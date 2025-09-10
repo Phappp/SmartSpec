@@ -23,7 +23,6 @@ Trở lại GitHub Desktop, bạn sẽ thấy thay đổi trong tab Changes
 Nhập lời nhắn commit (ví dụ: feat: thêm login bằng JWT)
 Nhấn "Commit to feature/phap-login"
 
-
 🧩 4. Đồng bộ với nhánh main (trước khi push)
 
 Chọn lại nhánh main → Pull origin
