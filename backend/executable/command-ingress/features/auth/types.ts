@@ -9,6 +9,8 @@ type ExchangeTokenRequest = {
   idp: string;
 };
 
+
+
 interface AuthService {
   exchangeWithGoogleIDP(
     request: ExchangeTokenRequest
@@ -27,7 +29,7 @@ interface AuthService {
     dob: Date,
     gender: string
   ): Promise<ExchangeTokenResult>;
-  login(email: string, password: string): Promise<ExchangeTokenResult>;
+  login(email: string, password: string): Promise<String>;
 
   forgotPassword(email: string): Promise<string>;
 
@@ -36,6 +38,7 @@ interface AuthService {
   toggleTwoFactorAuth(userId: string, enable: boolean): Promise<string>;
 
   verifyEmail(email: string): Promise<string>;
+  verifyOTP(email: string, otp: string): Promise<ExchangeTokenResult>;
 }
 
 export { AuthService, ExchangeTokenRequest, ExchangeTokenResult };

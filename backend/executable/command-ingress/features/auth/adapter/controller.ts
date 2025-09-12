@@ -106,7 +106,6 @@ class AuthController extends BaseController {
       responseValidationError(res, validateResult.errors[0]);
       return;
     }
-    console.log(2);
 
     const token = await this.service.refreshToken(
       refreshTokenRequestBody.refreshToken
@@ -149,7 +148,6 @@ class AuthController extends BaseController {
         return;
       }
 
-      console.log(2);
       const registerResult = await this.service.register(
         email,
         password,
@@ -219,21 +217,48 @@ class AuthController extends BaseController {
         responseValidationError(res, validateResult.errors[0]);
         return;
       }
-
       const loginResult = await this.service.login(email, password);
-
       const serviceResponse = {
         success: true,
         message: "User logged in successfully",
         data: loginResult,
         code: StatusCodes.OK,
       };
-
       handleServiceResponse(serviceResponse, res);
     } catch (error) {
       res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
         status: "Failed",
         message: "Error logging in",
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  async verifyOTP(req: Request, res: Response, _next: NextFunction): Promise<void>{
+    try {
+      const { email, otp } = req.body;
+      if (!email || !otp) {
+        res.status(StatusCodes.BAD_REQUEST).json({
+          status: "Failed",
+          message: "Email and OTP are required",
+        });
+        return;
+      }
+      
+      const verifyOTP = await this.service.verifyOTP(email, otp);
+      const serviceResponse = {
+        success: true,
+        message: "User logged in successfully",
+        data: verifyOTP,
+        code: StatusCodes.OK,
+      };
+      handleServiceResponse(serviceResponse, res);
+
+      
+    } catch (error) {
+      res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        status: "Failed",
+        message: "Error verifying OTP",
         error: (error as Error).message,
       });
     }

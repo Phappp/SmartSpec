@@ -1,3 +1,4 @@
+import { toInteger } from "lodash";
 import { InferSchemaType, model, Schema } from "mongoose";
 
 const userSchema = new Schema({
@@ -8,7 +9,7 @@ const userSchema = new Schema({
       return !this.isGoogleAccount;
     },
   },
-  full_name: { type: String }, 
+  name: { type: String }, 
   system_role: {
     type: String,
     enum: ["ADMIN", "PARTICIPANT"],
@@ -29,6 +30,9 @@ const userSchema = new Schema({
   isTwoFactorEnabled: { type: Boolean, default: false },
   gender: String,
   dob: Date,
+  otp: String,
+  accessToken: String,
+  refreshToken: String,
   created_at: { type: Date, default: Date.now }, // Ngày tạo tài khoản
   updated_at: { type: Date },
 });

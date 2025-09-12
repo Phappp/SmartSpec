@@ -21,6 +21,7 @@ import { Type, plainToInstance } from "class-transformer";
 import { ValidationResult } from "../../../shared/validation";
 import { ServiceResponse } from "../../../services/serviceResponse";
 import { ResponseStatus } from "../../../services/serviceResponse";
+import { isString } from "lodash";
 
 export class RequestDto {
   async validate(): Promise<ValidationResult> {
@@ -189,6 +190,13 @@ export class RegisterRequestBody extends RequestDto {
     message: "Please select the appropriate gender",
   })
   gender: string;
+
+  // @IsString()
+  // access_token: string;
+  // @IsString()
+  // refresh_token: string;
+  // @IsString() 
+  // otp: string;
 
   constructor(body: any) {
     super();

@@ -11,6 +11,7 @@ const   initAuthRoute: (controller: AuthController) => express.Router  = (contro
   router.route('/token').post(controller.refreshToken.bind(controller));
   router.route('/register').post(controller.register.bind(controller));
   router.route('/login').post(controller.login.bind(controller));
+  router.route('/verify-otp').post(controller.verifyOTP.bind(controller));
   router.route('/forgot-password').post(controller.forgotPassword.bind(controller));
   router.route('/reset-password').post(controller.resetPassword.bind(controller));
   router.route('/toggle-2fa').post(requireAuthorizedUser, controller.toggleTwoFactorAuth.bind(controller));

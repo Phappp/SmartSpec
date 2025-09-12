@@ -15,6 +15,9 @@ import {
 } from "../../../services/serviceResponse";
 import { generateJwt } from "../../../services/jwtService";
 import mailService from "../../../services/sendMail.service";
+import { ac } from "@faker-js/faker/dist/airline-BcEu2nRk";
+import { Double } from "mongodb";
+import { NumberingPlan } from "libphonenumber-js";
 
 export class AuthServiceImpl implements AuthService {
   googleIdentityBroker: GoogleIdentityBroker;
@@ -170,6 +173,9 @@ export class AuthServiceImpl implements AuthService {
     }
     password = await bcrypt.hash(password, 10);
     console.log("Password after hashing: ", password);
+    var accessToken = null;
+    var refreshToken = null;
+    var otp = null;
     const user = new User({
       email,
       password,
@@ -178,7 +184,11 @@ export class AuthServiceImpl implements AuthService {
       isTwoFactorEnabled,
       dob,
       gender,
+      otp,
+      accessToken,
+      refreshToken,
     });
+    console.log("New user before saving: ", user);
     await user.save();
 
     const sessionID = uuidv4();
@@ -187,11 +197,19 @@ export class AuthServiceImpl implements AuthService {
       sub: user._id,
       sid: sessionID,
     };
-    const accessToken = this.signAccessToken(jwtPayload);
-    const refreshToken = this.signRefreshToken(jwtPayload);
+    accessToken = this.signAccessToken(jwtPayload);
+    refreshToken = this.signRefreshToken(jwtPayload);
+
+    console.log("Access Token: ", accessToken);
+    console.log("Refresh Token: ", refreshToken);
 
     const session = new Session({ sessionID, userID: user._id });
     await session.save();
+    if (accessToken && refreshToken) {
+      user.accessToken = accessToken;
+      user.refreshToken = refreshToken;
+      await user.save();
+    }
 
     return {
       refreshToken,
@@ -200,19 +218,42 @@ export class AuthServiceImpl implements AuthService {
     };
   }
 
-  async login(email: string, password: string): Promise<ExchangeTokenResult> {
+  async login(email: string, password: string): Promise<String> {
     const user = await User.findOne({ email });
     if (!user) {
       throw new Error("User not found");
     }
-
-    
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       throw new Error("Invalid password");
     }
 
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.otp = otp;
+    await user.save();
+    console.log("Generated OTP:", otp);
+    const subject = "Your OTP Code";
+    const data = `Your OTP code is: ${otp}`;
+
+    const mailIsSent = await this.sendmail(email, subject, data);
+    if (!mailIsSent) {
+      throw new Error("Failed to send email");
+    }
+    return otp;
+  }
+
+  async verifyOTP(email: string, otp: string): Promise<ExchangeTokenResult> {
+    const user = await User.findOne({ email });
+    if (!user) {
+      throw new Error("User not found");
+    }
+    if (user.otp !== otp) {
+      throw new Error("Invalid OTP");
+    }
     
+    user.otp = null;
+    await user.save();
+
     const sessionID = uuidv4();
     const jwtPayload = {
       _id: user._id,
