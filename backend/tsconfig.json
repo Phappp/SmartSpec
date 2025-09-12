@@ -5,7 +5,8 @@
     "typeRoots": [
       "./node_modules/@types"
     ],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "emitDecoratorMetadata": true
   },
   "include": [
     "executable/command-ingress/**/*"

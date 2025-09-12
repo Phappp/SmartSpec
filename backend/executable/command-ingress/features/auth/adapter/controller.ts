@@ -9,6 +9,7 @@ import {
   LoginRequestBody,
   ForgotPasswordRequestBody,
   ResetPasswordRequestBody,
+  verifyEmailRequestBody,
 } from "./dto";
 import { BaseController } from "../../../shared/base-controller";
 import responseValidationError from "../../../shared/response";
@@ -125,15 +126,24 @@ class AuthController extends BaseController {
     _next: NextFunction
   ): Promise<void> {
     try {
-      const { email, password, confirmPassword, full_name, avatar, phone } =
-        req.body;
+      const {
+        email,
+        password,
+        confirmPassword,
+        name,
+        isTwoFactorEnabled,
+        dob,
+        gender,
+      } = req.body;
 
+      const { day, month, year } = dob;
+      const newDob = new Date(year, month - 1, day);
       console.log(req.body);
 
       const registerRequestBody = new RegisterRequestBody(req.body);
       const validateResult = await registerRequestBody.validate();
 
-      console.log(1);
+      console.log("register:", registerRequestBody);
       if (!validateResult.ok) {
         responseValidationError(res, validateResult.errors[0]);
         return;
@@ -144,9 +154,10 @@ class AuthController extends BaseController {
         email,
         password,
         confirmPassword,
-        full_name,
-        avatar,
-        phone
+        name,
+        isTwoFactorEnabled,
+        newDob,
+        gender
       );
 
       const serviceResponse = {
@@ -166,6 +177,37 @@ class AuthController extends BaseController {
     }
   }
 
+  async verifyEmail(
+    req: Request,
+    res: Response,
+    _next: NextFunction
+  ): Promise<void> {
+    try {
+      const { email } = req.body;
+      const verifyEmail = new verifyEmailRequestBody(req.body);
+      const validateResult = await verifyEmail.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+      const verifyEmailResult = await this.service.verifyEmail(email);
+
+      const serviceResponse = {
+        success: true,
+        message: "Verify email successfully",
+        data: verifyEmailResult,
+        code: StatusCodes.OK,
+      };
+
+      handleServiceResponse(serviceResponse, res);
+    } catch (error) {
+      res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        status: "Failed",
+        message: "Error verifying email",
+        error: (error as Error).message,
+      });
+    }
+  }
   async login(req: Request, res: Response, _next: NextFunction): Promise<void> {
     try {
       const { email, password } = req.body;
@@ -282,8 +324,10 @@ class AuthController extends BaseController {
       next,
       async (req, res, _next) => {
         const { enable } = req.body;
-        if(enable !== true && enable !== false) {
-          throw new Error("Invalid value for enable. It should be true or false");
+        if (enable !== true && enable !== false) {
+          throw new Error(
+            "Invalid value for enable. It should be true or false"
+          );
         }
         const userId = req.getSubject();
         if (!userId) {

@@ -27,6 +27,8 @@ const userSchema = new Schema({
   avatar_url: String,
   phone: String,
   isTwoFactorEnabled: { type: Boolean, default: false },
+  gender: String,
+  dob: Date,
   created_at: { type: Date, default: Date.now }, // Ngày tạo tài khoản
   updated_at: { type: Date },
 });

@@ -7,7 +7,17 @@ import {
   MinLength,
   validate,
   ValidationError,
+  ValidateNested,
+  IsInt,
+  Min,
+  Max,
+  Matches,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+  ValidationArguments,
+  Validate,
 } from "class-validator";
+import { Type, plainToInstance } from "class-transformer";
 import { ValidationResult } from "../../../shared/validation";
 import { ServiceResponse } from "../../../services/serviceResponse";
 import { ResponseStatus } from "../../../services/serviceResponse";
@@ -95,6 +105,51 @@ export class RefreshTokenRequestBody extends RequestDto {
     };
   }
 }
+export class verifyEmailRequestBody extends RequestDto {
+  @IsNotEmpty({ message: "Email is required" })
+  @IsEmail({}, { message: "Please provide a valid email address" })
+  email: string;
+
+  constructor(body: any) {
+    super();
+    if (body) {
+      this.email = body.email;
+    }
+  }
+}
+
+@ValidatorConstraint({ name: "IsValidDob", async: false })
+class IsValidDobConstraint implements ValidatorConstraintInterface {
+  validate(dob: any, args: ValidationArguments) {
+    if (!dob || typeof dob !== "object") return false;
+
+    const { day, month, year } = dob;
+
+    if (
+      typeof day !== "number" ||
+      typeof month !== "number" ||
+      typeof year !== "number"
+    ) {
+      return false;
+    }
+
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+    if (year < 1900 || year > new Date().getFullYear()) return false;
+
+    // Check ngày hợp lệ thực sự (ví dụ 30/02 là invalid)
+    const date = new Date(year, month - 1, day);
+    return (
+      date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day
+    );
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    return "dob must be a valid date object { day, month, year }";
+  }
+}
 
 export class RegisterRequestBody extends RequestDto {
   @IsNotEmpty({ message: "Email is required" })
@@ -110,26 +165,47 @@ export class RegisterRequestBody extends RequestDto {
 
   @IsNotEmpty({ message: "Full name is required" })
   @IsString()
-  full_name: string;
+  name: string;
+
+  // @IsOptional()
+  // @IsString()
+  // @Matches(/^[0-9]{10,11}$/, { message: "Phone number must be 10–11 digits" })
+  // phone?: string;
 
   @IsOptional()
-  @IsString()
-  avatar?: string;
+  isTwoFactorEnabled?: boolean;
 
+  //validate date of birth
+  // @IsOptional()
+  // @ValidateNested()
+  // dob?: { day: number; month: number; year: number };
+
+  @Validate(IsValidDobConstraint)
+  dob: { day: number; month: number; year: number };
+  
   @IsOptional()
   @IsString()
-  phone?: string;
-
+  @Matches(/^(male|female|genderless|do not want to be specific|other)$/, {
+    message: "Please select the appropriate gender",
+  })
+  gender: string;
 
   constructor(body: any) {
     super();
     if (body) {
       this.email = body.email;
       this.password = body.password;
-      this.confirmPassword = body.confirmPassword; 
-      this.full_name = body.full_name;
-      this.avatar = body.avatar;
-      this.phone = body.phone;
+      this.confirmPassword = body.confirmPassword;
+      this.name = body.name;
+      this.isTwoFactorEnabled = body.isTwoFactorEnabled;
+      this.gender = body.gender;
+      if (body.dob) {
+        this.dob = {
+          day: body.dob.day,
+          month: body.dob.month,
+          year: body.dob.year,
+        };
+      }
     }
   }
 
@@ -144,7 +220,7 @@ export class RegisterRequestBody extends RequestDto {
     if (this.password !== this.confirmPassword) {
       const passwordMismatchError = new ValidationError();
       // Gán lỗi này cho thuộc tính 'confirmPassword' để frontend biết cần hiển thị lỗi ở đâu
-      passwordMismatchError.property = "confirmPassword"; 
+      passwordMismatchError.property = "confirmPassword";
       passwordMismatchError.constraints = {
         passwordMismatch: "Passwords do not match",
       };
@@ -178,7 +254,7 @@ export class LoginRequestBody extends RequestDto {
   }
 }
 
-export class ForgotPasswordRequestBody extends RequestDto { 
+export class ForgotPasswordRequestBody extends RequestDto {
   @IsNotEmpty({ message: "Email is required" })
   @IsEmail({}, { message: "Please provide a valid email address" })
   email: string;
@@ -203,7 +279,7 @@ export class ResetPasswordRequestBody extends RequestDto {
     super();
     if (body) {
       this.newPassword = body.newPassword;
-      this.confirmNewPassword = body.confirmNewPassword; 
+      this.confirmNewPassword = body.confirmNewPassword;
     }
   }
 
@@ -218,7 +294,7 @@ export class ResetPasswordRequestBody extends RequestDto {
     if (this.newPassword !== this.confirmNewPassword) {
       const passwordMismatchError = new ValidationError();
       // Gán lỗi này cho thuộc tính 'confirmPassword' để frontend biết cần hiển thị lỗi ở đâu
-      passwordMismatchError.property = "confirmPassword"; 
+      passwordMismatchError.property = "confirmPassword";
       passwordMismatchError.constraints = {
         passwordMismatch: "Passwords do not match",
       };

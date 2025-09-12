@@ -23,8 +23,9 @@ interface AuthService {
     password: string,
     confirmPassword: string,
     name: string,
-    avatar: string,
-    phone: string
+    isTwoFactorEnabled: boolean,
+    dob: Date,
+    gender: string
   ): Promise<ExchangeTokenResult>;
   login(email: string, password: string): Promise<ExchangeTokenResult>;
 
@@ -33,6 +34,8 @@ interface AuthService {
   resetPassword(token: string, newPassword: string): Promise<string>;
 
   toggleTwoFactorAuth(userId: string, enable: boolean): Promise<string>;
+
+  verifyEmail(email: string): Promise<string>;
 }
 
 export { AuthService, ExchangeTokenRequest, ExchangeTokenResult };

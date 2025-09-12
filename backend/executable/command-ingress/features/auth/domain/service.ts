@@ -14,7 +14,7 @@ import {
   ResponseStatus,
 } from "../../../services/serviceResponse";
 import { generateJwt } from "../../../services/jwtService";
-import  mailService  from "../../../services/sendMail.service";
+import mailService from "../../../services/sendMail.service";
 
 export class AuthServiceImpl implements AuthService {
   googleIdentityBroker: GoogleIdentityBroker;
@@ -138,13 +138,31 @@ export class AuthServiceImpl implements AuthService {
     };
   }
 
+  async verifyEmail(email: string): Promise<string> {
+    const user = await User.findOne({ email });
+    if (user) {
+      throw new Error("Email already exists");
+    }
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log("Generated OTP:", otp);
+
+    const subject = "Verify your email";
+    const data = `Your OTP code is: ${otp}`;
+
+    const mailIsSent = await this.sendmail(email, subject, data);
+    if (!mailIsSent) {
+      throw new Error("Failed to send email");
+    }
+    return otp;
+  }
   async register(
     email: string,
     password: string,
     confirmPassword: string,
     name: string,
-    avatar: string,
-    phone: string
+    isTwoFactorEnabled: boolean,
+    dob: Date,
+    gender: string
   ): Promise<ExchangeTokenResult> {
     let existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -157,8 +175,9 @@ export class AuthServiceImpl implements AuthService {
       password,
       confirmPassword,
       name,
-      avatar,
-      phone,
+      isTwoFactorEnabled,
+      dob,
+      gender,
     });
     await user.save();
 
@@ -186,10 +205,14 @@ export class AuthServiceImpl implements AuthService {
     if (!user) {
       throw new Error("User not found");
     }
+
+    
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       throw new Error("Invalid password");
     }
+
+    
     const sessionID = uuidv4();
     const jwtPayload = {
       _id: user._id,
@@ -214,7 +237,6 @@ export class AuthServiceImpl implements AuthService {
     data: string
   ): Promise<boolean> {
     try {
-     
       const mailIsSent = await mailService.sendEmail({
         emailFrom: "hngvtdat010@gmail.com",
         emailTo: email,
@@ -248,7 +270,7 @@ export class AuthServiceImpl implements AuthService {
       throw new Error("Failed to send email");
     }
     return token;
-  } 
+  }
 
   async resetPassword(token: string, newPassword: string): Promise<string> {
     try {
@@ -268,15 +290,16 @@ export class AuthServiceImpl implements AuthService {
 
   async toggleTwoFactorAuth(userId: string, enable: boolean): Promise<string> {
     try {
-      const user = await User.findOne({_id: userId });
+      const user = await User.findOne({ _id: userId });
       if (!user) {
         throw new Error("User not found");
       }
       user.isTwoFactorEnabled = enable === true;
       await user.save();
-      return `Two-factor authentication has been ${enable === true ? 'enabled' : 'disabled'} successfully.`;
-
-    }catch (error) {
+      return `Two-factor authentication has been ${
+        enable === true ? "enabled" : "disabled"
+      } successfully.`;
+    } catch (error) {
       throw new Error("Error toggling two-factor authentication");
     }
   }
