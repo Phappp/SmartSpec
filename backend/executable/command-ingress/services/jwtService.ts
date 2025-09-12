@@ -9,6 +9,11 @@ export const generateJwt = (payload: any) => {
   return jwt.sign(payload, JWT_SECRET, options);
 };
 
+export const generateJwtOTP = (payload: any) => {
+  const options: SignOptions = { expiresIn: '1m' as ms.StringValue };
+  return jwt.sign(payload, JWT_SECRET, options);
+};
+
 export const verifyJwt = (token: string): any => {
   return jwt.verify(token, JWT_SECRET);
 };

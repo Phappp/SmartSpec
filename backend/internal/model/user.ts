@@ -30,7 +30,6 @@ const userSchema = new Schema({
   isTwoFactorEnabled: { type: Boolean, default: false },
   gender: String,
   dob: Date,
-  otp: String,
   accessToken: String,
   refreshToken: String,
   created_at: { type: Date, default: Date.now }, // Ngày tạo tài khoản

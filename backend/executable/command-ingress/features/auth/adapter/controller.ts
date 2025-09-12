@@ -236,16 +236,17 @@ class AuthController extends BaseController {
 
   async verifyOTP(req: Request, res: Response, _next: NextFunction): Promise<void>{
     try {
-      const { email, otp } = req.body;
-      if (!email || !otp) {
+      const { email, otp, otpToken } = req.body;
+      
+      if (!email || !otp || !otpToken) {
         res.status(StatusCodes.BAD_REQUEST).json({
           status: "Failed",
-          message: "Email and OTP are required",
+          message: "Email, OTP, Token are required",
         });
         return;
       }
       
-      const verifyOTP = await this.service.verifyOTP(email, otp);
+      const verifyOTP = await this.service.verifyOTP(email, otp, otpToken);
       const serviceResponse = {
         success: true,
         message: "User logged in successfully",

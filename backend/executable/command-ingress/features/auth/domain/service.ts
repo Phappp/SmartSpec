@@ -13,7 +13,7 @@ import {
   ServiceResponse,
   ResponseStatus,
 } from "../../../services/serviceResponse";
-import { generateJwt } from "../../../services/jwtService";
+import { generateJwt, generateJwtOTP } from "../../../services/jwtService";
 import mailService from "../../../services/sendMail.service";
 import { ac } from "@faker-js/faker/dist/airline-BcEu2nRk";
 import { Double } from "mongodb";
@@ -175,7 +175,6 @@ export class AuthServiceImpl implements AuthService {
     console.log("Password after hashing: ", password);
     var accessToken = null;
     var refreshToken = null;
-    var otp = null;
     const user = new User({
       email,
       password,
@@ -184,7 +183,6 @@ export class AuthServiceImpl implements AuthService {
       isTwoFactorEnabled,
       dob,
       gender,
-      otp,
       accessToken,
       refreshToken,
     });
@@ -229,8 +227,7 @@ export class AuthServiceImpl implements AuthService {
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    user.otp = otp;
-    await user.save();
+    const otpToken = await generateJwtOTP({ email, otp });
     console.log("Generated OTP:", otp);
     const subject = "Your OTP Code";
     const data = `Your OTP code is: ${otp}`;
@@ -239,19 +236,22 @@ export class AuthServiceImpl implements AuthService {
     if (!mailIsSent) {
       throw new Error("Failed to send email");
     }
-    return otp;
+    return otpToken;
   }
 
-  async verifyOTP(email: string, otp: string): Promise<ExchangeTokenResult> {
+  async verifyOTP(
+    email: string,
+    otp: string,
+    otpToken: string
+  ): Promise<ExchangeTokenResult> {
     const user = await User.findOne({ email });
     if (!user) {
       throw new Error("User not found");
     }
-    if (user.otp !== otp) {
+    const payload = jwt.verify(otpToken, this.jwtSecret) as { email: string, otp: string };
+    if (payload.otp !== otp) {
       throw new Error("Invalid OTP");
     }
-    
-    user.otp = null;
     await user.save();
 
     const sessionID = uuidv4();
