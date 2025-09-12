@@ -175,7 +175,7 @@ class AuthController extends BaseController {
     }
   }
 
-  async verifyEmail(
+  async sendVerificationEmail(
     req: Request,
     res: Response,
     _next: NextFunction
@@ -188,7 +188,7 @@ class AuthController extends BaseController {
         responseValidationError(res, validateResult.errors[0]);
         return;
       }
-      const verifyEmailResult = await this.service.verifyEmail(email);
+      const verifyEmailResult = await this.service.sendVerificationEmail(email);
 
       const serviceResponse = {
         success: true,
@@ -199,6 +199,41 @@ class AuthController extends BaseController {
 
       handleServiceResponse(serviceResponse, res);
     } catch (error) {
+      res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        status: "Failed",
+        message: "Error sending verification email",
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  async verifyEmail(
+    req: Request,
+    res: Response,
+    _next: NextFunction
+  ): Promise<void> {
+    try {
+      const {token} = req.body;
+      if (!token || typeof token !== "string") {
+        res.status(StatusCodes.BAD_REQUEST).json({
+          status: "Failed",
+          message: "Invalid or missing token",
+        });
+        return;
+      }
+      const verifyEmailResult = await this.service.verifyEmail(token);
+
+      const serviceResponse = {
+        success: true,
+        message: "Verify email successfully",
+        data: verifyEmailResult,
+        code: StatusCodes.OK,
+      };
+
+      handleServiceResponse(serviceResponse, res);
+
+    }
+    catch (error) {
       res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
         status: "Failed",
         message: "Error verifying email",
@@ -234,10 +269,14 @@ class AuthController extends BaseController {
     }
   }
 
-  async verifyOTP(req: Request, res: Response, _next: NextFunction): Promise<void>{
+  async verifyOTP(
+    req: Request,
+    res: Response,
+    _next: NextFunction
+  ): Promise<void> {
     try {
       const { email, otp, otpToken } = req.body;
-      
+
       if (!email || !otp || !otpToken) {
         res.status(StatusCodes.BAD_REQUEST).json({
           status: "Failed",
@@ -245,7 +284,7 @@ class AuthController extends BaseController {
         });
         return;
       }
-      
+
       const verifyOTP = await this.service.verifyOTP(email, otp, otpToken);
       const serviceResponse = {
         success: true,
@@ -254,8 +293,6 @@ class AuthController extends BaseController {
         code: StatusCodes.OK,
       };
       handleServiceResponse(serviceResponse, res);
-
-      
     } catch (error) {
       res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
         status: "Failed",

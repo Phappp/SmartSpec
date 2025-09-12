@@ -37,8 +37,9 @@ interface AuthService {
 
   toggleTwoFactorAuth(userId: string, enable: boolean): Promise<string>;
 
-  verifyEmail(email: string): Promise<string>;
+  sendVerificationEmail(email: string): Promise<string>;
   verifyOTP(email: string, otp: string, otpToken: string): Promise<ExchangeTokenResult>;
+  verifyEmail(token: string): Promise<boolean>;
 }
 
 export { AuthService, ExchangeTokenRequest, ExchangeTokenResult };

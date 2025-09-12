@@ -141,22 +141,30 @@ export class AuthServiceImpl implements AuthService {
     };
   }
 
-  async verifyEmail(email: string): Promise<string> {
+  async sendVerificationEmail(email: string): Promise<string> {
     const user = await User.findOne({ email });
     if (user) {
       throw new Error("Email already exists");
     }
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log("Generated OTP:", otp);
+    const verifyToken = await generateJwtOTP({ email });
 
     const subject = "Verify your email";
-    const data = `Your OTP code is: ${otp}`;
+    const data = `Click the link to verify your email: http://localhost:5173/verify-email?token=${verifyToken}`;
 
     const mailIsSent = await this.sendmail(email, subject, data);
     if (!mailIsSent) {
       throw new Error("Failed to send email");
     }
-    return otp;
+    return verifyToken;
+  }
+
+  async verifyEmail(token: string): Promise<boolean> {
+    const payload = jwt.verify(token, this.jwtSecret) as { email: string };
+    if( !payload.email ) {
+      throw new Error("Invalid token");
+    }
+    return true
+
   }
   async register(
     email: string,
@@ -304,7 +312,7 @@ export class AuthServiceImpl implements AuthService {
     const token = await generateJwt({ email });
     console.log("verifyEmailToken generated");
     const subject = "Reset your password";
-    const data = `Click the link to reset your password: http://localhost:3000/reset-password?token=${token}`;
+    const data = `Click the link to reset your password: http://localhost:5173/reset-password?token=${token}`;
 
     const mailIsSent = await this.sendmail(email, subject, data);
     if (!mailIsSent) {
