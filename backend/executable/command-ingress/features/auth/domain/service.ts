@@ -160,11 +160,10 @@ export class AuthServiceImpl implements AuthService {
 
   async verifyEmail(token: string): Promise<boolean> {
     const payload = jwt.verify(token, this.jwtSecret) as { email: string };
-    if( !payload.email ) {
+    if (!payload.email) {
       throw new Error("Invalid token");
     }
-    return true
-
+    return true;
   }
   async register(
     email: string,
@@ -234,17 +233,25 @@ export class AuthServiceImpl implements AuthService {
       throw new Error("Invalid password");
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpToken = await generateJwtOTP({ email, otp });
-    console.log("Generated OTP:", otp);
-    const subject = "Your OTP Code";
-    const data = `Your OTP code is: ${otp}`;
+    const fa = user.isTwoFactorEnabled;
+    console.log("2FA status:", fa);
+    if (fa) {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpToken = await generateJwtOTP({ email, otp });
+      console.log("Generated OTP:", otp);
+      const subject = "Your OTP Code";
+      const data = `Your OTP code is: ${otp}`;
 
-    const mailIsSent = await this.sendmail(email, subject, data);
-    if (!mailIsSent) {
-      throw new Error("Failed to send email");
+      const mailIsSent = await this.sendmail(email, subject, data);
+      if (!mailIsSent) {
+        throw new Error("Failed to send email");
+      }
+      return {
+        isTwoFactorEnabled: true,
+        otpToken: otpToken,
+      } as unknown as string;
     }
-    return otpToken;
+    return { isTwoFactorEnabled: false } as unknown as string;
   }
 
   async verifyOTP(
@@ -256,7 +263,10 @@ export class AuthServiceImpl implements AuthService {
     if (!user) {
       throw new Error("User not found");
     }
-    const payload = jwt.verify(otpToken, this.jwtSecret) as { email: string, otp: string };
+    const payload = jwt.verify(otpToken, this.jwtSecret) as {
+      email: string;
+      otp: string;
+    };
     if (payload.otp !== otp) {
       throw new Error("Invalid OTP");
     }

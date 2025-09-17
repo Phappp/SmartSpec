@@ -213,7 +213,7 @@ class AuthController extends BaseController {
     _next: NextFunction
   ): Promise<void> {
     try {
-      const {token} = req.body;
+      const { token } = req.body;
       if (!token || typeof token !== "string") {
         res.status(StatusCodes.BAD_REQUEST).json({
           status: "Failed",
@@ -231,9 +231,7 @@ class AuthController extends BaseController {
       };
 
       handleServiceResponse(serviceResponse, res);
-
-    }
-    catch (error) {
+    } catch (error) {
       res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
         status: "Failed",
         message: "Error verifying email",
