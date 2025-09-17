@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNotEmpty, IsArray, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, IsArray, IsObject, ValidateNested } from 'class-validator';
 
 export class CreateProjectDto {
   @IsString()
@@ -22,13 +22,12 @@ export class UpdateProjectDto {
   @IsOptional()
   @IsString()
   current_version?: string;
-
+  
   @IsOptional()
   @IsArray()
   members?: {
     user_id: string;
-    role?: 'owner' | 'editor' | 'viewer';
-    status?: 'active' | 'inactive';
+    role: 'owner' | 'editor' | 'viewer';
   }[];
 
   @IsOptional()
@@ -41,5 +40,27 @@ export class UpdateProjectDto {
 
   @IsOptional()
   last_accessed_at?: Date;
+}
 
+// Request interfaces
+export interface CreateProjectRequest {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateProjectRequest {
+  name?: string;
+  description?: string;
+  status?: {
+    is_trashed?: boolean;
+    trashed_at?: Date | null;
+    delete_after_days?: number;
+  };
+  current_version?: string;
+  members?: {
+    user_id: string;
+    role: 'owner' | 'editor' | 'viewer';
+  }[];
+
+  last_accessed_at?: Date;
 }

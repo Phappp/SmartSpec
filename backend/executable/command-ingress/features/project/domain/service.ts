@@ -2,30 +2,10 @@ import Project from '../../../../../internal/model/project';
 import Input from '../../../../../internal/model/input';
 import Output from '../../../../../internal/model/output';
 import Version from '../../../../../internal/model/Version';
-// import ProjectLog from '../../../../../internal/model/projectLog';
+import ProjectLog from '../../../../../internal/model/projectLog';
 import { Types } from 'mongoose';
 
-
-export interface CreateProjectRequest {
-  name: string;
-  description?: string;
-}
-
-export interface UpdateProjectRequest {
-  name?: string;
-  description?: string;
-  status?: {
-    is_trashed?: boolean;
-    trashed_at?: Date | null;
-    delete_after_days?: number;
-  };
-  current_version?: string;
-  members?: {
-    user_id: string;
-    role?: 'owner' | 'editor' | 'viewer';
-    status?: 'active' | 'inactive';
-  }[];
-}
+import {CreateProjectRequest,UpdateProjectRequest} from '../adapter/dto'
 
 export class ProjectService {
   async getMyProjects(userId: string) {
@@ -40,14 +20,16 @@ export class ProjectService {
   }
 
   async createProject(userId: string, data: CreateProjectRequest) {
+    if (!Types.ObjectId.isValid(userId)) throw new Error("Invalid userId");
+    const userObjectId = new Types.ObjectId(userId);
     const project = new Project({
       name: data.name,
       description: data.description,
-      owner_id: new Types.ObjectId(userId),
+      owner_id: userObjectId,
       members: [{
-        user_id: new Types.ObjectId(userId),
+        user_id: userObjectId,
         role: 'owner',
-        status: 'active',
+        status: 'accepted',
         invited_at: new Date(),
         accepted_at: new Date()
       }],
@@ -56,51 +38,66 @@ export class ProjectService {
 
     const savedProject = await project.save();
 
-    // Tạo version đầu tiên
     const firstVersion = await Version.create({
       project_id: savedProject._id,
+      version_number: 1,
       name: 'Version 1',
       description: 'Initial version',
-      created_by: new Types.ObjectId(userId),
+      created_by: userObjectId,
       created_at: new Date(),
       data: {}
     });
 
-    // Gán version này làm current_version
     savedProject.current_version = firstVersion._id;
-    
     await savedProject.save();
 
     return await Project.findById(savedProject._id)
       .populate('owner_id', 'full_name email avatar_url')
-      .populate('members.user_id', 'full_name email avatar_url')
-      .lean();
+      .populate('members.user_id', 'full_name email avatar_url');
   }
-
-
+  
   async updateProject(projectId: string, userId: string, data: UpdateProjectRequest) {
     const project = await Project.findOne({
       _id: new Types.ObjectId(projectId),
-      $or: [
-        { owner_id: new Types.ObjectId(userId) },
-        { 'members.user_id': new Types.ObjectId(userId), 'members.role': { $in: ['owner', 'editor'] } }
-      ],
+      owner_id: new Types.ObjectId(userId),
       'status.is_trashed': { $ne: true }
     });
 
-    if (!project) {
-      return null;
-    }
+    if (!project) return null;
 
-    Object.assign(project, data);
+    const { members, ...otherData } = data;
+
+    const disallowedFields = ['_id', 'owner_id', 'created_at', 'updated_at'];
+    Object.keys(otherData).forEach((key) => {
+      if (!disallowedFields.includes(key)) {
+        (project as any)[key] = (otherData as any)[key];
+      }
+    });
     if (data.current_version && data.current_version !== project.current_version?.toString()) {
-        project.current_version = new Types.ObjectId(data.current_version);
+      project.current_version = new Types.ObjectId(data.current_version);
     }
-
+    if (members && members.length > 0) {
+    for (const m of members) {
+      const member = project.members.find(mem => mem.user_id.toString() === m.user_id);
+        if (member) {
+          if (member.role === 'owner') continue;
+          if (m.role && member.role !== m.role) {
+            member.history.push({
+              action: 'role_changed',
+              by: new Types.ObjectId(userId),
+              at: new Date(),
+              details: { old_role: member.role, new_role: m.role }
+            });
+            member.role = m.role;
+          }
+        }
+      }
+    }
     project.updated_at = new Date();
     project.last_accessed_at = new Date();
 
     const updatedProject = await project.save();
+
     return await Project.findById(updatedProject._id)
       .populate('owner_id', 'full_name email avatar_url')
       .populate('members.user_id', 'full_name email avatar_url')
@@ -108,44 +105,35 @@ export class ProjectService {
   }
 
   async deleteProject(projectId: string, userId: string) {
-    const project = await Project.findById(projectId);
+    const project = await Project.findOne({
+      _id: projectId,
+      owner_id: new Types.ObjectId(userId)
+    });
 
-    if (!project) {
-      return false;
-    }
-    // Nếu user là owner
-    if (project.owner_id.toString() === userId) {
-      // Nếu chưa trashed → chuyển sang trashed
-      if (!project.status || project.status.is_trashed === false) {
-        if (!project.status) {
-          project.status = {
-            is_trashed: true,
-            trashed_at: new Date(),
-            delete_after_days: 30,
-          };
-        } else {
-          project.status.is_trashed = true;
-          project.status.trashed_at = new Date();
-        }
+    if (!project) return null;
 
-        await project.save();
-        return true;
+    if (!project.status || project.status.is_trashed === false) {
+      if (!project.status) {
+        project.status = {
+          is_trashed: true,
+          trashed_at: new Date(),
+          delete_after_days: 30,
+        };
+      } else {
+        project.status.is_trashed = true;
+        project.status.trashed_at = new Date();
       }
-      // Nếu đã trashed → xóa hẳn project và dữ liệu liên quan
-      await Promise.all([
-        Input.deleteMany({ project_id: project._id }),
-        Output.deleteMany({ project_id: project._id }),
-        Version.deleteMany({ project_id: project._id }),
-        // ProjectLog.deleteMany({ project_id: project._id }),
-        Project.deleteOne({ _id: project._id }),
-      ]);
+
+      await project.save();
       return true;
     }
-    // Nếu user là member (được share dự án)
-   await Project.updateOne(
-      { _id: projectId },
-      { $pull: { members: { user_id: new Types.ObjectId(userId) } } }
-    );
+    await Promise.all([
+      Input.deleteMany({ project_id: project._id }),
+      Output.deleteMany({ project_id: project._id }),
+      Version.deleteMany({ project_id: project._id }),
+      ProjectLog.deleteMany({ project_id: project._id }),
+      Project.deleteOne({ _id: project._id }),
+    ]);
     return true;
   }
 
@@ -178,7 +166,7 @@ export class ProjectService {
     return await Project.find({
       $or: [
         { owner_id: new Types.ObjectId(userId) },
-        { 'members.user_id': new Types.ObjectId(userId),'members.status': 'active' }
+        { 'members.user_id': new Types.ObjectId(userId),'members.status': 'accepted' }
       ],
       'status.is_trashed': { $ne: true }
     })
@@ -193,7 +181,7 @@ export class ProjectService {
     const projects = await Project.find({
       owner_id: { $ne: new Types.ObjectId(userId) },
       'members.user_id': new Types.ObjectId(userId),
-      'members.status': 'active',
+      'members.status': 'accepted',
       'status.is_trashed': { $ne: true },
     })
       .populate('owner_id', 'full_name email avatar_url')
@@ -202,5 +190,104 @@ export class ProjectService {
       .lean();
 
     return projects;
+  }
+
+  async getProjectDetail(projectId: string, userId: string) {
+    const project = await Project.findById(projectId)
+      .populate("owner_id", "full_name email avatar_url")
+      .populate("members.user_id", "full_name email avatar_url");
+
+    if (!project) return null;
+
+    const isOwner = project.owner_id._id.toString() === userId;
+    const isMember = project.members.some(
+      (m: any) => m.user_id._id.toString() === userId && m.status === "accepted"
+    );
+    if (!isOwner && !isMember)
+      throw { status: 403, message: "Bạn không có quyền truy cập project này" };
+
+    if (!project.current_version) {
+      const newVersion = await Version.create({
+        project_id: project._id,
+        version_number: 1,
+        name: "Version 1",
+        description: "Initial version when project is first opened",
+        created_by: userId,
+        trigger_action: "init",
+        inputs: [],
+        outputs: [],
+        affects_requirement: false,
+        requirement_model: null,
+      });
+      project.current_version = newVersion._id;
+      await project.save();
+
+      await ProjectLog.create({
+        project_id: project._id,
+        version_id: newVersion._id,
+        user_id: userId,
+        action: "create_version",
+        target_id: newVersion._id,
+        target_type: "version",
+        affects_requirement: false,
+        details: { message: "Initial version created automatically" },
+      });
+    }
+
+    const versions = await Version.find({ project_id: project._id })
+      .select("_id name version_number")
+      .sort({ version_number: 1 })
+      .lean();
+
+    const currentVersion = await Version.findById(project.current_version)
+      .select("_id name version_number")
+      .lean();
+
+    let inputs: any[] = [];
+    let outputs: any[] = [];
+    if (currentVersion) {
+      [inputs, outputs] = await Promise.all([
+        Input.find({ version_id: currentVersion._id }).sort({ created_at: 1 }).lean(),
+        Output.find({ version_id: currentVersion._id }).sort({ created_at: 1 }).lean(),
+      ]);
+    }
+
+    // Lấy logs của current version
+    const logs = await ProjectLog.find({
+      project_id: project._id,
+      version_id: currentVersion?._id,
+    })
+      .populate("user_id", "full_name email avatar_url")
+      .sort({ created_at: 1 })
+      .lean();
+
+    // Enrich logs với input/output metadata
+    const chatLogs = logs.map((log: any) => {
+      const input = log.input_id
+        ? inputs.find((i: any) => i._id.toString() === log.input_id.toString())
+        : null;
+      const output = log.output_id
+        ? outputs.find((o: any) => o._id.toString() === log.output_id.toString())
+        : null;
+
+      return {
+        ...log,
+        input_meta: input
+          ? { id: input._id, name: input.name, type: input.type }
+          : null,
+        output_meta: output
+          ? { id: output._id, name: output.name, type: output.type }
+          : null,
+      };
+    });
+
+    return {
+      project: project.toObject(),
+      current_version: currentVersion,
+      versions,
+      inputs,
+      outputs,
+      chatLogs,
+    };
   }
 }

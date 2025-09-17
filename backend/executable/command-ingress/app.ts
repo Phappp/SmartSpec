@@ -99,6 +99,7 @@ import cors from 'cors';
 import { recoverMiddleware } from './middlewares/recover';
 import { createServer } from 'http';
 
+import { createMockLoginRoute } from './features/auth/mock-login';
 // Project
 import { ProjectService } from './features/project/domain/service';
 import { ProjectController } from './features/project/adapter/controller';
@@ -123,6 +124,8 @@ const createHttpServer = (redisClient: any) => {
   const projectController = new ProjectController(projectService);
   app.use('/project', initProjectRoute(projectController));
 
+
+    app.use('/api/auth', createMockLoginRoute());
   app.use(recoverMiddleware);
 
   return server;

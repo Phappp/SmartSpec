@@ -1,24 +1,37 @@
 import { InferSchemaType, model, Schema } from "mongoose";
 
-const statusSchema = new Schema({
-  is_trashed: {
-    type: Boolean,
-    default: false
-  },
-  trashed_at: {
-    type: Date,
-    default: null
-  },
-  delete_after_days: {
-    type: Number,
-    default: 30
-  }
+// Schema cho requirement_model (embedded document)
+const requirementModelSchema = new Schema({
+  id: { type: String, required: true },         // uuid
+  name: { type: String, required: true },
+  role: { type: String, default: "" },
+  goal: { type: String, default: "" },
+  reason: { type: String, default: "" },
+  tasks: { type: [String], default: [] },
+  inputs: { type: [String], default: [] },
+  outputs: { type: [String], default: [] },
+  context: { type: String, default: "" },
+  priority: { type: String, default: "medium" },
+  feedback: { type: String, default: "" },
+  rules: { type: [String], default: [] },
+  triggers: { type: String, default: "" },
+  preconditions: { type: [String], default: [] },
+  postconditions: { type: [String], default: [] },
+  exceptions: { type: [String], default: [] },
+  stakeholders: { type: [String], default: [] },
+  constraints: { type: [String], default: [] },
+  related_usecases: { type: [String], default: [] }
 }, { _id: false });
 
+// Schema chính cho version
 const versionSchema = new Schema({
   project_id: {
     type: Schema.Types.ObjectId,
-    ref: 'projects',
+    ref: "projects",
+    required: true
+  },
+  version_number: {
+    type: Number,
     required: true
   },
   name: {
@@ -27,19 +40,34 @@ const versionSchema = new Schema({
   },
   description: {
     type: String,
-    default: ''
+    default: ""
   },
   created_by: {
     type: Schema.Types.ObjectId,
-    ref: 'users',
+    ref: "users",
     required: true
   },
-  based_on: {
-    type: Schema.Types.ObjectId,
-    ref: 'versions',
-    default: null   // Nếu version này được tạo dựa trên version cũ
+  trigger_action: {
+    type: String,
+    enum: ["input_update", "output_update", "rollback"],
+    default: null
   },
-  status: statusSchema,
+  inputs: [{
+    type: Schema.Types.ObjectId,
+    ref: "inputs"
+  }],
+  outputs: [{
+    type: Schema.Types.ObjectId,
+    ref: "outputs"
+  }],
+  affects_requirement: {
+    type: Boolean,
+    default: false
+  },
+  requirement_model: {
+    type: requirementModelSchema,
+    default: null
+  },
   created_at: {
     type: Date,
     default: Date.now
@@ -49,7 +77,7 @@ const versionSchema = new Schema({
     default: Date.now
   }
 }, {
-  timestamps: true
+  timestamps: { createdAt: "created_at", updatedAt: "updated_at" }
 });
 
 type VersionSchemaInferType = InferSchemaType<typeof versionSchema>;
