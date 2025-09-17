@@ -12,6 +12,8 @@ import Input from '../../../../../internal/model/input';
 import Output from '../../../../../internal/model/output';
 import Version from '../../../../../internal/model/Version';
 import ProjectLog from '../../../../../internal/model/projectLog';
+import { UploadedFile } from "express-fileupload";
+// import { OrchestratorService } from '../../orchestrator/domain/service';
 
 export class ProjectController extends BaseController {
   private service: ProjectService;
@@ -33,60 +35,39 @@ export class ProjectController extends BaseController {
     });
   };
 
-  createProject = async (req: Request & { getSubject?: () => string },res: Response,next: NextFunction) => {
-    return this.execWithTryCatchBlock(req as any, res, next, async (_req, _res) => {
+  createProject = async(req: Request & { getSubject?: () => string; files?: { [key: string]: UploadedFile | UploadedFile[] } }, res: Response, next: NextFunction) =>{
+    try {
       const userId = req.getSubject?.();
       if (!userId) {
-        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401),res);
-        return;
-      }
-      const dto = plainToClass(CreateProjectDto, req.body);
-      const projectData: CreateProjectRequest = {
-        name: dto.name,
-        description: dto.description,
-      };
-
-      const project = await this.service.createProject(userId, projectData);
-      handleServiceResponse(new ServiceResponse(ResponseStatus.Success, "Project created", project, 201),res);
-    });
-  };
-
-  createProjectWithInput = async (req: Request & { getSubject?: () => string },res: Response,next: NextFunction) => {
-    return this.execWithTryCatchBlock(req as any, res, next, async (_req, _res) => {
-      const userId = req.getSubject?.();
-      if (!userId) {
-        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401),res);
-        return;
+        return handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401),res);
       }
 
-      const dto = plainToClass(CreateProjectDto, req.body);
-      //Tạo dự án
-      const project = await this.service.createProject(userId, {
-        name: dto.name,
-        description: dto.description,
+      const { name, description, rawText } = req.body;
+      const files = req.files
+        ? (Object.values(req.files) as UploadedFile[]): [];
+
+      if (!name || !description) {
+        return res.status(400).json({ error: "name và description là bắt buộc" });
+      }
+
+    const result = await this.service.createProject(
+      name,
+      description,
+      userId,
+      { rawText, files }
+    );
+
+      return res.status(201).json({
+        message: "Project created successfully",
+        project: result.project,
+        version: result.version,
+        inputs: result.inputs,
       });
-
-      const files = req.files as Express.Multer.File[] | undefined;
-      const text = req.body.text as string | undefined;
-      //Tạo input với dự án vừa được tạo
-      try {
-        // await inputService.addInputs({
-        //   projectId: project._id,
-        //   versionId: project.current_version,
-        //   files,
-        //   text,
-        // });
-      } catch (err) {
-        // rollback nếu input lỗi
-        await Version.deleteMany({ project_id: project._id });
-        await Input.deleteMany({ project_id: project._id });
-        await ProjectLog.deleteMany({ project_id: project._id });
-        await Project.findByIdAndDelete(project._id);
-        throw err;
-      }
-      handleServiceResponse(new ServiceResponse(ResponseStatus.Success, "Tạo dự án với input", project, 201),res);
-    });
-  };
+    } catch (err: any) {
+      console.error("❌ Error createProject2:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  }
 
   updateProject = async (req: Request & { getSubject?: () => string },res: Response,next: NextFunction) => {
     return this.execWithTryCatchBlock(req as any, res, next, async (_req, _res) => {

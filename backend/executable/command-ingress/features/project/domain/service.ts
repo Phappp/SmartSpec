@@ -3,6 +3,9 @@ import Input from '../../../../../internal/model/input';
 import Output from '../../../../../internal/model/output';
 import Version from '../../../../../internal/model/Version';
 import ProjectLog from '../../../../../internal/model/projectLog';
+// import { OrchestratorService } from "../../orchestrator/domain/service";
+import { UploadedFile } from "express-fileupload";
+
 import { Types } from 'mongoose';
 
 import {CreateProjectRequest,UpdateProjectRequest} from '../adapter/dto'
@@ -19,41 +22,100 @@ export class ProjectService {
     .lean();
   }
 
-  async createProject(userId: string, data: CreateProjectRequest) {
-    if (!Types.ObjectId.isValid(userId)) throw new Error("Invalid userId");
-    const userObjectId = new Types.ObjectId(userId);
-    const project = new Project({
-      name: data.name,
-      description: data.description,
-      owner_id: userObjectId,
-      members: [{
-        user_id: userObjectId,
-        role: 'owner',
-        status: 'accepted',
-        invited_at: new Date(),
-        accepted_at: new Date()
-      }],
-      last_accessed_at: new Date()
-    });
+  private getFileType(filename: string): string {
+      const ext = filename.split('.').pop()?.toLowerCase();
+      if (ext === 'pdf') return 'pdf';
+      if (['doc', 'docx'].includes(ext || '')) return 'docx';
+      if (['jpg', 'jpeg', 'png', 'gif'].includes(ext || '')) return 'image';
+      if (['mp3', 'wav', 'ogg'].includes(ext || '')) return 'audio';
+      return 'text';
+  }
+  // private orchestrator = new OrchestratorService();
 
-    const savedProject = await project.save();
+  async createProject(name: string,description: string,ownerId: string,opts: { rawText?: string; files?: UploadedFile[] }) {
+    if (!Types.ObjectId.isValid(ownerId)) throw new Error("Invalid ownerId");
+    const ownerObjectId = new Types.ObjectId(ownerId);
 
-    const firstVersion = await Version.create({
-      project_id: savedProject._id,
-      version_number: 1,
-      name: 'Version 1',
-      description: 'Initial version',
-      created_by: userObjectId,
+    const project = await Project.create({
+      name,
+      description,
+      owner_id: ownerObjectId,
       created_at: new Date(),
-      data: {}
+      members: [{
+        user_id: ownerObjectId,
+        role: "owner",
+        status: "accepted",
+        invited_by: ownerObjectId,
+        invited_at: new Date(),
+        responded_at: new Date(),
+        history: [{ action: "accepted", by: ownerObjectId, at: new Date() }],
+      }],
     });
 
-    savedProject.current_version = firstVersion._id;
-    await savedProject.save();
+    const version = await Version.create({
+      project_id: project._id,
+      version_number: 1,
+      created_by: ownerObjectId,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
 
-    return await Project.findById(savedProject._id)
-      .populate('owner_id', 'full_name email avatar_url')
-      .populate('members.user_id', 'full_name email avatar_url');
+    const inputs: any[] = [];
+    if (opts.rawText) {
+      inputs.push({
+        project_id: project._id,
+        version_id: version._id,
+        type: "text",
+        raw_text: opts.rawText,
+        processing_status: "pending",
+        is_processed: false,
+        created_at: new Date(),
+      });
+    }
+
+    if (opts.files && opts.files.length > 0) {
+      for (const file of opts.files) {
+        const fileType = this.getFileType(file.name);
+        inputs.push({
+          project_id: project._id,
+          version_id: version._id,
+          type: fileType,
+          original_filename: file.name,
+          mime_type: file.mimetype,
+          raw_text: file.data.toString("utf8"),
+          processing_status: "pending",
+          is_processed: false,
+          created_at: new Date(),
+        });
+      }
+    }
+
+    if (inputs.length > 0) {
+      await Input.insertMany(inputs);
+    }
+
+    try {
+      // await this.orchestrator.run(
+      //   project._id.toString(),
+      //   version._id.toString(),
+      //   {
+      //     files: opts.files || [],
+      //     rawText: opts.rawText,
+      //     mode: "full",
+      //   }
+      // );
+    } catch (err) {
+      console.error("Error in OrchestratorService:", err);
+    }
+    const populatedProject = await Project.findById(project._id)
+      .populate("owner_id", "full_name email avatar_url")
+      .populate("members.user_id", "full_name email avatar_url");
+
+    return {
+      project: populatedProject,
+      version,
+      inputs,
+    };
   }
   
   async updateProject(projectId: string, userId: string, data: UpdateProjectRequest) {

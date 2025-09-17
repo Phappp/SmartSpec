@@ -9,12 +9,8 @@ export default function initProjectRoute(controller: ProjectController) {
   // GET /myproject -> lấy danh sách project của user
   router.get('/myproject',requireAuthorizedUser,(req: Request, res: Response, next: NextFunction) =>controller.getMyProjects(req as any, res, next));
 
-  // POST /projects -> tạo project mới
-  router.post('/',requireAuthorizedUser,(req: Request, res: Response, next: NextFunction) =>controller.createProject(req as any, res, next));
-  
   // POST /projects -> tạo project mới với upload file
-  const upload = multer({ storage: multer.memoryStorage() }); 
-  router.post('/inputfiles', upload.array('files'), controller.createProjectWithInput);
+  router.post("/",requireAuthorizedUser,(req: Request, res: Response, next: NextFunction) => controller.createProject(req as any, res, next));
 
   // PUT /:projectId -> update project
   router.put('/:projectId',requireAuthorizedUser,(req: Request, res: Response, next: NextFunction) =>controller.updateProject(req as any, res, next));
