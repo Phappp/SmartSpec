@@ -141,7 +141,7 @@ export class AuthServiceImpl implements AuthService {
     };
   }
 
-  async sendVerificationEmail(email: string): Promise<string> {
+  async sendVerificationEmail(email: string): Promise<boolean> {
     const user = await User.findOne({ email });
     if (user) {
       throw new Error("Email already exists");
@@ -155,7 +155,7 @@ export class AuthServiceImpl implements AuthService {
     if (!mailIsSent) {
       throw new Error("Failed to send email");
     }
-    return verifyToken;
+    return true;
   }
 
   async verifyEmail(token: string): Promise<boolean> {

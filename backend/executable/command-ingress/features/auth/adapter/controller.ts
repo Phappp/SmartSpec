@@ -195,13 +195,13 @@ class AuthController extends BaseController {
         message: "Verify email successfully",
         data: verifyEmailResult,
         code: StatusCodes.OK,
-      };
+      };  
 
       handleServiceResponse(serviceResponse, res);
     } catch (error) {
       res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
         status: "Failed",
-        message: "Error sending verification email",
+        message: (error as Error).message,
         error: (error as Error).message,
       });
     }
