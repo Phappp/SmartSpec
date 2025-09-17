@@ -5,9 +5,6 @@ const userSchema = new Schema({
   email: { type: String, required: true, unique: true }, 
   password: {
     type: String,
-    required: function () {
-      return !this.isGoogleAccount;
-    },
   },
   name: { type: String }, 
   system_role: {
@@ -32,6 +29,7 @@ const userSchema = new Schema({
   dob: Date,
   accessToken: String,
   refreshToken: String,
+  provider: { type: String, enum: ["LOCAL", "GOOGLE"], default: "LOCAL" },
   created_at: { type: Date, default: Date.now }, // Ngày tạo tài khoản
   updated_at: { type: Date },
 });

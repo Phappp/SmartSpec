@@ -36,7 +36,7 @@ class AuthController extends BaseController {
       next,
       async (req, res, _next) => {
         const exchangeGoogleTokenBody = new ExchangeGoogleTokenBody(req.query);
-
+        console.log("exchangeGoogleTokenBody: ", exchangeGoogleTokenBody);
         const validateResult = await exchangeGoogleTokenBody.validate();
         if (!validateResult.ok) {
           responseValidationError(res, validateResult.errors[0]);

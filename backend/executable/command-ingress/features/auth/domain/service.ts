@@ -68,6 +68,7 @@ export class AuthServiceImpl implements AuthService {
             images: [],
           },
         ],
+        provider: "GOOGLE",
       });
 
       await user.save();
