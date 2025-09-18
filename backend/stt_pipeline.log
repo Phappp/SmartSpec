@@ -1,0 +1,192 @@
+2025-09-10 19:45:57,175 - INFO - Whisper device: cpu
+2025-09-10 19:45:57,176 - INFO - Đang tải mô hình Whisper: small
+2025-09-10 19:46:08,792 - INFO - Model small đã tải thành công trên cpu
+2025-09-10 19:46:09,092 - INFO - Bắt đầu xử lý: 1757508342573_studentbook1.mp3
+2025-09-10 19:46:27,691 - INFO - Áp dụng high-pass filter...
+2025-09-10 19:46:27,871 - INFO - Áp dụng band-pass filter...
+2025-09-10 19:46:27,872 - ERROR - Lỗi trong tiền xử lý âm thanh: Digital filter critical frequencies must be 0 < Wn < 1
+2025-09-10 19:46:27,873 - ERROR - Lỗi trong pipeline chính: Digital filter critical frequencies must be 0 < Wn < 1
+2025-09-10 19:46:27,874 - ERROR - Lỗi khi xử lý E:\SmartSpec\backend\uploads_Audio\1757508342573_studentbook1.mp3: Digital filter critical frequencies must be 0 < Wn < 1
+2025-09-10 19:52:05,663 - INFO - Whisper device: cpu
+2025-09-10 19:52:05,664 - INFO - Đang tải mô hình Whisper: small
+2025-09-10 19:52:31,861 - INFO - Model small đã tải thành công trên cpu
+2025-09-10 19:52:32,222 - INFO - Bắt đầu xử lý: 1757508709534_studentbook1.mp3
+2025-09-10 19:52:32,222 - INFO - Bắt đầu tiền xử lý: 1757508709534_studentbook1.mp3
+2025-09-10 19:53:15,758 - INFO - Audio loaded: 91.73s, sample rate: 16000Hz
+2025-09-10 19:53:15,760 - INFO - Áp dụng high-pass filter...
+2025-09-10 19:53:15,886 - INFO - Áp dụng band-pass filter...
+2025-09-10 19:53:15,887 - ERROR - Lỗi trong tiền xử lý âm thanh: Digital filter critical frequencies must be 0 < Wn < 1
+2025-09-10 19:53:15,909 - ERROR - Traceback (most recent call last):
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 157, in advanced_audio_preprocessing
+    y = band_pass_filter(y, sr)
+        ^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 131, in band_pass_filter
+    b, a = butter(4, [low, high], btype='band')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 3475, in butter
+    return iirfilter(N, Wn, btype=btype, analog=analog,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 2847, in iirfilter
+    raise ValueError("Digital filter critical frequencies "
+ValueError: Digital filter critical frequencies must be 0 < Wn < 1
+
+2025-09-10 19:53:15,910 - ERROR - Lỗi trong pipeline chính: Digital filter critical frequencies must be 0 < Wn < 1
+2025-09-10 19:53:15,912 - ERROR - Traceback (most recent call last):
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 312, in transcribe_audio
+    clean_path = advanced_audio_preprocessing(audio_path)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 157, in advanced_audio_preprocessing
+    y = band_pass_filter(y, sr)
+        ^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 131, in band_pass_filter
+    b, a = butter(4, [low, high], btype='band')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 3475, in butter
+    return iirfilter(N, Wn, btype=btype, analog=analog,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 2847, in iirfilter
+    raise ValueError("Digital filter critical frequencies "
+ValueError: Digital filter critical frequencies must be 0 < Wn < 1
+
+2025-09-10 19:57:53,690 - INFO - Whisper device: cpu
+2025-09-10 19:57:53,691 - INFO - Đang tải mô hình Whisper: small
+2025-09-10 19:58:22,879 - INFO - Model small đã tải thành công trên cpu
+2025-09-10 19:58:23,236 - INFO - Bắt đầu xử lý: 1757509055112_studentbook1.mp3
+2025-09-10 19:58:23,237 - INFO - Bắt đầu tiền xử lý: 1757509055112_studentbook1.mp3
+2025-09-10 19:58:38,858 - INFO - Audio loaded: 91.73s, sample rate: 16000Hz
+2025-09-10 19:58:38,859 - INFO - Áp dụng high-pass filter...
+2025-09-10 19:58:39,001 - INFO - Áp dụng band-pass filter...
+2025-09-10 19:58:39,002 - ERROR - Lỗi trong tiền xử lý âm thanh: Digital filter critical frequencies must be 0 < Wn < 1
+2025-09-10 19:58:39,009 - ERROR - Traceback (most recent call last):
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 157, in advanced_audio_preprocessing
+    y = band_pass_filter(y, sr)
+        ^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 131, in band_pass_filter
+    b, a = butter(4, [low, high], btype='band')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 3475, in butter
+    return iirfilter(N, Wn, btype=btype, analog=analog,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 2847, in iirfilter
+    raise ValueError("Digital filter critical frequencies "
+ValueError: Digital filter critical frequencies must be 0 < Wn < 1
+
+2025-09-10 19:58:39,009 - ERROR - Lỗi trong pipeline chính: Digital filter critical frequencies must be 0 < Wn < 1
+2025-09-10 19:58:39,010 - ERROR - Traceback (most recent call last):
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 312, in transcribe_audio
+    clean_path = advanced_audio_preprocessing(audio_path)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 157, in advanced_audio_preprocessing
+    y = band_pass_filter(y, sr)
+        ^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 131, in band_pass_filter
+    b, a = butter(4, [low, high], btype='band')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 3475, in butter
+    return iirfilter(N, Wn, btype=btype, analog=analog,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 2847, in iirfilter
+    raise ValueError("Digital filter critical frequencies "
+ValueError: Digital filter critical frequencies must be 0 < Wn < 1
+
+2025-09-10 20:00:25,546 - INFO - Whisper device: cpu
+2025-09-10 20:00:25,547 - INFO - Đang tải mô hình Whisper: small
+2025-09-10 20:00:44,971 - INFO - Model small đã tải thành công trên cpu
+2025-09-10 20:00:52,452 - INFO - Bắt đầu xử lý: 1757509194726_studentbook1.mp3
+2025-09-10 20:00:52,452 - INFO - Bắt đầu tiền xử lý: 1757509194726_studentbook1.mp3
+2025-09-10 20:01:45,591 - INFO - Audio loaded: 91.73s, sample rate: 16000Hz
+2025-09-10 20:01:45,594 - INFO - Áp dụng high-pass filter...
+2025-09-10 20:01:45,775 - INFO - Áp dụng band-pass filter...
+2025-09-10 20:01:45,781 - ERROR - Lỗi trong tiền xử lý âm thanh: Digital filter critical frequencies must be 0 < Wn < 1
+2025-09-10 20:01:45,798 - ERROR - Traceback (most recent call last):
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 157, in advanced_audio_preprocessing
+    y = band_pass_filter(y, sr)
+        ^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 131, in band_pass_filter
+    b, a = butter(4, [low, high], btype='band')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 3475, in butter
+    return iirfilter(N, Wn, btype=btype, analog=analog,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 2847, in iirfilter
+    raise ValueError("Digital filter critical frequencies "
+ValueError: Digital filter critical frequencies must be 0 < Wn < 1
+
+2025-09-10 20:01:45,799 - ERROR - Lỗi trong pipeline chính: Digital filter critical frequencies must be 0 < Wn < 1
+2025-09-10 20:01:45,803 - ERROR - Traceback (most recent call last):
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 312, in transcribe_audio
+    clean_path = advanced_audio_preprocessing(audio_path)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 157, in advanced_audio_preprocessing
+    y = band_pass_filter(y, sr)
+        ^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 131, in band_pass_filter
+    b, a = butter(4, [low, high], btype='band')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 3475, in butter
+    return iirfilter(N, Wn, btype=btype, analog=analog,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 2847, in iirfilter
+    raise ValueError("Digital filter critical frequencies "
+ValueError: Digital filter critical frequencies must be 0 < Wn < 1
+
+2025-09-10 20:06:41,432 - INFO - Whisper device: cpu
+2025-09-10 20:06:41,433 - INFO - Đang tải mô hình Whisper: small
+2025-09-10 20:07:16,801 - INFO - Model small đã tải thành công trên cpu
+2025-09-10 20:07:17,677 - INFO - Bắt đầu xử lý: 1757509581432_studentbook1.mp3
+2025-09-10 20:07:17,678 - INFO - Bắt đầu tiền xử lý: 1757509581432_studentbook1.mp3
+2025-09-10 20:07:38,217 - INFO - Audio loaded: 91.73s, sample rate: 16000Hz
+2025-09-10 20:07:38,218 - INFO - Áp dụng high-pass filter...
+2025-09-10 20:07:38,299 - INFO - Áp dụng band-pass filter...
+2025-09-10 20:07:38,300 - ERROR - Lỗi trong tiền xử lý âm thanh: Digital filter critical frequencies must be 0 < Wn < 1
+2025-09-10 20:07:38,305 - ERROR - Traceback (most recent call last):
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 157, in advanced_audio_preprocessing
+    y = band_pass_filter(y, sr)
+        ^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 131, in band_pass_filter
+    b, a = butter(4, [low, high], btype='band')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 3475, in butter
+    return iirfilter(N, Wn, btype=btype, analog=analog,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 2847, in iirfilter
+    raise ValueError("Digital filter critical frequencies "
+ValueError: Digital filter critical frequencies must be 0 < Wn < 1
+
+2025-09-10 20:07:38,306 - ERROR - Lỗi trong pipeline chính: Digital filter critical frequencies must be 0 < Wn < 1
+2025-09-10 20:07:38,307 - ERROR - Traceback (most recent call last):
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 312, in transcribe_audio
+    clean_path = advanced_audio_preprocessing(audio_path)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 157, in advanced_audio_preprocessing
+    y = band_pass_filter(y, sr)
+        ^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\SmartSpec\backend\executable\command-ingress\features\handle_audio\pythonScript\process_STT.py", line 131, in band_pass_filter
+    b, a = butter(4, [low, high], btype='band')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 3475, in butter
+    return iirfilter(N, Wn, btype=btype, analog=analog,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ASUS\AppData\Local\Programs\Python\Python311\Lib\site-packages\scipy\signal\_filter_design.py", line 2847, in iirfilter
+    raise ValueError("Digital filter critical frequencies "
+ValueError: Digital filter critical frequencies must be 0 < Wn < 1
+
+2025-09-10 20:11:06,728 - INFO - Whisper device: cpu
+2025-09-10 20:11:06,733 - INFO - Đang tải mô hình Whisper: small
+2025-09-10 20:11:36,403 - INFO - Model small đã tải thành công trên cpu
+2025-09-10 20:11:37,441 - INFO - Bắt đầu xử lý: 1757509842145_studentbook1.mp3
+2025-09-10 20:11:37,445 - INFO - Bắt đầu tiền xử lý: 1757509842145_studentbook1.mp3
+2025-09-10 20:12:42,733 - INFO - Audio loaded: 91.73s, sample rate: 16000Hz
+2025-09-10 20:12:42,735 - INFO - Áp dụng high-pass filter...
+2025-09-10 20:12:42,883 - INFO - Áp dụng band-pass filter...
+2025-09-10 20:12:42,990 - INFO - Khử nhiễu...
+2025-09-10 20:12:47,591 - INFO - Nén dynamic range...
+2025-09-10 20:12:47,636 - INFO - Điều chỉnh gain tự động...
+2025-09-10 20:12:47,675 - INFO - Chuẩn hóa âm lượng...
+2025-09-10 20:12:47,777 - INFO - Phát hiện hoạt động giọng nói...
+2025-09-10 20:12:52,391 - INFO - Đã cắt bỏ 926031 samples im lặng
+2025-09-10 20:12:52,582 - INFO - Đã xử lý và lưu file tạm: tmppc0li0_6_processed.wav
+2025-09-10 20:12:52,612 - INFO - Cắt file thành chunks 30s, tổng thời lượng: 33.9s
+2025-09-10 20:12:52,784 - INFO - Đã tạo 2 chunks
+2025-09-10 20:12:52,785 - INFO - Bắt đầu transcribe...
+2025-09-10 20:17:15,206 - INFO - Hoàn thành xử lý: 1757509842145_studentbook1.mp3

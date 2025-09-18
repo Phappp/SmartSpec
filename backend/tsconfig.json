@@ -5,9 +5,18 @@
     "typeRoots": [
       "./node_modules/@types"
     ],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
   },
+  "skipLibCheck": true,
+  "emitDecoratorMetadata": true,
   "include": [
-    "executable/command-ingress/**/*"
+    "executable/command-ingress/**/*",
+    "internal/**/*"
   ]
 }
