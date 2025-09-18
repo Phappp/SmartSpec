@@ -13,6 +13,8 @@
       ]
     }
   },
+  "skipLibCheck": true,
+  "emitDecoratorMetadata": true,
   "include": [
     "executable/command-ingress/**/*",
     "internal/**/*"

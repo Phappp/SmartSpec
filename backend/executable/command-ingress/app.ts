@@ -9,11 +9,10 @@ import cors from 'cors';
 import { recoverMiddleware } from './middlewares/recover';
 import { createServer } from 'http';
 
-import { createMockLoginRoute } from './utils/mock-login';
-// import initAuthRoute from './features/auth/adapter/route';
-// import { AuthController } from './features/auth/adapter/controller';
-// import { AuthServiceImpl } from './features/auth/domain/service';
-// import { GoogleIdentityBroker } from './features/auth/identity-broker/google-idp.broker';
+import initAuthRoute from './features/auth/adapter/route';
+import { AuthController } from './features/auth/adapter/controller';
+import { AuthServiceImpl } from './features/auth/domain/service';
+import { GoogleIdentityBroker } from './features/auth/identity-broker/google-idp.broker';
 
 import initOcrRoute from './features/handle_image/adapter/route';
 import { OcrController } from './features/handle_image/adapter/controller';
@@ -43,6 +42,10 @@ import initOrchestratorRoute from './features/orchestrator/adapter/route';
 import { OrchestratorController } from './features/orchestrator/adapter/controller';
 import { OrchestratorService } from './features/orchestrator/domain/service';
 
+import { ProjectService } from './features/project/domain/service';
+import { ProjectController } from './features/project/adapter/controller';
+import initProjectRoute from './features/project/adapter/route';
+
 
 const app = express();
 
@@ -62,21 +65,20 @@ const createHttpServer = (redisClient: any) => {
 
 
   // Construct services
-  // const googleIdentityBroker = new GoogleIdentityBroker({
-  //   clientID: env.GOOGLE_OAUTH_CLIENT_ID,
-  //   clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET,
-  //   redirectURL: env.GOOGLE_OAUTH_REDIRECT_URL,
-  // });
+  const googleIdentityBroker = new GoogleIdentityBroker({
+    clientID: env.GOOGLE_OAUTH_CLIENT_ID,
+    clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET,
+    redirectURL: env.GOOGLE_OAUTH_REDIRECT_URL,
+  });
 
-  // const authService = new AuthServiceImpl(
-  //   googleIdentityBroker,
-  //   env.JWT_SECRET,
-  //   env.JWT_REFRESH_SECRET,
-  // );
+  const authService = new AuthServiceImpl(
+    googleIdentityBroker,
+    env.JWT_SECRET,
+    env.JWT_REFRESH_SECRET,
+  );
 
   // Setup route
-  // app.use('/auth', initAuthRoute(new AuthController(authService))); //Xử lý xác thực người dùng
-  app.use('/api/auth', createMockLoginRoute());
+  app.use('/auth', initAuthRoute(new AuthController(authService)));
   app.use('/api/handle_docx', initReadDocxRoute(new ReadDocxController(new ReadDocxService())));
   app.use('/api/handle_pdf', initPdfRoute(new PdfController(new PdfService())));
   app.use('/api/handle_extraction', initExtractorRoute(new ExtractorController(new ExtractorService())));
@@ -84,7 +86,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/handle_image', initOcrRoute(new OcrController(new OcrService())));
   app.use('/api/handle_text', initTextRoute(new TextController(new TextService())));
   app.use('/api/orchestrate', initOrchestratorRoute(new OrchestratorController(new OrchestratorService())));
-
+  app.use('/project', initProjectRoute(new ProjectController(new ProjectService())));
 
 
   app.use(recoverMiddleware);
