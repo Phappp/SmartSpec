@@ -264,31 +264,30 @@ export default {
     const verificationToken = ref("");
 
     onMounted(() => {
-  window.addEventListener("storage", handleStorageEvent);
+      window.addEventListener("storage", handleStorageEvent);
 
-  if (route.query.verified === "true") {
-    // Người dùng vừa click link xác thực email
-    localStorage.setItem("emailVerified", "true");
-    email.value = localStorage.getItem("registerEmail") || "";
-    currentStep.value = 2;
-    localStorage.setItem("registerStep", "2");
-    setTimeout(() => {
-      router.replace({ path: route.path });
-    }, 1000);
-  } else {
-    // Luôn khôi phục từ localStorage khi reload
-    const savedStep = localStorage.getItem("registerStep");
-    const savedEmail = localStorage.getItem("registerEmail");
+      if (route.query.verified === "true") {
+        // Người dùng vừa click link xác thực email
+        localStorage.setItem("emailVerified", "true");
+        email.value = localStorage.getItem("registerEmail") || "";
+        currentStep.value = 2;
+        localStorage.setItem("registerStep", "2");
+        setTimeout(() => {
+          router.replace({ path: route.path });
+        }, 1000);
+      } else {
+        // Luôn khôi phục từ localStorage khi reload
+        const savedStep = localStorage.getItem("registerStep");
+        const savedEmail = localStorage.getItem("registerEmail");
 
-    if (savedStep) {
-      currentStep.value = parseInt(savedStep, 10);
-    }
-    if (savedEmail) {
-      email.value = savedEmail;
-    }
-  }
-});
-
+        if (savedStep) {
+          currentStep.value = parseInt(savedStep, 10);
+        }
+        if (savedEmail) {
+          email.value = savedEmail;
+        }
+      }
+    });
 
     onBeforeUnmount(() => {
       window.removeEventListener("storage", handleStorageEvent);
