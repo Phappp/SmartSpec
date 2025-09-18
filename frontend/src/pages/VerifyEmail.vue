@@ -25,8 +25,8 @@ onMounted(async () => {
       success.value = 'Xác thực email thành công!';
 
       
-      const email = route.query.email || '';
-      localStorage.setItem('registerEmail', email);
+      //const email = route.query.email || '';
+      //localStorage.setItem('registerEmail', email);
       localStorage.setItem('emailVerified', 'true');
 
       
