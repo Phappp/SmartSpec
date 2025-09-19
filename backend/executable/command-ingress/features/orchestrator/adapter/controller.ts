@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { OrchestratorService } from '../domain/service';
+import Project from "../../../../../internal/model/project";
 
 export class OrchestratorController {
     constructor(private readonly service: OrchestratorService) { }
@@ -8,11 +9,11 @@ export class OrchestratorController {
         const project_id = req.params.project_id || (req.query.project_id as string) || (req.body.project_id as string) || (req.headers['x-project-id'] as string);
         const version_id = req.params.version_id || (req.query.version_id as string) || (req.body.version_id as string) || (req.headers['x-version-id'] as string);
         const mode = (req.query.mode === 'incremental' ? 'incremental' : 'full') as 'full' | 'incremental';
-
+        const project = await Project.findById(project_id).lean();
         if (!project_id || !version_id) {
             return res.status(400).json({ success: false, error: 'Missing project_id or version_id' });
         }
-
+        const language = project.language;
         const rawText: string | undefined = req.body?.raw_text;
         const files = req.files && (req.files as any).files ? (Array.isArray((req.files as any).files) ? (req.files as any).files : [(req.files as any).files]) : [];
 
@@ -29,7 +30,8 @@ export class OrchestratorController {
                 files,
                 rawText,
                 mode
-            });
+            },
+                language);
 
             return res.status(200).json({ success: true, data: result });
         } catch (e: any) {

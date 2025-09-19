@@ -39,7 +39,7 @@ export class ProjectController extends BaseController {
   createProject = async (req: HttpRequest, res: Response, next: NextFunction) => {
         console.log("[CONTROLLER] Bắt đầu xử lý trong ProjectController.create...");
         try {
-            const { name, description, rawText } = req.body;
+            const { name, description, rawText, language = 'vi-VN' } = req.body;
             const ownerId = req.getSubject();
 
             // DEBUG: Ghi log tất cả các thông tin đầu vào
@@ -65,7 +65,8 @@ export class ProjectController extends BaseController {
                 description,
                 ownerId,
                 files,
-                rawText
+                language,
+                rawText,
             );
 
             console.log(`[CONTROLLER] Service đã thực thi thành công. Project ID: ${newProject._id}`);

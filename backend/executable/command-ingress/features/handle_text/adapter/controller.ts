@@ -27,16 +27,18 @@ export class TextController {
             if (!versionExists) return res.status(404).json({ success: false, error: `Version ${version_id} not found` });
 
             const saved = await this.textService.saveText(raw_text, project_id, version_id, { language });
-            return res.status(201).json({ success: true, input_id: saved._id });
+
+            // Trả về thông báo khác nhau tùy vào việc tạo mới hay cập nhật
+            const message = saved.isNew ? 'Text created successfully' : 'Text updated successfully';
+
+            return res.status(201).json({
+                success: true,
+                input_id: saved._id,
+                message,
+                action: saved.isNew ? 'created' : 'updated'
+            });
         } catch (e: any) {
             return res.status(500).json({ success: false, error: e?.message || 'Internal error' });
         }
     }
 }
-
-
-
-
-
-
-

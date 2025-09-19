@@ -7,7 +7,7 @@ export class TextService {
         const sample = (text || '').slice(0, 5000);
         if (!sample.trim()) return null;
 
-        const hasVietnamese = /[ăâđêôơưĂÂĐÊÔƠƯàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵÀÁẢÃẠẰẮẲẴẶẦẤẨẪẬÈÉẺẼẸỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌỒỐỔỖỘỜỚỞỠỢÙÚỦŨỤỪỨỬỮỰỲÝỶỸỴ]/.test(sample);
+        const hasVietnamese = /[ăâđêôơưĂÂĐÊÔƠƯàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵÀÁẢÃẠẰẮẲẴẶẦẤẨẪẬÈÉẺẼẸỀẾỂỄỆÌÍỉĨỊÒÓỎÕỌỒỐỔỖỘỜỚỞỠỢÙÚỦŨỤỪỨỬỮỰỲÝỶỸỴ]/.test(sample);
         const hasHiraganaKatakana = /[\u3040-\u30ff]/.test(sample);
         const hasHangul = /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/.test(sample);
         const hasHan = /[\u4E00-\u9FFF]/.test(sample);
@@ -27,57 +27,84 @@ export class TextService {
     ) {
         const detected = options?.language || this.detectLanguageFromText(rawText);
         const textHash = HashUtil.calculateTextHash(rawText);
-        const input = new Input({
+        
+        // Tìm input hiện tại cùng version và project
+        const existingInput = await Input.findOne({
             project_id: projectId,
             version_id: versionId,
-            type: 'text',
-            original_filename: null,
-            mime_type: 'text/plain',
-            raw_text: rawText || '',
-            text_hash: textHash,
-            paragraphs: [],
-            tables: [],
-            metadata: {
+            type: 'text'
+        });
+
+        if (existingInput) {
+            // Cập nhật input hiện tại
+            existingInput.raw_text = rawText || '';
+            existingInput.text_hash = textHash;
+            existingInput.metadata = {
+                ...existingInput.metadata,
                 language: detected || null,
                 file_size: (rawText || '').length,
-                pages: 1,
-                is_scanned: false,
-                created: new Date(),
                 modified: new Date(),
                 paragraphs_count: 0,
-                tables_count: 0,
-                headers: [],
-                footers: []
-            },
-            confidence_score: 1.0,
-            quality_score: 1.0,
-            processing_status: 'completed',
-            cleaned_text: rawText || '',
-            language: detected || null,
-            pipeline_steps: { extraction: true, lang_detect: { ok: true, value: detected || null } },
-            is_processed: false
-        });
+                tables_count: 0
+            };
+            existingInput.confidence_score = 1.0;
+            existingInput.quality_score = 1.0;
+            existingInput.processing_status = 'completed';
+            existingInput.cleaned_text = rawText || '';
+            existingInput.language = detected || null;
+            existingInput.pipeline_steps = { 
+                extraction: true, 
+                lang_detect: { ok: true, value: detected || null } 
+            };
+            existingInput.is_processed = false; // Đặt lại thành false
+            existingInput.updated_at = new Date(); // Cập nhật updated_at
 
-        const saved = await input.save();
+            const saved = await existingInput.save();
+            return saved;
+        } else {
+            // Tạo input mới nếu không tìm thấy
+            const input = new Input({
+                project_id: projectId,
+                version_id: versionId,
+                type: 'text',
+                original_filename: null,
+                mime_type: 'text/plain',
+                raw_text: rawText || '',
+                text_hash: textHash,
+                paragraphs: [],
+                tables: [],
+                metadata: {
+                    language: detected || null,
+                    file_size: (rawText || '').length,
+                    pages: 1,
+                    is_scanned: false,
+                    created: new Date(),
+                    modified: new Date(),
+                    paragraphs_count: 0,
+                    tables_count: 0,
+                    headers: [],
+                    footers: []
+                },
+                confidence_score: 1.0,
+                quality_score: 1.0,
+                processing_status: 'completed',
+                cleaned_text: rawText || '',
+                language: detected || null,
+                pipeline_steps: { extraction: true, lang_detect: { ok: true, value: detected || null } },
+                is_processed: false,
+                created_at: new Date(),
+                updated_at: new Date()
+            });
 
-        // Link vào Version.inputs và cập nhật merged_text
-        await Version.findByIdAndUpdate(versionId, {
-            $push: { inputs: saved._id },
-            $set: { updated_at: new Date() }
-        });
+            const saved = await input.save();
 
-        // if (rawText && rawText.trim().length > 0) {
-        //     try {
-        //         const current = await Version.findById(versionId).lean();
-        //         const merged = [current?.merged_text || '', rawText].filter(Boolean).join('\n\n');
-        //         await Version.findByIdAndUpdate(versionId, {
-        //             $set: { merged_text: merged, updated_at: new Date() }
-        //         });
-        //     } catch { }
-        // }
+            // Link vào Version.inputs
+            await Version.findByIdAndUpdate(versionId, {
+                $push: { inputs: saved._id },
+                $set: { updated_at: new Date() }
+            });
 
-        return saved;
+            return saved;
+        }
     }
 }
-
-

@@ -14,17 +14,16 @@ export class OrchestratorService {
     private requirementService = new RequirementService();
     private util = new UtilService();
 
+    // THAY ĐỔI: Thêm `language` vào chữ ký hàm
     async run(
         projectId: string,
         versionId: string,
-        opts: { files: UploadedFile[]; rawText?: string; mode?: "full" | "incremental" }
+        opts: { files: UploadedFile[]; rawText?: string; mode?: "full" | "incremental" },
+        language: string
     ) {
-        const [project, version] = await Promise.all([
-            Project.findById(projectId).lean(),
-            Version.findById(versionId).lean(),
-        ]);
-        if (!project) throw new Error("Project not found");
+        const version = await Version.findById(versionId).lean();
         if (!version) throw new Error("Version not found");
+        // Không cần lấy project nữa vì language đã được truyền vào
 
         // 1. Xử lý input (file + raw text)
         const { newFilesCount, newTextProvided } = await this.inputService.handleInputs(
@@ -60,23 +59,38 @@ export class OrchestratorService {
             }
         }
         if (!inputs || inputs.length === 0) {
-            throw new Error("Không có input hợp lệ để xử lý.");
+            // Sửa lại để không ném lỗi mà trả về model hiện tại
+            console.warn("Không có input hợp lệ để xử lý. Trả về trạng thái hiện tại.");
+            return {
+                version_id: versionId,
+                inputs_count: 0,
+                requirement_model: version.requirement_model || [],
+                mode: opts.mode,
+            };
         }
 
         // Debug log
         console.log("Mode:", opts.mode || "full");
+        console.log("Language:", language); // Log ngôn ngữ
         console.log(
             "Inputs to process:",
             inputs.map((i) => ({
                 id: i._id,
                 processed: i.is_processed,
-                completed: i.is_completed,
+                status: i.processing_status,
                 textLength: (i.cleaned_text || i.raw_text || "").length
             }))
         );
 
         // 4. Gọi finalize để phân tích requirement
-        return this.requirementService.finalize(versionId, opts.mode || "full", inputs, this.gemini);
+        // THAY ĐỔI: Truyền `language` vào RequirementService
+        return this.requirementService.finalize(
+            versionId,
+            opts.mode || "full",
+            inputs,
+            this.gemini,
+            language
+        );
     }
 
     async resolveDuplicate(versionId: string, conflictId: string, keep: "old" | "new") {

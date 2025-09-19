@@ -75,7 +75,8 @@ export class RequirementService {
         versionId: string,
         mode: "full" | "incremental",
         inputs: any[],
-        gemini: GeminiService
+        gemini: GeminiService,
+        language: string
     ) {
         const version = await Version.findById(versionId).lean();
         if (!version) throw new Error("Version not found");
@@ -138,7 +139,7 @@ export class RequirementService {
                             console.log(
                                 `Processing chunk ${index + 1}/${chunks.length} for input ${input._id}`
                             );
-                            const part = await gemini.analyzeRequirements(chunk);
+                            const part = await gemini.analyzeRequirements(chunk, language);
                             if (Array.isArray(part) && part.length > 0) {
                                 inputResults = inputResults.concat(part);
                             }
@@ -172,7 +173,7 @@ export class RequirementService {
                 let existingReq: any = null;
 
                 for (const oldReq of previousRequirements) {
-                    if (await this.isConflict(oldReq, newReq, gemini)) {
+                    if (await this.isConflict(oldReq, newReq, gemini, language)) {
                         existingReq = oldReq;
                         break;
                     }
@@ -196,7 +197,8 @@ export class RequirementService {
             try {
                 finalRequirements = await gemini.addRelatedUseCases(
                     finalRequirements,
-                    { incremental: mode === "incremental" }
+                    { incremental: mode === "incremental" },
+                    language
                 );
             } catch (err: any) {
                 console.error("⚠️ Lỗi khi bổ sung related_usecases:", err.message);
@@ -248,66 +250,60 @@ export class RequirementService {
      * Giải quyết conflict khi user chọn giữ use case cũ hoặc mới
      */
     async resolveDuplicate(versionId: string, conflictId: string, keep: "old" | "new") {
-        const version = await Version.findById(versionId).lean();
+        const version = await Version.findById(versionId); // Lấy Mongoose document để có thể save()
         if (!version) throw new Error("Version not found");
 
-        const currentRequirements = (version as any).requirement_model || [];
-        const pendingConflicts = (version as any).pending_conflicts || [];
+        const currentRequirements = version.requirement_model || [];
+        const pendingConflicts = version.pending_conflicts || [];
 
         // Tìm đúng conflict theo UUID
-        const conflict = pendingConflicts.find((c: any) => c.conflict_id === conflictId);
-        if (!conflict) throw new Error("Conflict not found");
+        const conflictIndex = pendingConflicts.findIndex((c: any) => c.conflict_id === conflictId);
+        if (conflictIndex === -1) throw new Error("Conflict not found");
 
-        // Helper: so sánh requirement dựa trên name + goal + role + reason (ignore case/space)
-        const normalizeStr = (s: string) => (s || "").trim().toLowerCase();
-        const isSameRequirement = (req: any, target: any) => {
-            return (
-                normalizeStr(req.name) === normalizeStr(target.name) &&
-                normalizeStr(req.goal) === normalizeStr(target.goal) &&
-                normalizeStr(req.role) === normalizeStr(target.role) &&
-                normalizeStr(req.reason) === normalizeStr(target.reason)
-            );
+        const conflict = pendingConflicts[conflictIndex];
+
+        let finalRequirements = [...currentRequirements]; // Tạo bản sao để làm việc
+
+        // Helper: so sánh requirement dựa trên ID
+        const isSameRequirementById = (req: any, targetId: string) => {
+            return req.id === targetId;
         };
 
-        let filtered: any[];
-        if (keep === "old") {
-            // Giữ requirement cũ → loại requirement mới
-            filtered = currentRequirements.filter((req: any) => !isSameRequirement(req, conflict.new));
-        } else {
-            // Giữ requirement mới → loại requirement cũ
-            filtered = currentRequirements.filter((req: any) => !isSameRequirement(req, conflict.existing));
-
-            // ✅ Đảm bảo thêm conflict.new vào model nếu nó chưa có
-            const alreadyExists = filtered.some((req: any) => isSameRequirement(req, conflict.new));
-            if (!alreadyExists) {
-                filtered.push(conflict.new);
-            }
+        // ---- LOGIC ĐÃ ĐƯỢC THAY ĐỔI ----
+        if (keep === "new") {
+            // DÙNG MAP ĐỂ THAY THẾ "TẠI CHỖ"
+            // Duyệt qua mảng, nếu tìm thấy use case cũ thì thay nó bằng use case mới
+            finalRequirements = currentRequirements.map(req => {
+                if (isSameRequirementById(req, conflict.existing.id)) {
+                    // Trả về use case mới để thay thế
+                    return conflict.new;
+                }
+                // Giữ nguyên use case hiện tại
+                return req;
+            });
         }
-
-        // Normalize lại ID sau khi merge
-        const normalized = this.normalizeUseCaseIds(filtered, "UC");
+        // Nếu keep === "old", chúng ta không cần làm gì với mảng `requirement_model` cả,
+        // vì use case mới chưa bao giờ được thêm vào.
 
         // Xóa conflict đã giải quyết
-        const updatedConflicts = pendingConflicts.filter((c: any) => c.conflict_id !== conflictId);
+        version.pending_conflicts.splice(conflictIndex, 1);
 
-        await Version.findByIdAndUpdate(versionId, {
-            $set: {
-                requirement_model: normalized,
-                pending_conflicts: updatedConflicts,
-                updated_at: new Date(),
-            },
-        });
+        // Gán lại model đã được xử lý và normalize lại ID
+        version.set('requirement_model', this.normalizeUseCaseIds(finalRequirements, "UC"));
+        version.updated_at = new Date();
+
+        await version.save(); // Lưu lại toàn bộ thay đổi
 
         return {
             version_id: versionId,
-            requirement_model: normalized,
+            requirement_model: version.requirement_model,
             resolved: { conflict_id: conflictId, kept: keep },
         };
     }
 
 
     // Check conflict giữa 2 use case
-    private async isConflict(reqA: any, reqB: any, gemini: GeminiService): Promise<boolean> {
+    private async isConflict(reqA: any, reqB: any, gemini: GeminiService, language: string): Promise<boolean> {
         const a = (reqA.name || reqA.goal || "").toLowerCase();
         const b = (reqB.name || reqB.goal || "").toLowerCase();
         if (!a || !b) return false;
@@ -316,10 +312,10 @@ export class RequirementService {
         if (a === b) return true;
 
         // 2. Check string similarity
-        const score = stringSimilarity.compareTwoStrings(a, b);
+        const score = stringSimilarity.compareTwoStrings(a, b, language);
         if (score >= 0.95) return true; // chỉ khi cực kỳ giống nhau mới coi là conflict
         if (score >= 0.75) {
-            return await gemini.checkConflictWithGemini(a, b);
+            return await gemini.checkConflictWithGemini(a, b, language);
         }
         return false;
 

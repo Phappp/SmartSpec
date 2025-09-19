@@ -93,6 +93,7 @@ const inputSchema = new Schema({
     type: Schema.Types.Mixed,
     default: {}
   },
+  updated_at: { type: Date, default: Date.now },
   is_processed: {
     type: Boolean,
     default: false

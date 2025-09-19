@@ -77,6 +77,12 @@ const projectSchema = new Schema({
     type: String,
     required: true
   },
+  language: {
+    type: String,
+    enum: ['vi-VN', 'en-US'],
+    required: true,
+    default: 'vi-VN'
+  },
   owner_id: {
     type: Schema.Types.ObjectId,
     ref: 'users',

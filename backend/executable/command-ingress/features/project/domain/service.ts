@@ -38,7 +38,8 @@ export class ProjectService {
     description: string,
     ownerId: string,
     files: UploadedFile[],
-    rawText?: string
+    language: string,
+    rawText?: string,
   ) {
     console.log(`[SERVICE] Bắt đầu createProject cho '${name}' của owner '${ownerId}'`);
 
@@ -48,6 +49,7 @@ export class ProjectService {
         name,
         description,
         owner_id: ownerId,
+        language,
         members: [{
           user_id: ownerId,
           role: 'owner',
@@ -84,7 +86,8 @@ export class ProjectService {
       this.orchestratorService.run(
         newProject._id.toString(),
         newVersion._id.toString(),
-        { files, rawText, mode: "full" }
+        { files, rawText, mode: "full" },
+        language
       ).catch(err => {
         console.error(`[SERVICE] Lỗi xử lý nền cho version ${newVersion._id}:`, err);
       });
