@@ -256,10 +256,7 @@ export class ProjectService {
 
   async getDeleteProjects(userId: string) {
     return await Project.find({
-      $or: [
-        { owner_id: new Types.ObjectId(userId) },
-        { 'members.user_id': new Types.ObjectId(userId), 'members.status': 'accepted' }
-      ],
+      owner_id: new Types.ObjectId(userId),
       'status.is_trashed': true
     })
       .populate('owner_id', 'full_name email avatar_url')
@@ -267,6 +264,7 @@ export class ProjectService {
       .sort({ last_accessed_at: -1, updated_at: -1 })
       .lean();
   }
+
 
   async getProjectDetail(projectId: string, userId: string) {
     const project = await Project.findById(projectId)
