@@ -30,5 +30,8 @@ export default function initProjectRoute(controller: ProjectController) {
   // GET /:projectId -> lấy chi tiết project với version hiện tại 
   router.get('/:projectId',requireAuthorizedUser,(req: Request, res: Response, next: NextFunction) =>controller.getProjectDetail(req as any, res, next));
 
+  //Get /:projectId/getDelete -> lấy danh sách project đã bị xóa/ đưa vào thùng rác
+  router.get('/getDelete',requireAuthorizedUser,(req: Request, res: Response, next: NextFunction)=>controller.getDeleteProjects(req as any, res, next));
+
   return router;
 }

@@ -210,5 +210,19 @@ export class ProjectController extends BaseController {
       }, 200),res);
     });
   };
+
+  getDeleteProjects = async (req: Request & { getSubject?: () => string },res: Response,next: NextFunction) => {
+    return this.execWithTryCatchBlock(req as any, res, next, async (_req, _res) => {
+      const userId = req.getSubject?.();
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401),res);
+        return;
+      }
+
+      const projects = await this.service.getDeleteProjects(userId);
+      handleServiceResponse( new ServiceResponse(ResponseStatus.Success, 'OK', projects, 200),res
+      );
+    });
+  };
 }
 
