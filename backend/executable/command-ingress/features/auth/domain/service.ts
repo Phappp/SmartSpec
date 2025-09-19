@@ -252,7 +252,22 @@ export class AuthServiceImpl implements AuthService {
         otpToken: otpToken,
       } as unknown as string;
     }
-    return { isTwoFactorEnabled: false } as unknown as string;
+    const sessionID = uuidv4();
+    const jwtPayload = {
+      _id: user._id,
+      sub: user._id,
+      sid: sessionID,
+    };
+    const accessToken = this.signAccessToken(jwtPayload);
+    const refreshToken = this.signRefreshToken(jwtPayload);
+    const session = new Session({ sessionID, userID: user._id });
+    await session.save();
+
+    return {
+      refreshToken,
+      accessToken,
+      sub: String(user._id),
+    } as unknown as string;
   }
 
   async verifyOTP(
