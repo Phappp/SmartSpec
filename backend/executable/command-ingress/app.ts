@@ -49,6 +49,7 @@ import initProjectRoute from './features/project/adapter/route';
 
 const app = express();
 
+
 const createHttpServer = (redisClient: any) => {
   const server = createServer(app);
 
@@ -56,7 +57,10 @@ const createHttpServer = (redisClient: any) => {
   if (isProd) {
     app.use(logger);
   }
-  app.use(cors());
+  app.use(cors({
+    origin: "http://localhost:5173", // FE URL
+    credentials: true,
+  }));
   app.use(morgan('combined'));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));

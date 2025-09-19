@@ -1,10 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Login from '../pages/login.vue'
-import Register from '../pages/register.vue'
+import Login from '../pages/Login.vue'
+import Register from '../pages/Register.vue'
 import VerifyEmail from '../pages/VerifyEmail.vue'
 import VerifyOtp from '../pages/VerifyOtp.vue'
 import ForgotPassword from '../pages/ForgotPassword.vue'
 import ResetPassword from '../pages/ResetPassword.vue'
+// 📌 Import thêm các view quản lý project
+import Homepage from '../views/HomePage.vue'
+import ProjectEditor from '../views/ProjectEditor.vue'
+
 const routes = [
   { path: '/', redirect: '/login' },
   { path: '/login', component: Login },
@@ -13,6 +17,9 @@ const routes = [
   { path: '/verify-otp', component: VerifyOtp },
   { path: '/forgot-password', component: ForgotPassword },
   { path: '/reset-password', component: ResetPassword },
+  // Project routes
+  { path: '/dashboard', name: 'Home', component: Homepage },
+  { path: '/editor/:id', name: 'Editor', component: ProjectEditor, props: true }
 ]
 
 const router = createRouter({
