@@ -10,7 +10,7 @@ export default function initOrchestratorRoute(controller: OrchestratorController
     // Run API (full/incremental mode)
     router.post(
         '/projects/:project_id/versions/:version_id/process',
-        requireAuthorizedUser,
+        // requireAuthorizedUser,
         runHandler
     );
 

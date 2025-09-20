@@ -63,16 +63,19 @@ const createHttpServer = (redisClient: any) => {
   app.use(fileUpload());
 
   // --- 2. CẤU HÌNH CORS ĐÚNG CHUẨN ---
-  const corsOptions = {
-    // Thay bằng URL của frontend bạn, đọc từ file .env
-    origin: 'http://localhost:5173',
-    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-    // QUAN TRỌNG: Cho phép trình duyệt gửi header "Authorization"
-    allowedHeaders: "Content-Type,Authorization"
-  };
-  app.use(cors(corsOptions));
-  app.options('*', cors(corsOptions)); // Xử lý các preflight request
-
+  // const corsOptions = {
+  //   // Thay bằng URL của frontend bạn, đọc từ file .env
+  //   origin: 'http://localhost:5173',
+  //   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  //   // QUAN TRỌNG: Cho phép trình duyệt gửi header "Authorization"
+  //   allowedHeaders: "Content-Type,Authorization"
+  // };
+  // app.use(cors(corsOptions));
+  // app.options('*', cors(corsOptions)); // Xử lý các preflight request
+  app.use(cors({
+    origin: "http://localhost:5173", // FE URL
+    credentials: true,
+  }));
 
   // Construct services
   const googleIdentityBroker = new GoogleIdentityBroker({

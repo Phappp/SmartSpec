@@ -63,7 +63,9 @@
           <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
         </div>
 
-        <router-link to="#" class="forgot-password-link">Forgot your password?</router-link>
+        <router-link to="forgot-password" class="forgot-password-link"
+          >Forgot your password?</router-link
+        >
 
         <p class="signup-text">
           Don't have an account?
@@ -92,50 +94,33 @@ export default {
     const emailError = ref('')
     const passwordError = ref('')
 
-    const continueWith = (provider) => {
-      errorMessage.value = ''
-      console.log(`Continue with ${provider}`)
-      // Simulate social login
-      loading.value = true
-      setTimeout(() => {
-        loading.value = false
-        alert(`This would normally redirect to ${provider} authentication`)
-      }, 1000)
-    }
-
     const togglePasswordVisibility = () => {
       passwordVisible.value = !passwordVisible.value
     }
 
     const validateEmail = () => {
       emailError.value = ''
-
       if (!email.value) {
-        emailError.value = 'Email or username is required'
+        emailError.value = 'Email is required'
         return false
       }
-
-      if (!/\S+@\S+\.\S+/.test(email.value) && email.value.length < 3) {
-        emailError.value = 'Please enter a valid email or username'
+      if (!/\S+@\S+\.\S+/.test(email.value)) {
+        emailError.value = 'Please enter a valid email'
         return false
       }
-
       return true
     }
 
     const validatePassword = () => {
       passwordError.value = ''
-
       if (!password.value) {
         passwordError.value = 'Password is required'
         return false
       }
-
       if (password.value.length < 6) {
         passwordError.value = 'Password must be at least 6 characters'
         return false
       }
-
       return true
     }
 
@@ -149,54 +134,45 @@ export default {
       clearErrors()
 
       if (!showPasswordField.value) {
-        // First step - validate email and show password field
         if (validateEmail()) {
-          // Check if email exists in the database
-          loading.value = true
-          try {
-            const response = await axios.post('/api/check-email', { email: email.value })
-            if (response.data.exists) {
-              showPasswordField.value = true
-            } else {
-              emailError.value = 'Email not found. Please sign up first.'
-            }
-          } catch (error) {
-            console.error('Error checking email:', error)
-            errorMessage.value = 'An error occurred. Please try again.'
-          } finally {
-            loading.value = false
-          }
+          showPasswordField.value = true
         }
         return
       }
 
-      // Second step - validate both email and password
-      const isEmailValid = validateEmail()
-      const isPasswordValid = validatePassword()
-
-      if (!isEmailValid || !isPasswordValid) {
+      if (!validateEmail() || !validatePassword()) {
         return
       }
 
-      // Submit login
       loading.value = true
-
       try {
-        // Use axios for login
-        const response = await axios.post('/api/login', {
+        const response = await axios.post('http://localhost:8000/api/auth/login', {
           email: email.value,
           password: password.value,
         })
 
-        if (response.data.success) {
-          // In a real app, you would redirect to dashboard or returnUrl
-          router.push('/dashboard')
+        const data = response.data?.data
+
+        if (!data) {
+          throw new Error('Login response không có token')
+        }
+
+        if (data.isTwoFactorEnabled) {
+          // 2FA case
+          localStorage.setItem('otpToken', data.otpToken)
+          localStorage.setItem('email', email.value)
+          router.push('/verify-otp')
         } else {
-          errorMessage.value = 'Invalid email or password. Please try again.'
+          // Normal login
+          localStorage.setItem('accessToken', data.accessToken)
+          localStorage.setItem('refreshToken', data.refreshToken)
+          localStorage.setItem('userId', data.sub)
+          router.push('/dashboard')
         }
       } catch (error) {
-        console.error('Login error:', error)
-        errorMessage.value = 'An error occurred during login. Please try again.'
+        console.error(error)
+        errorMessage.value =
+          error.response?.data?.message || 'Invalid email or password. Please try again.'
       } finally {
         loading.value = false
       }
@@ -211,7 +187,6 @@ export default {
       loading,
       emailError,
       passwordError,
-      continueWith,
       togglePasswordVisibility,
       handleSubmit,
       clearErrors,
@@ -219,8 +194,6 @@ export default {
   },
 }
 </script>
-
-
 
 <style scoped>
 .container-center {
