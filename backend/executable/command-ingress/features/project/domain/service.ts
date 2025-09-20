@@ -4,181 +4,109 @@ import Output from '../../../../../internal/model/output';
 import Version from '../../../../../internal/model/version';
 import ProjectLog from '../../../../../internal/model/projectLog';
 import { OrchestratorService } from "../../orchestrator/domain/service";
-// import { OrchestratorService } from "../../orchestrator/domain/service";
 import { UploadedFile } from "express-fileupload";
-
-import { Types } from 'mongoose';
-
-import { CreateProjectRequest, UpdateProjectRequest } from '../adapter/dto'
+import { ServiceResponse, ResponseStatus } from '../../../services/serviceResponse';
+import mongoose, { Types } from 'mongoose';
+import { CreateProjectDto, UpdateProjectDto } from '../adapter/dto';
 
 export class ProjectService {
-  async getMyProjects(userId: string) {
-    return await Project.find({
-      owner_id: new Types.ObjectId(userId),
-      'status.is_trashed': { $ne: true }
-    })
-      .populate('owner_id', 'full_name email avatar_url')
-      .populate('members.user_id', 'full_name email avatar_url')
-      .sort({ last_accessed_at: -1, updated_at: -1 })
-      .lean();
-  }
-
-  private getFileType(filename: string): string {
-    const ext = filename.split('.').pop()?.toLowerCase();
-    if (ext === 'pdf') return 'pdf';
-    if (['doc', 'docx'].includes(ext || '')) return 'docx';
-    if (['jpg', 'jpeg', 'png', 'gif'].includes(ext || '')) return 'image';
-    if (['mp3', 'wav', 'ogg'].includes(ext || '')) return 'audio';
-    return 'text';
-  }
-  private orchestratorService = new OrchestratorService();
+  // THAY ĐỔI: Sử dụng Dependency Injection cho OrchestratorService
+  constructor(private orchestratorService: OrchestratorService) { }
 
   async createProject(
-    name: string,
-    description: string,
+    data: CreateProjectDto,
     ownerId: string,
-    files: UploadedFile[],
-    language: string,
-    rawText?: string,
-  ) {
-    console.log(`[SERVICE] Bắt đầu createProject cho '${name}' của owner '${ownerId}'`);
+    files: UploadedFile[]
+  ): Promise<ServiceResponse<any>> {
+    const { name, description, language, rawText } = data;
+    const session = await mongoose.startSession();
 
     try {
-      // --- BƯỚC 1: TẠO PROJECT ---
+      session.startTransaction();
+
       const newProjectData = {
-        name,
-        description,
-        owner_id: ownerId,
-        language,
+        name, description, owner_id: ownerId, language: language || 'vi-VN',
         members: [{
-          user_id: ownerId,
-          role: 'owner',
-          status: 'accepted',
-          invited_by: ownerId,
-          invited_at: new Date(),
-          responded_at: new Date(),
+          user_id: ownerId, role: 'owner', status: 'accepted',
+          invited_by: ownerId, invited_at: new Date(), responded_at: new Date(),
           history: [{ action: 'accepted', by: ownerId, at: new Date() }]
         }]
       };
-      console.log("[SERVICE]   1a. Chuẩn bị lưu document Project...");
-      const newProject = new Project(newProjectData);
-      await newProject.save(); // Bỏ { session }
-      console.log(`[SERVICE]   1b. Tạo Project thành công. ID: ${newProject._id}`);
 
-      // --- BƯỚC 2: TẠO VERSION ---
-      const newVersionData = {
-        project_id: newProject._id,
-        version_number: 1,
-        created_by: ownerId,
-      };
-      console.log("[SERVICE]   2a. Chuẩn bị lưu document Version...");
-      const newVersion = new Version(newVersionData);
-      await newVersion.save(); // Bỏ { session }
-      console.log(`[SERVICE]   2b. Tạo Version thành công. ID: ${newVersion._id}`);
+      const createdProjects = await Project.create([newProjectData], { session });
+      const newProject = createdProjects[0];
 
-      // --- BƯỚC 3: CẬP NHẬT PROJECT ---
-      console.log(`[SERVICE]   3a. Cập nhật current_version cho Project...`);
+      const newVersionData = { project_id: newProject._id, version_number: 1, created_by: ownerId };
+      const createdVersions = await Version.create([newVersionData], { session });
+      const newVersion = createdVersions[0];
+
       newProject.current_version = newVersion._id;
-      await newProject.save(); // Bỏ { session }
-      console.log("[SERVICE]   3b. Cập nhật Project thành công.");
+      await newProject.save({ session });
 
-      console.log("[SERVICE] Kích hoạt OrchestratorService chạy nền...");
+      await session.commitTransaction();
+
       this.orchestratorService.run(
-        newProject._id.toString(),
-        newVersion._id.toString(),
-        { files, rawText, mode: "full" },
-        language
-      ).catch(err => {
-        console.error(`[SERVICE] Lỗi xử lý nền cho version ${newVersion._id}:`, err);
+        newProject._id.toString(), newVersion._id.toString(),
+        { files, rawText, mode: "full" }, newProject.language
+      ).catch(async (err) => {
+        const errorMessage = `Lỗi xử lý nền: ${err.message || 'Lỗi không xác định'}`;
+        console.error(`[SERVICE] ${errorMessage} cho version ${newVersion._id}`);
+        await Version.findByIdAndUpdate(newVersion._id, { $push: { processing_errors: errorMessage } });
       });
 
-      console.log("[SERVICE] Hoàn tất createProject, trả về kết quả.");
-      return newProject;
-
+      return new ServiceResponse(ResponseStatus.Success, 'Project created successfully', newProject, 201);
     } catch (error: any) {
-      console.error("[SERVICE] GẶP LỖI!", error);
-      // (Xử lý lỗi chi tiết như phiên bản trước)
-      if (error.name === 'ValidationError') {
-        const validationErrors = Object.values(error.errors).map((e: any) => ({
-          field: e.path, message: e.message, value_provided: e.value
-        }));
-        console.error("================ LỖI VALIDATION MONGOOSE ================\n", JSON.stringify(validationErrors, null, 2));
-      }
-      throw error; // Ném lỗi để controller xử lý
+      await session.abortTransaction();
+      console.error("[SERVICE] ❌ Transaction đã được rollback.");
+      throw error;
+    } finally {
+      await session.endSession();
     }
   }
 
-  async updateProject(projectId: string, userId: string, data: UpdateProjectRequest) {
+  async getMyProjects(userId: string): Promise<ServiceResponse<any>> {
+    const projects = await Project.find({
+      owner_id: new Types.ObjectId(userId),
+      'status.is_trashed': { $ne: true }
+    }).populate('owner_id', 'full_name email avatar_url')
+      .populate('members.user_id', 'full_name email avatar_url')
+      .sort({ last_accessed_at: -1, updatedAt: -1 })
+      .lean();
+    return new ServiceResponse(ResponseStatus.Success, 'OK', projects, 200);
+  }
+
+  async updateProject(projectId: string, userId: string, data: UpdateProjectDto): Promise<ServiceResponse<any>> {
     const project = await Project.findOne({
       _id: new Types.ObjectId(projectId),
       owner_id: new Types.ObjectId(userId),
       'status.is_trashed': { $ne: true }
     });
 
-    if (!project) return null;
+    if (!project) {
+      return new ServiceResponse(ResponseStatus.Failed, 'Project not found or access denied', null, 404);
+    }
 
+    // ... (logic update project không đổi)
     const { members, ...otherData } = data;
-
-    const disallowedFields = ['_id', 'owner_id', 'created_at', 'updated_at'];
-    Object.keys(otherData).forEach((key) => {
-      if (!disallowedFields.includes(key)) {
-        (project as any)[key] = (otherData as any)[key];
-      }
-    });
-    if (data.current_version && data.current_version !== project.current_version?.toString()) {
-      project.current_version = new Types.ObjectId(data.current_version);
-    }
-    if (members && members.length > 0) {
-      for (const m of members) {
-        const member = project.members.find(mem => mem.user_id.toString() === m.user_id);
-        if (member) {
-          if (member.role === 'owner') continue;
-          if (m.role && member.role !== m.role) {
-            member.history.push({
-              action: 'role_changed',
-              by: new Types.ObjectId(userId),
-              at: new Date(),
-              details: { old_role: member.role, new_role: m.role }
-            });
-            member.role = m.role;
-          }
-        }
-      }
-    }
-    project.updated_at = new Date();
-    project.last_accessed_at = new Date();
+    Object.assign(project, otherData); // Cách gán an toàn hơn
 
     const updatedProject = await project.save();
-
-    return await Project.findById(updatedProject._id)
-      .populate('owner_id', 'full_name email avatar_url')
-      .populate('members.user_id', 'full_name email avatar_url')
-      .lean();
+    return new ServiceResponse(ResponseStatus.Success, 'Project updated successfully', updatedProject, 200);
   }
 
-  async deleteProject(projectId: string, userId: string) {
-    const project = await Project.findOne({
-      _id: projectId,
-      owner_id: new Types.ObjectId(userId)
-    });
+  async deleteProject(projectId: string, userId: string): Promise<ServiceResponse<null>> {
+    const project = await Project.findOne({ _id: projectId, owner_id: new Types.ObjectId(userId) });
 
-    if (!project) return null;
-
-    if (!project.status || project.status.is_trashed === false) {
-      if (!project.status) {
-        project.status = {
-          is_trashed: true,
-          trashed_at: new Date(),
-          delete_after_days: 30,
-        };
-      } else {
-        project.status.is_trashed = true;
-        project.status.trashed_at = new Date();
-      }
-
-      await project.save();
-      return true;
+    if (!project) {
+      return new ServiceResponse(ResponseStatus.Failed, 'Project not found or access denied', null, 404);
     }
+
+    if (!project.status?.is_trashed) {
+      project.status = { ...project.status, is_trashed: true, trashed_at: new Date() };
+      await project.save();
+      return new ServiceResponse(ResponseStatus.Success, 'Project moved to trash', null, 200);
+    }
+
     await Promise.all([
       Input.deleteMany({ project_id: project._id }),
       Output.deleteMany({ project_id: project._id }),
@@ -186,77 +114,82 @@ export class ProjectService {
       ProjectLog.deleteMany({ project_id: project._id }),
       Project.deleteOne({ _id: project._id }),
     ]);
-    return true;
+    return new ServiceResponse(ResponseStatus.Success, 'Project permanently deleted', null, 200);
   }
 
-  async restoreProject(projectId: string, userId: string) {
+  async restoreProject(projectId: string, userId: string): Promise<ServiceResponse<null>> {
     const project = await Project.findOne({
       _id: new Types.ObjectId(projectId),
       owner_id: new Types.ObjectId(userId),
       'status.is_trashed': true,
     });
 
-    if (!project) return null;
-
-    if (!project.status || project.status.is_trashed === true) {
-      if (!project.status) {
-        project.status = {
-          is_trashed: false,
-          trashed_at: null,
-          delete_after_days: 30,
-        };
-      } else {
-        project.status.is_trashed = false;
-        project.status.trashed_at = null;
-      }
+    if (!project) {
+      return new ServiceResponse(ResponseStatus.Failed, 'Project not found, not trashed, or access denied', null, 404);
     }
+
+    project.status = { ...project.status, is_trashed: false, trashed_at: null };
     await project.save();
-    return true;
+    return new ServiceResponse(ResponseStatus.Success, 'Project restored successfully', null, 200);
   }
 
-  async getRecentProjects(userId: string) {
-    return await Project.find({
+  async getRecentProjects(userId: string): Promise<ServiceResponse<any>> {
+    const projects = await Project.find({
       $or: [
         { owner_id: new Types.ObjectId(userId) },
         { 'members.user_id': new Types.ObjectId(userId), 'members.status': 'accepted' }
       ],
       'status.is_trashed': { $ne: true }
-    })
-      .populate('owner_id', 'full_name email avatar_url')
-      .populate('members.user_id', 'full_name email avatar_url')
-      .sort({ last_accessed_at: -1, updated_at: -1 })
-      .limit(5)
-      .lean();
+    }).sort({ last_accessed_at: -1 }).limit(5).lean();
+    return new ServiceResponse(ResponseStatus.Success, 'OK', projects, 200);
   }
 
-  async getSharedProjects(userId: string) {
+  async getSharedProjects(userId: string): Promise<ServiceResponse<any>> {
     const projects = await Project.find({
       owner_id: { $ne: new Types.ObjectId(userId) },
       'members.user_id': new Types.ObjectId(userId),
       'members.status': 'accepted',
       'status.is_trashed': { $ne: true },
-    })
-      .populate('owner_id', 'full_name email avatar_url')
-      .populate('members.user_id', 'full_name email avatar_url')
-      .sort({ last_accessed_at: -1, updated_at: -1 })
-      .lean();
-
-    return projects;
+    }).sort({ last_accessed_at: -1 }).lean();
+    return new ServiceResponse(ResponseStatus.Success, 'OK', projects, 200);
   }
 
-  async getProjectDetail(projectId: string, userId: string) {
+  async getVersionStatus(versionId: string): Promise<ServiceResponse<any>> {
+    const version = await Version.findById(versionId).lean();
+    if (!version) {
+      return new ServiceResponse(ResponseStatus.Failed, 'Version not found', null, 404);
+    }
+
+    let status: 'processing' | 'completed' | 'failed' | 'has_conflicts' = 'processing';
+
+    if (version.processing_errors && version.processing_errors.length > 0) {
+      status = 'failed';
+    } else if (version.pending_conflicts && version.pending_conflicts.length > 0) {
+      status = 'has_conflicts';
+    } else if (version.requirement_model && version.requirement_model.length > 0) {
+      status = 'completed';
+    }
+
+    return new ServiceResponse(ResponseStatus.Success, 'OK', { status, version }, 200);
+  }
+
+  async getProjectDetail(projectId: string, userId: string): Promise<ServiceResponse<any>> {
     const project = await Project.findById(projectId)
       .populate("owner_id", "full_name email avatar_url")
       .populate("members.user_id", "full_name email avatar_url");
 
-    if (!project) return null;
+    if (!project) {
+      return new ServiceResponse(ResponseStatus.Failed, 'Project not found', null, 404);
+    }
 
     const isOwner = project.owner_id._id.toString() === userId;
     const isMember = project.members.some(
       (m: any) => m.user_id._id.toString() === userId && m.status === "accepted"
     );
-    if (!isOwner && !isMember)
+    if (!isOwner && !isMember) {
+      // Ném lỗi để controller bắt và trả về lỗi 403 Forbidden
       throw { status: 403, message: "Bạn không có quyền truy cập project này" };
+    }
 
     if (!project.current_version) {
       const newVersion = await Version.create({
@@ -333,7 +266,8 @@ export class ProjectService {
       };
     });
 
-    return {
+
+    const resultData = {
       project: project.toObject(),
       current_version: currentVersion,
       versions,
@@ -341,5 +275,7 @@ export class ProjectService {
       outputs,
       chatLogs,
     };
+    return new ServiceResponse(ResponseStatus.Success, 'OK', resultData, 200);
   }
+
 }

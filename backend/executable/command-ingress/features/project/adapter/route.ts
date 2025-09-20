@@ -46,5 +46,10 @@ export default function initProjectRoute(controller: ProjectController) {
     requireAuthorizedUser,
     (req: Request, res: Response, next: NextFunction) => controller.getProjectDetail(req as any, res, next));
 
+  router.get(
+    "/versions/:versionId/status",
+    requireAuthorizedUser,
+    controller.getVersionStatus // Thêm phương thức này vào controller
+  )
   return router;
 }

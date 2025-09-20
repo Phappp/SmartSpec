@@ -56,12 +56,22 @@ const createHttpServer = (redisClient: any) => {
   if (isProd) {
     app.use(logger);
   }
-  app.use(cors());
+  // app.use(cors());
   app.use(morgan('combined'));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(fileUpload());
 
+  // --- 2. CẤU HÌNH CORS ĐÚNG CHUẨN ---
+  const corsOptions = {
+    // Thay bằng URL của frontend bạn, đọc từ file .env
+    origin: 'http://localhost:5173',
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+    // QUAN TRỌNG: Cho phép trình duyệt gửi header "Authorization"
+    allowedHeaders: "Content-Type,Authorization"
+  };
+  app.use(cors(corsOptions));
+  app.options('*', cors(corsOptions)); // Xử lý các preflight request
 
 
   // Construct services
@@ -76,9 +86,16 @@ const createHttpServer = (redisClient: any) => {
     env.JWT_SECRET,
     env.JWT_REFRESH_SECRET,
   );
+  // 1. Khởi tạo OrchestratorService trước
+  const orchestratorService = new OrchestratorService();
 
+  // 2. Khởi tạo ProjectService và "inject" orchestratorService vào
+  const projectService = new ProjectService(orchestratorService);
+
+  // 3. Khởi tạo ProjectController và inject projectService vào
+  const projectController = new ProjectController(projectService);
   // Setup route
-  app.use('/auth', initAuthRoute(new AuthController(authService)));
+  app.use('/api/auth', initAuthRoute(new AuthController(authService)));
   app.use('/api/handle_docx', initReadDocxRoute(new ReadDocxController(new ReadDocxService())));
   app.use('/api/handle_pdf', initPdfRoute(new PdfController(new PdfService())));
   app.use('/api/handle_extraction', initExtractorRoute(new ExtractorController(new ExtractorService())));
@@ -86,7 +103,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/handle_image', initOcrRoute(new OcrController(new OcrService())));
   app.use('/api/handle_text', initTextRoute(new TextController(new TextService())));
   app.use('/api/orchestrate', initOrchestratorRoute(new OrchestratorController(new OrchestratorService())));
-  app.use('/project', initProjectRoute(new ProjectController(new ProjectService())));
+  app.use('/api/projects', initProjectRoute(projectController));
 
 
   app.use(recoverMiddleware);
