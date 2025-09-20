@@ -153,4 +153,20 @@ export class ProjectController extends BaseController {
       handleServiceResponse(result, res);
     });
   };
+
+  public getDeleteProjects = async (req: HttpRequest, res: Response, next: NextFunction) => {
+    await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
+      const userId = req.getSubject();
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
+        return;
+      }
+
+      // Gọi service và nhận về ServiceResponse
+      const result = await this.service.getDeleteProjects(userId);
+
+      // Chuyển tiếp kết quả cho handler
+      handleServiceResponse(result, res);
+    });
+  };
 }

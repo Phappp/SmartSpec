@@ -128,8 +128,15 @@ export class ProjectService {
       return new ServiceResponse(ResponseStatus.Failed, 'Project not found, not trashed, or access denied', null, 404);
     }
 
-    project.status = { ...project.status, is_trashed: false, trashed_at: null };
+    // THAY ĐỔI Ở ĐÂY: Sửa trực tiếp các thuộc tính của sub-document
+    // Truy vấn `findOne` đã đảm bảo `project.status` tồn tại và `is_trashed` là true
+    if (project.status) {
+      project.status.is_trashed = false;
+      project.status.trashed_at = null;
+    }
+
     await project.save();
+
     return new ServiceResponse(ResponseStatus.Success, 'Project restored successfully', null, 200);
   }
 
@@ -266,7 +273,6 @@ export class ProjectService {
       };
     });
 
-
     const resultData = {
       project: project.toObject(),
       current_version: currentVersion,
@@ -276,6 +282,24 @@ export class ProjectService {
       chatLogs,
     };
     return new ServiceResponse(ResponseStatus.Success, 'OK', resultData, 200);
+  }
+
+  async getDeleteProjects(userId: string): Promise<ServiceResponse<any>> {
+    try {
+      const projects = await Project.find({
+        owner_id: new Types.ObjectId(userId),
+        'status.is_trashed': true // Lấy các project có is_trashed = true
+      })
+        .populate('owner_id', 'full_name email avatar_url')
+        .populate('members.user_id', 'full_name email avatar_url')
+        .sort({ 'status.trashed_at': -1 }) // Sắp xếp theo ngày xóa gần nhất
+        .lean();
+
+      return new ServiceResponse(ResponseStatus.Success, 'Fetched trashed projects successfully', projects, 200);
+    } catch (error) {
+      // Ném lỗi để controller có thể bắt và xử lý
+      throw error;
+    }
   }
 
 }
