@@ -137,7 +137,7 @@ import axios from 'axios'
 // --- CONFIG ---
 const API_BASE_URL = 'http://localhost:8000/api'
 const AUTH_TOKEN =
-  'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OGNjYTA4NWY1YzMyYjJkNWMzOGIyOTQiLCJzdWIiOiI2OGNjYTA4NWY1YzMyYjJkNWMzOGIyOTQiLCJzaWQiOiJjNTYxN2IwOC03OTZmLTQ0ZTktYWY1Ni1iYjRkY2NiNzk5YjEiLCJpYXQiOjE3NTgyOTY0NzIsImV4cCI6MTc1ODM4Mjg3Mn0.UEWak2-2SPAf4dSaDi_NmR1p7F7syYfaFcOQLLc9kkg'
+  'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OGNmYzMzM2RjMTMwZmNhNjE3MzE1OWQiLCJzdWIiOiI2OGNmYzMzM2RjMTMwZmNhNjE3MzE1OWQiLCJzaWQiOiJiMjYwZDZkNy1mZDIyLTQwOTMtYjNmNi1hZjdjOWFjMGY3ZWQiLCJpYXQiOjE3NTg0NjQ0ODcsImV4cCI6MTc1ODU1MDg4N30.869urfzI-UhdxuVFncfFL14MPdFFlbpSuLf5YOEMYhQ'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -223,7 +223,7 @@ const startPolling = (projectId, versionId) => {
 
   pollingIntervals.value[versionId] = setInterval(async () => {
     try {
-      const response = await api.get(`/versions/${versionId}/status`)
+      const response = await api.get(`projects/versions/${versionId}/status`)
       const { status, version } = response.data.data
 
       const projectIndex = projects.value.findIndex((p) => p._id === projectId)
@@ -257,7 +257,7 @@ const retryProcessing = async (projectId, versionId) => {
 
   try {
     // Gọi API retry
-    await api.post(`/orchestrator/run`, {
+    await api.post(`/orchestrate/process`, {
       project_id: projectId,
       version_id: versionId,
       mode: 'incremental',
@@ -282,6 +282,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Toàn bộ CSS đã được xem xét và sửa lại ở những chỗ cần thiết */
 :root {
   --primary-color: #6d5edc;
   --primary-light: #f3f1fe;
@@ -353,6 +354,7 @@ select {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 1em;
+  box-sizing: border-box; /* Thêm để padding không làm vỡ layout */
   transition: border-color 0.3s, box-shadow 0.3s;
 }
 input:focus,
@@ -374,8 +376,8 @@ button[type='submit'] {
   padding: 14px;
   border: none;
   border-radius: 8px;
-  background-color: #2c3e50;
-  color: #fff;
+  /* background-color: var(--primary-color); */
+  /* color: white; */
   font-size: 1.1em;
   font-weight: 600;
   cursor: pointer;
@@ -405,11 +407,19 @@ button:not(:disabled):hover {
 }
 .project-item {
   margin-bottom: 20px;
+  display: none;
 }
+.project-item:first-child {
+  display: block;
+}
+
 .project-item:hover {
   transform: translateY(-5px);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
 }
+
+
+
 .project-header {
   display: flex;
   justify-content: space-between;
@@ -458,22 +468,35 @@ button:not(:disabled):hover {
   background-color: #fffbe6;
   color: #faad14;
 }
+
+
+/* --- CÁC THAY ĐỔI CHÍNH Ở ĐÂY --- */
 .status-box.failed {
   background-color: var(--danger-light);
   color: var(--danger-color);
-  flex-direction: column;
-  align-items: flex-start;
+  display: flex;
+  /* Sửa lại layout để hiển thị đúng */
+  flex-direction: column; /* Xếp các phần tử theo chiều dọc */
+  align-items: stretch; /* Kéo dãn các phần tử con theo chiều ngang */
+  justify-content: flex-start; /* Bắt đầu từ trên xuống */
 }
+
 .failed-content {
   width: 100%;
-  margin-bottom: 10px;
+  margin-bottom: 12px; /* Thêm khoảng cách giữa text và button */
 }
+
+.status-box.failed button {
+  align-self: flex-end; /* Đẩy nút "Retry" về phía bên phải */
+  margin-top: 8px; /* Thêm khoảng cách phía trên nút */
+}
+/* ---------------------------------- */
 
 .status-box button {
   padding: 8px 12px;
   border: none;
   border-radius: 6px;
-  background-color: var(--danger-color);
+  background-color: rgb(107, 5, 5);
   color: white;
   cursor: pointer;
   transition: opacity 0.3s;
