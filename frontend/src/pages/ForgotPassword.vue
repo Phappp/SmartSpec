@@ -23,7 +23,7 @@
 
             <div class="continue-button-wrapper">
               <button type="submit" class="btn btn-primary" :disabled="loading">
-                <span v-if="loading" class="loading"></span>
+                <span v-if="loading" class="button-spinner"></span>
                 <span v-else>Send Reset Link</span>
               </button>
             </div>
@@ -40,63 +40,62 @@
 </template>
 
 <script>
-import { ref } from "vue";
-import axios from "axios";
+import { ref } from 'vue'
+import axios from 'axios'
 
 export default {
-  name: "ForgotPasswordView",
+  name: 'ForgotPasswordView',
   setup() {
-    const email = ref("");
-    const emailError = ref("");
-    const errorMessage = ref("");
-    const successMessage = ref("");
-    const loading = ref(false);
+    const email = ref('')
+    const emailError = ref('')
+    const errorMessage = ref('')
+    const successMessage = ref('')
+    const loading = ref(false)
 
     const clearErrors = () => {
-      emailError.value = "";
-      errorMessage.value = "";
-      successMessage.value = "";
-    };
+      emailError.value = ''
+      errorMessage.value = ''
+      successMessage.value = ''
+    }
 
     const validateEmail = () => {
-      emailError.value = "";
+      emailError.value = ''
       if (!email.value) {
-        emailError.value = "Email or username is required";
-        return false;
+        emailError.value = 'Email or username is required'
+        return false
       }
       if (!/\S+@\S+\.\S+/.test(email.value) && email.value.length < 3) {
-        emailError.value = "Please enter a valid email or username";
-        return false;
+        emailError.value = 'Please enter a valid email or username'
+        return false
       }
-      return true;
-    };
+      return true
+    }
 
     const handleSubmit = async () => {
-      clearErrors();
-      if (!validateEmail()) return;
+      clearErrors()
+      if (!validateEmail()) return
 
-      loading.value = true;
+      loading.value = true
       try {
         // Gọi API forgot password
-        const res = await axios.post("http://localhost:8000/api/auth/forgot-password", {
+        const res = await axios.post('http://localhost:8000/api/auth/forgot-password', {
           email: email.value,
-        });
+        })
 
-        if (res.data.status === "Success") {
-          successMessage.value =
-            "Reset link has been sent. Interface will close in 10 seconds.";
+        if (res.data.status === 'Success') {
+          successMessage.value = 'Reset link has been sent. Interface will close in 10 seconds.'
           setTimeout(() => {
-            window.close();
-          }, 10000);
+            window.close()
+          }, 10000)
         } else {
-          errorMessage.value = "Unable to send reset link. Please try again.";
+          errorMessage.value = 'Unable to send reset link. Please try again.'
         }
       } catch (err) {
-        errorMessage.value = "An error occurred. Please try again.";
+        errorMessage.value = 'An error occurred. Please try again.'
       } finally {
-        loading.value = false;
+        loading.value = false
       }
-    };
+    }
 
     return {
       email,
@@ -106,9 +105,9 @@ export default {
       loading,
       clearErrors,
       handleSubmit,
-    };
+    }
   },
-};
+}
 </script>
 
 <style scoped>
@@ -249,17 +248,39 @@ export default {
   }
 }
 
-.loading {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
+/* 👇 NEW SPINNER STYLES ADDED HERE 👇 */
+@keyframes spinner-a4dj62 {
+  100% {
+    transform: rotate(1turn);
+  }
+}
+
+.button-spinner {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  border: 3px solid #0000;
   border-radius: 50%;
-  border-top-color: white;
-  animation: spin 1s ease-in-out infinite;
+  border-right-color: #ffffff; /* Color for spinner */
+  animation: spinner-a4dj62 1s infinite linear;
+}
+
+.button-spinner::before,
+.button-spinner::after {
+  content: '';
+  grid-area: 1/1;
+  margin: 1.5px;
+  border: inherit;
+  border-radius: 50%;
+  animation: spinner-a4dj62 2s infinite;
+}
+
+.button-spinner::after {
+  margin: 6px;
+  animation-duration: 3s;
 }
 </style>
 
 <style>
-@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css");
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
 </style>

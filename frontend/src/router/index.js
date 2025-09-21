@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import Homepage from '../views/HomePage.vue'
 import ProjectEditor from '../views/ProjectEditor.vue'
 import Login from '../pages/login.vue'
+import OauthRedirect from '../pages/OauthRedirect.vue'
 import Register from '../pages/register.vue'
 import VerifyEmail from '../pages/VerifyEmail.vue'
 import VerifyOtp from '../pages/VerifyOtp.vue'
@@ -13,6 +14,7 @@ const routes = [
   { path: '/', redirect: '/login' },
   { path: '/login', component: Login },
   { path: '/register', component: Register },
+  { path: '/oauth/redirect', component: OauthRedirect },
   { path: '/verify-email', component: VerifyEmail },
   { path: '/verify-otp', component: VerifyOtp },
   { path: '/forgot-password', component: ForgotPassword },

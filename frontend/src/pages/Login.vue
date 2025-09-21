@@ -2,7 +2,9 @@
   <div class="container-center">
     <div class="login-card">
       <div class="card-content">
-        <router-link to="/"><i class="fa-brands fa-slack"></i></router-link>
+        <router-link style="pointer-events: none" to="/"
+          ><i class="fa-brands fa-slack"></i
+        ></router-link>
         <h1 class="card-title">Log in to SmartSpec</h1>
 
         <div class="form-group">
@@ -40,10 +42,11 @@
               <span class="divider-text">or</span>
             </div>
             <div class="social-buttons-grid">
-              <div class="btn btn-social" @click="continueWith('google')">
+              <button type="button" class="btn btn-social" @click="loginWithGoogle">
                 <i class="fab fa-google icon-margin-right"></i>
                 <div class="brand">Continue with Google</div>
-              </div>
+              </button>
+
               <!-- <div class="btn btn-social" @click="continueWith('facebook')">
                 <i class="fab fa-facebook icon-margin-right"></i>
                 <div class="brand">Continue with Facebook</div>
@@ -55,7 +58,7 @@
             </div>
             <div class="continue-button-wrapper">
               <button type="submit" class="btn btn-primary" :disabled="loading">
-                <span v-if="loading" class="loading"></span>
+                <span v-if="loading" class="button-spinner"></span>
                 <span v-else>{{ showPasswordField ? 'Log In' : 'Continue' }}</span>
               </button>
             </div>
@@ -77,7 +80,7 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 
@@ -93,6 +96,24 @@ export default {
     const loading = ref(false)
     const emailError = ref('')
     const passwordError = ref('')
+
+    // Google OAuth config
+    const GOOGLE_CLIENT_ID =
+      '1030258814420-rra11eqd5vhcriar7sgclokotfrgmp9k.apps.googleusercontent.com'
+    const GOOGLE_REDIRECT_URI = 'http://localhost:5173/login' // FE domain
+    const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
+
+    function loginWithGoogle() {
+      const params = new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        redirect_uri: 'http://localhost:8000/api/auth/google/oauth',
+        response_type: 'code',
+        scope: 'openid email profile',
+        access_type: 'offline',
+        prompt: 'consent',
+      })
+      window.location.href = `${GOOGLE_AUTH_URL}?${params.toString()}`
+    }
 
     const togglePasswordVisibility = () => {
       passwordVisible.value = !passwordVisible.value
@@ -117,10 +138,10 @@ export default {
         passwordError.value = 'Password is required'
         return false
       }
-      if (password.value.length < 6) {
-        passwordError.value = 'Password must be at least 6 characters'
-        return false
-      }
+      // if (password.value.length < 6) {
+      //   passwordError.value = 'Password must be at least 6 characters'
+      //   return false
+      // }
       return true
     }
 
@@ -140,9 +161,7 @@ export default {
         return
       }
 
-      if (!validateEmail() || !validatePassword()) {
-        return
-      }
+      if (!validateEmail() || !validatePassword()) return
 
       loading.value = true
       try {
@@ -152,18 +171,13 @@ export default {
         })
 
         const data = response.data?.data
-
-        if (!data) {
-          throw new Error('Login response không có token')
-        }
+        if (!data) throw new Error('Login response không có token')
 
         if (data.isTwoFactorEnabled) {
-          // 2FA case
           localStorage.setItem('otpToken', data.otpToken)
           localStorage.setItem('email', email.value)
           router.push('/verify-otp')
         } else {
-          // Normal login
           localStorage.setItem('accessToken', data.accessToken)
           localStorage.setItem('refreshToken', data.refreshToken)
           localStorage.setItem('userId', data.sub)
@@ -190,6 +204,7 @@ export default {
       togglePasswordVisibility,
       handleSubmit,
       clearErrors,
+      loginWithGoogle,
     }
   },
 }
@@ -269,15 +284,15 @@ export default {
 .password-toggle {
   position: absolute;
   right: 15px;
-  top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(40%);
   color: #b3b3b3;
   cursor: pointer;
   font-size: 18px;
+  transition: 0.2s ease;
 }
 
 .password-toggle:hover {
-  color: #0a1a4d;
+  color: #000;
 }
 
 .divider {
@@ -408,20 +423,36 @@ export default {
 }
 
 /* Loading animation */
-.loading {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: white;
-  animation: spin 1s ease-in-out infinite;
+/* 👇 NEW SPINNER STYLES ADDED HERE 👇 */
+@keyframes spinner-a4dj62 {
+  100% {
+    transform: rotate(1turn);
+  }
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.button-spinner {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  border: 3px solid #0000;
+  border-radius: 50%;
+  border-right-color: #ffffff; /* Color for spinner */
+  animation: spinner-a4dj62 1s infinite linear;
+}
+
+.button-spinner::before,
+.button-spinner::after {
+  content: '';
+  grid-area: 1/1;
+  margin: 1.5px;
+  border: inherit;
+  border-radius: 50%;
+  animation: spinner-a4dj62 2s infinite;
+}
+
+.button-spinner::after {
+  margin: 6px;
+  animation-duration: 3s;
 }
 
 /* Responsive */

@@ -63,14 +63,14 @@ class GoogleIdentityBroker {
     accessToken: string;
   }): Promise<any> {
     const res = await axios
-    .get(
-      `https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${data.accessToken}`,
-      {
-        headers: {
-          Authorization: `Bearer ${data.idToken}`,
-        },
-      }
-    );
+      .get(
+        `https://www.googleapis.com/oauth2/v2/userinfo?alt=json&access_token=${data.accessToken}`,
+        {
+          headers: {
+            Authorization: `Bearer ${data.accessToken}`,
+          },
+        }
+      );
 
     return res.data;
   }

@@ -9,22 +9,26 @@
           <form @submit.prevent="handleSubmit">
             <div class="form-group-input">
               <label for="otp" class="form-label">Enter OTP</label>
-              <input
-                type="text"
-                v-model="otp"
-                maxlength="6"
-                class="form-control"
-                :class="{ error: otpError }"
-                id="otp"
-                placeholder="6-digit OTP"
-                @input="clearErrors"
-              />
+              <div class="otp-inputs">
+                <input
+                  v-for="(digit, index) in otpArray"
+                  :key="index"
+                  type="text"
+                  maxlength="1"
+                  class="otp-box"
+                  v-model="otpArray[index]"
+                  @input="onInput($event, index)"
+                  @keydown.backspace="onBackspace($event, index)"
+                  ref="otpRefs"
+                  :disabled="loading"
+                />
+              </div>
               <p v-if="otpError" class="field-error">{{ otpError }}</p>
             </div>
 
             <div class="continue-button-wrapper">
-              <button type="submit" class="btn btn-primary" :disabled="loading">
-                <span v-if="loading" class="loading"></span>
+              <button type="submit" class="spotify-button primary" :disabled="loading">
+                <span v-if="loading" class="button-spinner"></span>
                 <span v-else>Verify</span>
               </button>
             </div>
@@ -34,95 +38,158 @@
           <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
         </div>
 
-        <router-link to="/login" class="forgot-password-link">
-          Back to Login
-        </router-link>
+        <router-link to="/login" class="forgot-password-link"> Back to Login </router-link>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref } from "vue";
-import { useRouter } from "vue-router";
-import axios from "axios";
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import axios from 'axios'
 
 export default {
-  name: "VerifyOtpView",
+  name: 'VerifyOtpView',
   setup() {
-    const router = useRouter();
-    const otp = ref("");
-    const otpError = ref("");
-    const errorMessage = ref("");
-    const successMessage = ref("");
-    const loading = ref(false);
+    const router = useRouter()
+    const otpArray = ref(['', '', '', '', '', ''])
+    const otpRefs = ref([])
+    const otpError = ref('')
+    const errorMessage = ref('')
+    const successMessage = ref('')
+    const loading = ref(false)
 
     const clearErrors = () => {
-      otpError.value = "";
-      errorMessage.value = "";
-      successMessage.value = "";
-    };
+      otpError.value = ''
+      errorMessage.value = ''
+      successMessage.value = ''
+    }
+
+    const onInput = (e, index) => {
+      if (loading.value) return // Ngăn input khi đang loading
+
+      const val = e.target.value.replace(/[^0-9]/g, '')
+      otpArray.value[index] = val
+      if (val && index < 5) {
+        otpRefs.value[index + 1].focus()
+      }
+      clearErrors()
+    }
+
+    const onBackspace = (e, index) => {
+      if (loading.value) return // Ngăn backspace khi đang loading
+
+      if (!otpArray.value[index] && index > 0) {
+        otpRefs.value[index - 1].focus()
+      }
+    }
 
     const validateOtp = () => {
-      otpError.value = "";
-      if (!otp.value) {
-        otpError.value = "OTP is required";
-        return false;
+      const otp = otpArray.value.join('')
+      otpError.value = ''
+      if (!otp) {
+        otpError.value = 'OTP is required'
+        return false
       }
-      if (!/^[0-9]{6}$/.test(otp.value)) {
-        otpError.value = "OTP must be 6 digits";
-        return false;
+      if (!/^[0-9]{6}$/.test(otp)) {
+        otpError.value = 'OTP must be 6 digits'
+        return false
       }
-      return true;
-    };
+      return true
+    }
 
     const handleSubmit = async () => {
-  clearErrors();
-  if (!validateOtp()) return;
+      clearErrors()
+      if (!validateOtp()) return
 
-  loading.value = true;
-  try {
-    const email = localStorage.getItem("email");      
-    const otpToken = localStorage.getItem("otpToken");
+      loading.value = true
+      try {
+        const email = localStorage.getItem('email')
+        const otpToken = localStorage.getItem('otpToken')
 
-    const response = await axios.post("http://localhost:8000/api/auth/verify-otp", {
-      email,                                          
-      otp: otp.value,
-      otpToken
-    });
+        // Kiểm tra nếu thiếu thông tin cần thiết
+        if (!email || !otpToken) {
+          errorMessage.value = 'Session expired. Please login again.'
+          setTimeout(() => router.push('/login'), 2000)
+          return
+        }
 
-    const { data } = response;
-if ((data.success === true) || data.status === "Success") {
-  successMessage.value = "OTP verified successfully!";
-  localStorage.removeItem("otpToken");
-  setTimeout(() => router.push("/dashboard"), 1000);
-} else {
-  errorMessage.value = data.message || "Invalid or expired OTP.";
-}
-  } catch (error) {
-    console.error("OTP verify error:", error);
-    errorMessage.value = "An error occurred during OTP verification.";
-  } finally {
-    loading.value = false;
-  }
-};
+        const response = await axios.post('http://localhost:8000/api/auth/verify-otp', {
+          email,
+          otp: otpArray.value.join(''),
+          otpToken,
+        })
+
+        const { data } = response
+
+        if (data.success === true || data.status === 'Success') {
+          successMessage.value = 'OTP verified successfully!'
+
+          // Lưu các token cần thiết vào localStorage
+          localStorage.setItem('accessToken', data.data.accessToken)
+          localStorage.setItem('refreshToken', data.data.refreshToken)
+          localStorage.setItem('userId', data.data.sub)
+
+          // Xóa otpToken và email tạm
+          localStorage.removeItem('otpToken')
+          localStorage.removeItem('email')
+
+          setTimeout(() => router.push('/dashboard'), 1000)
+        } else {
+          errorMessage.value = data.message || 'Invalid or expired OTP.'
+        }
+      } catch (error) {
+        console.error('OTP verify error:', error)
+
+        // Xử lý lỗi chi tiết từ server
+        if (error.response) {
+          // Lỗi từ server (4xx, 5xx)
+          const serverError = error.response.data
+          errorMessage.value =
+            serverError.message || serverError.error || 'An error occurred during OTP verification.'
+
+          // Xử lý các trường hợp lỗi cụ thể
+          if (error.response.status === 401) {
+            errorMessage.value = 'Invalid or expired OTP. Please try again.'
+          } else if (error.response.status === 400) {
+            errorMessage.value = 'Invalid OTP format.'
+          } else if (error.response.status === 404) {
+            errorMessage.value = 'OTP session not found. Please request a new OTP.'
+          }
+        } else if (error.request) {
+          // Lỗi network
+          errorMessage.value = 'Network error. Please check your connection and try again.'
+        } else {
+          // Lỗi khác
+          errorMessage.value = 'An unexpected error occurred. Please try again.'
+        }
+      } finally {
+        loading.value = false
+      }
+    }
+
+    onMounted(() => {
+      if (otpRefs.value[0]) otpRefs.value[0].focus()
+    })
 
     return {
-      otp,
+      otpArray,
+      otpRefs,
       otpError,
       errorMessage,
       successMessage,
       loading,
       handleSubmit,
       clearErrors,
-    };
+      onInput,
+      onBackspace,
+    }
   },
-};
+}
 </script>
 
-
 <style scoped>
-
 .container-center {
   width: 100%;
   width: 450px;
@@ -176,6 +243,28 @@ if ((data.success === true) || data.status === "Success") {
   border-color: #e74c3c;
 }
 
+.otp-inputs {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.otp-box {
+  width: 48px;
+  height: 56px;
+  text-align: center;
+  font-size: 22px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.otp-box:focus {
+  border-color: #0a1a4d;
+}
+
 .continue-button-wrapper {
   margin-top: 24px;
   margin-bottom: 16px;
@@ -207,14 +296,81 @@ if ((data.success === true) || data.status === "Success") {
   text-decoration: underline;
 }
 
-.loading {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
+.field-error {
+  color: #e74c3c;
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+.spotify-button {
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: 9999px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  margin-top: 10px;
+  color: #ddd;
+  /* Ensure button keeps its height during loading */
+  min-height: 58px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.spotify-button.primary {
+  background-color: #0a1a4d;
+}
+
+/* Thêm style cho trạng thái disabled */
+.otp-box:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.spotify-button:disabled {
+  background-color: #b3b3b3;
+  cursor: not-allowed;
+}
+
+.spotify-button:disabled:hover {
+  background-color: #b3b3b3;
+  transform: none;
+}
+
+/* 👇 NEW SPINNER STYLES ADDED HERE 👇 */
+@keyframes spinner-a4dj62 {
+  100% {
+    transform: rotate(1turn);
+  }
+}
+
+.button-spinner {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  border: 3px solid #0000;
   border-radius: 50%;
-  border-top-color: white;
-  animation: spin 1s ease-in-out infinite;
+  border-right-color: #ffffff; /* Color for spinner */
+  animation: spinner-a4dj62 1s infinite linear;
+}
+
+.button-spinner::before,
+.button-spinner::after {
+  content: '';
+  grid-area: 1/1;
+  margin: 1.5px;
+  border: inherit;
+  border-radius: 50%;
+  animation: spinner-a4dj62 2s infinite;
+}
+
+.button-spinner::after {
+  margin: 6px;
+  animation-duration: 3s;
 }
 
 @keyframes spin {
@@ -225,5 +381,5 @@ if ((data.success === true) || data.status === "Success") {
 </style>
 
 <style>
-@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css");
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
 </style>

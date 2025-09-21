@@ -10,35 +10,42 @@
             <!-- New password -->
             <div class="form-group-input" id="password-input">
               <label for="newPassword" class="form-label">New password</label>
-              <input
-                :type="passwordVisible ? 'text' : 'password'"
-                v-model="newPassword"
-                class="form-control"
-                :class="{ error: newPasswordError }"
-                id="newPassword"
-                placeholder="Enter new password"
-                @input="clearErrors"
-              />
-              <span class="password-toggle" @click="togglePasswordVisibility">
-                <i
-                  :class="passwordVisible ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'"
-                ></i>
-              </span>
+              <div class="password-input-wrapper">
+                <input
+                  :type="newPasswordVisible ? 'text' : 'password'"
+                  v-model="newPassword"
+                  class="form-control"
+                  :class="{ error: newPasswordError }"
+                  id="newPassword"
+                  placeholder="Enter new password"
+                  @input="clearErrors"
+                />
+                <span class="password-toggle" @click="toggleNewPasswordVisibility">
+                  <i :class="newPasswordVisible ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'"></i>
+                </span>
+              </div>
               <p v-if="newPasswordError" class="field-error">{{ newPasswordError }}</p>
             </div>
 
             <!-- Confirm password -->
-            <div class="form-group-input" id="password-input">
+            <div class="form-group-input" id="confirm-password-input" style="margin-top: 16px">
               <label for="confirmPassword" class="form-label">Confirm password</label>
-              <input
-                :type="passwordVisible ? 'text' : 'password'"
-                v-model="confirmPassword"
-                class="form-control"
-                :class="{ error: confirmPasswordError }"
-                id="confirmPassword"
-                placeholder="Confirm new password"
-                @input="clearErrors"
-              />
+              <div class="password-input-wrapper">
+                <input
+                  :type="confirmPasswordVisible ? 'text' : 'password'"
+                  v-model="confirmPassword"
+                  class="form-control"
+                  :class="{ error: confirmPasswordError }"
+                  id="confirmPassword"
+                  placeholder="Confirm new password"
+                  @input="clearErrors"
+                />
+                <span class="password-toggle" @click="toggleConfirmPasswordVisibility">
+                  <i
+                    :class="confirmPasswordVisible ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'"
+                  ></i>
+                </span>
+              </div>
               <p v-if="confirmPasswordError" class="field-error">
                 {{ confirmPasswordError }}
               </p>
@@ -46,7 +53,7 @@
 
             <div class="continue-button-wrapper">
               <button type="submit" class="btn btn-primary" :disabled="loading">
-                <span v-if="loading" class="loading"></span>
+                <span v-if="loading" class="button-spinner"></span>
                 <span v-else>Reset Password</span>
               </button>
             </div>
@@ -61,100 +68,109 @@
 </template>
 
 <script>
-import { ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import axios from "axios";
+import { ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import axios from 'axios'
 
 export default {
-  name: "ResetPasswordView",
+  name: 'ResetPasswordView',
   setup() {
-    const route = useRoute();
-    const router = useRouter();
-    const token = route.query.token || "";
+    const route = useRoute()
+    const router = useRouter()
+    const token = route.query.token || ''
 
-    const newPassword = ref("");
-    const confirmPassword = ref("");
-    const passwordVisible = ref(false);
-    const newPasswordError = ref("");
-    const confirmPasswordError = ref("");
-    const errorMessage = ref("");
-    const successMessage = ref("");
-    const loading = ref(false);
+    const newPassword = ref('')
+    const confirmPassword = ref('')
+    const newPasswordVisible = ref(false)
+    const confirmPasswordVisible = ref(false)
+    const newPasswordError = ref('')
+    const confirmPasswordError = ref('')
+    const errorMessage = ref('')
+    const successMessage = ref('')
+    const loading = ref(false)
 
     const clearErrors = () => {
-      newPasswordError.value = "";
-      confirmPasswordError.value = "";
-      errorMessage.value = "";
-      successMessage.value = "";
-    };
+      newPasswordError.value = ''
+      confirmPasswordError.value = ''
+      errorMessage.value = ''
+      successMessage.value = ''
+    }
 
-    const togglePasswordVisibility = () => {
-      passwordVisible.value = !passwordVisible.value;
-    };
+    const toggleNewPasswordVisibility = () => {
+      newPasswordVisible.value = !newPasswordVisible.value
+    }
+
+    const toggleConfirmPasswordVisibility = () => {
+      confirmPasswordVisible.value = !confirmPasswordVisible.value
+    }
 
     const validate = () => {
-      let valid = true;
+      let valid = true
 
       if (!newPassword.value) {
-        newPasswordError.value = "New password is required";
-        valid = false;
-      } else if (newPassword.value.length <10) {
-        newPasswordError.value = "Password must be at least 10 characters";
-        valid = false;
+        newPasswordError.value = 'New password is required'
+        valid = false
+      } else if (newPassword.value.length < 10) {
+        newPasswordError.value =
+          'Password must be at least 10 characters long and contain at least one number and one letter or special character'
+        valid = false
       }
 
       if (!confirmPassword.value) {
-        confirmPasswordError.value = "Please confirm your password";
-        valid = false;
+        confirmPasswordError.value = 'Please confirm your password'
+        valid = false
       } else if (confirmPassword.value !== newPassword.value) {
-        confirmPasswordError.value = "Passwords do not match";
-        valid = false;
+        confirmPasswordError.value = 'Passwords do not match'
+        valid = false
       }
 
-      return valid;
-    };
+      return valid
+    }
 
     const handleSubmit = async () => {
-      clearErrors();
-      if (!validate()) return;
+      clearErrors()
+      if (!validate()) return
 
-      loading.value = true;
+      loading.value = true
       try {
-        const res = await axios.post(`http://localhost:8000/api/auth/reset-password?token=${token}`,
+        const res = await axios.post(
+          `http://localhost:8000/api/auth/reset-password?token=${token}`,
           {
             newPassword: newPassword.value,
             confirmNewPassword: confirmPassword.value,
           }
-        );
+        )
 
-        if (res.data.status === "Success") {
-          successMessage.value = "Password reset successfully. Redirecting to login...";
-          setTimeout(() => router.push("/login"), 2000);
+        if (res.data.status === 'Success') {
+          successMessage.value = 'Password reset successfully. Redirecting to login...'
+          setTimeout(() => router.push('/login'), 2000)
         } else {
-          errorMessage.value = res.data.message || "Reset password failed.";
+          errorMessage.value = res.data.message || 'Reset password failed.'
         }
       } catch (e) {
-        errorMessage.value = "An error occurred. Please try again.";
+        errorMessage.value = 'An error occurred. Please try again.'
       } finally {
-        loading.value = false;
+        loading.value = false
       }
-    };
+    }
 
     return {
       newPassword,
       confirmPassword,
-      passwordVisible,
+      newPasswordVisible,
+      confirmPasswordVisible,
       newPasswordError,
       confirmPasswordError,
       errorMessage,
       successMessage,
       loading,
       clearErrors,
-      togglePasswordVisibility,
+      toggleNewPasswordVisibility,
+      toggleConfirmPasswordVisibility,
       handleSubmit,
-    };
+    }
   },
-};
+}
 </script>
 
 <style scoped>
@@ -228,14 +244,21 @@ export default {
   margin-top: 12px;
 }
 
+.password-input-wrapper {
+  position: relative;
+}
+
+.form-control {
+  padding-right: 40px; /* Tạo khoảng trống cho biểu tượng */
+}
+
 .password-toggle {
   position: absolute;
-  right: 15px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #b3b3b3;
   cursor: pointer;
-  font-size: 18px;
+  color: #6c757d;
 }
 
 .password-toggle:hover {
@@ -370,20 +393,36 @@ export default {
 }
 
 /* Loading animation */
-.loading {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: white;
-  animation: spin 1s ease-in-out infinite;
+/* 👇 NEW SPINNER STYLES ADDED HERE 👇 */
+@keyframes spinner-a4dj62 {
+  100% {
+    transform: rotate(1turn);
+  }
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.button-spinner {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  border: 3px solid #0000;
+  border-radius: 50%;
+  border-right-color: #ffffff; /* Color for spinner */
+  animation: spinner-a4dj62 1s infinite linear;
+}
+
+.button-spinner::before,
+.button-spinner::after {
+  content: '';
+  grid-area: 1/1;
+  margin: 1.5px;
+  border: inherit;
+  border-radius: 50%;
+  animation: spinner-a4dj62 2s infinite;
+}
+
+.button-spinner::after {
+  margin: 6px;
+  animation-duration: 3s;
 }
 
 /* Responsive */
@@ -416,5 +455,5 @@ export default {
 </style>
 
 <style>
-@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css");
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
 </style>

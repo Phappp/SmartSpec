@@ -12,12 +12,7 @@
         <h2>Create an account to get started</h2>
         <div class="form-group">
           <label for="email">Email address</label>
-          <input
-            type="email"
-            id="email"
-            v-model="email"
-            placeholder="name@domain.com"
-          />
+          <input type="email" id="email" v-model="email" placeholder="name@domain.com" />
           <p class="error-message" v-if="emailError">{{ emailError }}</p>
           <p class="error-message" v-if="emailExistsError">{{ emailExistsError }}</p>
           <p class="success-message" v-if="emailVerified">✓ Email has been verified</p>
@@ -33,7 +28,7 @@
           <span>or</span>
           <hr />
         </div>
-        <button class="social-signup-button google" @click="continueWith('google')">
+        <button class="social-signup-button google" @click="loginWithGoogle">
           <i class="fa-brands fa-google"></i>
           Sign up with Google
         </button>
@@ -111,7 +106,7 @@
           <div class="dob-group">
             <input type="text" id="day" v-model="day" placeholder="DD" maxlength="2" />
             <select id="month" v-model="month">
-              <option value="">Month</option>
+              <option value="" disabled selected style="color: gray">Month</option>
               <option value="1">January</option>
               <option value="2">February</option>
               <option value="3">March</option>
@@ -243,6 +238,24 @@ export default {
     const registering = ref(false)
     const emailVerified = ref(false)
     const verificationToken = ref('')
+
+    // Google OAuth config
+    const GOOGLE_CLIENT_ID =
+      '1030258814420-rra11eqd5vhcriar7sgclokotfrgmp9k.apps.googleusercontent.com'
+    const GOOGLE_REDIRECT_URI = 'http://localhost:5173/login' // FE domain
+    const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
+
+    function loginWithGoogle() {
+      const params = new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        redirect_uri: 'http://localhost:8000/api/auth/google/oauth',
+        response_type: 'code',
+        scope: 'openid email profile',
+        access_type: 'offline',
+        prompt: 'consent',
+      })
+      window.location.href = `${GOOGLE_AUTH_URL}?${params.toString()}`
+    }
 
     // *** BẮT ĐẦU PHẦN CẬP NHẬT ***
 
@@ -521,6 +534,7 @@ export default {
       prevStep,
       continueWith,
       register,
+      loginWithGoogle,
     }
   },
 }
@@ -609,7 +623,6 @@ body {
 }
 
 .form-group label {
-  display: block;
   font-size: 14px;
   font-weight: bold;
   margin-bottom: 8px;
@@ -758,10 +771,11 @@ body {
   color: #b3b3b3;
   cursor: pointer;
   font-size: 18px;
+  transition: 0.2s ease;
 }
 
 .password-toggle:hover {
-  color: #ffffff;
+  color: #000;
 }
 
 /* Password Strength Checklist */
@@ -845,6 +859,7 @@ body {
   font-size: 12px;
   margin-top: -8px;
   margin-bottom: 10px;
+  opacity: 0.6;
 }
 
 .info-text a {
@@ -866,6 +881,7 @@ body {
 
 .radio-label {
   display: flex;
+  text-align: center;
   align-items: center;
   font-size: 16px;
   color: #b3b3b3;
@@ -967,8 +983,8 @@ body {
 /* Back Arrow */
 .back-arrow {
   position: absolute;
-  left: -40px;
-  top: 10px;
+  top: -4px;
+  transform: translateX(-50px);
   font-size: 26px;
   cursor: pointer;
   transition: color 0.2s ease;
@@ -976,10 +992,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0.5;
+  transition: 0.2s ease;
 }
 
 .back-arrow:hover {
-  color: #ffffff;
+  opacity: 1;
+  transform: scale(1.1) translateX(-50px);
 }
 
 .back-arrow i {
@@ -1080,6 +1099,7 @@ body {
 
   .form-group label {
     font-size: 13px;
+    display: flex;
   }
 
   .form-group input,
