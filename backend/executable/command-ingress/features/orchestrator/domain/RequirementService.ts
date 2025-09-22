@@ -63,8 +63,6 @@ export class RequirementService {
             } catch (error) {
                 console.error(`Error processing item ${i}:`, error);
                 results.push([]);
-                // THÊM MỚI: Ném lại lỗi để các tầng cao hơn có thể bắt được
-                throw error;
             }
         }
         return results;
@@ -80,125 +78,171 @@ export class RequirementService {
         gemini: GeminiService,
         language: string
     ) {
-        // Lấy Mongoose document đầy đủ (không có .lean()) để có thể dùng .save()
-        const version = await Version.findById(versionId);
+        const version = await Version.findById(versionId).lean();
         if (!version) throw new Error("Version not found");
 
-        const previousRequirements = version.requirement_model || [];
+        const previousRequirements = (version as any).requirement_model || [];
+        let markAsProcessed: string[] = [];
 
-        // Khởi tạo các biến chứa kết quả
-        let finalRequirements: any[] = mode === 'full' ? [] : [...previousRequirements];
-        let conflicts: any[] = [];
+        if (mode === "full") {
+            markAsProcessed = inputs.map((i: any) => String(i._id));
+            console.log(`FULL mode: processing all ${inputs.length} inputs`);
+        } else {
+            markAsProcessed = inputs
+                .filter((i: any) => i.is_processed !== true)
+                .map((i: any) => String(i._id));
+            console.log(`INCREMENTAL mode: processing ${markAsProcessed.length} new inputs`);
+        }
+
+        const mergedText = inputs
+            .map((i: any) => (i.cleaned_text || i.raw_text || ""))
+            .filter(Boolean)
+            .join("\n\n");
+
+        await Version.findByIdAndUpdate(versionId, {
+            $set: { merged_text: mergedText, updated_at: new Date() },
+        });
+
+        if (!mergedText || mergedText.trim().length === 0) {
+            if (markAsProcessed.length > 0) {
+                await Input.updateMany(
+                    { _id: { $in: markAsProcessed } },
+                    { $set: { is_processed: true } }
+                );
+            }
+            return {
+                version_id: versionId,
+                inputs_count: inputs.length,
+                requirement_model: previousRequirements,
+                mode,
+                new_usecases: [],
+                duplicate_usecases: [],
+            };
+        }
+
+        let newRequirements: any[] = [];
         let processingErrors: string[] = [];
 
         try {
-            // Cập nhật trạng thái bắt đầu xử lý ngay lập tức để UI phản hồi
-            version.status = 'processing';
-            await version.save();
+            const results = await this.processWithRateLimit(
+                inputs,
+                async (input) => {
+                    const text = input.cleaned_text || input.raw_text;
+                    if (!text || text.trim().length === 0) return [];
 
-            const mergedText = inputs.map((i: any) => (i.cleaned_text || i.raw_text || "")).filter(Boolean).join("\n\n");
+                    const chunks = this.splitTextIntoChunks(text, 12000);
+                    let inputResults: any[] = [];
 
-            // Nếu không có text để xử lý, coi như hoàn thành và thoát sớm
-            if (!mergedText || mergedText.trim().length === 0) {
-                console.log("No new text to process. Finalizing as completed.");
-                // Ghi nhận trạng thái cuối cùng và thoát
-                version.status = 'completed';
-                await version.save();
-                return; // Dừng thực thi tại đây
-            }
-
-            // --- BẮT ĐẦU QUÁ TRÌNH PHÂN TÍCH ---
-            let newRequirements: any[] = [];
-            for (const input of inputs) {
-                const text = input.cleaned_text || input.raw_text;
-                if (!text || text.trim().length === 0) continue;
-
-                const chunks = this.splitTextIntoChunks(text, 12000);
-                for (let index = 0; index < chunks.length; index++) {
-                    const chunk = chunks[index];
-                    try {
-                        console.log(`Processing chunk ${index + 1}/${chunks.length} for input ${input._id}`);
-                        const part = await gemini.analyzeRequirements(chunk, language);
-                        if (Array.isArray(part) && part.length > 0) {
-                            newRequirements = newRequirements.concat(part);
+                    for (let index = 0; index < chunks.length; index++) {
+                        const chunk = chunks[index];
+                        try {
+                            console.log(
+                                `Processing chunk ${index + 1}/${chunks.length} for input ${input._id}`
+                            );
+                            const part = await gemini.analyzeRequirements(chunk, language);
+                            if (Array.isArray(part) && part.length > 0) {
+                                inputResults = inputResults.concat(part);
+                            }
+                        } catch (err: any) {
+                            const errorMsg = `Error processing chunk ${index + 1} for input ${input._id}: ${err.message}`;
+                            console.error(errorMsg);
+                            processingErrors.push(errorMsg);
                         }
-                    } catch (err: any) {
-                        const errorMsg = `Error processing chunk for input ${input._id}: ${err.message}`;
-                        console.error(errorMsg);
-                        processingErrors.push(errorMsg);
+                    }
+                    return inputResults;
+                },
+                500
+            );
+
+            newRequirements = results.flat();
+        } catch (error: any) {
+            processingErrors.push(`Process error: ${error.message}`);
+        }
+
+        newRequirements = this.mergeUseCasesDedup(newRequirements);
+        newRequirements = this.normalizeUseCaseIds(newRequirements, "UC");
+
+        let finalRequirements: any[] = [];
+        let conflicts: any[] = [];
+
+        if (mode === "full") {
+            finalRequirements = newRequirements;
+        } else {
+            finalRequirements = [...previousRequirements];
+            for (const newReq of newRequirements) {
+                let existingReq: any = null;
+
+                for (const oldReq of previousRequirements) {
+                    if (await this.isConflict(oldReq, newReq, gemini, language)) {
+                        existingReq = oldReq;
+                        break;
                     }
                 }
-            }
 
-            // --- XỬ LÝ KẾT QUẢ THÔ ---
-            newRequirements = this.mergeUseCasesDedup(newRequirements);
-            newRequirements = this.normalizeUseCaseIds(newRequirements, "UC");
-
-            // --- XỬ LÝ CONFLICT (NẾU LÀ INCREMENTAL) ---
-            if (mode === "full") {
-                finalRequirements = newRequirements;
-            } else { // mode === "incremental"
-                for (const newReq of newRequirements) {
-                    let isConflicting = false;
-                    for (const oldReq of previousRequirements) {
-                        if (await this.isConflict(oldReq, newReq, gemini, language)) {
-                            conflicts.push({ existing: oldReq, new: newReq });
-                            isConflicting = true;
-                            break;
-                        }
-                    }
-                    if (!isConflicting) {
-                        finalRequirements.push(newReq);
-                    }
+                if (existingReq) {
+                    // ⚡ Không cần tự sinh conflict_id nữa
+                    conflicts.push({
+                        existing: existingReq,
+                        new: newReq,
+                    });
+                } else {
+                    finalRequirements.push(newReq);
                 }
             }
             finalRequirements = this.normalizeUseCaseIds(finalRequirements, "UC");
-
-            // --- LÀM GIÀU DỮ LIỆU (ADD RELATED USE CASES) ---
-            if (finalRequirements.length > 1) { // Nên là > 1 thay vì > 10
-                try {
-                    finalRequirements = await gemini.addRelatedUseCases(
-                        finalRequirements, { incremental: mode === "incremental" }, language
-                    );
-                } catch (err: any) {
-                    console.error("⚠️ Lỗi khi bổ sung related_usecases:", err.message);
-                    processingErrors.push(`Error adding related use cases: ${err.message}`);
-                }
-            }
-
-        } catch (error: any) {
-            // Bắt các lỗi nghiêm trọng không lường trước được trong toàn bộ quá trình
-            console.error("A critical error occurred during finalization:", error);
-            processingErrors.push(error.message || "An unknown critical error occurred.");
-        } finally {
-            // KHỐI LỆNH NÀY SẼ LUÔN LUÔN ĐƯỢC THỰC THI, DÙ CÓ LỖI HAY KHÔNG
-
-            console.log(`Finalizing update for version ${versionId}. Errors found: ${processingErrors.length}`);
-
-            // 1. Cập nhật các mảng kết quả vào document
-            version.set('requirement_model', finalRequirements);
-            version.set('pending_conflicts', conflicts);
-            version.processing_errors = processingErrors;
-
-            // 2. Quyết định trạng thái cuối cùng
-            if (processingErrors.length > 0) {
-                version.status = 'failed';
-            } else if (conflicts.length > 0) {
-                version.status = 'has_conflicts';
-            } else {
-                version.status = 'completed';
-            }
-
-            // 3. Đánh dấu các input đã được xử lý
-            const processedInputIds = inputs.map(i => i._id);
-            if (processedInputIds.length > 0) {
-                await Input.updateMany({ _id: { $in: processedInputIds } }, { $set: { is_processed: true } });
-            }
-
-            // 4. Lưu lại toàn bộ thay đổi vào DB một lần duy nhất
-            await version.save();
-            console.log(`✅ Version ${versionId} updated with final status: ${version.status}`);
         }
+        // Sau khi đã merge xong finalRequirements
+        // Sau khi đã merge xong finalRequirements
+        if (finalRequirements.length > 1) {   // ✅ chỉ gọi khi có nhiều hơn 1 use case
+            try {
+                finalRequirements = await gemini.addRelatedUseCases(
+                    finalRequirements,
+                    { incremental: mode === "incremental" },
+                    language
+                );
+            } catch (err: any) {
+                console.error("⚠️ Lỗi khi bổ sung related_usecases:", err.message);
+            }
+        }
+
+        if (markAsProcessed.length > 0) {
+            await Input.updateMany(
+                { _id: { $in: markAsProcessed } },
+                { $set: { is_processed: true } }
+            );
+        }
+
+        await Version.findByIdAndUpdate(versionId, {
+            $set: {
+                requirement_model: finalRequirements,
+                affects_requirement: true,
+                updated_at: new Date(),
+                ...(conflicts.length > 0 && { pending_conflicts: conflicts }),
+                ...(processingErrors.length > 0 && { processing_errors: processingErrors }),
+            },
+        });
+
+        return {
+            version_id: versionId,
+            inputs_count: inputs.length,
+            requirement_model: finalRequirements,
+            mode,
+            processed_count: markAsProcessed.length,
+            new_usecases: mode === "incremental" ? newRequirements : [],
+            duplicate_usecases: conflicts,
+            ...(processingErrors.length > 0 && {
+                has_errors: true,
+                errors: processingErrors,
+            }),
+            ...(conflicts.length > 0 && {
+                has_conflicts: true,
+                conflicts: conflicts.map((c) => ({
+                    conflict_id: c.conflict_id, // ✅ UUID do schema tự sinh
+                    existing: c.existing,
+                    new: c.new,
+                })),
+            }),
+        };
     }
 
 

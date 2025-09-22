@@ -20,7 +20,7 @@ const routes = [
   { path: '/forgot-password', component: ForgotPassword },
   { path: '/reset-password', component: ResetPassword },
   { path: '/reset-password', component: ResetPassword },
-  { path: '/dashboard', name: 'Home', component: Homepage },
+  { path: '/dashboard', name: 'Home', component: HomeView },
   { path: '/editor/:id', name: 'Editor', component: ProjectEditor, props: true }
 ]
 const router = createRouter({

@@ -21,16 +21,8 @@ export class OrchestratorService {
     ) {
         // THÊM MỚI: Xóa các lỗi cũ để chuẩn bị cho lần chạy lại (retry).
         // Thao tác này đảm bảo rằng nếu lần chạy lại thành công, người dùng sẽ không thấy lỗi cũ nữa.
-        // THAY ĐỔI LỚN: Dọn dẹp toàn bộ kết quả cũ (lỗi, use case, conflict)
-        // để đảm bảo mỗi lần "Thử lại" là một khởi đầu hoàn toàn mới.
-        console.log(`[SERVICE] Preparing version ${versionId} for a new run by clearing old data...`);
-        await Version.findByIdAndUpdate(versionId, {
-            $set: {
-                processing_errors: [],
-                requirement_model: [], // BỔ SUNG: Xóa use case cũ
-                pending_conflicts: []  // BỔ SUNG: Xóa conflict cũ
-            }
-        });
+        console.log(`[SERVICE] Clearing previous errors for version ${versionId} before running...`);
+        await Version.findByIdAndUpdate(versionId, { $set: { processing_errors: [] } });
 
         const version = await Version.findById(versionId).lean();
         if (!version) throw new Error("Version not found");
