@@ -260,7 +260,7 @@ const retryProcessing = async (projectId, versionId) => {
     await api.post(`/orchestrate/process`, {
       project_id: projectId,
       version_id: versionId,
-      mode: 'incremental',
+      mode: 'full',
     })
 
     // Cập nhật UI ngay lập tức và bắt đầu polling lại
@@ -418,8 +418,6 @@ button:not(:disabled):hover {
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
 }
 
-
-
 .project-header {
   display: flex;
   justify-content: space-between;
@@ -468,7 +466,6 @@ button:not(:disabled):hover {
   background-color: #fffbe6;
   color: #faad14;
 }
-
 
 /* --- CÁC THAY ĐỔI CHÍNH Ở ĐÂY --- */
 .status-box.failed {
