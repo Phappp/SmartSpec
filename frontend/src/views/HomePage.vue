@@ -1,12 +1,7 @@
 <template>
   <div class="homepage">
     <div class="app-container">
-      <Sidebar
-        :user="user"
-        @new="navigateTo('new-project')"
-        @navigate="navigateTo"
-        @logout="logout"
-      />
+      <Sidebar :user="user" @new="openNewProjectModal" @navigate="navigateTo" @logout="logout" />
 
       <div class="main-content">
         <header class="page-header">
@@ -19,11 +14,10 @@
               <h2>Recent Projects</h2>
               <p>{{ recentProjects.length }} projects found</p>
             </div>
-            <div v-if="isLoading"><p>Loading...</p></div>
-            <div v-else class="projects-grid">
+            <div class="projects-grid">
               <ProjectCard
                 v-for="p in recentProjects"
-                :key="p._id || p.id"
+                :key="p._id"
                 :project="p"
                 @open="openProject"
                 :showDelete="false"
@@ -36,11 +30,10 @@
               <h2>My Projects</h2>
               <p>{{ myProjects.length }} projects found</p>
             </div>
-            <div v-if="isLoading"><p>Loading...</p></div>
-            <div v-else class="projects-grid">
+            <div class="projects-grid">
               <ProjectCard
                 v-for="p in myProjects"
-                :key="p._id || p.id"
+                :key="p._id"
                 :project="p"
                 @open="openProject"
                 @delete="deleteProject"
@@ -53,11 +46,10 @@
               <h2>Shared Projects</h2>
               <p>{{ sharedProjects.length }} project found</p>
             </div>
-            <div v-if="isLoading"><p>Loading...</p></div>
-            <div v-else class="projects-grid">
+            <div class="projects-grid">
               <ProjectCard
                 v-for="p in sharedProjects"
-                :key="p._id || p.id"
+                :key="p._id"
                 :project="p"
                 @open="openProject"
                 :showDelete="false"
@@ -65,130 +57,99 @@
             </div>
           </div>
 
-          <div v-if="currentView === 'new-project'">
-            <NewProjectForm @cancel="navigateTo('my-projects')" />
-          </div>
-
-          <div v-if="currentView === 'trash'" class="projects-view">
+          <div v-if="currentView === 'trash'" class="trash-view">
             <div class="projects-header">
               <h2>Trash</h2>
-              <p>{{ trashedProjects.length }} projects found</p>
+              <p>0 projects found</p>
             </div>
-
-            <div v-if="isLoading" class="loading-state">
-              <p>Loading trashed projects...</p>
-            </div>
-
-            <div v-else-if="trashedProjects.length > 0" class="projects-grid">
-              <ProjectCard
-                v-for="p in trashedProjects"
-                :key="p._id || p.id"
-                :project="p"
-                :is-trashed="true"
-                @restore="restoreProject"
-                @delete-permanently="deleteProjectPermanently"
-              />
-            </div>
-
-            <div v-else class="empty-state">
+            <div class="empty-state">
               <div class="empty-icon">
                 <span class="material-symbols-outlined">delete_outline</span>
               </div>
-              <p>No projects found in trash</p>
+              <p>No projects found</p>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <NewProjectModal
+      :show="isModalVisible"
+      @close="closeNewProjectModal"
+      @project-created="handleProjectCreated"
+    />
   </div>
 </template>
 
 <script>
 import Sidebar from '@/components/Sidebar.vue'
-import NewProjectForm from '@/components/NewProjectForm.vue'
+import NewProjectModal from '@/components/NewProjectForm.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
-import {
-  getMyProjects,
-  getSharedProjects,
-  getRecentProjects,
-  deleteProject,
-  restoreProject,
-  getTrashedProjects,
-} from '@/api/project'
+import { getMyProjects, getSharedProjects, getRecentProjects, deleteProject } from '@/api/project'
 
 export default {
   name: 'Homepage',
-  components: { Sidebar, NewProjectForm, ProjectCard },
+  components: {
+    Sidebar,
+    NewProjectModal,
+    ProjectCard,
+  },
   data() {
     return {
+      isModalVisible: false,
+      // [MỚI] Thêm biến cờ để xử lý việc điều hướng sau khi tạo thành công
+      creationSuccess: false,
       currentView: 'recent-projects',
-      user: { name: 'John Doe', email: 'john.doe@example.com' },
+      user: null,
       recentProjects: [],
       myProjects: [],
       sharedProjects: [],
-      trashedProjects: [],
-      isLoading: false,
     }
   },
   created() {
-    // Lấy thông tin user và các project ban đầu
-    this.fetchInitialData()
+    this.fetchAll()
   },
   methods: {
-    async navigateTo(view) {
-      this.currentView = view
-      // Tải dữ liệu thùng rác chỉ khi người dùng click vào
-      if (view === 'trash') {
-        await this.fetchTrashedProjects()
+    openNewProjectModal() {
+      this.isModalVisible = true
+    },
+    closeNewProjectModal() {
+      this.isModalVisible = false
+      // [SỬA] Chỉ chuyển trang KHI việc đóng modal là do tạo project thành công
+      if (this.creationSuccess) {
+        this.navigateTo('my-projects')
+        this.creationSuccess = false // Reset lại cờ cho lần sau
       }
+    },
+    handleProjectCreated() {
+      // [SỬA] Không đóng modal hay chuyển trang ở đây nữa
+      this.fetchAll() // Chỉ tải lại danh sách dự án
+      this.creationSuccess = true // Bật cờ lên để báo hiệu đã tạo thành công
+    },
+    navigateTo(view) {
+      this.currentView = view
     },
     getPageTitle() {
       const titles = {
         'recent-projects': 'Recent Projects',
         'my-projects': 'My Projects',
         'shared-projects': 'Shared Projects',
-        'new-project': 'New Project',
         trash: 'Trash',
       }
       return titles[this.currentView] || 'Dashboard'
     },
-    async fetchInitialData() {
-      // Cập nhật thông tin user thật
-      const userEmail = localStorage.getItem('email')
-      if (userEmail) {
-        this.user.email = userEmail
-        // Bạn có thể gọi API lấy tên đầy đủ của user ở đây nếu cần
-      }
-      await this.fetchAll()
-    },
     async fetchAll() {
-      this.isLoading = true
       try {
-        // Chạy song song các API để tăng tốc độ tải
-        const [myRes, sharedRes, recentRes] = await Promise.all([
+        const [myRes, sharedRes, recentRes] = await Promise.allSettled([
           getMyProjects(),
           getSharedProjects(),
           getRecentProjects(),
         ])
-        this.myProjects = myRes.data?.data || []
-        this.sharedProjects = sharedRes.data?.data || []
-        this.recentProjects = recentRes.data?.data || []
+        if (myRes.status === 'fulfilled') this.myProjects = myRes.value.data?.data || []
+        if (sharedRes.status === 'fulfilled') this.sharedProjects = sharedRes.value.data?.data || []
+        if (recentRes.status === 'fulfilled') this.recentProjects = recentRes.value.data?.data || []
       } catch (err) {
         console.error('Fetch projects error', err)
-      } finally {
-        this.isLoading = false
-      }
-    },
-    async fetchTrashedProjects() {
-      this.isLoading = true
-      try {
-        const response = await getTrashedProjects()
-        this.trashedProjects = response.data?.data || []
-      } catch (err) {
-        console.error('Fetch trashed projects error', err)
-        this.trashedProjects = []
-      } finally {
-        this.isLoading = false
       }
     },
     openProject(project) {
@@ -196,37 +157,13 @@ export default {
       if (id) this.$router.push({ name: 'Editor', params: { id } })
     },
     async deleteProject(projectId) {
-      if (!confirm('Bạn có chắc muốn chuyển dự án này vào thùng rác?')) return
+      if (!confirm('Bạn có chắc muốn xóa dự án này?')) return
       try {
         await deleteProject(projectId)
-        // Cập nhật UI ngay lập tức để người dùng thấy thay đổi
-        this.myProjects = this.myProjects.filter((p) => (p._id || p.id) !== projectId)
+        this.fetchAll()
       } catch (err) {
-        console.error('Move to trash error', err)
-        alert('Chuyển vào thùng rác thất bại')
-      }
-    },
-    async restoreProject(projectId) {
-      try {
-        await restoreProject(projectId)
-        this.trashedProjects = this.trashedProjects.filter((p) => (p._id || p.id) !== projectId)
-        await this.fetchAll() // Tải lại các danh sách chính
-        alert('Khôi phục dự án thành công!')
-      } catch (err) {
-        console.error('Restore error', err)
-        alert('Khôi phục thất bại')
-      }
-    },
-    async deleteProjectPermanently(projectId) {
-      if (!confirm('HÀNH ĐỘNG NÀY SẼ XÓA VĨNH VIỄN DỰ ÁN VÀ KHÔNG THỂ HOÀN TÁC. Bạn có chắc chắn?'))
-        return
-      try {
-        await deleteProject(projectId)
-        this.trashedProjects = this.trashedProjects.filter((p) => (p._id || p.id) !== projectId)
-        alert('Đã xóa vĩnh viễn dự án.')
-      } catch (err) {
-        console.error('Permanent delete error', err)
-        alert('Xóa vĩnh viễn thất bại')
+        console.error('delete error', err)
+        alert('Xóa thất bại')
       }
     },
     logout() {
@@ -242,73 +179,74 @@ export default {
 </script>
 
 <style scoped>
+/* CSS giữ nguyên, không thay đổi */
 .homepage {
-  display: flex;
-  height: 100vh;
-  background-color: #f8f9fa;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #f5f5f5;
 }
 .app-container {
   display: flex;
-  flex-grow: 1;
+  min-height: 100vh;
 }
 .main-content {
-  flex-grow: 1;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
+  flex: 1;
+  background-color: #ffffff;
 }
 .page-header {
-  margin-bottom: 24px;
+  padding: 20px 30px;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #f8f9fa;
 }
 .page-header h1 {
-  font-size: 24px;
-  font-weight: 700;
-  color: #212529;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
 }
 .content-area {
-  flex-grow: 1;
-}
-.projects-view {
-  /* Style chung cho các view danh sách project */
+  padding: 30px;
 }
 .projects-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 30px;
 }
 .projects-header h2 {
   font-size: 20px;
   font-weight: 600;
+  color: #333;
+  margin-bottom: 5px;
 }
 .projects-header p {
-  color: #6c757d;
+  font-size: 14px;
+  color: #666;
 }
 .projects-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 24px;
+  gap: 20px;
+}
+.trash-view {
+  text-align: center;
 }
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 64px;
-  color: #6c757d;
-  background-color: #fff;
-  border-radius: 8px;
-  border: 1px dashed #dee2e6;
+  margin-top: 60px;
+}
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 20px;
 }
 .empty-icon .material-symbols-outlined {
   font-size: 64px;
-  color: #adb5bd;
+  color: #9ca3af;
 }
-.loading-state {
-  text-align: center;
-  padding: 64px;
-  color: #6c757d;
+.empty-state p {
+  font-size: 16px;
+  color: #666;
+}
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+  .projects-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

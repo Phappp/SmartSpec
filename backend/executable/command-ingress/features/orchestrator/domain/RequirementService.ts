@@ -217,10 +217,18 @@ export class RequirementService {
                 requirement_model: finalRequirements,
                 affects_requirement: true,
                 updated_at: new Date(),
+                status: processingErrors.length > 0
+                    ? "failed"
+                    : conflicts.length > 0
+                        ? "has_conflicts"
+                        : finalRequirements.length > 0
+                            ? "completed"
+                            : "processing",
                 ...(conflicts.length > 0 && { pending_conflicts: conflicts }),
                 ...(processingErrors.length > 0 && { processing_errors: processingErrors }),
             },
         });
+
 
         return {
             version_id: versionId,

@@ -70,7 +70,7 @@ export class ProjectService {
       'status.is_trashed': { $ne: true }
     }).populate('owner_id', 'full_name email avatar_url')
       .populate('members.user_id', 'full_name email avatar_url')
-      .sort({ last_accessed_at: -1, updatedAt: -1 })
+      .sort({ last_accessed_at: -1, updated_at: -1 })
       .lean();
     return new ServiceResponse(ResponseStatus.Success, 'OK', projects, 200);
   }
@@ -163,21 +163,13 @@ export class ProjectService {
 
   async getVersionStatus(versionId: string): Promise<ServiceResponse<any>> {
     const version = await Version.findById(versionId).lean();
+    const project = await Project.findById(version.project_id).lean();
     if (!version) {
       return new ServiceResponse(ResponseStatus.Failed, 'Version not found', null, 404);
     }
 
-    let status: 'processing' | 'completed' | 'failed' | 'has_conflicts' = 'processing';
+    return new ServiceResponse(ResponseStatus.Success, 'OK', { status: version.status, version, project }, 200);
 
-    if (version.processing_errors && version.processing_errors.length > 0) {
-      status = 'failed';
-    } else if (version.pending_conflicts && version.pending_conflicts.length > 0) {
-      status = 'has_conflicts';
-    } else if (version.requirement_model && version.requirement_model.length > 0) {
-      status = 'completed';
-    }
-
-    return new ServiceResponse(ResponseStatus.Success, 'OK', { status, version }, 200);
   }
 
   async getProjectDetail(projectId: string, userId: string): Promise<ServiceResponse<any>> {

@@ -12,7 +12,7 @@ export const deleteProject = (id) => axiosClient.delete(`/api/projects/${id}`);
 export const restoreProject = (id) => axiosClient.post(`/api/projects/${id}/restore`);
 
 export const getProject = (id) => axiosClient.get(`/api/projects/${id}`);
-
+export const getVersionStatus = (versionId) => axiosClient.get(`/api/projects/versions/${versionId}/status`);
 // Attachments
 export const uploadAttachments = (projectId, formData) =>
   axiosClient.post(`/api/projects/${projectId}/attachments`, formData, {
@@ -41,4 +41,5 @@ export default {
   uploadAttachments,
   generateDocumentation,
   getCurrentUser,
+  getVersionStatus,
 };
