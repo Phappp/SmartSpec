@@ -54,15 +54,15 @@ class AuthController extends BaseController {
           refresh_token: exchangeResult.refreshToken,
         });
 
-        const redirectURL = `${
-          env.CLIENT_URL
-        }/oauth/redirect?${params.toString()}`;
+        const redirectURL = `${env.CLIENT_URL
+          }/oauth/redirect?${params.toString()}`;
         res.redirect(redirectURL);
 
         return;
       }
     );
   }
+
 
   async logout(
     req: HttpRequest,
@@ -195,7 +195,7 @@ class AuthController extends BaseController {
         message: "Verify email successfully",
         data: verifyEmailResult,
         code: StatusCodes.OK,
-      };  
+      };
 
       handleServiceResponse(serviceResponse, res);
     } catch (error) {
@@ -265,6 +265,33 @@ class AuthController extends BaseController {
         error: (error as Error).message,
       });
     }
+  }
+
+  async getProfile(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const userId = req.getSubject();
+        if (!userId) {
+          throw new Error("User ID not found in request. User is not authenticated.");
+        }
+
+        const userProfile = await this.service.getProfile(userId);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "User profile fetched successfully.",
+          data: userProfile,
+        });
+        return;
+      }
+    );
   }
 
   async verifyOTP(
@@ -397,9 +424,8 @@ class AuthController extends BaseController {
         const result = await this.service.toggleTwoFactorAuth(userId, enable);
         res.status(StatusCodes.OK).json({
           status: "Success",
-          message: `Two-factor authentication has been ${
-            enable ? "enabled" : "disabled"
-          } successfully.`,
+          message: `Two-factor authentication has been ${enable ? "enabled" : "disabled"
+            } successfully.`,
           data: result,
         });
         return;

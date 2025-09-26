@@ -21,7 +21,7 @@ export const uploadAttachments = (projectId, formData) =>
 
 // User
 export function getCurrentUser() {
-  return axiosClient.get("/auth/me"); // confirm endpoint này đúng chưa
+  return axiosClient.get("/api/auth/me"); // confirm endpoint này đúng chưa
 }
 
 // Documentation generation

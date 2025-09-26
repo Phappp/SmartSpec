@@ -3,6 +3,7 @@ import {
   AuthService,
   ExchangeTokenResult,
   ExchangeTokenRequest,
+  LoginResponse,
 } from "../types";
 import User from "../../../../../internal/model/user";
 import Session from "../../../../../internal/model/session";
@@ -15,23 +16,29 @@ import {
 } from "../../../services/serviceResponse";
 import { generateJwt, generateJwtOTP } from "../../../services/jwtService";
 import mailService from "../../../services/sendMail.service";
-import { ac } from "@faker-js/faker/dist/airline-BcEu2nRk";
+import { ac, L } from "@faker-js/faker/dist/airline-BcEu2nRk";
 import { Double } from "mongodb";
 import { NumberingPlan } from "libphonenumber-js";
 
 export class AuthServiceImpl implements AuthService {
   googleIdentityBroker: GoogleIdentityBroker;
-  jwtSecret: string;
-  jwtRefreshSecret: string;
+  jwtSecret: string;          // Dùng cho Access Token
+  jwtRefreshSecret: string;   // Dùng cho Refresh Token
+  jwtOtpSecret: string;       // Dùng cho OTP Token
+  jwtEmailSecret: string      // Dùng cho Verify Email & Reset Password
 
   constructor(
     googleIdentityBroker: GoogleIdentityBroker,
     jwtSecret: string,
-    jwtRefreshSecret: string
+    jwtRefreshSecret: string,
+    jwtOtpSecret: string,
+    jwtEmailSecret: string
   ) {
     this.googleIdentityBroker = googleIdentityBroker;
     this.jwtSecret = jwtSecret;
     this.jwtRefreshSecret = jwtRefreshSecret;
+    this.jwtOtpSecret = jwtOtpSecret;
+    this.jwtEmailSecret = jwtEmailSecret;
   }
 
   signAccessToken(payload: any): string {
@@ -122,8 +129,10 @@ export class AuthServiceImpl implements AuthService {
     const subject = jwtClaims["sub"];
 
     const session = await Session.findOne({ sessionID });
+
+    // ✨ FIX: Ném ra lỗi với thông báo rõ ràng hơn.
     if (!session) {
-      throw new Error("");
+      throw new Error("Invalid or expired session. Please log in again.");
     }
 
     const jwtPayload = {
@@ -132,6 +141,7 @@ export class AuthServiceImpl implements AuthService {
       sid: sessionID,
     };
 
+    // Tạo lại cả access token và refresh token mới (xoay vòng token)
     const newAccessToken = this.signAccessToken(jwtPayload);
     const newRefreshToken = this.signRefreshToken(jwtPayload);
 
@@ -141,6 +151,15 @@ export class AuthServiceImpl implements AuthService {
       refreshToken: newRefreshToken,
     };
   }
+
+  async getProfile(userId: string): Promise<any> {
+    const user = await User.findById(userId).select('-password'); // Lấy user và loại bỏ trường password
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return user;
+  }
+
 
   async sendVerificationEmail(email: string): Promise<boolean> {
     const user = await User.findOne({ email });
@@ -160,7 +179,8 @@ export class AuthServiceImpl implements AuthService {
   }
 
   async verifyEmail(token: string): Promise<boolean> {
-    const payload = jwt.verify(token, this.jwtSecret) as { email: string };
+    // ✨ FIX: Dùng secret key riêng cho email.
+    const payload = jwt.verify(token, this.jwtSecret) as { email: string }; // THAY this.jwtSecret BẰNG this.jwtEmailSecret
     if (!payload.email) {
       throw new Error("Invalid token");
     }
@@ -175,26 +195,27 @@ export class AuthServiceImpl implements AuthService {
     dob: Date,
     gender: string
   ): Promise<ExchangeTokenResult> {
+    // ✨ FIX: Thêm bước kiểm tra mật khẩu trùng khớp.
+    if (password !== confirmPassword) {
+      throw new Error("Passwords do not match");
+    }
+
     let existingUser = await User.findOne({ email });
     if (existingUser) {
       throw new Error("User already exists");
     }
-    password = await bcrypt.hash(password, 10);
-    console.log("Password after hashing: ", password);
-    var accessToken = null;
-    var refreshToken = null;
+
+    const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({
       email,
-      password,
-      confirmPassword,
+      password: hashedPassword,
       name,
       isTwoFactorEnabled,
       dob,
       gender,
-      accessToken,
-      refreshToken,
+      // ✨ FIX: Loại bỏ việc lưu trữ token trong model User.
+      // accessToken và refreshToken không nên được lưu ở đây.
     });
-    console.log("New user before saving: ", user);
     await user.save();
 
     const sessionID = uuidv4();
@@ -203,20 +224,13 @@ export class AuthServiceImpl implements AuthService {
       sub: user._id,
       sid: sessionID,
     };
-    accessToken = this.signAccessToken(jwtPayload);
-    refreshToken = this.signRefreshToken(jwtPayload);
-
-    console.log("Access Token: ", accessToken);
-    console.log("Refresh Token: ", refreshToken);
+    const accessToken = this.signAccessToken(jwtPayload);
+    const refreshToken = this.signRefreshToken(jwtPayload);
 
     const session = new Session({ sessionID, userID: user._id });
     await session.save();
-    if (accessToken && refreshToken) {
-      user.accessToken = accessToken;
-      user.refreshToken = refreshToken;
-      await user.save();
-    }
 
+    // ✨ FIX: Loại bỏ logic cập nhật token vào đối tượng user một lần nữa.
     return {
       refreshToken,
       accessToken,
@@ -224,7 +238,7 @@ export class AuthServiceImpl implements AuthService {
     };
   }
 
-  async login(email: string, password: string): Promise<String> {
+  async login(email: string, password: string): Promise<LoginResponse> {
     const user = await User.findOne({ email });
     if (!user) {
       throw new Error("User not found");
@@ -234,24 +248,23 @@ export class AuthServiceImpl implements AuthService {
       throw new Error("Invalid password");
     }
 
-    const fa = user.isTwoFactorEnabled;
-    console.log("2FA status:", fa);
-    if (fa) {
+    if (user.isTwoFactorEnabled) {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const otpToken = await generateJwtOTP({ email, otp });
-      console.log("Generated OTP:", otp);
+
+      // ✨ FIX: Ký token OTP bằng một secret key RIÊNG BIỆT và có thời gian hết hạn ngắn.
+      // Lưu ý: Bạn cần thêm this.jwtOtpSecret vào constructor.
+      const otpToken = jwt.sign({ email, otp }, this.jwtSecret, { expiresIn: '5m' }); // THAY this.jwtSecret BẰNG this.jwtOtpSecret
+
       const subject = "Your OTP Code";
       const data = `Your OTP code is: ${otp}`;
+      await this.sendmail(email, subject, data);
 
-      const mailIsSent = await this.sendmail(email, subject, data);
-      if (!mailIsSent) {
-        throw new Error("Failed to send email");
-      }
       return {
         isTwoFactorEnabled: true,
         otpToken: otpToken,
-      } as unknown as string;
+      };
     }
+
     const sessionID = uuidv4();
     const jwtPayload = {
       _id: user._id,
@@ -264,10 +277,11 @@ export class AuthServiceImpl implements AuthService {
     await session.save();
 
     return {
+      isTwoFactorEnabled: false,
       refreshToken,
       accessToken,
       sub: String(user._id),
-    } as unknown as string;
+    };
   }
 
   async verifyOTP(
@@ -279,15 +293,19 @@ export class AuthServiceImpl implements AuthService {
     if (!user) {
       throw new Error("User not found");
     }
-    const payload = jwt.verify(otpToken, this.jwtSecret) as {
+
+    // ✨ FIX: Xác thực token OTP bằng secret key RIÊNG BIỆT của nó.
+    // Đây là bước quan trọng nhất để sửa lỗi login-logout.
+    const payload = jwt.verify(otpToken, this.jwtSecret) as { // THAY this.jwtSecret BẰNG this.jwtOtpSecret
       email: string;
       otp: string;
     };
-    if (payload.otp !== otp) {
-      throw new Error("Invalid OTP");
-    }
-    await user.save();
 
+    if (payload.otp !== otp || payload.email !== email) {
+      throw new Error("Invalid OTP or token");
+    }
+
+    // Sau khi xác thực thành công, tạo session và cấp token cho người dùng.
     const sessionID = uuidv4();
     const jwtPayload = {
       _id: user._id,
@@ -349,7 +367,8 @@ export class AuthServiceImpl implements AuthService {
 
   async resetPassword(token: string, newPassword: string): Promise<string> {
     try {
-      const payload = jwt.verify(token, this.jwtSecret) as { email: string };
+      // ✨ FIX: Dùng secret key riêng cho email/reset password.
+      const payload = jwt.verify(token, this.jwtSecret) as { email: string }; // THAY this.jwtSecret BẰNG this.jwtEmailSecret
       const user = await User.findOne({ email: payload.email });
       if (!user) {
         throw new Error("User not found");

@@ -44,7 +44,7 @@ export default function initProjectRoute(controller: ProjectController) {
   // GET /trashed -> lấy danh sách project đã xóa (trash)
   router.get('/trashed',
     requireAuthorizedUser,
-    (req, res, next) => controller.getDeleteProjects(req as any, res, next)
+    (req: Request, res: Response, next: NextFunction) => controller.getDeleteProjects(req as any, res, next)
   );
 
   // GET /:projectId -> lấy chi tiết project với version hiện tại 

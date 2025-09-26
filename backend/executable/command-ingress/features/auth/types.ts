@@ -9,7 +9,13 @@ type ExchangeTokenRequest = {
   idp: string;
 };
 
-
+interface LoginResponse {
+  isTwoFactorEnabled: boolean;
+  otpToken?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  sub?: string;
+}
 
 interface AuthService {
   exchangeWithGoogleIDP(
@@ -29,7 +35,7 @@ interface AuthService {
     dob: Date,
     gender: string
   ): Promise<ExchangeTokenResult>;
-  login(email: string, password: string): Promise<String>;
+  login(email: string, password: string): Promise<LoginResponse>;
 
   forgotPassword(email: string): Promise<string>;
 
@@ -40,6 +46,7 @@ interface AuthService {
   sendVerificationEmail(email: string): Promise<boolean>;
   verifyOTP(email: string, otp: string, otpToken: string): Promise<ExchangeTokenResult>;
   verifyEmail(token: string): Promise<boolean>;
+  getProfile(userId: string): Promise<any>;
 }
 
-export { AuthService, ExchangeTokenRequest, ExchangeTokenResult };
+export { AuthService, ExchangeTokenRequest, ExchangeTokenResult, LoginResponse };

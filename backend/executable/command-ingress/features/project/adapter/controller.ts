@@ -78,16 +78,26 @@ export class ProjectController extends BaseController {
     });
   };
 
-  public deleteProject = async (req: HttpRequest, res: Response, next: NextFunction) => {
-    await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
-      const userId = req.getSubject();
+  deleteProject = async (req: Request & { getSubject?: () => string }, res: Response, next: NextFunction) => {
+    return this.execWithTryCatchBlock(req as any, res, next, async (_req, _res) => {
+      const userId = req.getSubject?.();
       if (!userId) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
         return;
       }
+
       const projectId = req.params.projectId;
-      const result = await this.service.deleteProject(projectId, userId);
-      handleServiceResponse(result, res);
+      if (!projectId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Project ID is required', null, 400), res);
+        return;
+      }
+
+      const deleted = await this.service.deleteProject(projectId, userId);
+      if (!deleted) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Project not found or access denied', null, 404), res);
+        return;
+      }
+      handleServiceResponse(new ServiceResponse(ResponseStatus.Success, "Project deleted successfully", null, 204),res);
     });
   };
 

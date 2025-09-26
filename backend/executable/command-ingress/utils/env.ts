@@ -11,6 +11,9 @@ const env = cleanEnv(process.env, {
   GOOGLE_OAUTH_CLIENT_ID: str(),
   GOOGLE_OAUTH_CLIENT_SECRET: str(),
   GOOGLE_OAUTH_REDIRECT_URL: str(),
+  JWT_OTP_SECRET: str(),
+  JWT_EMAIL_SECRET: str(),
+  
 });
 
 export default env;

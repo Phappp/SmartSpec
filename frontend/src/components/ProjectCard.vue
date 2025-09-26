@@ -52,15 +52,18 @@ export default {
   name: 'ProjectCard',
   props: {
     project: { type: Object, required: true },
+    user: { type: Object, default: null }, // ✨ THÊM PROP MỚI ✨
     showDelete: { type: Boolean, default: true },
-    isTrashed: { type: Boolean, default: false }, // MỚI: Prop để xác định trạng thái
+    isTrashed: { type: Boolean, default: false },
   },
   computed: {
     projectType() {
-      // Logic này có thể cần user object thay vì email từ localStorage để ổn định hơn
-      // Tạm thời giữ nguyên
-      const currentEmail = localStorage.getItem('email')
-      return this.project.owner_id?.email === currentEmail ? 'my' : 'shared'
+      // ✨ SỬA LẠI TOÀN BỘ LOGIC NÀY ✨
+      if (!this.user || !this.project.owner_id) {
+        return 'shared' // Mặc định là 'shared' nếu thiếu thông tin
+      }
+      // So sánh bằng ID thay vì email để đảm bảo chính xác tuyệt đối
+      return this.project.owner_id._id === this.user._id ? 'my' : 'shared'
     },
   },
   methods: {

@@ -84,10 +84,19 @@ const createHttpServer = (redisClient: any) => {
     redirectURL: env.GOOGLE_OAUTH_REDIRECT_URL,
   });
 
+  // ✨ THÊM ĐOẠN CODE KIỂM TRA NÀY VÀO
+  console.log("--- Đang kiểm tra biến môi trường ---");
+  console.log("JWT_SECRET:", process.env.JWT_SECRET ? "OK" : "!!! THIẾU !!!");
+  console.log("JWT_REFRESH_SECRET:", process.env.JWT_REFRESH_SECRET ? "OK" : "!!! THIẾU !!!");
+  console.log("JWT_OTP_SECRET:", process.env.JWT_OTP_SECRET ? "OK" : "!!! THIẾU !!!");
+  console.log("JWT_EMAIL_SECRET:", process.env.JWT_EMAIL_SECRET ? "OK" : "!!! THIẾU !!!");
+  console.log("-----------------------------------");
   const authService = new AuthServiceImpl(
     googleIdentityBroker,
     env.JWT_SECRET,
     env.JWT_REFRESH_SECRET,
+    env.JWT_OTP_SECRET,      // <-- Lấy giá trị mới từ .env
+    env.JWT_EMAIL_SECRET     // <-- Lấy giá trị mới từ .env
   );
   // 1. Khởi tạo OrchestratorService trước
   const orchestratorService = new OrchestratorService();

@@ -94,19 +94,29 @@ export class ProjectService {
     return new ServiceResponse(ResponseStatus.Success, 'Project updated successfully', updatedProject, 200);
   }
 
-  async deleteProject(projectId: string, userId: string): Promise<ServiceResponse<null>> {
-    const project = await Project.findOne({ _id: projectId, owner_id: new Types.ObjectId(userId) });
+  async deleteProject(projectId: string, userId: string) {
+    const project = await Project.findOne({
+      _id: projectId,
+      owner_id: new Types.ObjectId(userId)
+    });
 
-    if (!project) {
-      return new ServiceResponse(ResponseStatus.Failed, 'Project not found or access denied', null, 404);
-    }
+    if (!project) return null;
 
-    if (!project.status?.is_trashed) {
-      project.status = { ...project.status, is_trashed: true, trashed_at: new Date() };
+    if (!project.status || project.status.is_trashed === false) {
+      if (!project.status) {
+        project.status = {
+          is_trashed: true,
+          trashed_at: new Date(),
+          delete_after_days: 30,
+        };
+      } else {
+        project.status.is_trashed = true;
+        project.status.trashed_at = new Date();
+      }
+
       await project.save();
-      return new ServiceResponse(ResponseStatus.Success, 'Project moved to trash', null, 200);
+      return true;
     }
-
     await Promise.all([
       Input.deleteMany({ project_id: project._id }),
       Output.deleteMany({ project_id: project._id }),
@@ -114,7 +124,7 @@ export class ProjectService {
       ProjectLog.deleteMany({ project_id: project._id }),
       Project.deleteOne({ _id: project._id }),
     ]);
-    return new ServiceResponse(ResponseStatus.Success, 'Project permanently deleted', null, 200);
+    return true;
   }
 
   async restoreProject(projectId: string, userId: string): Promise<ServiceResponse<null>> {
@@ -153,11 +163,24 @@ export class ProjectService {
 
   async getSharedProjects(userId: string): Promise<ServiceResponse<any>> {
     const projects = await Project.find({
-      owner_id: { $ne: new Types.ObjectId(userId) },
-      'members.user_id': new Types.ObjectId(userId),
-      'members.status': 'accepted',
-      'status.is_trashed': { $ne: true },
-    }).sort({ last_accessed_at: -1 }).lean();
+      owner_id: { $ne: new Types.ObjectId(userId) }, // Người dùng không phải là chủ sở hữu
+      'status.is_trashed': { $ne: true },            // Dự án không ở trong thùng rác
+
+      // ✨ THAY ĐỔI QUAN TRỌNG Ở ĐÂY ✨
+      // Tìm các dự án mà trong mảng `members` có một phần tử
+      // khớp với CẢ hai điều kiện dưới đây.
+      members: {
+        $elemMatch: {
+          user_id: new Types.ObjectId(userId),
+          status: 'accepted'
+        }
+      }
+    })
+      .populate('owner_id', 'full_name email avatar_url') // Thêm populate để lấy đủ thông tin
+      .populate('members.user_id', 'full_name email avatar_url')
+      .sort({ last_accessed_at: -1 })
+      .lean();
+
     return new ServiceResponse(ResponseStatus.Success, 'OK', projects, 200);
   }
 

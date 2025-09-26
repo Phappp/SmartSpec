@@ -19,8 +19,9 @@
                 v-for="p in recentProjects"
                 :key="p._id"
                 :project="p"
+                :user="user"
                 @open="openProject"
-                :showDelete="false"
+                @delete="moveToTrash"
               />
             </div>
           </div>
@@ -35,8 +36,9 @@
                 v-for="p in myProjects"
                 :key="p._id"
                 :project="p"
+                :user="user"
                 @open="openProject"
-                @delete="deleteProject"
+                @delete="moveToTrash"
               />
             </div>
           </div>
@@ -51,22 +53,34 @@
                 v-for="p in sharedProjects"
                 :key="p._id"
                 :project="p"
+                :user="user"
                 @open="openProject"
-                :showDelete="false"
+                @delete="moveToTrash"
               />
             </div>
           </div>
 
-          <div v-if="currentView === 'trash'" class="trash-view">
+          <div v-if="currentView === 'trash'" class="trash-view projects-view">
             <div class="projects-header">
               <h2>Trash</h2>
-              <p>0 projects found</p>
+              <p>{{ trashedProjects.length }} projects found</p>
             </div>
-            <div class="empty-state">
+            <div v-if="trashedProjects.length > 0" class="projects-grid">
+              <ProjectCard
+                v-for="p in trashedProjects"
+                :key="p._id"
+                :project="p"
+                :user="user"
+                :is-trashed="true"
+                @restore="restoreProject"
+                @delete-permanently="deleteProjectPermanently"
+              />
+            </div>
+            <div v-else class="empty-state">
               <div class="empty-icon">
                 <span class="material-symbols-outlined">delete_outline</span>
               </div>
-              <p>No projects found</p>
+              <p>No projects found in Trash</p>
             </div>
           </div>
         </div>
@@ -85,7 +99,15 @@
 import Sidebar from '@/components/Sidebar.vue'
 import NewProjectModal from '@/components/NewProjectForm.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
-import { getMyProjects, getSharedProjects, getRecentProjects, deleteProject } from '@/api/project'
+import {
+  getMyProjects,
+  getSharedProjects,
+  getRecentProjects,
+  deleteProject,
+  getCurrentUser,
+  getTrashedProjects,
+  restoreProject,
+} from '@/api/project'
 
 export default {
   name: 'Homepage',
@@ -97,17 +119,17 @@ export default {
   data() {
     return {
       isModalVisible: false,
-      // [MỚI] Thêm biến cờ để xử lý việc điều hướng sau khi tạo thành công
       creationSuccess: false,
       currentView: 'recent-projects',
       user: null,
       recentProjects: [],
       myProjects: [],
       sharedProjects: [],
+      trashedProjects: [],
     }
   },
   created() {
-    this.fetchAll()
+    this.fetchInitialData()
   },
   methods: {
     openNewProjectModal() {
@@ -115,16 +137,14 @@ export default {
     },
     closeNewProjectModal() {
       this.isModalVisible = false
-      // [SỬA] Chỉ chuyển trang KHI việc đóng modal là do tạo project thành công
       if (this.creationSuccess) {
         this.navigateTo('my-projects')
-        this.creationSuccess = false // Reset lại cờ cho lần sau
+        this.creationSuccess = false
       }
     },
     handleProjectCreated() {
-      // [SỬA] Không đóng modal hay chuyển trang ở đây nữa
-      this.fetchAll() // Chỉ tải lại danh sách dự án
-      this.creationSuccess = true // Bật cờ lên để báo hiệu đã tạo thành công
+      this.fetchInitialData()
+      this.creationSuccess = true
     },
     navigateTo(view) {
       this.currentView = view
@@ -138,36 +158,70 @@ export default {
       }
       return titles[this.currentView] || 'Dashboard'
     },
-    async fetchAll() {
+    async fetchInitialData() {
       try {
-        const [myRes, sharedRes, recentRes] = await Promise.allSettled([
+        const [userRes, myRes, sharedRes, recentRes, trashedRes] = await Promise.all([
+          getCurrentUser(),
           getMyProjects(),
           getSharedProjects(),
           getRecentProjects(),
+          getTrashedProjects(),
         ])
-        if (myRes.status === 'fulfilled') this.myProjects = myRes.value.data?.data || []
-        if (sharedRes.status === 'fulfilled') this.sharedProjects = sharedRes.value.data?.data || []
-        if (recentRes.status === 'fulfilled') this.recentProjects = recentRes.value.data?.data || []
+
+        this.user = userRes.data.data
+        this.myProjects = myRes.data?.data || []
+        this.sharedProjects = sharedRes.data?.data || []
+        this.recentProjects = recentRes.data?.data || []
+        this.trashedProjects = trashedRes.data?.data || []
       } catch (err) {
-        console.error('Fetch projects error', err)
+        console.error('Failed to fetch initial data:', err)
+        if (err.response?.status === 401 || err.response?.status === 400) {
+          this.logout()
+        }
       }
     },
     openProject(project) {
       const id = project._id || project.id
       if (id) this.$router.push({ name: 'Editor', params: { id } })
     },
-    async deleteProject(projectId) {
-      if (!confirm('Bạn có chắc muốn xóa dự án này?')) return
+    async moveToTrash(projectId) {
+      if (!confirm('Are you sure you want to move this project to the trash?')) return
       try {
         await deleteProject(projectId)
-        this.fetchAll()
+        alert('Project moved to trash successfully.')
+        this.fetchInitialData()
       } catch (err) {
-        console.error('delete error', err)
-        alert('Xóa thất bại')
+        console.error('Move to trash error', err)
+        alert('Failed to move project to trash.')
+      }
+    },
+    async restoreProject(projectId) {
+      try {
+        await restoreProject(projectId)
+        alert('Project restored successfully.')
+        this.fetchInitialData()
+      } catch (err) {
+        console.error('Restore error', err)
+        alert('Failed to restore project.')
+      }
+    },
+    async deleteProjectPermanently(projectId) {
+      if (
+        !confirm(
+          'This action is irreversible. Are you sure you want to permanently delete this project?'
+        )
+      )
+        return
+      try {
+        await deleteProject(projectId)
+        alert('Project permanently deleted.')
+        this.fetchInitialData()
+      } catch (err) {
+        console.error('Permanent delete error', err)
+        alert('Failed to permanently delete project.')
       }
     },
     logout() {
-      // Dọn dẹp localStorage và chuyển hướng
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('userId')
@@ -250,3 +304,4 @@ export default {
   }
 }
 </style>
+
