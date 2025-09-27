@@ -21,7 +21,7 @@
                 :project="p"
                 :user="user"
                 @open="openProject"
-                @delete="moveToTrash"
+                @delete="confirmMoveToTrash"
               />
             </div>
           </div>
@@ -38,7 +38,7 @@
                 :project="p"
                 :user="user"
                 @open="openProject"
-                @delete="moveToTrash"
+                @delete="confirmMoveToTrash"
               />
             </div>
           </div>
@@ -55,7 +55,7 @@
                 :project="p"
                 :user="user"
                 @open="openProject"
-                @delete="moveToTrash"
+                @delete="confirmMoveToTrash"
               />
             </div>
           </div>
@@ -73,7 +73,7 @@
                 :user="user"
                 :is-trashed="true"
                 @restore="restoreProject"
-                @delete-permanently="deleteProjectPermanently"
+                @delete-permanently="confirmDeletePermanently"
               />
             </div>
             <div v-else class="empty-state">
@@ -88,9 +88,16 @@
     </div>
 
     <NewProjectModal
-      :show="isModalVisible"
+      :show="isNewProjectModalVisible"
       @close="closeNewProjectModal"
       @project-created="handleProjectCreated"
+    />
+    <AppModal
+      v-model="isAppModalVisible"
+      :title="modalContent.title"
+      :message="modalContent.message"
+      :is-confirmation="modalContent.isConfirmation"
+      @confirm="modalContent.onConfirm"
     />
   </div>
 </template>
@@ -99,6 +106,7 @@
 import Sidebar from '@/components/Sidebar.vue'
 import NewProjectModal from '@/components/NewProjectForm.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
+import AppModal from '@/components/AppModal.vue' // Import AppModal
 import {
   getMyProjects,
   getSharedProjects,
@@ -106,7 +114,7 @@ import {
   deleteProject,
   getCurrentUser,
   getTrashedProjects,
-  restoreProject,
+  restoreProject as apiRestoreProject, // Renamed to avoid conflict
 } from '@/api/project'
 
 export default {
@@ -115,10 +123,11 @@ export default {
     Sidebar,
     NewProjectModal,
     ProjectCard,
+    AppModal, // Register AppModal
   },
   data() {
     return {
-      isModalVisible: false,
+      isNewProjectModalVisible: false,
       creationSuccess: false,
       currentView: 'recent-projects',
       user: null,
@@ -126,17 +135,44 @@ export default {
       myProjects: [],
       sharedProjects: [],
       trashedProjects: [],
+      isAppModalVisible: false,
+      modalContent: {
+        title: '',
+        message: '',
+        isConfirmation: false,
+        onConfirm: () => {},
+      },
     }
   },
   created() {
     this.fetchInitialData()
   },
   methods: {
+    // --- Modal Methods ---
+    showNotification(title, message) {
+      this.modalContent = {
+        title,
+        message,
+        isConfirmation: false,
+      }
+      this.isAppModalVisible = true
+    },
+    showConfirmation(title, message, onConfirm) {
+      this.modalContent = {
+        title,
+        message,
+        isConfirmation: true,
+        onConfirm,
+      }
+      this.isAppModalVisible = true
+    },
+
+    // --- Original Methods Modified ---
     openNewProjectModal() {
-      this.isModalVisible = true
+      this.isNewProjectModalVisible = true
     },
     closeNewProjectModal() {
-      this.isModalVisible = false
+      this.isNewProjectModalVisible = false
       if (this.creationSuccess) {
         this.navigateTo('my-projects')
         this.creationSuccess = false
@@ -184,41 +220,48 @@ export default {
       const id = project._id || project.id
       if (id) this.$router.push({ name: 'Editor', params: { id } })
     },
+    confirmMoveToTrash(projectId) {
+      this.showConfirmation(
+        'Confirm Move to Trash',
+        'Are you sure you want to move this project to the trash?',
+        () => this.moveToTrash(projectId)
+      )
+    },
     async moveToTrash(projectId) {
-      if (!confirm('Are you sure you want to move this project to the trash?')) return
       try {
         await deleteProject(projectId)
-        alert('Project moved to trash successfully.')
+        this.showNotification('Success', 'Project moved to trash successfully.')
         this.fetchInitialData()
       } catch (err) {
         console.error('Move to trash error', err)
-        alert('Failed to move project to trash.')
+        this.showNotification('Error', 'Failed to move project to trash.')
       }
     },
     async restoreProject(projectId) {
       try {
-        await restoreProject(projectId)
-        alert('Project restored successfully.')
+        await apiRestoreProject(projectId)
+        this.showNotification('Success', 'Project restored successfully.')
         this.fetchInitialData()
       } catch (err) {
         console.error('Restore error', err)
-        alert('Failed to restore project.')
+        this.showNotification('Error', 'Failed to restore project.')
       }
     },
-    async deleteProjectPermanently(projectId) {
-      if (
-        !confirm(
-          'This action is irreversible. Are you sure you want to permanently delete this project?'
-        )
+    confirmDeletePermanently(projectId) {
+      this.showConfirmation(
+        'Confirm Permanent Deletion',
+        'This action is irreversible. Are you sure you want to permanently delete this project?',
+        () => this.deleteProjectPermanently(projectId)
       )
-        return
+    },
+    async deleteProjectPermanently(projectId) {
       try {
         await deleteProject(projectId)
-        alert('Project permanently deleted.')
+        this.showNotification('Success', 'Project permanently deleted.')
         this.fetchInitialData()
       } catch (err) {
         console.error('Permanent delete error', err)
-        alert('Failed to permanently delete project.')
+        this.showNotification('Error', 'Failed to permanently delete project.')
       }
     },
     logout() {
@@ -233,7 +276,7 @@ export default {
 </script>
 
 <style scoped>
-/* CSS giữ nguyên, không thay đổi */
+/* CSS styles remain unchanged */
 .homepage {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: #f5f5f5;
@@ -304,4 +347,3 @@ export default {
   }
 }
 </style>
-

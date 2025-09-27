@@ -76,6 +76,12 @@
         </p>
       </div>
     </div>
+    <AppModal
+      v-model="modalOpen"
+      :title="modalTitle"
+      :message="modalMessage"
+      @update:modelValue="handleModalClose"
+    />
   </div>
 </template>
 
@@ -83,9 +89,10 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
-
+import AppModal from '../components/AppModal.vue'
 export default {
   name: 'LoginView',
+  components: { AppModal },
   setup() {
     const router = useRouter()
     const email = ref('')
@@ -96,6 +103,31 @@ export default {
     const loading = ref(false)
     const emailError = ref('')
     const passwordError = ref('')
+
+    // Modal state
+    const modalOpen = ref(false)
+    const modalTitle = ref('Thông báo')
+    const modalMessage = ref('')
+
+    const openModal = (message, title = 'Thông báo', onClose = null) => {
+      modalTitle.value = title
+      modalMessage.value = message
+      modalOpen.value = true
+      // Store callback for when modal closes
+      if (onClose) {
+        modalOnClose.value = onClose
+      }
+    }
+
+    const modalOnClose = ref(null)
+
+    const handleModalClose = () => {
+      modalOpen.value = false
+      if (modalOnClose.value) {
+        modalOnClose.value()
+        modalOnClose.value = null
+      }
+    }
 
     // Google OAuth config
     const GOOGLE_CLIENT_ID =
@@ -138,10 +170,6 @@ export default {
         passwordError.value = 'Password is required'
         return false
       }
-      // if (password.value.length < 6) {
-      //   passwordError.value = 'Password must be at least 6 characters'
-      //   return false
-      // }
       return true
     }
 
@@ -181,12 +209,15 @@ export default {
           localStorage.setItem('accessToken', data.accessToken)
           localStorage.setItem('refreshToken', data.refreshToken)
           localStorage.setItem('userId', data.sub)
-          router.push('/dashboard')
+          openModal('Log in successfully', 'Login', () => {
+            router.push('/dashboard')
+          })
         }
       } catch (error) {
         console.error(error)
-        errorMessage.value =
-          error.response?.data?.message || 'Invalid email or password. Please try again.'
+        const msg = error.response?.data?.message || 'Invalid email or password. Please try again.'
+        errorMessage.value = msg
+        openModal(msg, 'Login failed')
       } finally {
         loading.value = false
       }
@@ -201,10 +232,15 @@ export default {
       loading,
       emailError,
       passwordError,
+      modalOpen,
+      modalTitle,
+      modalMessage,
       togglePasswordVisibility,
       handleSubmit,
       clearErrors,
       loginWithGoogle,
+      openModal,
+      handleModalClose,
     }
   },
 }
@@ -231,6 +267,7 @@ export default {
   color: #0a1a4d;
   margin-bottom: 24px;
   display: block;
+  justify-self: center;
 }
 
 .card-title {

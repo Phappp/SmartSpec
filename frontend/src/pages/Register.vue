@@ -200,6 +200,12 @@
         <a href="#">Privacy Policy</a> and <a href="#">Terms of Service</a> apply.
       </p>
     </div>
+    <AppModal
+      v-model="modalOpen"
+      :title="modalTitle"
+      :message="modalMessage"
+      @update:modelValue="handleModalClose"
+    />
   </div>
 </template>
 
@@ -207,9 +213,10 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
-
+import AppModal from '../components/AppModal.vue'
 export default {
   name: 'RegisterView',
+  components: { AppModal },
   setup() {
     const router = useRouter()
     const route = useRoute()
@@ -238,6 +245,29 @@ export default {
     const registering = ref(false)
     const emailVerified = ref(false)
     const verificationToken = ref('')
+    // Modal state
+    const modalOpen = ref(false)
+    const modalTitle = ref('Thông báo')
+    const modalMessage = ref('')
+    const modalOnClose = ref(null)
+
+    const openModal = (message, title = 'Thông báo', onClose = null) => {
+      modalTitle.value = title
+      modalMessage.value = message
+      modalOpen.value = true
+      // Store callback for when modal closes
+      if (onClose) {
+        modalOnClose.value = onClose
+      }
+    }
+
+    const handleModalClose = () => {
+      modalOpen.value = false
+      if (modalOnClose.value) {
+        modalOnClose.value()
+        modalOnClose.value = null
+      }
+    }
 
     // Google OAuth config
     const GOOGLE_CLIENT_ID =
@@ -365,7 +395,10 @@ export default {
             { email: email.value }
           )
           if (response.data.status === 'Success') {
-            alert("We've sent a verification link to your email. Please check your inbox.")
+            openModal(
+              "We've sent a verification link to your email. Please check your inbox.",
+              'Email verification'
+            )
             localStorage.setItem('registerEmail', email.value)
             localStorage.setItem('registerStep', '1')
           } else {
@@ -443,7 +476,7 @@ export default {
     }
 
     const continueWith = (provider) => {
-      alert(`This would normally redirect to ${provider} authentication`)
+      openModal(`This would normally redirect to ${provider} authentication`, 'Social login')
     }
 
     const register = async () => {
@@ -451,7 +484,7 @@ export default {
       const emailToSend = email.value || storedEmail
 
       if (!emailToSend) {
-        alert('Email not found. Please re-enter or verify your email.')
+        openModal('Email not found. Please re-enter or verify your email.', 'Registration')
         return
       }
 
@@ -477,13 +510,21 @@ export default {
           localStorage.removeItem('registerStep')
 
           router.push('/login?registered=true')
-          alert(response.data.message || 'Registration successful! Please log in.')
+          openModal('Registration successful! Please log in.', 'Registration', () => {
+            router.push('/login?registered=true')
+          })
         } else {
-          alert(response.data.message || 'Registration failed. Please try again.')
+          openModal(
+            response.data.message || 'Registration failed. Please try again.',
+            'Registration'
+          )
         }
       } catch (error) {
         console.error('Registration error:', error)
-        alert(error.response?.data?.message || 'An error occurred. Please try again.')
+        openModal(
+          error.response?.data?.message || 'An error occurred. Please try again.',
+          'Registration error'
+        )
       } finally {
         registering.value = false
       }
@@ -498,7 +539,10 @@ export default {
       if (emailVerified.value && newEmail !== verifiedEmail) {
         emailVerified.value = false
         localStorage.removeItem('emailVerified')
-        alert('Bạn đã thay đổi email. Vui lòng xác thực lại địa chỉ email mới.')
+        openModal(
+          'Bạn đã thay đổi email. Vui lòng xác thực lại địa chỉ email mới.',
+          'Email changed'
+        )
       }
     })
 
@@ -529,12 +573,17 @@ export default {
       hasChar,
       hasSpecial,
       hasLength,
+      modalOpen,
+      modalTitle,
+      modalMessage,
       togglePasswordVisibility,
       nextStep,
       prevStep,
       continueWith,
       register,
       loginWithGoogle,
+      openModal,
+      handleModalClose,
     }
   },
 }

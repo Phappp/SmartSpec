@@ -242,7 +242,8 @@ export class GeminiService {
             try {
                 const { GoogleGenerativeAI } = await import("@google/generative-ai");
                 const client = new GoogleGenerativeAI(k.key_value);
-                const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
+
 
                 const resp: any = await model.generateContent({
                     contents: [{ role: "user", parts: [{ text: basePrompt }] }],
@@ -303,7 +304,8 @@ export class GeminiService {
                     console.log(`🔑 Trying Gemini key: ${key.slice(0, 12)}... (offset=${offset})`);
                     const { GoogleGenerativeAI } = await import("@google/generative-ai");
                     const client = new GoogleGenerativeAI(key);
-                    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
+                    const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
+
 
                     const prompt = this.buildPrompt(cleanText, language, offset, this.BATCH_SIZE);
 
@@ -376,7 +378,7 @@ export class GeminiService {
             try {
                 const { GoogleGenerativeAI } = await import("@google/generative-ai");
                 const client = new GoogleGenerativeAI(k.key_value);
-                const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
 
                 const resp: any = await model.generateContent({
                     contents: [{ role: "user", parts: [{ text: prompt }] }],

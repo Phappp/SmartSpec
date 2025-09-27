@@ -374,12 +374,14 @@ export default {
   color: #333;
   margin-bottom: 2px;
   pointer-events: none;
+  user-select: none;
 }
 
 .user-email {
   font-size: 12px;
   color: #666;
   pointer-events: none;
+  user-select: none;
 }
 
 .logout-btn {

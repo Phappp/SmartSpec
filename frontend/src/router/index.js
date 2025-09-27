@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
 import Homepage from '../views/HomePage.vue'
-import ProjectEditor from '../views/ProjectEditor.vue'
+import UsecaseManagement from '../views/UsecaseManagement.vue'
 import Login from '../pages/login.vue'
 import OauthRedirect from '../pages/OauthRedirect.vue'
 import Register from '../pages/register.vue'
@@ -21,7 +20,7 @@ const routes = [
   { path: '/reset-password', component: ResetPassword },
   { path: '/reset-password', component: ResetPassword },
   { path: '/dashboard', name: 'Home', component: Homepage },
-  { path: '/editor/:id', name: 'Editor', component: ProjectEditor, props: true }
+  { path: '/editor/:id', name: 'Editor', component: UsecaseManagement, props: true }
 ]
 const router = createRouter({
   history: createWebHistory(),
