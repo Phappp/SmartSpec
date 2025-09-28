@@ -3,10 +3,10 @@
     <div class="brand-section">
       <div class="brand">
         <h2>
-          <router-link  class="logo-link">
+          <router-link class="logo-link">
             <i class="fa-brands fa-slack"></i>
           </router-link>
-          SMART REQ
+          SMART SPEC
         </h2>
         <p>Generate professional software documentation using AI</p>
       </div>
@@ -122,21 +122,15 @@ export default {
       return this.user.name.substring(0, 2).toUpperCase()
     },
   },
-  // created() {
-  //   this.fetchUser()
-  // },
+  mounted() {
+    // 🔹 Đọc lại từ localStorage
+    const savedSection = localStorage.getItem('activeSection')
+    if (savedSection) {
+      this.activeSection = savedSection
+      this.$emit('navigate', savedSection) // gọi navigate ngay để đồng bộ
+    }
+  },
   methods: {
-    // async fetchUser() {
-    //   try {
-    //     // Gọi API để lấy thông tin người dùng đang đăng nhập
-    //     const response = await getCurrentUser()
-    //     this.user = response.data.user
-    //   } catch (error) {
-    //     console.error('Failed to fetch user:', error)
-    //     // Xử lý lỗi, ví dụ chuyển hướng về trang đăng nhập
-    //     // this.$router.push('/login');
-    //   }
-    // },
     toggleUserMenu() {
       this.showUserMenu = !this.showUserMenu
 
@@ -161,6 +155,7 @@ export default {
     },
     navigate(section) {
       this.activeSection = section
+      localStorage.setItem('activeSection', section)
       this.$emit('navigate', section)
     },
   },
@@ -168,11 +163,12 @@ export default {
 </script>
 <style scoped>
 .fa-slack {
-  font-size: 20px;
+  font-size: 28px;
   color: #0a1a4d;
 }
 .sidebar {
-  position: relative;
+  position: fixed;
+  height: 100vh;
   width: 250px;
   background: #fff;
   display: flex;
@@ -183,6 +179,9 @@ export default {
   border-right: 1px solid #e0e0e0;
 }
 .brand h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 18px;
   font-weight: bold;
   color: #333;
@@ -369,12 +368,18 @@ export default {
 }
 
 .user-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 1; /* số dòng tối đa */
+  -webkit-box-orient: vertical;
   font-weight: 600;
   font-size: 14px;
+  padding-right: 10px;
   color: #333;
   margin-bottom: 2px;
   pointer-events: none;
   user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .user-email {
@@ -382,6 +387,8 @@ export default {
   color: #666;
   pointer-events: none;
   user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .logout-btn {

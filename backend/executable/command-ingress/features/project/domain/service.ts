@@ -209,22 +209,20 @@ export class ProjectService {
       (m: any) => m.user_id._id.toString() === userId && m.status === "accepted"
     );
     if (!isOwner && !isMember) {
-      // Ném lỗi để controller bắt và trả về lỗi 403 Forbidden
       throw { status: 403, message: "Bạn không có quyền truy cập project này" };
     }
 
+    // Nếu chưa có version => tạo Version 1
     if (!project.current_version) {
       const newVersion = await Version.create({
         project_id: project._id,
         version_number: 1,
-        name: "Version 1",
-        description: "Initial version when project is first opened",
         created_by: userId,
-        trigger_action: "init",
-        inputs: [],
-        outputs: [],
+        status: "completed",
         affects_requirement: false,
-        requirement_model: null,
+        requirement_model: [],
+        pending_conflicts: [],
+        processing_errors: [],
       });
       project.current_version = newVersion._id;
       await project.save();
@@ -241,14 +239,14 @@ export class ProjectService {
       });
     }
 
+    // Lấy danh sách versions (metadata)
     const versions = await Version.find({ project_id: project._id })
-      .select("_id name version_number")
+      .select("_id version_number status created_at updated_at")
       .sort({ version_number: 1 })
       .lean();
 
-    const currentVersion = await Version.findById(project.current_version)
-      .select("_id name version_number")
-      .lean();
+    // Lấy current version (đầy đủ tất cả field)
+    const currentVersion = await Version.findById(project.current_version).lean();
 
     let inputs: any[] = [];
     let outputs: any[] = [];
@@ -296,8 +294,10 @@ export class ProjectService {
       outputs,
       chatLogs,
     };
+
     return new ServiceResponse(ResponseStatus.Success, 'OK', resultData, 200);
   }
+
 
   async getDeleteProjects(userId: string): Promise<ServiceResponse<any>> {
     try {

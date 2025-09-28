@@ -4,14 +4,14 @@ import axiosClient from "./../utils/axiosClient";
 export const getMyProjects = () => axiosClient.get(`/api/projects/myproject`);
 export const getSharedProjects = () => axiosClient.get(`/api/projects/shared`);
 export const getRecentProjects = () => axiosClient.get(`/api/projects/recent`);
-export const getTrashedProjects = () => axiosClient.get(`/api/projects/trashed`);
+export const getTrashedProjects = () => axiosClient.get(`/api/projects/trashed`); 
+export const getProjectDetail = (id) => axiosClient.get(`/api/projects/${id}`);
 
 export const createProject = (data) => axiosClient.post(`/api/projects`, data);
 export const updateProject = (id, data) => axiosClient.put(`/api/projects/${id}`, data);
 export const deleteProject = (id) => axiosClient.delete(`/api/projects/${id}`);
 export const restoreProject = (id) => axiosClient.post(`/api/projects/${id}/restore`);
 
-export const getProject = (id) => axiosClient.get(`/api/projects/${id}`);
 export const getVersionStatus = (versionId) => axiosClient.get(`/api/projects/versions/${versionId}/status`);
 // Attachments
 export const uploadAttachments = (projectId, formData) =>
@@ -37,9 +37,9 @@ export default {
   updateProject,
   deleteProject,
   restoreProject,
-  getProject,
   uploadAttachments,
   generateDocumentation,
   getCurrentUser,
   getVersionStatus,
+  getProjectDetail
 };

@@ -5,14 +5,14 @@
 
       <div class="main-content">
         <header class="page-header">
-          <h1>HOMEPAGE - {{ getPageTitle() }}</h1>
+          <h1>HOME PAGE</h1>
         </header>
 
         <div class="content-area">
           <div v-if="currentView === 'recent-projects'" class="projects-view">
             <div class="projects-header">
               <h2>Recent Projects</h2>
-              <p>{{ recentProjects.length }} projects found</p>
+              <p></p>
             </div>
             <div class="projects-grid">
               <ProjectCard
@@ -21,6 +21,7 @@
                 :project="p"
                 :user="user"
                 @open="openProject"
+                @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
               />
             </div>
@@ -38,6 +39,7 @@
                 :project="p"
                 :user="user"
                 @open="openProject"
+                @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
               />
             </div>
@@ -55,6 +57,7 @@
                 :project="p"
                 :user="user"
                 @open="openProject"
+                @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
               />
             </div>
@@ -62,7 +65,7 @@
 
           <div v-if="currentView === 'trash'" class="trash-view projects-view">
             <div class="projects-header">
-              <h2>Trash</h2>
+              <h2>Trashed Projects</h2>
               <p>{{ trashedProjects.length }} projects found</p>
             </div>
             <div v-if="trashedProjects.length > 0" class="projects-grid">
@@ -106,7 +109,7 @@
 import Sidebar from '@/components/Sidebar.vue'
 import NewProjectModal from '@/components/NewProjectForm.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
-import AppModal from '@/components/AppModal.vue' // Import AppModal
+import AppModal from '@/components/AppModal.vue'
 import {
   getMyProjects,
   getSharedProjects,
@@ -114,7 +117,8 @@ import {
   deleteProject,
   getCurrentUser,
   getTrashedProjects,
-  restoreProject as apiRestoreProject, // Renamed to avoid conflict
+  restoreProject as apiRestoreProject,
+  updateProject, // Thêm import updateProject
 } from '@/api/project'
 
 export default {
@@ -123,7 +127,7 @@ export default {
     Sidebar,
     NewProjectModal,
     ProjectCard,
-    AppModal, // Register AppModal
+    AppModal,
   },
   data() {
     return {
@@ -185,15 +189,35 @@ export default {
     navigateTo(view) {
       this.currentView = view
     },
-    getPageTitle() {
-      const titles = {
-        'recent-projects': 'Recent Projects',
-        'my-projects': 'My Projects',
-        'shared-projects': 'Shared Projects',
-        trash: 'Trash',
+
+    // --- Xử lý Edit Project ---
+    async handleEditProject({ projectId, data }) {
+      try {
+        await updateProject(projectId, data)
+        this.showNotification('Success', 'Project updated successfully!')
+
+        // Cập nhật local data mà không cần refetch toàn bộ
+        this.updateProjectInLists(projectId, data)
+      } catch (err) {
+        console.error('Update project error', err)
+        this.showNotification('Error', 'Failed to update project!')
       }
-      return titles[this.currentView] || 'Dashboard'
     },
+
+    // Cập nhật project trong các danh sách local
+    updateProjectInLists(projectId, newData) {
+      const updateProjectInArray = (array) => {
+        const index = array.findIndex((p) => (p._id || p.id) === projectId)
+        if (index !== -1) {
+          array[index] = { ...array[index], ...newData }
+        }
+      }
+
+      updateProjectInArray(this.recentProjects)
+      updateProjectInArray(this.myProjects)
+      updateProjectInArray(this.sharedProjects)
+    },
+
     async fetchInitialData() {
       try {
         const [userRes, myRes, sharedRes, recentRes, trashedRes] = await Promise.all([
@@ -230,11 +254,11 @@ export default {
     async moveToTrash(projectId) {
       try {
         await deleteProject(projectId)
-        this.showNotification('Success', 'Project moved to trash successfully.')
+        this.showNotification('Success', 'Project moved to trash successfully!')
         this.fetchInitialData()
       } catch (err) {
         console.error('Move to trash error', err)
-        this.showNotification('Error', 'Failed to move project to trash.')
+        this.showNotification('Error', 'Failed to move project to trash!')
       }
     },
     async restoreProject(projectId) {
@@ -244,7 +268,7 @@ export default {
         this.fetchInitialData()
       } catch (err) {
         console.error('Restore error', err)
-        this.showNotification('Error', 'Failed to restore project.')
+        this.showNotification('Error', 'Failed to restore project!')
       }
     },
     confirmDeletePermanently(projectId) {
@@ -257,11 +281,11 @@ export default {
     async deleteProjectPermanently(projectId) {
       try {
         await deleteProject(projectId)
-        this.showNotification('Success', 'Project permanently deleted.')
+        this.showNotification('Success', 'Project permanently deleted!')
         this.fetchInitialData()
       } catch (err) {
         console.error('Permanent delete error', err)
-        this.showNotification('Error', 'Failed to permanently delete project.')
+        this.showNotification('Error', 'Failed to permanently delete project!')
       }
     },
     logout() {
@@ -276,7 +300,6 @@ export default {
 </script>
 
 <style scoped>
-/* CSS styles remain unchanged */
 .homepage {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: #f5f5f5;
@@ -288,6 +311,7 @@ export default {
 .main-content {
   flex: 1;
   background-color: #ffffff;
+  margin-left: 250px;
 }
 .page-header {
   padding: 20px 30px;
@@ -304,6 +328,7 @@ export default {
 }
 .projects-header {
   margin-bottom: 30px;
+  text-align: left;
 }
 .projects-header h2 {
   font-size: 20px;
@@ -314,6 +339,7 @@ export default {
 .projects-header p {
   font-size: 14px;
   color: #666;
+  min-height: 24px;
 }
 .projects-grid {
   display: grid;

@@ -1,4 +1,3 @@
-
 <template>
   <div v-if="show" class="modal-overlay" @click.self="handleClose">
     <div class="modal-content">
@@ -117,21 +116,11 @@
 
       <!-- STATUS VIEW -->
       <template v-else>
-        <div class="modal-header">
-          <div class="header-text">
-            <h2>Project Status</h2>
-            <p class="progress-indicator">{{ creationStatusMessage }}</p>
-          </div>
-          <button class="close-btn" @click="handleClose" :disabled="creationStatus === 'creating'">
-            &times;
-          </button>
-        </div>
         <div class="modal-body processing-view">
           <!-- COMPLETED -->
           <div v-if="creationStatus === 'completed'">
-            <div class="status-icon success">✅</div>
+            <span class="status-icon success material-symbols-outlined"> check_circle </span>
             <h3 class="status-title">Project Ready!</h3>
-            <p class="status-text">Detected {{ 25 }} use cases.</p>
             <div class="button-group">
               <button
                 class="cancel-btn"
@@ -148,12 +137,16 @@
           </div>
 
           <!-- FAILED -->
+          <!-- FAILED -->
           <div v-if="creationStatus === 'failed'">
-            <div class="status-icon fail">❌</div>
+            <span class="status-icon fail material-symbols-outlined"> error </span>
             <h3 class="status-title">Processing Failed</h3>
             <p class="status-text">Something went wrong during the analysis.</p>
-            <pre class="error-log">{{ processingError || 'Unknown error.' }}</pre>
-            <button class="cancel-btn" @click="handleClose">Close</button>
+            <!-- <pre class="error-log">{{ processingError || 'Unknown error.' }}</pre> -->
+            <div class="button-group">
+              <button class="cancel-btn" @click="handleClose">Close</button>
+              <button class="create-btn" @click="handleRetry">Retry</button>
+            </div>
           </div>
         </div>
       </template>
@@ -162,7 +155,7 @@
     <!-- FULLSCREEN LOADING OVERLAY -->
     <div v-if="overlayLoading" class="fullscreen-overlay">
       <div class="loading-box">
-        <div class="spinner-borders"></div>
+        <div class="spinner-flashlight"></div>
         <p class="loading-text">{{ loadingMessage }}</p>
       </div>
     </div>
@@ -211,7 +204,7 @@ export default {
       messageInterval = setInterval(() => {
         messageIndex.value = (messageIndex.value + 1) % loadingMessages.length
         loadingMessage.value = loadingMessages[messageIndex.value]
-      }, 2000)
+      }, 4000)
     }
     const stopLoadingMessages = () => {
       overlayLoading.value = false
@@ -255,7 +248,7 @@ export default {
 
     const nextStep = () => {
       if (currentStep.value === 1 && (!projectData.value.name || !projectData.value.description)) {
-        alert('Please fill in both Project Name and Description.')
+        alert('Please fill in both Project Name and Description!')
         return
       }
       if (currentStep.value < 3) currentStep.value++
@@ -296,7 +289,7 @@ export default {
             } else {
               creationStatus.value = 'failed'
               processingError.value =
-                version.processing_errors?.join('\n') || 'Analysis failed without specific errors.'
+                version.processing_errors?.join('\n') || 'Analysis failed without specific errors!!'
               stopLoadingMessages()
             }
           }
@@ -304,7 +297,7 @@ export default {
           clearInterval(pollingInterval.value)
           creationStatus.value = 'failed'
           processingError.value =
-            error.response?.data?.message || 'Could not fetch processing status from the server.'
+            error.response?.data?.message || 'Could not fetch processing status from the server!!'
           stopLoadingMessages()
         }
       }, 5000)
@@ -329,7 +322,7 @@ export default {
         startPolling(createdProject._id, createdProject.current_version)
       } catch (error) {
         creationStatus.value = 'failed'
-        processingError.value = error.response?.data?.message || 'Failed to create project.'
+        processingError.value = error.response?.data?.message || 'Failed to create project!!'
         stopLoadingMessages()
       }
     }
@@ -344,6 +337,13 @@ export default {
       if (pollingInterval.value) clearInterval(pollingInterval.value)
       stopLoadingMessages()
     })
+
+    const handleRetry = async () => {
+      creationStatus.value = 'creating'
+      processingError.value = ''
+      startLoadingMessages()
+      await handleCreateProject()
+    }
 
     return {
       router,
@@ -363,6 +363,7 @@ export default {
       removeFile,
       handleCreateProject,
       goToEditor,
+      handleRetry,
     }
   },
 }
@@ -384,16 +385,14 @@ export default {
   backdrop-filter: blur(6px);
 }
 .loading-box {
-  background: white;
-  padding: 30px;
-  border-radius: 12px;
-  text-align: center;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .loading-text {
-  margin-top: 15px;
+  margin-top: 45px;
   font-size: 1.2em;
-  color: #333;
+  color: #ece8e8;
 }
 .button-group {
   display: flex;
@@ -589,6 +588,7 @@ export default {
   cursor: pointer;
   transition: all 0.2s;
   border: 1px solid transparent;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 .cancel-btn {
   background: white;
@@ -621,7 +621,7 @@ export default {
   margin-top: 15px;
   font-size: 1.1em;
   color: #666;
-  max-width: 80%;
+  justify-self: center;
 }
 .status-title {
   font-size: 1.5em;
@@ -651,44 +651,49 @@ export default {
 }
 
 /* SPINNER */
-.spinner-borders {
+.spinner-flashlight {
   position: relative;
   width: 56px;
   height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  animation: spinner-xza56z 2s infinite linear;
 }
-.spinner-borders::before,
-.spinner-borders::after {
-  border: 6.7px solid #1a365d;
-  border-radius: 50%;
-  position: absolute;
+
+.spinner-flashlight::before,
+.spinner-flashlight::after {
   content: '';
-  display: block;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: #e7e9ea;
+  border-radius: 50%;
+  animation: spinner-lqsq3g 1.3s infinite ease;
 }
-.spinner-borders::before {
-  width: 33.6px;
-  height: 33.6px;
-  border-bottom-color: transparent;
-  border-left-color: transparent;
-  animation: spin-inner 0.8s infinite linear reverse;
+
+.spinner-flashlight::before {
+  height: 75%;
+  width: 75%;
+  transform-origin: -40% -80%;
 }
-.spinner-borders::after {
-  animation: spin-outer 0.5s infinite linear;
-  height: 56px;
-  width: 56px;
-  border-right-color: transparent;
-  border-top-color: transparent;
+
+.spinner-flashlight::after {
+  height: 50%;
+  width: 50%;
+  transform-origin: 40% 80%;
 }
-@keyframes spin-inner {
+
+@keyframes spinner-xza56z {
   to {
     transform: rotate(360deg);
   }
 }
-@keyframes spin-outer {
-  to {
-    transform: rotate(360deg);
+
+@keyframes spinner-lqsq3g {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(0);
   }
 }
 </style>

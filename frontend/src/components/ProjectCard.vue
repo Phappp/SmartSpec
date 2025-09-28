@@ -1,56 +1,110 @@
 <template>
-  <div @click="openProject" class="project-card" :class="{ trashed: isTrashed }">
-    <div class="project-header">
-      <h3>{{ project.name }}</h3>
+  <div
+    @click="openProject"
+    class="project-card"
+    :class="{ trashed: isTrashed, editing: isEditing }"
+  >
+    <div v-if="!isEditing" class="project-content">
+      <div class="project-header">
+        <h3>{{ project.name }}</h3>
 
-      <span v-if="!isTrashed" class="project-type fab-container" :class="projectType">
-        {{ projectType === 'my' ? 'My Project' : 'Shared Project' }}
-      </span>
-    </div>
+        <span v-if="!isTrashed" class="project-type fab-container" :class="projectType">
+          {{ projectType === 'my' ? 'My Project' : 'Shared Project' }}
+        </span>
+      </div>
 
-    <p class="project-description">{{ project.description }}</p>
+      <p class="project-description">{{ project.description }}</p>
 
-    <div class="project-meta">
-      <span class="update-time">
-        {{ isTrashed ? 'Trashed' : 'Updated' }}
-        {{ formatDate(isTrashed ? project.status.trashed_at : project.updatedAt) }}
-      </span>
-
-      <div class="meta-right">
-        <span class="project-members">
-          <span class="material-symbols-outlined">group</span>
-          {{ project.members?.length || 0 }}
+      <div class="project-meta">
+        <span class="update-time">
+          {{ isTrashed ? 'Trashed' : 'Updated' }}
+          {{ formatDate(isTrashed ? project.status.trashed_at : project.updatedAt) }}
         </span>
 
-        <!-- FAB menu -->
-        <div class="fab-container" @mouseenter="open = true" @mouseleave="open = false" @click.stop>
-          <button class="fab-main">
-            <span class="material-symbols-outlined">more_vert</span>
-          </button>
+        <div class="meta-right">
+          <span class="project-members">
+            <span class="material-symbols-outlined">group</span>
+            {{ project.members?.length || 0 }}
+          </span>
 
-          <!-- thêm :class="{ open }" -->
-          <div class="fab-options" :class="{ open }">
-            <button
-              v-for="(btn, i) in isTrashed ? trashedActions : normalActions"
-              :key="i"
-              class="fab-btn"
-              :class="`fab-${btn.type}`"
-              :style="getStyle(i, isTrashed ? trashedActions.length : normalActions.length)"
-              @click.stop="btn.action"
-              :title="btn.title"
-            >
-              <span class="material-symbols-outlined">{{ btn.icon }}</span>
+          <div class="fab-container" @click.stop v-click-outside="closeFab">
+            <button class="fab-main" @click="toggleFab">
+              <span class="material-symbols-outlined">more_vert</span>
             </button>
+
+            <div class="fab-options" :class="{ open }">
+              <button
+                v-for="(btn, i) in isTrashed ? trashedActions : normalActions"
+                :key="i"
+                class="fab-btn"
+                :class="`fab-${btn.type}`"
+                :style="getStyle(i, isTrashed ? trashedActions.length : normalActions.length)"
+                @click.stop="btn.action"
+                :title="btn.title"
+              >
+                <span class="material-symbols-outlined">{{ btn.icon }}</span>
+              </button>
+            </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Edit Form (inline) -->
+    <div v-else class="edit-form" @click.stop>
+      <div class="form-group">
+        <input
+          v-model="editForm.name"
+          type="text"
+          placeholder="Project name"
+          class="form-input inline-input"
+          ref="nameInput"
+          @keyup.enter="saveProject"
+          @keyup.esc="cancelEdit"
+          @click.stop
+        />
+      </div>
+
+      <div class="form-group">
+        <textarea
+          v-model="editForm.description"
+          placeholder="Project description"
+          class="form-textarea inline-textarea"
+          rows="2"
+          @keyup.esc="cancelEdit"
+          @click.stop
+        ></textarea>
+      </div>
+
+      <div class="edit-actions">
+        <button class="btn btn-cancel" @click.stop="cancelEdit">Cancel</button>
+        <button class="btn btn-save" @click.stop="saveProject">Save</button>
       </div>
     </div>
   </div>
 </template>
 
 <script>
+// Custom directive for click outside
+const clickOutside = {
+  beforeMount(el, binding) {
+    el.clickOutsideEvent = function (event) {
+      if (!(el === event.target || el.contains(event.target))) {
+        binding.value(event)
+      }
+    }
+    document.addEventListener('click', el.clickOutsideEvent)
+  },
+  unmounted(el) {
+    document.removeEventListener('click', el.clickOutsideEvent)
+  },
+}
+
 export default {
   name: 'ProjectCard',
+  directives: {
+    'click-outside': clickOutside,
+  },
   props: {
     project: { type: Object, required: true },
     showDelete: { type: Boolean, default: true },
@@ -59,6 +113,11 @@ export default {
   data() {
     return {
       open: false,
+      isEditing: false,
+      editForm: {
+        name: '',
+        description: '',
+      },
     }
   },
   computed: {
@@ -76,13 +135,29 @@ export default {
     },
     normalActions() {
       return [
-        { icon: 'delete', title: 'Move to Trash', type: 'delete', action: this.confirmDelete },
-        { icon: 'share', title: 'Share', type: 'share', action: () => alert('Share clicked') },
+        {
+          icon: 'edit',
+          title: 'Edit Project',
+          type: 'edit',
+          action: this.startEditing,
+        },
+        {
+          icon: 'share',
+          title: 'Share',
+          type: 'share',
+          action: () => alert('Share clicked'),
+        },
         {
           icon: 'palette',
           title: 'Change Color',
           type: 'palette',
           action: () => alert('Change color'),
+        },
+        {
+          icon: 'delete',
+          title: 'Move to Trash',
+          type: 'delete',
+          action: this.confirmDelete,
         },
       ]
     },
@@ -104,29 +179,99 @@ export default {
     },
   },
   methods: {
+    toggleFab() {
+      this.open = !this.open
+    },
+
+    closeFab() {
+      this.open = false
+    },
+
+    startEditing() {
+      this.editForm = {
+        name: this.project.name,
+        description: this.project.description || '',
+      }
+      this.isEditing = true
+      this.closeFab()
+
+      // Focus vào input sau khi DOM được cập nhật
+      this.$nextTick(() => {
+        this.$refs.nameInput?.focus()
+      })
+    },
+
+    cancelEdit(event) {
+      // Ngăn sự kiện nổi bọt
+      if (event) {
+        event.stopPropagation()
+      }
+      this.isEditing = false
+      this.editForm = {
+        name: '',
+        description: '',
+      }
+    },
+
+    async saveProject(event) {
+      // Ngăn sự kiện nổi bọt
+      if (event) {
+        event.stopPropagation()
+      }
+
+      if (!this.editForm.name.trim()) {
+        alert('Project name is required')
+        return
+      }
+
+      try {
+        // Emit event to parent component to handle the update
+        this.$emit('edit', {
+          projectId: this.project._id || this.project.id,
+          data: {
+            name: this.editForm.name.trim(),
+            description: this.editForm.description.trim(),
+          },
+        })
+
+        this.isEditing = false
+      } catch (error) {
+        console.error('Error updating project:', error)
+        alert('Failed to update project')
+      }
+    },
+
     getStyle(index, total) {
       const angle = (360 / total) * index
       const rad = (angle * Math.PI) / 180
-      const radius = 50 // bán kính vòng tròn
+      const radius = 50
       const x = Math.cos(rad) * radius
       const y = Math.sin(rad) * radius
       return {
         transform: `translate(${x}px, ${-y}px)`,
       }
     },
+
     openProject() {
-      if (this.isTrashed) return
+      if (this.isTrashed || this.isEditing) return
       this.$emit('open', this.project)
     },
+
     confirmDelete() {
       this.$emit('delete', this.project._id || this.project.id)
+      this.closeFab()
     },
+
     restoreProject() {
       this.$emit('restore', this.project._id || this.project.id)
+      this.closeFab()
     },
+
     deletePermanently() {
       this.$emit('delete-permanently', this.project._id || this.project.id)
+      this.closeFab()
     },
+
     formatDate(dateStr) {
       if (!dateStr) return ''
       const date = new Date(dateStr)
@@ -138,21 +283,33 @@ export default {
   },
 }
 </script>
+
 <style scoped>
 .project-card {
   background: #fff;
   border-radius: 12px;
   padding: 16px 20px;
   margin-bottom: 64px;
-  margin-right: 32px;
+  margin-right: 36px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   cursor: pointer;
+  position: relative;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .project-card:hover:not(.trashed) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.32);
+}
+
+.project-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .project-header {
@@ -194,17 +351,32 @@ export default {
 
 .project-description {
   color: #555;
-  font-size: 14px;
+  font-size: 13px;
   margin: 6px 0 12px;
   line-height: 1.5;
   text-align: left;
+}
+
+.project-description {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-header h3 {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .project-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: 12px;
   color: #777;
 }
 
@@ -225,7 +397,6 @@ export default {
   color: #555;
 }
 
-/* Trạng thái trashed */
 .project-card.trashed {
   background-color: #fdfdfd;
   border: 1px dashed #ccc;
@@ -236,49 +407,6 @@ export default {
   color: #888;
 }
 
-.trashed-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.action-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 50%;
-  transition: background-color 0.2s;
-}
-.action-btn:hover {
-  background-color: #f0f0f0;
-}
-
-.action-btn .material-symbols-outlined {
-  font-size: 20px;
-}
-.restore-btn .material-symbols-outlined {
-  color: #28a745;
-}
-.permanent-delete-btn .material-symbols-outlined {
-  color: #dc3545;
-}
-
-.delete-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 50%;
-  transition: background-color 0.2s;
-}
-.delete-btn:hover {
-  background-color: #f8d7da;
-}
-.delete-btn .material-symbols-outlined {
-  font-size: 20px;
-  color: #dc3545;
-}
-/* FAB Container */
 .fab-container {
   position: relative;
   display: inline-block;
@@ -295,27 +423,32 @@ export default {
   justify-content: center;
   z-index: 2;
   font-size: 20px;
+  background: transparent;
+  transition: background 0.3s ease;
 }
 
-/* Vòng tròn chứa các nút con */
+.fab-main:hover {
+  color: #222;
+}
+
 .fab-options {
   position: absolute;
   top: 45%;
   left: 45%;
-  width: 150px; /* to hơn bán kính 70 */
+  width: 150px;
   height: 150px;
   margin-left: -70px;
   margin-top: -70px;
   border-radius: 50%;
-  pointer-events: none; /* không block chuột */
+  pointer-events: none;
 }
 
 .fab-options.open {
-  pointer-events: auto; /* bật khi hover container */
+  pointer-events: auto;
   background: transparent;
   border: 1px solid #ddd;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(3px);
+  backdrop-filter: blur(6px);
 }
 
 .fab-btn {
@@ -338,83 +471,145 @@ export default {
   transition: all 0.3s ease;
 }
 
-/* Khi open thì hiện nút con */
 .fab-options.open .fab-btn {
   opacity: 1;
   transform: translate(var(--x), var(--y)) scale(1);
 }
+
 .fab-options.open .fab-btn:hover {
-  translate: 0;
-  scale: 1.4;
+  transform: translate(var(--x), var(--y)) scale(1.2);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
 }
-/* Delete (đỏ) */
+
+.fab-btn.fab-delete {
+  background: #dc35452a;
+  color: #000000;
+}
 .fab-btn.fab-delete:hover {
   background: #dc3545;
   color: #fff;
 }
 
-/* Restore (xanh lá) */
+.fab-btn.fab-edit {
+  background: #ffc1072a;
+  color: #000000;
+}
+.fab-btn.fab-edit:hover {
+  background: #ffc107;
+  color: #000;
+}
+
+.fab-btn.fab-restore {
+  background: #28a7452a;
+  color: #000000;
+}
 .fab-btn.fab-restore:hover {
   background: #28a745;
   color: #fff;
 }
 
-/* Share (xanh dương) */
+.fab-btn.fab-share {
+  background: #0d6efd2a;
+  color: #000000;
+}
 .fab-btn.fab-share:hover {
   background: #0d6efd;
   color: #fff;
 }
 
-/* Palette (tím) */
+.fab-btn.fab-palette {
+  background: #6f42c12a;
+  color: #000000;
+}
 .fab-btn.fab-palette:hover {
   background: #6f42c1;
   color: #fff;
 }
-/* Cha: nút nav */
-.nav-item {
-  position: relative;
-  background: #222;
-  color: #fff;
-  padding: 12px 20px;
-  transition: background 0.3s ease;
-}
 
-/* Con: submenu */
-.nav-subitem {
-  background: #333;
-  padding: 10px 18px;
-  transition: background 0.3s ease, box-shadow 0.3s ease;
-}
-
-/* Khi hover vào con thì cha cũng sáng */
-.nav-subitem:hover {
-  background: #444;
-  box-shadow: 0 0 10px rgba(0, 255, 150, 0.6);
-}
-
-/* dùng selector để làm cha sáng khi hover con */
-.nav-item:hover,
-.nav-item:has(.nav-subitem:hover) {
-  background: linear-gradient(to right, #00ff99, #004466);
-}
-/* Khi hover vào nút con thì cha fab-container sáng */
 .fab-container:hover .fab-main {
-  background: linear-gradient(135deg, #00ff99, #004466);
-  color: #fff;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
-  transition: all 0.3s ease;
+  transition: .2s ease;
+  background: #0000001a;
+  box-shadow: 0 0 12px rgba(121, 118, 118, 0.6);
 }
 
-/* Hiệu ứng lan tỏa khi hover nút con */
-.fab-options.open .fab-btn:hover {
-  scale: 1.2;
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+/* Edit Form Styles */
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-/* Nếu muốn cha sáng chỉ khi hover vào nút con (không phải khi hover cả container) */
-.fab-options .fab-btn:hover ~ .fab-main,
-.fab-options .fab-btn:hover::before {
-  background: linear-gradient(135deg, #cccecd, #ffffff);
-  color: #fff;
+.form-group {
+  margin-bottom: 0;
+}
+
+.inline-input,
+.inline-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border 0.3s ease;
+  box-sizing: border-box;
+}
+
+.inline-input:focus,
+.inline-textarea:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.inline-input {
+  font-size: 18px;
+  font-weight: 600;
+  height: 36px;
+}
+
+.inline-textarea {
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.btn-cancel {
+  background: #f8f9fa;
+  color: #333;
+}
+
+.btn-cancel:hover {
+  background: #e9ecef;
+}
+
+.btn-save {
+  background: #1a365d;
+  opacity: 0.8;
+  color: white;
+}
+
+.btn-save:hover {
+  opacity: 1;
+}
+
+/* Ensure consistent height when editing */
+.project-card.editing {
+  min-height: 140px;
+  justify-content: flex-start;
 }
 </style>
