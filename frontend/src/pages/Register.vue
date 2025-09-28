@@ -8,54 +8,46 @@
         <div class="progress-bar" :style="{ width: progressWidth }"></div>
       </div>
 
-      <!-- Step 1: Email -->
       <div class="form-step" v-show="currentStep === 1">
-        <h2>Tạo tài khoản để bắt đầu</h2>
+        <h2>Create an account to get started</h2>
         <div class="form-group">
-          <label for="email">Địa chỉ email</label>
-          <input
-            type="email"
-            id="email"
-            v-model="email"
-            placeholder="name@domain.com"
-            @blur="checkEmailExists"
-          />
+          <label for="email">Email address</label>
+          <input type="email" id="email" v-model="email" placeholder="name@domain.com" />
           <p class="error-message" v-if="emailError">{{ emailError }}</p>
           <p class="error-message" v-if="emailExistsError">{{ emailExistsError }}</p>
+          <p class="success-message" v-if="emailVerified">✓ Email has been verified</p>
         </div>
         <br />
         <button class="spotify-button primary" @click="nextStep" :disabled="checkingEmail">
-          <span v-if="checkingEmail" class="loading"></span>
-          <span v-else>Tiếp theo</span>
+          <div v-if="checkingEmail" class="button-spinner"></div>
+          <span v-else>Next</span>
         </button>
 
         <div class="divider">
           <hr />
-          <span>hoặc</span>
+          <span>or</span>
           <hr />
         </div>
-        <button class="social-signup-button google" @click="continueWith('google')">
+        <button class="social-signup-button google" @click="loginWithGoogle">
           <i class="fa-brands fa-google"></i>
-          Đăng ký bằng Google
+          Sign up with Google
         </button>
 
-        <!-- Thêm link chuyển sang trang login -->
         <div class="login-redirect">
-          <p>Bạn đã có tài khoản? <a href="/login">Đăng nhập tại đây</a></p>
+          <p>Already have an account? <a href="/login">Sign in here</a></p>
         </div>
       </div>
 
-      <!-- Step 2: Password -->
       <div class="form-step" v-show="currentStep === 2">
         <div class="back-arrow" @click="prevStep">
           <i class="fa-regular fa-circle-left"></i>
         </div>
         <h3>
-          Bước <span>{{ currentStepDisplay }}</span> của 3
+          Step <span>{{ currentStepDisplay }}</span> of 3
         </h3>
-        <h2>Tạo mật khẩu</h2>
+        <h2>Create password</h2>
         <div class="form-group">
-          <label for="password">Mật khẩu</label>
+          <label for="password">Password</label>
           <div class="password-input-wrapper">
             <input
               :type="passwordVisible ? 'text' : 'password'"
@@ -70,162 +62,166 @@
           <p class="error-message" v-if="passwordError">{{ passwordError }}</p>
         </div>
         <div class="password-strength-checklist">
-          <h4>Mật khẩu của bạn phải có ít nhất</h4>
+          <h4>Your password must have at least</h4>
           <p class="checklist-item" :class="{ valid: hasChar }">
-            <i :class="hasChar ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle'"></i> 1 chữ cái
+            <i :class="hasChar ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle'"></i> 1 letter
           </p>
           <p class="checklist-item" :class="{ valid: hasSpecial }">
-            <i :class="hasSpecial ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle'"></i> 1 chữ số
-            hoặc ký tự đặc biệt (ví dụ # ?!&)
+            <i :class="hasSpecial ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle'"></i>
+            1 number or special character (e.g. # ?!&)
           </p>
           <p class="checklist-item" :class="{ valid: hasLength }">
-            <i :class="hasLength ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle'"></i> 10 ký tự
+            <i :class="hasLength ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle'"></i>
+            10 characters
           </p>
         </div>
-        <button class="spotify-button primary" @click="nextStep">Tiếp theo</button>
+        <button class="spotify-button primary" @click="nextStep">Next</button>
 
-        <!-- Thêm link chuyển sang trang login ở bước 2 -->
         <div class="login-redirect">
-          <p>Bạn đã có tài khoản? <a href="/login">Đăng nhập tại đây</a></p>
+          <p>Already have an account? <a href="/login">Sign in here</a></p>
         </div>
       </div>
 
-      <!-- Step 3: Personal Info -->
       <div class="form-step" v-show="currentStep === 3">
         <div class="back-arrow" @click="prevStep">
           <i class="fa-regular fa-circle-left"></i>
         </div>
         <h3>
-          Bước <span>{{ currentStepDisplay }}</span> của 3
+          Step <span>{{ currentStepDisplay }}</span> of 3
         </h3>
-        <h2>Giới thiệu thông tin về bản thân bạn</h2>
+        <h2>Tell us about yourself</h2>
         <div class="form-group">
-          <label for="name">Tên</label>
+          <label for="name">Name</label>
           <input
             type="text"
             id="name"
             v-model="name"
-            placeholder="Tên này sẽ xuất hiện trên hồ sơ của bạn"
+            placeholder="This name will appear on your profile"
           />
           <p class="error-message" v-if="nameError">{{ nameError }}</p>
         </div>
         <div class="form-group">
-          <label>Ngày sinh</label>
-          <p class="info-text">
-            Tại sao chúng tôi cần biết ngày sinh của bạn? <a href="#">Tìm hiểu thêm.</a>
-          </p>
+          <label>Date of birth</label>
+          <p class="info-text">Why do we need your date of birth? <a href="#">Learn more.</a></p>
           <div class="dob-group">
-            <input type="text" id="day" v-model="day" placeholder="2" maxlength="2" />
+            <input type="text" id="day" v-model="day" placeholder="DD" maxlength="2" />
             <select id="month" v-model="month">
-              <option value="">Tháng</option>
-              <option value="1">Tháng 1</option>
-              <option value="2">Tháng 2</option>
-              <option value="3">Tháng 3</option>
-              <option value="4">Tháng 4</option>
-              <option value="5">Tháng 5</option>
-              <option value="6">Tháng 6</option>
-              <option value="7">Tháng 7</option>
-              <option value="8">Tháng 8</option>
-              <option value="9">Tháng 9</option>
-              <option value="10">Tháng 10</option>
-              <option value="11">Tháng 11</option>
-              <option value="12">Tháng 12</option>
+              <option value="" disabled selected style="color: gray">Month</option>
+              <option value="1">January</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+              <option value="4">April</option>
+              <option value="5">May</option>
+              <option value="6">June</option>
+              <option value="7">July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
             </select>
-            <input type="text" id="year" v-model="year" placeholder="1999" maxlength="4" />
+            <input type="text" id="year" v-model="year" placeholder="YYYY" maxlength="4" />
           </div>
           <p class="error-message" v-if="dobError">{{ dobError }}</p>
         </div>
         <div class="form-group">
-          <label>Giới tính</label>
+          <label>Gender</label>
           <p class="info-text">
-            Giới tính của bạn giúp chúng tôi cung cấp nội dung đề xuất và quảng cáo phù hợp với bạn.
+            We use your gender to help us personalize our content recommendations and ads for you.
           </p>
           <div class="radio-group">
             <label class="radio-label">
-              <input type="radio" name="gender" value="male" v-model="gender" /> Nam
+              <input type="radio" name="gender" value="male" v-model="gender" /> Male
             </label>
             <label class="radio-label">
-              <input type="radio" name="gender" value="female" v-model="gender" /> Nữ
+              <input type="radio" name="gender" value="female" v-model="gender" /> Female
             </label>
             <label class="radio-label">
-              <input type="radio" name="gender" value="non-binary" v-model="gender" /> Phi nhị giới
+              <input type="radio" name="gender" value="non-binary" v-model="gender" />
+              Non-binary
             </label>
             <label class="radio-label">
-              <input type="radio" name="gender" value="other" v-model="gender" /> Giới tính khác
+              <input type="radio" name="gender" value="other" v-model="gender" /> Other
             </label>
             <label class="radio-label">
-              <input type="radio" name="gender" value="not-specified" v-model="gender" /> Không muốn
-              nêu cụ thể
+              <input type="radio" name="gender" value="not-specified" v-model="gender" />
+              Prefer not to say
             </label>
           </div>
           <p class="error-message" v-if="genderError">{{ genderError }}</p>
         </div>
-        <button class="spotify-button primary" @click="nextStep">Tiếp theo</button>
+        <button class="spotify-button primary" @click="nextStep">Next</button>
 
-        <!-- Thêm link chuyển sang trang login ở bước 3 -->
         <div class="login-redirect">
-          <p>Bạn đã có tài khoản? <a href="/login">Đăng nhập tại đây</a></p>
+          <p>Already have an account? <a href="/login">Sign in here</a></p>
         </div>
       </div>
 
-      <!-- Step 4: Terms & Conditions -->
       <div class="form-step" v-show="currentStep === 4">
         <div class="back-arrow" @click="prevStep">
           <i class="fa-regular fa-circle-left"></i>
         </div>
         <h3>
-          Bước <span>{{ currentStepDisplay }}</span> của 3
+          Step <span>{{ currentStepDisplay }}</span> of 3
         </h3>
-        <h2>Điều khoản & Tùy chọn</h2>
+        <h2>Terms & Options</h2>
         <div class="checkbox-group">
           <label class="checkbox-label">
             <input type="checkbox" v-model="newsletter" required />
-            Chấp nhận điều khoản sử dụng
+            I agree to the terms of use
           </label>
           <label class="checkbox-label">
             <input type="checkbox" v-model="isTwoFactorEnabled" />
-            Kích hoạt xác thực 2 lớp
+            Enable Two-Factor Authentication
           </label>
         </div>
         <p class="terms-text">
-          Bằng việc nhấp vào nút Đăng ký, bạn đồng ý với
-          <a href="#">Điều khoản và điều kiện sử dụng</a> của Spotify.
+          By clicking on Sign up, you agree to Spotify's
+          <a href="#">Terms and Conditions of Use</a>.
         </p>
         <p class="terms-text">
-          Để tìm hiểu thêm về cách thức Spotify thu thập, sử dụng, chia sẻ và bảo vệ dữ liệu cá nhân
-          của bạn, vui lòng xem <a href="#">Chính sách quyền riêng tư</a> của Spotify.
+          To learn more about how Spotify collects, uses, shares and protects your personal data,
+          please see
+          <a href="#">Spotify's Privacy Policy</a>.
         </p>
         <button class="spotify-button primary" @click="register" :disabled="registering">
-          <span v-if="registering" class="loading"></span>
-          <span v-else>Đăng ký</span>
+          <div v-if="registering" class="button-spinner"></div>
+          <span v-else>Sign Up</span>
         </button>
 
-        <!-- Thêm link chuyển sang trang login ở bước 4 -->
         <div class="login-redirect">
-          <p>Bạn đã có tài khoản? <a href="/login">Đăng nhập tại đây</a></p>
+          <p>Already have an account? <a href="/login">Sign in here</a></p>
         </div>
       </div>
     </div>
     <div class="recaptcha-info">
       <p>
-        This site is protected by reCAPTCHA and the Google <a href="#">Privacy Policy</a> and
-        <a href="#">Terms of Service</a> apply.
+        This site is protected by reCAPTCHA and the Google
+        <a href="#">Privacy Policy</a> and <a href="#">Terms of Service</a> apply.
       </p>
     </div>
+    <AppModal
+      v-model="modalOpen"
+      :title="modalTitle"
+      :message="modalMessage"
+      @update:modelValue="handleModalClose"
+    />
   </div>
 </template>
 
 <script>
-import { ref, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
-
+import AppModal from '../components/AppModal.vue'
 export default {
   name: 'RegisterView',
+  components: { AppModal },
   setup() {
     const router = useRouter()
+    const route = useRoute()
 
-    // Form data
+    // Dữ liệu form (không đổi)
     const email = ref('')
     const password = ref('')
     const name = ref('')
@@ -236,7 +232,7 @@ export default {
     const newsletter = ref(false)
     const isTwoFactorEnabled = ref(false)
 
-    // UI state
+    // Trạng thái UI (không đổi)
     const currentStep = ref(1)
     const passwordVisible = ref(false)
     const emailError = ref('')
@@ -247,8 +243,109 @@ export default {
     const genderError = ref('')
     const checkingEmail = ref(false)
     const registering = ref(false)
+    const emailVerified = ref(false)
+    const verificationToken = ref('')
+    // Modal state
+    const modalOpen = ref(false)
+    const modalTitle = ref('Thông báo')
+    const modalMessage = ref('')
+    const modalOnClose = ref(null)
 
-    // Computed properties
+    const openModal = (message, title = 'Thông báo', onClose = null) => {
+      modalTitle.value = title
+      modalMessage.value = message
+      modalOpen.value = true
+      // Store callback for when modal closes
+      if (onClose) {
+        modalOnClose.value = onClose
+      }
+    }
+
+    const handleModalClose = () => {
+      modalOpen.value = false
+      if (modalOnClose.value) {
+        modalOnClose.value()
+        modalOnClose.value = null
+      }
+    }
+
+    // Google OAuth config
+    const GOOGLE_CLIENT_ID =
+      '1030258814420-rra11eqd5vhcriar7sgclokotfrgmp9k.apps.googleusercontent.com'
+    const GOOGLE_REDIRECT_URI = 'http://localhost:5173/login' // FE domain
+    const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
+
+    function loginWithGoogle() {
+      const params = new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        redirect_uri: 'http://localhost:8000/api/auth/google/oauth',
+        response_type: 'code',
+        scope: 'openid email profile',
+        access_type: 'offline',
+        prompt: 'consent',
+      })
+      window.location.href = `${GOOGLE_AUTH_URL}?${params.toString()}`
+    }
+
+    // *** BẮT ĐẦU PHẦN CẬP NHẬT ***
+
+    const handleStorageEvent = (e) => {
+      // Khi tab VerifyEmail xác thực thành công và set `emailVerified`
+      // tab Register cũ (nếu có) sẽ nhận được sự kiện này và tự đóng lại.
+      if (e.key === 'emailVerified' && e.newValue === 'true') {
+        window.close()
+      }
+    }
+
+    onMounted(() => {
+      window.addEventListener('storage', handleStorageEvent)
+
+      // Đọc các giá trị từ localStorage
+      const savedStep = localStorage.getItem('registerStep')
+      const savedEmail = localStorage.getItem('registerEmail')
+      const isVerifiedInStorage = localStorage.getItem('emailVerified') === 'true'
+
+      // 1. LUÔN KHÔI PHỤC TRẠNG THÁI TỪ LOCALSTORAGE TRƯỚC
+      // Đây là chìa khóa để sửa lỗi F5.
+      if (savedEmail) {
+        email.value = savedEmail
+      }
+      if (isVerifiedInStorage) {
+        emailVerified.value = true
+      }
+      if (savedStep) {
+        currentStep.value = parseInt(savedStep, 10)
+      } else {
+        // Nếu không có gì, mặc định là bước 1
+        currentStep.value = 1
+      }
+
+      // 2. SAU ĐÓ, MỚI XỬ LÝ CÁC TRƯỜNG HỢP ĐIỀU HƯỚNG ĐẶC BIỆT
+      if (route.query.verify_status === 'success') {
+        // Chỉ khi được điều hướng thành công, ta mới ép chuyển sang bước 2
+        emailVerified.value = true
+        currentStep.value = 2
+        localStorage.setItem('registerStep', '2')
+        localStorage.setItem('emailVerified', 'true') // Đảm bảo trạng thái được lưu
+        router.replace({ path: route.path }) // Dọn dẹp URL
+      } else if (route.query.verify_status === 'failed') {
+        // Nếu xác thực thất bại, ép quay về bước 1 và dọn dẹp
+        emailError.value = 'Xác thực email thất bại. Vui lòng thử lại.'
+        currentStep.value = 1
+        emailVerified.value = false
+        localStorage.setItem('registerStep', '1')
+        localStorage.removeItem('emailVerified')
+        router.replace({ path: route.path }) // Dọn dẹp URL
+      }
+    })
+
+    onBeforeUnmount(() => {
+      window.removeEventListener('storage', handleStorageEvent)
+    })
+
+    // *** KẾT THÚC PHẦN CẬP NHẬT ***
+
+    // Computed properties (không đổi)
     const progressWidth = computed(() => {
       return `${((currentStep.value - 1) / 3) * 100}%`
     })
@@ -269,99 +366,73 @@ export default {
       return password.value.length >= 10
     })
 
-    // Methods
+    // Methods (không đổi)
     const togglePasswordVisibility = () => {
       passwordVisible.value = !passwordVisible.value
     }
 
-    const checkEmailExists = async () => {
-      if (!email.value) return
-
-      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      if (!emailPattern.test(email.value)) {
-        emailError.value = 'Vui lòng nhập địa chỉ email hợp lệ'
-        return
-      }
-
-      emailError.value = ''
-      checkingEmail.value = true
-
-      try {
-        // Sử dụng axios để gọi API kiểm tra email
-        const response = await axios.post('/api/check-email', { email: email.value })
-
-        if (response.data.exists) {
-          emailExistsError.value = 'Email này đã được sử dụng. Vui lòng sử dụng email khác.'
-        } else {
-          emailExistsError.value = ''
-        }
-      } catch (error) {
-        console.error('Error checking email:', error)
-        emailExistsError.value = 'Không thể kiểm tra email. Vui lòng thử lại.'
-      } finally {
-        checkingEmail.value = false
-      }
-    }
-
     const nextStep = async () => {
       if (currentStep.value === 1) {
-        // Validate email
-        if (!email.value) {
-          emailError.value = 'Vui lòng nhập địa chỉ email'
-          return
-        }
-
-        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailPattern.test(email.value)) {
-          emailError.value = 'Vui lòng nhập địa chỉ email hợp lệ'
-          return
-        }
-
-        // Kiểm tra email đã tồn tại chưa
-        checkingEmail.value = true
-        try {
-          const response = await axios.post('/api/check-email', { email: email.value })
-
-          if (response.data.exists) {
-            emailExistsError.value = 'Email này đã được sử dụng. Vui lòng sử dụng email khác.'
-            checkingEmail.value = false
-            return
-          }
-        } catch (error) {
-          console.error('Error checking email:', error)
-          emailExistsError.value = 'Không thể kiểm tra email. Vui lòng thử lại.'
-          checkingEmail.value = false
-          return
-        }
-
         emailError.value = ''
         emailExistsError.value = ''
-        currentStep.value++
-        checkingEmail.value = false
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!email.value || !emailPattern.test(email.value)) {
+          emailError.value = 'Please enter a valid email address'
+          return
+        }
+
+        // Nếu email đã được xác thực, chỉ cần đi tiếp
+        if (emailVerified.value && email.value === localStorage.getItem('registerEmail')) {
+          currentStep.value++
+          localStorage.setItem('registerStep', currentStep.value.toString())
+          return
+        }
+
+        checkingEmail.value = true
+        try {
+          const response = await axios.post(
+            'http://localhost:8000/api/auth/send-verification-email',
+            { email: email.value }
+          )
+          if (response.data.status === 'Success') {
+            openModal(
+              "We've sent a verification link to your email. Please check your inbox.",
+              'Email verification'
+            )
+            localStorage.setItem('registerEmail', email.value)
+            localStorage.setItem('registerStep', '1')
+          } else {
+            emailExistsError.value = response.data.message || 'This email is already in use.'
+          }
+        } catch (error) {
+          emailExistsError.value =
+            error.response?.data?.message || 'Could not send verification email.'
+        } finally {
+          checkingEmail.value = false
+        }
       } else if (currentStep.value === 2) {
-        // Validate password
         if (!password.value) {
-          passwordError.value = 'Vui lòng nhập mật khẩu'
+          passwordError.value = 'Please enter a password'
           return
         }
         if (!hasChar.value || !hasSpecial.value || !hasLength.value) {
-          passwordError.value = 'Mật khẩu không đáp ứng yêu cầu'
+          passwordError.value = 'Password does not meet the requirements'
           return
         }
         passwordError.value = ''
         currentStep.value++
+        localStorage.setItem('registerStep', currentStep.value.toString())
       } else if (currentStep.value === 3) {
-        // Validate personal info
         let isValid = true
         if (!name.value) {
-          nameError.value = 'Vui lòng nhập tên của bạn'
+          nameError.value = 'Please enter your name'
           isValid = false
         } else {
           nameError.value = ''
         }
 
         if (!day.value || !month.value || !year.value) {
-          dobError.value = 'Vui lòng nhập đầy đủ ngày, tháng, năm sinh'
+          dobError.value = 'Please enter your full date of birth'
           isValid = false
         } else {
           const dayNum = parseInt(day.value)
@@ -370,13 +441,13 @@ export default {
           const currentYear = new Date().getFullYear()
 
           if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) {
-            dobError.value = 'Ngày không hợp lệ'
+            dobError.value = 'Invalid day'
             isValid = false
           } else if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
-            dobError.value = 'Tháng không hợp lệ'
+            dobError.value = 'Invalid month'
             isValid = false
           } else if (isNaN(yearNum) || yearNum < 1900 || yearNum > currentYear) {
-            dobError.value = 'Năm không hợp lệ'
+            dobError.value = 'Invalid year'
             isValid = false
           } else {
             dobError.value = ''
@@ -384,7 +455,7 @@ export default {
         }
 
         if (!gender.value) {
-          genderError.value = 'Vui lòng chọn giới tính'
+          genderError.value = 'Please select your gender'
           isValid = false
         } else {
           genderError.value = ''
@@ -392,6 +463,7 @@ export default {
 
         if (isValid) {
           currentStep.value++
+          localStorage.setItem('registerStep', currentStep.value.toString())
         }
       }
     }
@@ -399,48 +471,78 @@ export default {
     const prevStep = () => {
       if (currentStep.value > 1) {
         currentStep.value--
+        localStorage.setItem('registerStep', currentStep.value.toString())
       }
     }
 
     const continueWith = (provider) => {
-      console.log(`Continue with ${provider}`)
-      // Simulate social signup
-      alert(`This would normally redirect to ${provider} authentication`)
+      openModal(`This would normally redirect to ${provider} authentication`, 'Social login')
     }
 
     const register = async () => {
-      registering.value = true
+      const storedEmail = localStorage.getItem('registerEmail') || ''
+      const emailToSend = email.value || storedEmail
 
+      if (!emailToSend) {
+        openModal('Email not found. Please re-enter or verify your email.', 'Registration')
+        return
+      }
+
+      registering.value = true
       try {
-        // Sử dụng axios để gửi yêu cầu đăng ký
-        const response = await axios.post('/api/register', {
-          email: email.value,
+        const response = await axios.post('http://localhost:8000/api/auth/register', {
+          email: emailToSend,
           password: password.value,
+          confirmPassword: password.value,
           name: name.value,
-          dob: `${year.value}-${month.value}-${day.value}`,
+          dob: {
+            day: parseInt(day.value, 10),
+            month: parseInt(month.value, 10),
+            year: parseInt(year.value, 10),
+          },
           gender: gender.value,
-          newsletter: newsletter.value,
           isTwoFactorEnabled: isTwoFactorEnabled.value,
         })
 
-        if (response.data.success) {
-          // Đăng ký thành công, chuyển hướng đến trang đăng nhập
+        if (response.data.status === 'Success') {
+          localStorage.removeItem('registerEmail')
+          localStorage.removeItem('emailVerified')
+          localStorage.removeItem('registerStep')
+
           router.push('/login?registered=true')
+          openModal('Registration successful! Please log in.', 'Registration', () => {
+            router.push('/login?registered=true')
+          })
         } else {
-          alert('Đăng ký thất bại. Vui lòng thử lại.')
+          openModal(
+            response.data.message || 'Registration failed. Please try again.',
+            'Registration'
+          )
         }
       } catch (error) {
         console.error('Registration error:', error)
-        alert('Đã xảy ra lỗi. Vui lòng thử lại.')
+        openModal(
+          error.response?.data?.message || 'An error occurred. Please try again.',
+          'Registration error'
+        )
       } finally {
         registering.value = false
       }
     }
 
-    // Watch for email changes to clear error
-    watch(email, () => {
-      if (emailExistsError.value) {
-        emailExistsError.value = ''
+    watch(email, (newEmail) => {
+      emailError.value = ''
+      emailExistsError.value = ''
+
+      const verifiedEmail = localStorage.getItem('registerEmail')
+      // Nếu email đã được xác thực và người dùng thay đổi nó
+      if (emailVerified.value && newEmail !== verifiedEmail) {
+        emailVerified.value = false
+        localStorage.removeItem('emailVerified')
+        openModal(
+          'Bạn đã thay đổi email. Vui lòng xác thực lại địa chỉ email mới.',
+          'Email changed'
+        )
       }
     })
 
@@ -464,25 +566,31 @@ export default {
       genderError,
       checkingEmail,
       registering,
+      emailVerified,
+      verificationToken,
       progressWidth,
       currentStepDisplay,
       hasChar,
       hasSpecial,
       hasLength,
+      modalOpen,
+      modalTitle,
+      modalMessage,
       togglePasswordVisibility,
-      checkEmailExists,
       nextStep,
       prevStep,
       continueWith,
       register,
+      loginWithGoogle,
+      openModal,
+      handleModalClose,
     }
   },
 }
 </script>
 
-
 <style scoped>
-/* Giữ nguyên toàn bộ phần CSS từ file gốc */
+/* Original CSS remains unchanged */
 body {
   margin: 0;
   padding: 0;
@@ -505,6 +613,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-self: center;
 }
 
 .spotify-logo {
@@ -521,7 +630,6 @@ body {
   margin-bottom: 20px;
 }
 
-/* Progress Bar */
 .progress-bar-container {
   width: 100%;
   height: 4px;
@@ -538,7 +646,6 @@ body {
   transition: width 0.3s ease-in-out;
 }
 
-/* Form Steps */
 .form-step {
   position: relative;
   display: flex;
@@ -565,7 +672,6 @@ body {
 }
 
 .form-group label {
-  display: block;
   font-size: 14px;
   font-weight: bold;
   margin-bottom: 8px;
@@ -599,6 +705,12 @@ body {
   margin-top: 5px;
 }
 
+.success-message {
+  color: #1ed760;
+  font-size: 13px;
+  margin-top: 5px;
+}
+
 .use-phone-link {
   color: #0a1a4d;
   text-decoration: none;
@@ -624,16 +736,26 @@ body {
   transition: background-color 0.2s ease, transform 0.2s ease;
   margin-top: 10px;
   color: #ddd;
+  /* Ensure button keeps its height during loading */
+  min-height: 58px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .spotify-button.primary {
   background-color: #0a1a4d;
 }
 
-.spotify-button.primary:hover {
+.spotify-button.primary:hover:not(:disabled) {
   background-color: #434c69;
   transform: scale(1.01);
   color: #fff;
+}
+
+.spotify-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 /* Divider */
@@ -698,10 +820,11 @@ body {
   color: #b3b3b3;
   cursor: pointer;
   font-size: 18px;
+  transition: 0.2s ease;
 }
 
 .password-toggle:hover {
-  color: #ffffff;
+  color: #000;
 }
 
 /* Password Strength Checklist */
@@ -785,6 +908,7 @@ body {
   font-size: 12px;
   margin-top: -8px;
   margin-bottom: 10px;
+  opacity: 0.6;
 }
 
 .info-text a {
@@ -806,6 +930,7 @@ body {
 
 .radio-label {
   display: flex;
+  text-align: center;
   align-items: center;
   font-size: 16px;
   color: #b3b3b3;
@@ -907,8 +1032,8 @@ body {
 /* Back Arrow */
 .back-arrow {
   position: absolute;
-  left: -40px;
-  top: 10px;
+  top: -4px;
+  transform: translateX(-50px);
   font-size: 26px;
   cursor: pointer;
   transition: color 0.2s ease;
@@ -916,10 +1041,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0.5;
+  transition: 0.2s ease;
 }
 
 .back-arrow:hover {
-  color: #ffffff;
+  opacity: 1;
+  transform: scale(1.1) translateX(-50px);
 }
 
 .back-arrow i {
@@ -967,6 +1095,38 @@ body {
   text-decoration: underline;
 }
 
+/* 👇 NEW SPINNER STYLES ADDED HERE 👇 */
+@keyframes spinner-a4dj62 {
+  100% {
+    transform: rotate(1turn);
+  }
+}
+
+.button-spinner {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  border: 3px solid #0000;
+  border-radius: 50%;
+  border-right-color: #ffffff; /* Color for spinner */
+  animation: spinner-a4dj62 1s infinite linear;
+}
+
+.button-spinner::before,
+.button-spinner::after {
+  content: '';
+  grid-area: 1/1;
+  margin: 1.5px;
+  border: inherit;
+  border-radius: 50%;
+  animation: spinner-a4dj62 2s infinite;
+}
+
+.button-spinner::after {
+  margin: 6px;
+  animation-duration: 3s;
+}
+
 /* Responsive adjustments */
 @media (max-width: 600px) {
   body {
@@ -988,6 +1148,7 @@ body {
 
   .form-group label {
     font-size: 13px;
+    display: flex;
   }
 
   .form-group input,
@@ -995,6 +1156,7 @@ body {
   .spotify-button {
     padding: 12px;
     font-size: 15px;
+    min-height: 50px;
   }
 
   .social-signup-button {

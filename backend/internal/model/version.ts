@@ -47,6 +47,11 @@ const versionSchema = new Schema({
     updated_at: { type: Date, default: Date.now },
     inputs: [{ type: Schema.Types.ObjectId, ref: "inputs" }],
     outputs: [{ type: Schema.Types.ObjectId, ref: "outputs" }],
+    status: {
+        type: String,
+        enum: ['processing', 'completed', 'failed', 'has_conflicts'],
+        default: 'processing'
+    },
     // merged_text: { type: String, required: true },
     affects_requirement: { type: Boolean, default: false },
     requirement_model: { type: [requirementModelSchema], default: [] },

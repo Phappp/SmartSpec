@@ -2,7 +2,9 @@
   <div class="container-center">
     <div class="login-card">
       <div class="card-content">
-        <router-link to="/"><i class="fa-brands fa-slack"></i></router-link>
+        <router-link style="pointer-events: none" to="/"
+          ><i class="fa-brands fa-slack"></i
+        ></router-link>
         <h1 class="card-title">Log in to SmartSpec</h1>
 
         <div class="form-group">
@@ -40,10 +42,11 @@
               <span class="divider-text">or</span>
             </div>
             <div class="social-buttons-grid">
-              <div class="btn btn-social" @click="continueWith('google')">
+              <button type="button" class="btn btn-social" @click="loginWithGoogle">
                 <i class="fab fa-google icon-margin-right"></i>
                 <div class="brand">Continue with Google</div>
-              </div>
+              </button>
+
               <!-- <div class="btn btn-social" @click="continueWith('facebook')">
                 <i class="fab fa-facebook icon-margin-right"></i>
                 <div class="brand">Continue with Facebook</div>
@@ -55,7 +58,7 @@
             </div>
             <div class="continue-button-wrapper">
               <button type="submit" class="btn btn-primary" :disabled="loading">
-                <span v-if="loading" class="loading"></span>
+                <span v-if="loading" class="button-spinner"></span>
                 <span v-else>{{ showPasswordField ? 'Log In' : 'Continue' }}</span>
               </button>
             </div>
@@ -63,7 +66,9 @@
           <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
         </div>
 
-        <router-link to="#" class="forgot-password-link">Forgot your password?</router-link>
+        <router-link to="forgot-password" class="forgot-password-link"
+          >Forgot your password?</router-link
+        >
 
         <p class="signup-text">
           Don't have an account?
@@ -71,16 +76,23 @@
         </p>
       </div>
     </div>
+    <AppModal
+      v-model="modalOpen"
+      :title="modalTitle"
+      :message="modalMessage"
+      @update:modelValue="handleModalClose"
+    />
   </div>
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
-
+import AppModal from '../components/AppModal.vue'
 export default {
   name: 'LoginView',
+  components: { AppModal },
   setup() {
     const router = useRouter()
     const email = ref('')
@@ -92,15 +104,47 @@ export default {
     const emailError = ref('')
     const passwordError = ref('')
 
-    const continueWith = (provider) => {
-      errorMessage.value = ''
-      console.log(`Continue with ${provider}`)
-      // Simulate social login
-      loading.value = true
-      setTimeout(() => {
-        loading.value = false
-        alert(`This would normally redirect to ${provider} authentication`)
-      }, 1000)
+    // Modal state
+    const modalOpen = ref(false)
+    const modalTitle = ref('Thông báo')
+    const modalMessage = ref('')
+
+    const openModal = (message, title = 'Thông báo', onClose = null) => {
+      modalTitle.value = title
+      modalMessage.value = message
+      modalOpen.value = true
+      // Store callback for when modal closes
+      if (onClose) {
+        modalOnClose.value = onClose
+      }
+    }
+
+    const modalOnClose = ref(null)
+
+    const handleModalClose = () => {
+      modalOpen.value = false
+      if (modalOnClose.value) {
+        modalOnClose.value()
+        modalOnClose.value = null
+      }
+    }
+
+    // Google OAuth config
+    const GOOGLE_CLIENT_ID =
+      '1030258814420-rra11eqd5vhcriar7sgclokotfrgmp9k.apps.googleusercontent.com'
+    const GOOGLE_REDIRECT_URI = 'http://localhost:5173/login' // FE domain
+    const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
+
+    function loginWithGoogle() {
+      const params = new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        redirect_uri: 'http://localhost:8000/api/auth/google/oauth',
+        response_type: 'code',
+        scope: 'openid email profile',
+        access_type: 'offline',
+        prompt: 'consent',
+      })
+      window.location.href = `${GOOGLE_AUTH_URL}?${params.toString()}`
     }
 
     const togglePasswordVisibility = () => {
@@ -109,33 +153,23 @@ export default {
 
     const validateEmail = () => {
       emailError.value = ''
-
       if (!email.value) {
-        emailError.value = 'Email or username is required'
+        emailError.value = 'Email is required'
         return false
       }
-
-      if (!/\S+@\S+\.\S+/.test(email.value) && email.value.length < 3) {
-        emailError.value = 'Please enter a valid email or username'
+      if (!/\S+@\S+\.\S+/.test(email.value)) {
+        emailError.value = 'Please enter a valid email'
         return false
       }
-
       return true
     }
 
     const validatePassword = () => {
       passwordError.value = ''
-
       if (!password.value) {
         passwordError.value = 'Password is required'
         return false
       }
-
-      if (password.value.length < 6) {
-        passwordError.value = 'Password must be at least 6 characters'
-        return false
-      }
-
       return true
     }
 
@@ -149,54 +183,41 @@ export default {
       clearErrors()
 
       if (!showPasswordField.value) {
-        // First step - validate email and show password field
         if (validateEmail()) {
-          // Check if email exists in the database
-          loading.value = true
-          try {
-            const response = await axios.post('/api/check-email', { email: email.value })
-            if (response.data.exists) {
-              showPasswordField.value = true
-            } else {
-              emailError.value = 'Email not found. Please sign up first.'
-            }
-          } catch (error) {
-            console.error('Error checking email:', error)
-            errorMessage.value = 'An error occurred. Please try again.'
-          } finally {
-            loading.value = false
-          }
+          showPasswordField.value = true
         }
         return
       }
 
-      // Second step - validate both email and password
-      const isEmailValid = validateEmail()
-      const isPasswordValid = validatePassword()
+      if (!validateEmail() || !validatePassword()) return
 
-      if (!isEmailValid || !isPasswordValid) {
-        return
-      }
-
-      // Submit login
       loading.value = true
-
       try {
-        // Use axios for login
-        const response = await axios.post('/api/login', {
+        const response = await axios.post('http://localhost:8000/api/auth/login', {
           email: email.value,
           password: password.value,
         })
 
-        if (response.data.success) {
-          // In a real app, you would redirect to dashboard or returnUrl
-          router.push('/dashboard')
+        const data = response.data?.data
+        if (!data) throw new Error('Login response không có token')
+
+        if (data.isTwoFactorEnabled) {
+          localStorage.setItem('otpToken', data.otpToken)
+          localStorage.setItem('email', email.value)
+          router.push('/verify-otp')
         } else {
-          errorMessage.value = 'Invalid email or password. Please try again.'
+          localStorage.setItem('accessToken', data.accessToken)
+          localStorage.setItem('refreshToken', data.refreshToken)
+          localStorage.setItem('userId', data.sub)
+          openModal('Log in successfully', 'Login', () => {
+            router.push('/dashboard')
+          })
         }
       } catch (error) {
-        console.error('Login error:', error)
-        errorMessage.value = 'An error occurred during login. Please try again.'
+        console.error(error)
+        const msg = error.response?.data?.message || 'Invalid email or password. Please try again.'
+        errorMessage.value = msg
+        openModal(msg, 'Login failed')
       } finally {
         loading.value = false
       }
@@ -211,16 +232,19 @@ export default {
       loading,
       emailError,
       passwordError,
-      continueWith,
+      modalOpen,
+      modalTitle,
+      modalMessage,
       togglePasswordVisibility,
       handleSubmit,
       clearErrors,
+      loginWithGoogle,
+      openModal,
+      handleModalClose,
     }
   },
 }
 </script>
-
-
 
 <style scoped>
 .container-center {
@@ -243,6 +267,7 @@ export default {
   color: #0a1a4d;
   margin-bottom: 24px;
   display: block;
+  justify-self: center;
 }
 
 .card-title {
@@ -296,15 +321,15 @@ export default {
 .password-toggle {
   position: absolute;
   right: 15px;
-  top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(40%);
   color: #b3b3b3;
   cursor: pointer;
   font-size: 18px;
+  transition: 0.2s ease;
 }
 
 .password-toggle:hover {
-  color: #0a1a4d;
+  color: #000;
 }
 
 .divider {
@@ -435,20 +460,36 @@ export default {
 }
 
 /* Loading animation */
-.loading {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: white;
-  animation: spin 1s ease-in-out infinite;
+/* 👇 NEW SPINNER STYLES ADDED HERE 👇 */
+@keyframes spinner-a4dj62 {
+  100% {
+    transform: rotate(1turn);
+  }
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.button-spinner {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  border: 3px solid #0000;
+  border-radius: 50%;
+  border-right-color: #ffffff; /* Color for spinner */
+  animation: spinner-a4dj62 1s infinite linear;
+}
+
+.button-spinner::before,
+.button-spinner::after {
+  content: '';
+  grid-area: 1/1;
+  margin: 1.5px;
+  border: inherit;
+  border-radius: 50%;
+  animation: spinner-a4dj62 2s infinite;
+}
+
+.button-spinner::after {
+  margin: 6px;
+  animation-duration: 3s;
 }
 
 /* Responsive */

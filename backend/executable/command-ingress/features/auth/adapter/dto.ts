@@ -152,13 +152,38 @@ class IsValidDobConstraint implements ValidatorConstraintInterface {
   }
 }
 
+@ValidatorConstraint({ name: "IsValidPassword", async: false })
+class IsValidPasswordConstraint implements ValidatorConstraintInterface {
+  validate(password: string, args: ValidationArguments) {
+    // Kiểm tra độ dài
+    if (!password || password.length < 10) {
+      return false;
+    }
+
+    // Kiểm tra có ít nhất một số
+    const hasNumber = /\d/.test(password);
+    if (!hasNumber) {
+      return false;
+    }
+
+    // Kiểm tra có ít nhất một chữ cái hoặc ký tự đặc biệt
+    const hasLetterOrSpecialChar = /[a-zA-Z!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+
+    return hasLetterOrSpecialChar;
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    return "Password must be at least 10 characters long and contain at least one number and one letter or special character";
+  }
+}
+
 export class RegisterRequestBody extends RequestDto {
   @IsNotEmpty({ message: "Email is required" })
   @IsEmail({}, { message: "Please provide a valid email address" })
   email: string;
 
-  // @IsNotEmpty({ message: "Password is required" })
-  @MinLength(6, { message: "Password must be at least 6 characters long" })
+  @IsNotEmpty({ message: "Password is required" })
+  @Validate(IsValidPasswordConstraint)
   password: string;
 
   @IsNotEmpty({ message: "Password confirmation is required" })
@@ -168,35 +193,18 @@ export class RegisterRequestBody extends RequestDto {
   @IsString()
   name: string;
 
-  // @IsOptional()
-  // @IsString()
-  // @Matches(/^[0-9]{10,11}$/, { message: "Phone number must be 10–11 digits" })
-  // phone?: string;
-
   @IsOptional()
   isTwoFactorEnabled?: boolean;
 
-  //validate date of birth
-  // @IsOptional()
-  // @ValidateNested()
-  // dob?: { day: number; month: number; year: number };
-
   @Validate(IsValidDobConstraint)
   dob: { day: number; month: number; year: number };
-  
+
   @IsOptional()
   @IsString()
   @Matches(/^(male|female|genderless|do not want to be specific|other)$/, {
     message: "Please select the appropriate gender",
   })
   gender: string;
-
-  // @IsString()
-  // access_token: string;
-  // @IsString()
-  // refresh_token: string;
-  // @IsString() 
-  // otp: string;
 
   constructor(body: any) {
     super();
@@ -249,8 +257,8 @@ export class LoginRequestBody extends RequestDto {
   @IsEmail({}, { message: "Please provide a valid email address" })
   email: string;
 
-  // @IsNotEmpty({ message: "Password is required" })
-  @MinLength(6, { message: "Password must be at least 6 characters long" })
+  @IsNotEmpty({ message: "Password is required" })
+  // @Validate(IsValidPasswordConstraint)
   password: string;
 
   constructor(body: any) {
@@ -277,7 +285,7 @@ export class ForgotPasswordRequestBody extends RequestDto {
 
 export class ResetPasswordRequestBody extends RequestDto {
   @IsNotEmpty({ message: "Password is required" })
-  @MinLength(6, { message: "Password must be at least 6 characters long" })
+  @Validate(IsValidPasswordConstraint)
   newPassword: string;
 
   @IsNotEmpty({ message: "Password confirmation is required" })
