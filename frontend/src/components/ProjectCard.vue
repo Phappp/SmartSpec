@@ -41,6 +41,7 @@
                 :style="getStyle(i, isTrashed ? trashedActions.length : normalActions.length)"
                 @click.stop="btn.action"
                 :title="btn.title"
+                :disabled="btn.disabled"
               >
                 <span class="material-symbols-outlined">{{ btn.icon }}</span>
               </button>
@@ -121,46 +122,74 @@ export default {
     }
   },
   computed: {
-    projectType() {
+    isOwner() {
       const currentUserId = localStorage.getItem('userId')
-      if (!this.project.owner_id || !currentUserId) return 'shared'
+      if (!this.project.owner_id || !currentUserId) return false
 
       if (typeof this.project.owner_id === 'object') {
-        return this.project.owner_id._id === currentUserId ? 'my' : 'shared'
+        return this.project.owner_id._id === currentUserId
       }
       if (typeof this.project.owner_id === 'string') {
-        return this.project.owner_id === currentUserId ? 'my' : 'shared'
+        return this.project.owner_id === currentUserId
       }
-      return 'shared'
+      return false
     },
+
+    projectType() {
+      return this.isOwner ? 'my' : 'shared'
+    },
+
+    isViewer() {
+      return !this.isOwner
+    },
+
     normalActions() {
+      // Nếu là viewer (không phải owner), chỉ có nút Leave
+      if (this.isViewer) {
+        return [
+          {
+            icon: 'logout',
+            title: 'Leave Project',
+            type: 'leave',
+            action: this.leaveProject,
+            disabled: false,
+          },
+        ]
+      }
+
+      // Nếu là owner, có đầy đủ quyền
       return [
         {
           icon: 'edit',
           title: 'Edit Project',
           type: 'edit',
           action: this.startEditing,
+          disabled: false,
         },
         {
           icon: 'share',
           title: 'Share',
           type: 'share',
-          action: () => alert('Share clicked'),
+          action: () => this.shareProject(),
+          disabled: false,
         },
         {
           icon: 'palette',
           title: 'Change Color',
           type: 'palette',
-          action: () => alert('Change color'),
+          action: () => this.changeColor(),
+          disabled: false,
         },
         {
           icon: 'delete',
           title: 'Move to Trash',
           type: 'delete',
           action: this.confirmDelete,
+          disabled: false,
         },
       ]
     },
+
     trashedActions() {
       return [
         {
@@ -168,12 +197,14 @@ export default {
           title: 'Restore',
           type: 'restore',
           action: this.restoreProject,
+          disabled: false,
         },
         {
           icon: 'delete_forever',
           title: 'Delete Permanently',
           type: 'delete',
           action: this.deletePermanently,
+          disabled: false,
         },
       ]
     },
@@ -195,14 +226,25 @@ export default {
       this.isEditing = true
       this.closeFab()
 
-      // Focus vào input sau khi DOM được cập nhật
       this.$nextTick(() => {
         this.$refs.nameInput?.focus()
       })
     },
 
+    changeColor() {
+      alert('Change color clicked')
+    },
+
+    shareProject() {
+      alert('Share clicked')
+    },
+
+    leaveProject() {
+      this.$emit('leave', this.project._id || this.project.id)
+      this.closeFab()
+    },
+
     cancelEdit(event) {
-      // Ngăn sự kiện nổi bọt
       if (event) {
         event.stopPropagation()
       }
@@ -214,7 +256,6 @@ export default {
     },
 
     async saveProject(event) {
-      // Ngăn sự kiện nổi bọt
       if (event) {
         event.stopPropagation()
       }
@@ -225,7 +266,6 @@ export default {
       }
 
       try {
-        // Emit event to parent component to handle the update
         this.$emit('edit', {
           projectId: this.project._id || this.project.id,
           data: {
@@ -479,6 +519,7 @@ export default {
 .fab-options.open .fab-btn:hover {
   transform: translate(var(--x), var(--y)) scale(1.2);
   box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+  scale: 1.1;
 }
 
 .fab-btn.fab-delete {
@@ -526,8 +567,17 @@ export default {
   color: #fff;
 }
 
+.fab-btn.fab-leave {
+  background: #fd7e142a;
+  color: #000000;
+}
+.fab-btn.fab-leave:hover {
+  background: #fd7e14;
+  color: #fff;
+}
+
 .fab-container:hover .fab-main {
-  transition: .2s ease;
+  transition: 0.2s ease;
   background: #0000001a;
   box-shadow: 0 0 12px rgba(121, 118, 118, 0.6);
 }
@@ -611,5 +661,33 @@ export default {
 .project-card.editing {
   min-height: 140px;
   justify-content: flex-start;
+}
+
+.fab-btn:disabled {
+  position: absolute;
+  top: 36%;
+  left: 38%;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgb(73, 73, 73);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.3s ease;
+  cursor: not-allowed;
+}
+
+.fab-btn:disabled:hover {
+  background: rgb(73, 73, 73);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  transform: scale(1);
 }
 </style>
