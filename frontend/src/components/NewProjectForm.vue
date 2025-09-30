@@ -638,7 +638,7 @@ export default {
 }
 
 .progress-bar {
-  width: 100%;
+  min-width: 200px;
   height: 10px;
   background-color: #e5e7eb;
   border-radius: 8px;
