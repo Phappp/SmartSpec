@@ -27,6 +27,7 @@ const userSchema = new Schema({
   isTwoFactorEnabled: { type: Boolean, default: false },
   gender: String,
   dob: Date,
+  avatarUrl: String,
   accessToken: String,
   refreshToken: String,
   provider: { type: String, enum: ["LOCAL", "GOOGLE"], default: "LOCAL" },
