@@ -45,6 +45,8 @@ import { OrchestratorService } from './features/orchestrator/domain/service';
 import { ProjectService } from './features/project/domain/service';
 import { ProjectController } from './features/project/adapter/controller';
 import initProjectRoute from './features/project/adapter/route';
+import input from '@/internal/model/input';
+import { InputService } from './features/orchestrator/domain/InputService';
 
 
 const app = express();
@@ -100,9 +102,9 @@ const createHttpServer = (redisClient: any) => {
   );
   // 1. Khởi tạo OrchestratorService trước
   const orchestratorService = new OrchestratorService();
-
+  const inputService = new InputService();
   // 2. Khởi tạo ProjectService và "inject" orchestratorService vào
-  const projectService = new ProjectService(orchestratorService);
+  const projectService = new ProjectService(orchestratorService, inputService);
 
   // 3. Khởi tạo ProjectController và inject projectService vào
   const projectController = new ProjectController(projectService);

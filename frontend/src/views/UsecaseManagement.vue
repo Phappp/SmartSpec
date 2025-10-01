@@ -69,7 +69,9 @@
       <!-- Phần main content và sidebar giữ nguyên -->
       <div class="main-content">
         <div class="usecase-area">
-          <h2>Use Cases List ({{ useCases.length }})</h2>
+          <div class="usecase-header">
+            <h2>Use Cases List ({{ useCases.length }})</h2>
+          </div>
           <div v-for="(group, role) in groupedUseCases" :key="role" class="usecase-group">
             <h3 class="group-title">{{ role }}</h3>
             <ul class="usecase-list">
@@ -210,7 +212,13 @@
 
       <div class="sidebar">
         <div class="sidebar-item">
-          <h3>Inputs ({{ inputs.length }})</h3>
+          <div class="sidebar-header">
+            <h3>Inputs ({{ inputs.length }})</h3>
+            <!-- Nút thêm input mới -->
+            <button class="add-input-btn" @click="showAddInputModal = true">
+              <span class="material-symbols-outlined">add</span>
+            </button>
+          </div>
           <ul class="file-list">
             <li
               v-for="input in inputs"
@@ -219,11 +227,21 @@
               @click="toggleInput(input._id)"
             >
               <div class="input-summary">
-                <span class="material-symbols-outlined">notes</span>
+                <div class="input-status">
+                  <span
+                    class="status-dot"
+                    :class="{ processed: input.is_processed, 'not-processed': !input.is_processed }"
+                    :title="input.is_processed ? 'Processed' : 'Not Processed'"
+                  ></span>
+                  <span class="material-symbols-outlined file-icon">notes</span>
+                </div>
                 <div class="input-info">
+                  <div class="input-main">
+                    <span class="clean-text">{{ getCleanText(input) }}</span>
+                  </div>
                   <div class="input-meta">
                     <span class="input-type">{{ input.type }}</span>
-                    <span class="input-language">{{ input.metadata.language }}</span>
+                    <span class="input-language">{{ getLanguage(input) }}</span>
                     <span class="input-date">{{ formatDate(input.updated_at) }}</span>
                   </div>
                 </div>
@@ -245,27 +263,50 @@
                         fill="none"
                         stroke="#10b981"
                         :stroke-dasharray="113.097"
-                        :stroke-dashoffset="113.097 - 113.097 * (input.quality_score || 0)"
+                        :stroke-dashoffset="113.097 - 113.097 * getQualityScore(input)"
                         stroke-width="4"
                         stroke-linecap="round"
                         transform="rotate(-90 20 20)"
                       />
                     </svg>
-                    <span class="score-text"
-                      >{{ Math.round((input.quality_score || 0) * 100) }}%</span
-                    >
+                    <span class="score-text">{{ Math.round(getQualityScore(input) * 100) }}%</span>
                   </div>
                 </div>
+                <!-- Nút xóa input cụ thể -->
+                <!-- Nút xóa từng input -->
+                <button
+                  class="delete-input-btn"
+                  @click.stop="openDeleteSpecificModal(input._id)"
+                  :disabled="isDeletingInput === input._id"
+                  :title="`Delete ${input.type} input`"
+                >
+                  <span v-if="isDeletingInput === input._id" class="button-spinner-small"></span>
+                  <span v-else class="material-symbols-outlined">delete</span>
+                </button>
               </div>
               <div v-if="expandedInputId === input._id" class="input-detail">
                 <div class="input-details">
+                  <div class="detail-row">
+                    <span class="detail-label">Status:</span>
+                    <span class="detail-value">
+                      <span
+                        class="status-badge"
+                        :class="{
+                          processed: input.is_processed,
+                          'not-processed': !input.is_processed,
+                        }"
+                      >
+                        {{ input.is_processed ? 'Processed' : 'Not Processed' }}
+                      </span>
+                    </span>
+                  </div>
                   <div class="detail-row">
                     <span class="detail-label">Type:</span>
                     <span class="detail-value">{{ input.type }}</span>
                   </div>
                   <div class="detail-row">
                     <span class="detail-label">Language:</span>
-                    <span class="detail-value">{{ input.metadata.language }}</span>
+                    <span class="detail-value">{{ getLanguage(input) }}</span>
                   </div>
                   <div class="detail-row">
                     <span class="detail-label">Updated:</span>
@@ -273,19 +314,103 @@
                   </div>
                   <div class="detail-row">
                     <span class="detail-label">Quality:</span>
-                    <span class="detail-value">{{ input.quality_score * 100 }}%</span>
+                    <span class="detail-value"
+                      >{{ Math.round(getQualityScore(input) * 100) }}%</span
+                    >
                   </div>
                   <div class="detail-row full-width">
                     <span class="detail-label">Content:</span>
-                    <span class="detail-value content-text">{{
-                      input.cleaned_text || 'No content'
-                    }}</span>
+                    <span class="detail-value content-text">{{ getCleanText(input) }}</span>
                   </div>
                 </div>
               </div>
             </li>
           </ul>
         </div>
+      </div>
+    </div>
+    <!-- Modal xác nhận -->
+    <AppModal
+      v-model="showModal"
+      :title="modalTitle"
+      :message="modalMessage"
+      :isConfirmation="true"
+      @confirm="handleConfirm"
+    />
+    <!-- Modal thêm input mới -->
+    <div v-if="showAddInputModal" class="modal-overlay" @click="showAddInputModal = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>Add New Input</h3>
+          <button class="close-btn" @click="showAddInputModal = false">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- File upload section -->
+          <div class="input-section">
+            <h4>Upload Files</h4>
+            <div class="file-upload-area" @click="triggerFileInput">
+              <input
+                type="file"
+                ref="fileInput"
+                @change="handleFileSelect"
+                multiple
+                accept=".docx,.pdf,.jpg,.jpeg,.png,.gif,.mp3,.wav,.m4a"
+                style="display: none"
+              />
+              <div class="upload-placeholder">
+                <span class="material-symbols-outlined upload-icon">cloud_upload</span>
+                <p>Click to upload files</p>
+                <p class="file-types">Supported: DOCX, PDF, Images, Audio files</p>
+              </div>
+            </div>
+            <div v-if="selectedFiles.length > 0" class="selected-files">
+              <h5>Selected Files ({{ selectedFiles.length }})</h5>
+              <ul class="file-list">
+                <li v-for="(file, index) in selectedFiles" :key="index" class="file-item">
+                  <span class="material-symbols-outlined file-icon">description</span>
+                  <span class="file-name">{{ file.name }}</span>
+                  <span class="file-size">({{ formatFileSize(file.size) }})</span>
+                  <button class="remove-file" @click="removeFile(index)">
+                    <span class="material-symbols-outlined">close</span>
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Text input section -->
+          <div class="input-section">
+            <h4>Describe your project</h4>
+            <textarea
+              v-model="rawText"
+              placeholder="Enter your describe here..."
+              class="text-input"
+              rows="6"
+            ></textarea>
+          </div>
+
+          <!-- Validation message -->
+          <div v-if="!canSubmit" class="validation-message">
+            Please add at least one file or enter some text to proceed!
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="cancel-btn" @click="showAddInputModal = false">Cancel</button>
+          <button class="submit-btn" @click="addInputs" :disabled="!canSubmit || isAddingInput">
+            <span v-if="isAddingInput" class="button-spinner-small"></span>
+            {{ isAddingInput ? 'Adding...' : 'Add Input' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mini loading overlay khi thêm input -->
+    <div v-if="isAddingInput" class="mini-loading-overlay">
+      <div class="mini-loading-content">
+        <div class="mini-spinner"></div>
+        <p>Adding input...</p>
       </div>
     </div>
   </div>
@@ -297,10 +422,15 @@ import {
   generateDocumentation,
   retryProjectAnalysis,
   getVersionStatus,
+  addInputsToVersion,
+  deleteUnprocessedInputs,
+  deleteSpecificInput,
 } from '@/api/project'
-
+import { useToast } from 'vue-toastification'
+import AppModal from '@/components/AppModal.vue'
 export default {
   name: 'ProjectDetailView',
+  components: { AppModal },
   data() {
     return {
       project: {},
@@ -316,7 +446,7 @@ export default {
       showDescription: false,
       isRetrying: false,
       pollingInterval: null,
-
+      toast: useToast(),
       // loading overlay
       overlayLoading: false,
       loadingMessage: 'Retrying analysis...',
@@ -332,6 +462,19 @@ export default {
 
       // dropdown state
       isOpen: false,
+
+      // New features data
+      showAddInputModal: false,
+      selectedFiles: [],
+      rawText: '',
+      isAddingInput: false,
+      isDeletingUnprocessed: false,
+
+      showModal: false,
+      modalTitle: '',
+      modalMessage: '',
+      confirmAction: null,
+      isDeletingInput: null,
     }
   },
   computed: {
@@ -357,6 +500,12 @@ export default {
     selectedLabel() {
       const v = this.versions.find((x) => x._id === this.selectedVersionId)
       return v ? `Version ${v.version_number} (${v.status})` : 'Select version'
+    },
+    hasUnprocessedInputs() {
+      return this.inputs.some((input) => !input.is_processed)
+    },
+    canSubmit() {
+      return this.selectedFiles.length > 0 || this.rawText.trim().length > 0
     },
   },
   async created() {
@@ -395,6 +544,171 @@ export default {
       } catch (err) {
         console.error('Error fetching project details:', err)
       }
+    },
+
+    // New input methods
+    triggerFileInput() {
+      this.$refs.fileInput.click()
+    },
+
+    handleFileSelect(event) {
+      const files = Array.from(event.target.files)
+      // Filter by allowed types
+      const allowedTypes = [
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/pdf',
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/gif',
+        'audio/mpeg',
+        'audio/wav',
+        'audio/mp4',
+      ]
+
+      const validFiles = files.filter((file) => allowedTypes.includes(file.type))
+      this.selectedFiles = [...this.selectedFiles, ...validFiles]
+
+      // Reset file input
+      event.target.value = ''
+    },
+
+    removeFile(index) {
+      this.selectedFiles.splice(index, 1)
+    },
+
+    formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes'
+      const k = 1024
+      const sizes = ['Bytes', 'KB', 'MB', 'GB']
+      const i = Math.floor(Math.log(bytes) / Math.log(k))
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+    },
+
+    async addInputs() {
+      if (!this.canSubmit) return
+      this.isAddingInput = true
+
+      try {
+        const versionId = this.selectedVersionId || this.currentVersion?._id
+        if (!versionId) {
+          throw new Error('No version selected')
+        }
+
+        const formData = new FormData()
+
+        // Thêm files nếu có
+        if (this.selectedFiles.length > 0) {
+          this.selectedFiles.forEach((file) => {
+            formData.append('files', file)
+          })
+        }
+
+        // Thêm raw text nếu có
+        if (this.rawText.trim()) {
+          formData.append('rawText', this.rawText.trim())
+        }
+
+        // Loading tối thiểu 2 giây
+        const minLoadingTime = new Promise((resolve) => setTimeout(resolve, 2000))
+        const apiCall = addInputsToVersion(versionId, formData)
+
+        const [_, response] = await Promise.all([minLoadingTime, apiCall])
+
+        if (response.data && response.data.status === 'Success') {
+          this.toast.success('Input đã được thêm thành công!', {
+            toastClassName: 'my-success-toast',
+          })
+
+          // Reset form + đóng modal
+          this.resetInputForm()
+          this.showAddInputModal = false
+
+          // Refresh dữ liệu dự án (không reload toàn trang)
+          await this.fetchProjectData(this.project._id)
+        } else {
+          this.toast.error(response.data.message || 'Thêm input thất bại, vui lòng thử lại.')
+        }
+      } catch (error) {
+        console.error('Error adding inputs:', error)
+        this.toast.error('Có lỗi xảy ra khi thêm input!')
+      } finally {
+        this.isAddingInput = false
+      }
+    },
+
+    resetInputForm() {
+      this.selectedFiles = []
+      this.rawText = ''
+    },
+
+    async deleteUnprocessedInputs() {
+      if (!this.hasUnprocessedInputs) return
+
+      this.isDeletingUnprocessed = true
+
+      try {
+        const versionId = this.selectedVersionId || this.currentVersion?._id
+        if (!versionId) {
+          throw new Error('No version selected')
+        }
+
+        await deleteUnprocessedInputs(versionId)
+        await this.fetchProjectData(this.project._id)
+      } catch (error) {
+        console.error('Error deleting unprocessed inputs:', error)
+      } finally {
+        this.isDeletingUnprocessed = false
+      }
+    },
+
+    openDeleteSpecificModal(inputId) {
+      this.modalTitle = 'Xác nhận xóa'
+      this.modalMessage = 'Bạn có chắc chắn muốn xóa input này không?'
+      this.showModal = true
+      this.confirmAction = () => this.deleteSpecificInput(inputId)
+    },
+
+    async handleConfirm() {
+      if (this.confirmAction) {
+        await this.confirmAction()
+      }
+    },
+
+    async deleteSpecificInput(inputId) {
+      try {
+        this.isDeletingInput = inputId
+        const versionId = this.selectedVersionId || this.currentVersion?._id
+        if (!versionId) throw new Error('No version selected')
+
+        const response = await deleteSpecificInput(versionId, inputId)
+        if (response.data?.status === 'Success') {
+          this.toast.success('Input đã được xóa thành công!', {
+            toastClassName: 'my-success-toast',
+          })
+          await this.fetchProjectData(this.project._id)
+        } else {
+          this.toast.error(response.data?.message || 'Xóa thất bại.')
+        }
+      } catch (err) {
+        console.error(err)
+        this.toast.error('Có lỗi xảy ra khi xóa input!')
+      } finally {
+        this.isDeletingInput = null
+      }
+    },
+
+    // Helper methods for input data
+    getCleanText(input) {
+      return input.cleaned_text || input.clean_text || input.raw_text || 'No content available'
+    },
+
+    getLanguage(input) {
+      return input.metadata?.language || input.language || 'Unknown'
+    },
+
+    getQualityScore(input) {
+      return input.quality_score || 0
     },
 
     // xử lý click ngoài dropdown
@@ -519,8 +833,9 @@ export default {
 }
 </script>
 
-
 <style scoped>
+/* Existing styles remain the same, adding new styles for new features */
+
 .project-detail-view {
   padding: 30px;
   background: #f9fafb;
@@ -634,13 +949,6 @@ export default {
   gap: 8px;
   position: relative;
 }
-.version-selector select {
-  border: none;
-  background: transparent;
-  font-size: 14px;
-  font-weight: 600;
-  outline: none;
-}
 
 .dropdown {
   display: flex;
@@ -667,7 +975,7 @@ export default {
 .dropdown-menu {
   position: absolute;
   top: 100%;
-  left: 36px; /* đẩy sang phải để không đè icon */
+  left: 36px;
   margin-top: 6px;
   min-width: 200px;
   background: white;
@@ -769,9 +1077,46 @@ export default {
   padding: 20px;
 }
 
+/* New header styles for usecase area */
+.usecase-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.input-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.delete-unprocessed-btn {
+  background: #f59e0b;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.delete-unprocessed-btn:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.delete-unprocessed-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
 .usecase-area h2 {
   margin-top: 0;
-  margin-bottom: 20px;
+  margin-bottom: 0;
   color: #111827;
 }
 
@@ -781,11 +1126,15 @@ export default {
 
 .group-title {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: bold;
   color: #374151;
   padding-bottom: 8px;
   border-bottom: 1px solid #e5e7eb;
   margin-bottom: 12px;
+  text-transform: capitalize;
+  background-color: #2222221a;
+  padding: 6px 12px;
+  border-radius: 5px;
 }
 
 .usecase-list {
@@ -799,8 +1148,8 @@ export default {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   margin-bottom: 10px;
-  cursor: pointer;
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .usecase-item:hover {
@@ -970,19 +1319,58 @@ export default {
   background-color: #dbeafe;
   color: #1e40af;
 }
-
-/* CSS cho Sidebar Input */
+.input-section h4{
+  font-weight: bold;
+}
+/* === CSS MỚI CHO PHẦN INPUT VỚI CHẤM MÀU === */
 .sidebar-item {
   margin-bottom: 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.sidebar-item h3 {
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.sidebar-header h3 {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: 0;
   color: #111827;
 }
 
+.add-input-btn {
+  background-color: #8783831a;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(10px);
+  color: #000;
+  border: 1px solid #0606061a;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: center;
+  opacity: 0.7;
+  box-shadow: 0 4px 6px rgba(77, 77, 77, 0.1);
+}
+
+.add-input-btn:hover {
+  opacity: 1;
+}
+.add-input-btn span {
+  font-size: 24px;
+  transition: 0.2s ease;
+}
+.add-input-btn:hover span {
+  transform: rotate(90deg);
+}
 .file-list {
   list-style: none;
   padding: 0;
@@ -1013,9 +1401,59 @@ export default {
   padding: 12px;
 }
 
+.input-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.processed {
+  background-color: #10b981;
+  box-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
+}
+
+.status-dot.not-processed {
+  background-color: #ef4444;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+}
+
+.file-icon {
+  font-size: 18px;
+  color: #6b7280;
+}
+
 .input-info {
   flex: 1;
   min-width: 0;
+}
+
+.input-main {
+  margin-bottom: 4px;
+  max-width: 200px;
+}
+
+.clean-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  color: #1f2937;
+  display: -webkit-box;
+  -webkit-line-clamp: 1; /* số dòng tối đa */
+  -webkit-box-orient: vertical;
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .input-meta {
@@ -1051,6 +1489,30 @@ export default {
   font-size: 10px;
   font-weight: 600;
   color: #059669;
+}
+
+/* Delete input button */
+.delete-input-btn {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-input-btn:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.delete-input-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .input-detail {
@@ -1092,12 +1554,341 @@ export default {
   overflow-y: auto;
 }
 
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-badge.processed {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.not-processed {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
 .content-text {
   background: #f3f4f6;
   padding: 8px 12px;
   border-radius: 4px;
   word-break: break-word;
   text-align: justify;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: bold;
+  color: #111827;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modal-body {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.input-tabs {
+  display: flex;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 20px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.tab-btn.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+.tab-btn:hover:not(.active) {
+  color: #374151;
+}
+
+.tab-content {
+  min-height: 200px;
+}
+
+.file-upload-area {
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 20px;
+}
+
+.file-upload-area:hover {
+  border-color: #3b82f6;
+  background: #f8fafc;
+}
+
+.upload-placeholder {
+  color: #6b7280;
+}
+
+.upload-icon {
+  font-size: 48px;
+  margin-bottom: 10px;
+  color: #9ca3af;
+}
+
+.file-types {
+  font-size: 12px;
+  margin-top: 8px;
+  color: #9ca3af;
+}
+
+.selected-files h4 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: #f9fafb;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+.file-name {
+  flex: 1;
+  font-size: 14px;
+  color: #374151;
+}
+
+.file-size {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.remove-file {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 2px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.remove-file:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.text-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s ease;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.cancel-btn {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-btn:hover {
+  background: #e5e7eb;
+}
+
+.submit-btn {
+  background: #1a365d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.submit-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+.validation-message {
+  font-size: 12px;
+  color: #ef4444;
+  margin-top: 4px;
+}
+/* Mini loading overlay */
+.mini-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1001;
+}
+
+.mini-loading-content {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.mini-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #f3f4f6;
+  border-top: 2px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 10px;
+}
+
+.mini-loading-content p {
+  margin: 0;
+  font-size: 14px;
+  color: #374151;
+}
+
+/* Loading overlay */
+.fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.loading-box {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.spinner-flashlight {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f4f6;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 15px;
+}
+
+.loading-text {
+  margin: 0;
+  font-size: 16px;
+  color: #374151;
+  font-weight: 500;
 }
 
 @media (max-width: 1200px) {
@@ -1152,6 +1943,33 @@ export default {
   .retry-btn {
     margin-left: 0;
     margin-top: 8px;
+  }
+
+  .input-summary {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .quality-score {
+    align-self: flex-end;
+  }
+
+  .usecase-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .sidebar-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .modal-content {
+    width: 95%;
+    margin: 20px;
   }
 }
 </style>

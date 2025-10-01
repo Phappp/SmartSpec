@@ -221,9 +221,7 @@ export class RequirementService {
                     ? "failed"
                     : conflicts.length > 0
                         ? "has_conflicts"
-                        : finalRequirements.length > 0
-                            ? "completed"
-                            : "processing",
+                        : "completed",
                 ...(conflicts.length > 0 && { pending_conflicts: conflicts }),
                 ...(processingErrors.length > 0 && { processing_errors: processingErrors }),
             },

@@ -48,7 +48,7 @@ const versionSchema = new Schema({
     inputs: [{ type: Schema.Types.ObjectId, ref: "inputs" }],
     outputs: [{ type: Schema.Types.ObjectId, ref: "outputs" }],
     progress: { type: Number, default: 0 }, // %
-    stage: { type: String, enum: ["input", "analyzing", "finalizing", "completed", "failed"], default: "input" },
+    stage: { type: String, enum: ["normalization","input", "analyzing", "finalizing", "completed", "failed"], default: "input" },
     status: {
         type: String,
         enum: ['processing', 'completed', 'failed', 'has_conflicts'],

@@ -182,8 +182,13 @@ export default {
         this.creationSuccess = false
       }
     },
-    handleProjectCreated() {
-      this.fetchInitialData()
+    handleProjectCreated(newProject) {
+      if (newProject) {
+        // Thêm dự án mới vào đầu danh sách `myProjects` và `recentProjects`
+        this.myProjects.unshift(newProject)
+        this.recentProjects.unshift(newProject)
+      }
+
       this.creationSuccess = true
     },
     navigateTo(view) {

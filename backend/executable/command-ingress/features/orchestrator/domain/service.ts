@@ -29,7 +29,7 @@ export class OrchestratorService {
         // 🟢 Bắt đầu: clear lỗi cũ
         console.log(`[SERVICE] Clearing previous errors for version ${versionId} before running...`);
         await Version.findByIdAndUpdate(versionId, {
-            $set: { processing_errors: [], stage: "initializing", progress: 5 }
+            $set: { processing_errors: [], stage: "initializing", progress: 15 }
         });
 
         const version = await Version.findById(versionId).lean();
@@ -100,7 +100,11 @@ export class OrchestratorService {
 
 
         // 4️⃣ Phân tích requirement
-        await Version.findByIdAndUpdate(versionId, { $set: { stage: "analyzing", progress: 60 } });
+        await Version.findByIdAndUpdate(versionId, { $set: { stage: "analyzing", progress: 40 } });
+
+        await delay(randomDelay); // Chờ độ trễ ngẫu nhiên
+
+        await Version.findByIdAndUpdate(versionId, { $set: { stage: "normalization", progress: 70 } });
 
 
 

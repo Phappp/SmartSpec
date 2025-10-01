@@ -37,6 +37,13 @@
 
             <!-- Step 2 -->
             <div v-if="currentStep === 2">
+              <!-- Thông báo yêu cầu đầu vào -->
+              <div class="input-requirement" v-if="!isStep2Valid">
+                <span class="material-symbols-outlined" style="font-size: 16px; color: #ef4444"
+                  >info</span
+                >
+                Please provide either Raw Text or at least one attachment to continue.
+              </div>
               <div class="form-group">
                 <label for="rawText">Raw Text (Optional)</label>
                 <textarea
@@ -122,7 +129,9 @@
                 class="create-btn"
                 v-if="currentStep < 3"
                 @click="nextStep"
-                :disabled="currentStep === 2 && sizeLimitExceeded"
+                :disabled="
+                  (currentStep === 2 && sizeLimitExceeded) || (currentStep === 2 && !isStep2Valid)
+                "
               >
                 Next
               </button>
@@ -245,6 +254,11 @@ export default {
       return totalFileSize.value > MAX_TOTAL_SIZE
     })
 
+    // Thêm computed property để kiểm tra điều kiện bước 2
+    const isStep2Valid = computed(() => {
+      return projectData.value.rawText.trim() !== '' || selectedFiles.value.length > 0
+    })
+
     const startLoadingMessages = () => {
       overlayLoading.value = true
       messageIndex.value = 0
@@ -326,7 +340,7 @@ export default {
     }
 
     const handleCancelInStatus = () => {
-      window.location.reload()
+      handleClose()
     }
 
     watch(
@@ -341,10 +355,19 @@ export default {
         alert('Please fill in both Project Name and Description!')
         return
       }
-      if (currentStep.value === 2 && sizeLimitExceeded.value) {
-        alert('Please reduce total file size below 150KB before proceeding.')
-        return
+
+      // Thêm validation cho bước 2
+      if (currentStep.value === 2) {
+        if (sizeLimitExceeded.value) {
+          alert('Please reduce total file size below 150KB before proceeding.')
+          return
+        }
+        if (!isStep2Valid.value) {
+          alert('Please provide either Raw Text or attach at least one file.')
+          return
+        }
       }
+
       if (currentStep.value < 3) currentStep.value++
     }
 
@@ -407,9 +430,10 @@ export default {
     // Update progress based on stage
     const updateProgressFromStage = (stage) => {
       const stageProgressMap = {
-        initializing: 5,
+        initializing: 15,
         input: 25,
-        analyzing: 60,
+        analyzing: 40,
+        normalization: 70,
         finalizing: 90,
         completed: 100,
       }
@@ -434,7 +458,7 @@ export default {
 
           if (status !== 'processing') {
             clearInterval(pollingInterval.value)
-            finalProjectData.value = { _id: projectId, current_version: { _id: versionId } }
+            //finalProjectData.value = { _id: projectId, current_version: { _id: versionId } }
 
             if (status === 'completed' || status === 'has_conflicts') {
               // Đảm bảo progress là 100% trước khi delay
@@ -445,7 +469,8 @@ export default {
               setTimeout(() => {
                 creationStatus.value = 'completed'
                 stopLoadingMessages()
-                emit('processing-finished')
+                // emit('processing-finished')
+                emit('project-created', finalProjectData.value)
               }, 1000)
             } else {
               failedVersionId.value = versionId
@@ -490,6 +515,9 @@ export default {
       try {
         const response = await createProject(formData)
         const createdProject = response.data.data
+        // QUAN TRỌNG: Lưu lại toàn bộ object dự án vừa tạo
+        finalProjectData.value = createdProject
+
         creationStatus.value = 'polling'
         startPolling(createdProject._id, createdProject.current_version)
       } catch (error) {
@@ -551,6 +579,7 @@ export default {
       isRetrying,
       totalFileSize,
       sizeLimitExceeded,
+      isStep2Valid,
       processingProgress,
       currentStage,
       handleClose,
@@ -742,6 +771,20 @@ export default {
   outline: none;
   border-color: #1a365d;
   box-shadow: 0 0 0 2px rgba(26, 54, 93, 0.2);
+}
+
+/* INPUT REQUIREMENT STYLES */
+.input-requirement {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #ef4444;
+  margin-bottom: 10px;
+  padding: 8px;
+  background-color: #fef2f2;
+  border-radius: 4px;
+  border-left: 3px solid #ef4444;
 }
 
 /* FILE INPUT */
