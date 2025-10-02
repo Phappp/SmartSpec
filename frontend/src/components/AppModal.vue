@@ -15,7 +15,7 @@
         <p>{{ message }}</p>
       </div>
       <div class="modal-footer">
-        <button v-if="!isConfirmation" class="btn btn-primary" @click="close">OK</button>
+        <button v-if="!isConfirmation" class="btn btn-secondary" @click="close">OK</button>
         <template v-else>
           <button class="btn btn-danger" @click="confirmAction">Confirm</button>
           <button class="btn btn-secondary" @click="close">Cancel</button>
@@ -51,11 +51,12 @@ export default {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(19, 19, 19, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  backdrop-filter: blur(3px);
 }
 .modal-card {
   width: 100%;
@@ -99,10 +100,9 @@ export default {
   cursor: pointer;
   border: none;
   font-weight: 600;
-  transition: .2s ease;
+  transition: 0.2s ease;
   min-width: 80px;
   opacity: 0.9;
-
 }
 
 .btn:hover {

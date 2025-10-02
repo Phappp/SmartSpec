@@ -60,7 +60,7 @@ const createHttpServer = (redisClient: any) => {
     app.use(logger);
   }
   // app.use(cors());
-  app.use(morgan('combined'));
+  app.use(morgan(() => null));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(fileUpload());

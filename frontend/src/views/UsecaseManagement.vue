@@ -22,16 +22,46 @@
       <div class="actions">
         <div class="version-selector">
           <span class="material-symbols-outlined">history</span>
-          <select v-model="selectedVersionId" @change="onVersionChange">
-            <option v-for="v in versions" :key="v._id" :value="v._id">
+
+          <!-- Dropdown button -->
+          <div class="dropdown" @click="toggleDropdown">
+            <span>{{ selectedLabel }}</span>
+            <span class="material-symbols-outlined arrow" :class="{ open: isOpen }">
+              <span class="material-symbols-outlined"> chevron_right </span>
+            </span>
+          </div>
+
+          <!-- Dropdown menu -->
+          <ul v-if="isOpen" class="dropdown-menu">
+            <li v-for="v in versions" :key="v._id" @click="selectVersion(v)">
               Version {{ v.version_number }} ({{ v.status }})
-            </option>
-          </select>
+            </li>
+          </ul>
+
+          <!-- Retry button -->
+          <button
+            v-if="hasFailedVersion"
+            @click="retryFailedVersion"
+            class="retry-btn"
+            :disabled="isRetrying"
+          >
+            <span v-if="isRetrying" class="button-spinner-small"></span>
+            <span v-else class="material-symbols-outlined">refresh</span>
+            {{ isRetrying ? 'Retrying...' : 'Retry Failed' }}
+          </button>
         </div>
         <button class="members-button">
           <span class="material-symbols-outlined">group</span>
           {{ project.members ? project.members.length : 0 }} Members
         </button>
+      </div>
+    </div>
+
+    <!-- FULLSCREEN LOADING OVERLAY -->
+    <div v-if="overlayLoading" class="fullscreen-overlay">
+      <div class="loading-box">
+        <div class="spinner-flashlight"></div>
+        <p class="loading-text">{{ loadingMessage }}</p>
       </div>
     </div>
 
@@ -193,7 +223,7 @@
                 <div class="input-info">
                   <div class="input-meta">
                     <span class="input-type">{{ input.type }}</span>
-                    <span class="input-language">{{ input.language }}</span>
+                    <span class="input-language">{{ input.metadata.language }}</span>
                     <span class="input-date">{{ formatDate(input.updated_at) }}</span>
                   </div>
                 </div>
@@ -235,7 +265,7 @@
                   </div>
                   <div class="detail-row">
                     <span class="detail-label">Language:</span>
-                    <span class="detail-value">{{ input.language }}</span>
+                    <span class="detail-value">{{ input.metadata.language }}</span>
                   </div>
                   <div class="detail-row">
                     <span class="detail-label">Updated:</span>
@@ -243,7 +273,7 @@
                   </div>
                   <div class="detail-row">
                     <span class="detail-label">Quality:</span>
-                    <span class="detail-value">{{ input.quality_score }}%</span>
+                    <span class="detail-value">{{ input.quality_score * 100 }}%</span>
                   </div>
                   <div class="detail-row full-width">
                     <span class="detail-label">Content:</span>
@@ -262,7 +292,12 @@
 </template>
 
 <script>
-import { getProjectDetail, generateDocumentation } from '@/api/project'
+import {
+  getProjectDetail,
+  generateDocumentation,
+  retryProjectAnalysis,
+  getVersionStatus,
+} from '@/api/project'
 
 export default {
   name: 'ProjectDetailView',
@@ -278,7 +313,25 @@ export default {
       prompt: '',
       expandedUseCaseId: null,
       expandedInputId: null,
-      showDescription: false, // Thêm state để điều khiển hiển thị mô tả
+      showDescription: false,
+      isRetrying: false,
+      pollingInterval: null,
+
+      // loading overlay
+      overlayLoading: false,
+      loadingMessage: 'Retrying analysis...',
+      messageInterval: null,
+      messageIndex: 0,
+
+      loadingMessages: [
+        'Retrying analysis...',
+        'Processing data...',
+        'Generating results...',
+        'Finalizing project...',
+      ],
+
+      // dropdown state
+      isOpen: false,
     }
   },
   computed: {
@@ -295,12 +348,34 @@ export default {
         return groups
       }, {})
     },
+    hasFailedVersion() {
+      return this.versions.some((version) => version.status === 'failed')
+    },
+    failedVersion() {
+      return this.versions.find((version) => version.status === 'failed')
+    },
+    selectedLabel() {
+      const v = this.versions.find((x) => x._id === this.selectedVersionId)
+      return v ? `Version ${v.version_number} (${v.status})` : 'Select version'
+    },
   },
   async created() {
     const projectId = this.$route.params.id
     if (projectId) {
       await this.fetchProjectData(projectId)
     }
+
+    // lắng nghe click ngoài dropdown
+    document.addEventListener('click', this.handleClickOutside)
+  },
+  beforeUnmount() {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval)
+    }
+    if (this.messageInterval) {
+      clearInterval(this.messageInterval)
+    }
+    document.removeEventListener('click', this.handleClickOutside)
   },
   methods: {
     async fetchProjectData(projectId) {
@@ -321,24 +396,112 @@ export default {
         console.error('Error fetching project details:', err)
       }
     },
-    toggleUseCase(useCaseId) {
-      if (this.expandedUseCaseId === useCaseId) {
-        this.expandedUseCaseId = null
-      } else {
-        this.expandedUseCaseId = useCaseId
+
+    // xử lý click ngoài dropdown
+    handleClickOutside(e) {
+      const dropdown = this.$el.querySelector('.dropdown')
+      if (dropdown && !dropdown.contains(e.target)) {
+        this.isOpen = false
       }
+    },
+    toggleDropdown() {
+      this.isOpen = !this.isOpen
+    },
+    // chọn version
+    selectVersion(v) {
+      this.selectedVersionId = v._id
+      this.isOpen = false
+      console.log('Selected version ID:', this.selectedVersionId)
+    },
+
+    // Loading messages
+    startLoadingMessages() {
+      this.overlayLoading = true
+      this.messageIndex = 0
+      this.loadingMessage = this.loadingMessages[0]
+      this.messageInterval = setInterval(() => {
+        this.messageIndex = (this.messageIndex + 1) % this.loadingMessages.length
+        this.loadingMessage = this.loadingMessages[this.messageIndex]
+      }, 4000)
+    },
+    stopLoadingMessages() {
+      this.overlayLoading = false
+      if (this.messageInterval) {
+        clearInterval(this.messageInterval)
+        this.messageInterval = null
+      }
+    },
+
+    // Polling check status
+    startPolling(versionId) {
+      if (this.pollingInterval) {
+        clearInterval(this.pollingInterval)
+      }
+
+      this.pollingInterval = setInterval(async () => {
+        try {
+          const response = await getVersionStatus(versionId)
+          const { status } = response.data.data
+
+          console.log(`Polling status: ${status}`)
+
+          if (status !== 'processing') {
+            clearInterval(this.pollingInterval)
+            this.pollingInterval = null
+
+            if (status === 'completed' || status === 'has_conflicts') {
+              console.log('Retry completed successfully! Reloading data...')
+              this.stopLoadingMessages()
+              this.isRetrying = false
+              await this.fetchProjectData(this.project._id)
+            } else {
+              console.log('Retry failed')
+              this.stopLoadingMessages()
+              this.isRetrying = false
+              await this.fetchProjectData(this.project._id)
+            }
+          }
+        } catch (error) {
+          console.error('Error during polling:', error)
+          clearInterval(this.pollingInterval)
+          this.pollingInterval = null
+          this.stopLoadingMessages()
+          this.isRetrying = false
+        }
+      }, 5000)
+    },
+
+    async retryFailedVersion() {
+      if (!this.failedVersion || this.isRetrying) return
+
+      this.isRetrying = true
+      this.startLoadingMessages()
+
+      try {
+        console.log('Starting retry analysis...')
+        await retryProjectAnalysis(this.project._id, this.failedVersion._id)
+
+        this.startPolling(this.failedVersion._id)
+      } catch (error) {
+        console.error('Error retrying analysis:', error)
+        this.stopLoadingMessages()
+        this.isRetrying = false
+        alert('Failed to retry analysis. Please try again.')
+      }
+    },
+
+    // UI toggle helpers
+    toggleUseCase(useCaseId) {
+      this.expandedUseCaseId = this.expandedUseCaseId === useCaseId ? null : useCaseId
     },
     toggleInput(inputId) {
-      if (this.expandedInputId === inputId) {
-        this.expandedInputId = null
-      } else {
-        this.expandedInputId = inputId
-      }
+      this.expandedInputId = this.expandedInputId === inputId ? null : inputId
     },
-    // Thêm method để toggle hiển thị mô tả
     toggleDescription() {
       this.showDescription = !this.showDescription
     },
+
+    // Format utils
     formatDate(dateString) {
       if (!dateString) return 'N/A'
       const date = new Date(dateString)
@@ -352,12 +515,10 @@ export default {
     goBack() {
       this.$router.push('/dashboard')
     },
-    onVersionChange() {
-      console.log('Selected version ID:', this.selectedVersionId)
-    },
   },
 }
 </script>
+
 
 <style scoped>
 .project-detail-view {
@@ -452,6 +613,7 @@ export default {
   font-size: 14px;
   color: #6b7280;
   line-height: 1.4;
+  justify-self: center;
 }
 
 .actions {
@@ -460,7 +622,118 @@ export default {
   gap: 16px;
 }
 
-.version-selector,
+.version-selector {
+  padding: 0 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+.version-selector select {
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
+}
+
+.dropdown {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.arrow {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #6b7280;
+  transition: transform 0.2s ease;
+}
+
+.arrow.open {
+  transform: rotate(90deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 36px; /* đẩy sang phải để không đè icon */
+  margin-top: 6px;
+  min-width: 200px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  z-index: 20;
+}
+
+.dropdown-menu li {
+  padding: 8px 12px;
+  width: 100%;
+  font-size: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.dropdown-menu li:hover {
+  background: #f3f4f6;
+}
+
+/* CSS cho nút retry */
+.retry-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+  margin-left: 8px;
+}
+
+.retry-btn:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.retry-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Spinner nhỏ cho nút retry */
+.button-spinner-small {
+  width: 14px;
+  height: 14px;
+  border: 2px solid transparent;
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 .members-button {
   padding: 8px 14px;
   border: 1px solid #d1d5db;
@@ -471,14 +744,6 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.version-selector select {
-  border: none;
-  background: transparent;
-  font-size: 14px;
-  font-weight: 500;
-  outline: none;
 }
 
 .view-body {
@@ -823,13 +1088,16 @@ export default {
   font-size: 14px;
   color: #4b5563;
   flex: 1;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .content-text {
   background: #f3f4f6;
-  padding: 8px;
+  padding: 8px 12px;
   border-radius: 4px;
   word-break: break-word;
+  text-align: justify;
 }
 
 @media (max-width: 1200px) {
@@ -872,6 +1140,18 @@ export default {
   .actions {
     order: 3;
     align-self: flex-end;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .version-selector {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .retry-btn {
+    margin-left: 0;
+    margin-top: 8px;
   }
 }
 </style>

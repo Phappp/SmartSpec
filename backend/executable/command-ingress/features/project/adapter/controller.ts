@@ -97,7 +97,7 @@ export class ProjectController extends BaseController {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Project not found or access denied', null, 404), res);
         return;
       }
-      handleServiceResponse(new ServiceResponse(ResponseStatus.Success, "Project deleted successfully", null, 204),res);
+      handleServiceResponse(new ServiceResponse(ResponseStatus.Success, "Project deleted successfully", null, 204), res);
     });
   };
 
@@ -179,4 +179,18 @@ export class ProjectController extends BaseController {
       handleServiceResponse(result, res);
     });
   };
+
+  // public suggestRelations = async (req: HttpRequest, res: Response, next: NextFunction) => {
+  //   await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
+  //     const { versionId } = req.params;
+  //     const userId = req.getSubject();
+  //     if (!userId) {
+  //       handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
+  //       return;
+  //     }
+  //     // Gọi service và trả về response ngay lập tức
+  //     const result = await this.service.suggestRelations(versionId);
+  //     handleServiceResponse(result, res);
+  //   });
+  // };
 }

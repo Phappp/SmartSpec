@@ -58,5 +58,8 @@ export default function initProjectRoute(controller: ProjectController) {
     controller.getVersionStatus // Thêm phương thức này vào controller
   )
 
+  // router.post('/:versionId/suggest-relations',
+  //   requireAuthorizedUser, (req: Request, res: Response, next: NextFunction) => controller.suggestRelations(req as any, res, next));
+
   return router;
 }
