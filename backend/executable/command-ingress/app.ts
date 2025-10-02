@@ -46,6 +46,9 @@ import { ProjectService } from './features/project/domain/service';
 import { ProjectController } from './features/project/adapter/controller';
 import initProjectRoute from './features/project/adapter/route';
 
+import { ShareProjectService } from './features/share/domain/service';
+import { ShareProjectController } from './features/share/adapter/controller';
+import initShareProjectRoute from './features/share/adapter/route';
 
 const app = express();
 
@@ -116,10 +119,10 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/handle_text', initTextRoute(new TextController(new TextService())));
   app.use('/api/orchestrate', initOrchestratorRoute(new OrchestratorController(new OrchestratorService())));
   app.use('/api/projects', initProjectRoute(projectController));
-
+  app.use('/api/projects', initShareProjectRoute(new ShareProjectController(new ShareProjectService())));
+  app.use('/api/users', initShareProjectRoute(new ShareProjectController(new ShareProjectService())));
 
   app.use(recoverMiddleware);
-
 
   return server;
 };
