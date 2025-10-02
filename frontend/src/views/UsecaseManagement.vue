@@ -33,7 +33,7 @@
 
             <ul v-if="isOpen" class="dropdown-menu">
               <li v-for="v in versions" :key="v._id" @click="selectVersion(v)">
-                Version {{ v.version_number }} ({{ v.status }})
+                Version {{ v.version_number }} <span class="counter-badge">{{ v.status }}</span>
               </li>
             </ul>
 
@@ -72,7 +72,9 @@
       <div class="main-content">
         <div class="usecase-area">
           <div class="usecase-header">
-            <h2>Use Cases List ({{ useCases.length }})</h2>
+            <h2>
+              Use Cases <span class="counter-badge">{{ useCases.length }}</span>
+            </h2>
           </div>
           <div v-for="(group, role) in groupedUseCases" :key="role" class="usecase-group">
             <h3 class="group-title">{{ role }}</h3>
@@ -215,7 +217,10 @@
       <div class="sidebar">
         <div class="sidebar-item">
           <div class="sidebar-header">
-            <h3>Inputs ({{ inputs.length }})</h3>
+            <h3>
+              Inputs <span class="counter-badge">{{ inputs.length }}</span>
+            </h3>
+
             <button class="add-input-btn" @click="showAddInputModal = true">
               <span class="material-symbols-outlined">add</span>
             </button>
@@ -918,10 +923,6 @@ export default {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 25px;
-  background: white;
-  padding: 15px 25px;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
 }
 
 .back-button {
@@ -972,8 +973,8 @@ export default {
   background: #f3f4f6;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  padding: 4px 8px;
-  font-size: 12px;
+  padding: 2px 8px;
+  font-size: 10px;
   color: #6b7280;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -991,7 +992,9 @@ export default {
   max-width: 800px;
   text-align: justify;
 }
-
+.description-container span {
+  font-size: 10px;
+}
 .project-description p {
   margin: 0;
   font-size: 14px;
@@ -1149,11 +1152,18 @@ export default {
 /* New header styles for usecase area */
 .usecase-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: left;
   align-items: center;
   margin-bottom: 20px;
+  font-weight: bold;
+  font-size: 100%;
 }
-
+.usecase-header h2 {
+  font-weight: bold;
+}
+.usecase-header span {
+  font-size: 18px;
+}
 .input-actions {
   display: flex;
   gap: 10px;
@@ -1398,7 +1408,14 @@ export default {
   flex-direction: column;
   gap: 12px;
 }
-
+.counter-badge {
+  padding: 2px 8px;
+  background: #e2e8f0;
+  color: #475569;
+  border-radius: 12px;
+  font-weight: 600;
+  margin-left: 8px;
+}
 .sidebar-header {
   display: flex;
   justify-content: space-between;
@@ -1414,24 +1431,23 @@ export default {
 }
 
 .add-input-btn {
-  background-color: #8783831a;
+  background: linear-gradient(90deg, #1a365d6a, #2c52829a);
   display: flex;
   justify-content: center;
   align-items: center;
   backdrop-filter: blur(10px);
-  color: #000;
-  border: 1px solid #0606061a;
+  color: #ffffff;
+  border: 1px solid #c1bdbd1a;
   border-radius: 6px;
   padding: 4px 12px;
   font-weight: 600;
   cursor: pointer;
   align-self: center;
-  opacity: 0.7;
-  box-shadow: 0 4px 6px rgba(77, 77, 77, 0.1);
+  box-shadow: 0 4px 6px rgba(77, 77, 77, 0.7);
 }
 
 .add-input-btn:hover {
-  opacity: 1;
+  background: linear-gradient(90deg, #1a365d8a, #2c5282);
 }
 .add-input-btn span {
   font-size: 24px;
@@ -1871,7 +1887,7 @@ export default {
 }
 
 .submit-btn:hover:not(:disabled) {
-  background: #2563eb;
+  background: #0a4399;
 }
 
 .submit-btn:disabled {

@@ -44,57 +44,51 @@
     vertical-align: middle;
   }
 
-  /* Toàn bộ toast */
+  /* Base toast container */
   .Vue-Toastification__toast {
-    font-family: "Arial", sans-serif;
-    font-size: 14px;
-    border-radius: 8px;
-    padding: 12px 16px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 15px;
+    font-weight: 500;
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
   }
 
-  /* Toast success */
+  /* Success toast */
   .Vue-Toastification__toast--success {
-    background-color: #4caf50;
-    color: #fff;
+    background: linear-gradient(135deg, #28a745, #1e2696);
   }
 
-  /* Toast error */
+  /* Error toast */
   .Vue-Toastification__toast--error {
-    background-color: #f44336;
-    color: #fff;
+    background: linear-gradient(135deg, #dc3545, #b02a37);
   }
 
-  /* Toast info */
+  /* Info toast */
   .Vue-Toastification__toast--info {
-    background-color: #2196f3;
-    color: #fff;
+    background: linear-gradient(135deg, #17a2b8, #117a8b);
   }
 
-  /* Toast warning */
+  /* Warning toast */
   .Vue-Toastification__toast--warning {
-    background-color: #ff9800;
-    color: #fff;
+    background: linear-gradient(135deg, #ffc107, #d39e00);
+    color: #222;
   }
 
-  /* Close button */
+  /* Nội dung */
+  .Vue-Toastification__toast-body {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Nút đóng */
   .Vue-Toastification__close-button {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 16px;
+    transition: color 0.2s;
+  }
+
+  .Vue-Toastification__close-button:hover {
     color: #fff;
-    font-weight: bold;
-  }
-
-  .my-success-toast {
-    background: linear-gradient(135deg, #43e97b, #38f9d7);
-    color: rgb(127, 124, 124);
-    font-weight: bold;
-    border-radius: 10px;
-    border: 1px solid #ccc;
-  }
-
-  .my-error-toast {
-    background: linear-gradient(135deg, #f85032, #e73827);
-    color: white;
-    font-weight: bold;
-    border-radius: 10px;
-    border: 1px solid #ccc;
   }

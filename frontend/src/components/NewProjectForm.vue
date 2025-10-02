@@ -54,10 +54,10 @@
                 <span class="material-symbols-outlined" style="font-size: 16px; color: #ef4444"
                   >info</span
                 >
-                Please provide either Raw Text or at least one attachment to continue.
+                Please provide either Decribe Features or at least one attachment to continue.
               </div>
               <div class="form-group">
-                <label for="rawText">Raw Text (Optional)</label>
+                <label for="rawText">Decribe Features (Optional)</label>
                 <textarea
                   id="rawText"
                   v-model="projectData.rawText"
