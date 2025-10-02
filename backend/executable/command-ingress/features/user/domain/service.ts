@@ -155,7 +155,7 @@ export class UserServiceImpl implements UserService {
     }
 
     await User.deleteOne({ _id: id });
-    await Session.deleteMany({ userId: id });
+    await Session.deleteMany({ userID: id });
 
     return "User deleted successfully";
   }
