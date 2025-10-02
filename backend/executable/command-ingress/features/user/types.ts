@@ -24,17 +24,6 @@ interface UserResponse {
 interface UserService {
   getAllUsers(): Promise<UserResponse[]>;
   getUserById(id: string): Promise<UserResponse>;
-  updateUserById(
-    id: string,
-    body: {
-      email: string;
-      name: string;
-      newDob: Date;
-      gender: string;
-      avatarUrl: string;
-      status: string;
-    }
-  ): Promise<UserResponse>;
   getme(token: string): Promise<any>;
   updateProfile(userId: string, body: any): Promise<UserResponse>;
   changePassword(userId: string, body: any): Promise<string>;
