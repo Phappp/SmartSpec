@@ -29,6 +29,13 @@ const initUserRoute: (controller: UserController) => express.Router = (
       requireRole("ADMIN"),
       controller.updateUserById.bind(controller)
     );
+  router
+    .route("/reset-password/:id")
+    .put(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.resetPasswordById.bind(controller)
+    );
 
   //for user
   router

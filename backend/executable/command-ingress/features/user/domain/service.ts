@@ -12,7 +12,7 @@ import bcrypt from "bcrypt";
 
 import { generateJwt, generateJwtOTP } from "../../../services/jwtService";
 import mailService from "../../../services/sendMail.service";
-import { StringModule } from "@faker-js/faker/.";
+import { faker } from "@faker-js/faker";
 
 export class UserServiceImpl implements UserService {
   async getAllUsers(): Promise<UserResponse[]> {
@@ -47,7 +47,6 @@ export class UserServiceImpl implements UserService {
       isTwoFactorEnabled: user.isTwoFactorEnabled,
     };
   }
-
 
   async getme(token: string): Promise<any> {
     throw new Error("Method not implemented.");
@@ -125,5 +124,27 @@ export class UserServiceImpl implements UserService {
       gender: user.gender,
       isTwoFactorEnabled: user.isTwoFactorEnabled,
     };
+  }
+  async resetPasswordById(id: string): Promise<string> {
+    const user = await User.findOne({ _id: id });
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const newPassword = faker.string.alphanumeric(12).toLowerCase();
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    const subject = "Password Reset Notification";
+    const data = `Your password has been reset. Your new password is: ${newPassword}. Please change it after logging in.`;
+    const mailIsSent = await mailService.sendEmail({
+      emailFrom: "hngvtdat010@gmail.com",
+      emailTo: user.email,
+      emailSubject: subject,
+      emailText: `${data}`,
+    });
+
+    return "Password reset successfully. New password has been sent to the user's email.";
   }
 }

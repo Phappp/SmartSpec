@@ -229,6 +229,36 @@ class UserController extends BaseController {
       }
     );
   }
+
+  async resetPasswordById(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const { id } = req.params;
+        if (!id) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "User ID is required",
+          });
+          return;
+        }
+
+        const serviceResponse = await this.service.resetPasswordById(id);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Reset password successfully",
+          data: serviceResponse,
+        });
+      }
+    );
+  }
 }
 
 export { UserController };
