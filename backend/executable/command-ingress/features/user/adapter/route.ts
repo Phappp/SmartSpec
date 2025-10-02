@@ -7,23 +7,37 @@ const initUserRoute: (controller: UserController) => express.Router = (
 ) => {
   const router = express.Router();
 
-  router.route('').get(requireAuthorizedUser, requireRole('ADMIN'), controller.getAllUsers.bind(controller));
-  router.route('/:id').get(requireAuthorizedUser, requireRole('ADMIN'),  controller.getUserById.bind(controller));
-
-  // router.route('/getme').get(requireAuthorizedUser, requireAuthorizedUser, controller.getProfile.bind(controller));
+  //for admin
   router
-    .route("/update-profile")
+    .route("")
+    .get(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.getAllUsers.bind(controller)
+    );
+  router
+    .route("/:id")
+    .get(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.getUserById.bind(controller)
+    );
+  router
+    .route("/:id")
     .patch(
       requireAuthorizedUser,
-      controller.updateProfile.bind(controller)
+      requireRole("ADMIN"),
+      controller.updateUserById.bind(controller)
     );
+
+  //for user
+  router
+    .route("/update-profile")
+    .patch(requireAuthorizedUser, controller.updateProfile.bind(controller));
   router
     .route("/change-password")
-    .post(
-      requireAuthorizedUser,
-      controller.changePassword.bind(controller)
-    );
-  
+    .post(requireAuthorizedUser, controller.changePassword.bind(controller));
+
   return router;
 };
 

@@ -47,7 +47,8 @@ export class UserServiceImpl implements UserService {
       isTwoFactorEnabled: user.isTwoFactorEnabled,
     };
   }
-  
+
+
   async getme(token: string): Promise<any> {
     throw new Error("Method not implemented.");
   }
