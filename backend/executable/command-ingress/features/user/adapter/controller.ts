@@ -151,6 +151,35 @@ class UserController extends BaseController {
       }
     );
   }
+
+  async getUserById(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const { id } = req.params;
+        if (!id) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "User ID is required",
+          });
+          return;
+        }
+        const serviceResponse = await this.service.getUserById(id);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Get user by ID successfully",
+          data: serviceResponse,
+        });
+      }
+    );
+  }
 }
 
 export { UserController };

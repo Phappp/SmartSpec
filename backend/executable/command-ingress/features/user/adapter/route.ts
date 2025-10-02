@@ -8,7 +8,7 @@ const initUserRoute: (controller: UserController) => express.Router = (
   const router = express.Router();
 
   router.route('').get(requireAuthorizedUser, requireRole('ADMIN'), controller.getAllUsers.bind(controller));
-  // router.route('/get-by-id/:id').get(requireAuthorizedUser, controller.getUserById.bind(controller));
+  router.route('/:id').get(requireAuthorizedUser, requireRole('ADMIN'),  controller.getUserById.bind(controller));
 
   // router.route('/getme').get(requireAuthorizedUser, requireAuthorizedUser, controller.getProfile.bind(controller));
   router

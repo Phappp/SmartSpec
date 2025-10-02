@@ -30,9 +30,24 @@ export class UserServiceImpl implements UserService {
     }));
   }
 
-  async getUserById(id: string, token: string): Promise<UserResponse> {
-    throw new Error("Method not implemented.");
+  async getUserById(id: string): Promise<UserResponse> {
+    const user = await User.findOne({ _id: id });
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return {
+      id: user.id,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      name: user.name,
+      dob: user.dob,
+      system_role: user.system_role,
+      status: user.status,
+      gender: user.gender,
+      isTwoFactorEnabled: user.isTwoFactorEnabled,
+    };
   }
+  
   async getme(token: string): Promise<any> {
     throw new Error("Method not implemented.");
   }
