@@ -36,7 +36,13 @@ const initUserRoute: (controller: UserController) => express.Router = (
       requireRole("ADMIN"),
       controller.resetPasswordById.bind(controller)
     );
-
+  router
+    .route("/:id")
+    .delete(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.deleteUserById.bind(controller)
+    );
   //for user
   router
     .route("/update-profile")

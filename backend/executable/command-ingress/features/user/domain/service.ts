@@ -147,4 +147,16 @@ export class UserServiceImpl implements UserService {
 
     return "Password reset successfully. New password has been sent to the user's email.";
   }
+
+  async deleteUserById(id: string): Promise<string> {
+    const user = await User.findOne({ _id: id });
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    await User.deleteOne({ _id: id });
+    await Session.deleteMany({ userId: id });
+
+    return "User deleted successfully";
+  }
 }
