@@ -222,10 +222,16 @@ export class RequirementService {
                     : conflicts.length > 0
                         ? "has_conflicts"
                         : "completed",
+                stage: processingErrors.length > 0
+                    ? "failed"
+                    : conflicts.length > 0
+                        ? "completed"   // vẫn completed nhưng có conflict
+                        : "completed",
                 ...(conflicts.length > 0 && { pending_conflicts: conflicts }),
                 ...(processingErrors.length > 0 && { processing_errors: processingErrors }),
             },
         });
+
 
 
         return {

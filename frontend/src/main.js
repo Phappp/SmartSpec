@@ -21,7 +21,7 @@ app.use(router);
 const toastOptions = {
     // Tùy chọn tùy chỉnh nếu cần
     position: "top-right",
-    timeout: 5000,
+    timeout: 2000,
     closeOnClick: true,
     pauseOnHover: true,
     draggable: true,

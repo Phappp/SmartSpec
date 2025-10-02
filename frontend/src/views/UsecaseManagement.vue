@@ -20,36 +20,47 @@
         </div>
       </div>
       <div class="actions">
-        <div class="version-selector">
-          <span class="material-symbols-outlined">history</span>
+        <div class="version-section">
+          <div class="version-selector">
+            <span class="material-symbols-outlined">history</span>
 
-          <!-- Dropdown button -->
-          <div class="dropdown" @click="toggleDropdown">
-            <span>{{ selectedLabel }}</span>
-            <span class="material-symbols-outlined arrow" :class="{ open: isOpen }">
-              <span class="material-symbols-outlined"> chevron_right </span>
-            </span>
+            <div class="dropdown" @click="toggleDropdown">
+              <span>{{ selectedLabel }}</span>
+              <span class="material-symbols-outlined arrow" :class="{ open: isOpen }">
+                <span class="material-symbols-outlined"> chevron_right </span>
+              </span>
+            </div>
+
+            <ul v-if="isOpen" class="dropdown-menu">
+              <li v-for="v in versions" :key="v._id" @click="selectVersion(v)">
+                Version {{ v.version_number }} ({{ v.status }})
+              </li>
+            </ul>
+
+            <button
+              v-if="hasFailedVersion && !isRetrying"
+              @click="handleRetry"
+              class="retry-btn"
+              :disabled="isPolling"
+            >
+              <span class="material-symbols-outlined">refresh</span>
+              Retry Failed
+            </button>
           </div>
 
-          <!-- Dropdown menu -->
-          <ul v-if="isOpen" class="dropdown-menu">
-            <li v-for="v in versions" :key="v._id" @click="selectVersion(v)">
-              Version {{ v.version_number }} ({{ v.status }})
-            </li>
-          </ul>
-
-          <!-- Retry button -->
-          <button
-            v-if="hasFailedVersion"
-            @click="retryFailedVersion"
-            class="retry-btn"
-            :disabled="isRetrying"
-          >
-            <span v-if="isRetrying" class="button-spinner-small"></span>
-            <span v-else class="material-symbols-outlined">refresh</span>
-            {{ isRetrying ? 'Retrying...' : 'Retry Failed' }}
-          </button>
+          <!-- PROGRESS BAR HIỂN THỊ TRỰC TIẾP -->
+          <div v-if="isRetrying" class="inline-progress-container">
+            <div class="progress-info">
+              <span class="stage-text">{{ currentStage }}</span>
+              <span class="progress-percent">{{ processingProgress }}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: processingProgress + '%' }"></div>
+            </div>
+            <div class="stage-description">{{ getStageDescription(currentStage) }}</div>
+          </div>
         </div>
+
         <button class="members-button">
           <span class="material-symbols-outlined">group</span>
           {{ project.members ? project.members.length : 0 }} Members
@@ -57,16 +68,7 @@
       </div>
     </div>
 
-    <!-- FULLSCREEN LOADING OVERLAY -->
-    <div v-if="overlayLoading" class="fullscreen-overlay">
-      <div class="loading-box">
-        <div class="spinner-flashlight"></div>
-        <p class="loading-text">{{ loadingMessage }}</p>
-      </div>
-    </div>
-
     <div class="view-body">
-      <!-- Phần main content và sidebar giữ nguyên -->
       <div class="main-content">
         <div class="usecase-area">
           <div class="usecase-header">
@@ -214,7 +216,6 @@
         <div class="sidebar-item">
           <div class="sidebar-header">
             <h3>Inputs ({{ inputs.length }})</h3>
-            <!-- Nút thêm input mới -->
             <button class="add-input-btn" @click="showAddInputModal = true">
               <span class="material-symbols-outlined">add</span>
             </button>
@@ -272,8 +273,6 @@
                     <span class="score-text">{{ Math.round(getQualityScore(input) * 100) }}%</span>
                   </div>
                 </div>
-                <!-- Nút xóa input cụ thể -->
-                <!-- Nút xóa từng input -->
                 <button
                   class="delete-input-btn"
                   @click.stop="openDeleteSpecificModal(input._id)"
@@ -329,7 +328,7 @@
         </div>
       </div>
     </div>
-    <!-- Modal xác nhận -->
+
     <AppModal
       v-model="showModal"
       :title="modalTitle"
@@ -337,7 +336,8 @@
       :isConfirmation="true"
       @confirm="handleConfirm"
     />
-    <!-- Modal thêm input mới -->
+
+    <!-- Add Input Modal (giữ nguyên) -->
     <div v-if="showAddInputModal" class="modal-overlay" @click="showAddInputModal = false">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
@@ -347,7 +347,6 @@
           </button>
         </div>
         <div class="modal-body">
-          <!-- File upload section -->
           <div class="input-section">
             <h4>Upload Files</h4>
             <div class="file-upload-area" @click="triggerFileInput">
@@ -380,7 +379,6 @@
             </div>
           </div>
 
-          <!-- Text input section -->
           <div class="input-section">
             <h4>Describe your project</h4>
             <textarea
@@ -391,7 +389,6 @@
             ></textarea>
           </div>
 
-          <!-- Validation message -->
           <div v-if="!canSubmit" class="validation-message">
             Please add at least one file or enter some text to proceed!
           </div>
@@ -406,75 +403,60 @@
       </div>
     </div>
 
-    <!-- Mini loading overlay khi thêm input -->
-    <div v-if="isAddingInput" class="mini-loading-overlay">
+    <!-- <div v-if="isAddingInput" class="mini-loading-overlay">
       <div class="mini-loading-content">
         <div class="mini-spinner"></div>
         <p>Adding input...</p>
       </div>
-    </div>
+    </div> -->
   </div>
 </template>
 
 <script>
 import {
   getProjectDetail,
-  generateDocumentation,
   retryProjectAnalysis,
   getVersionStatus,
   addInputsToVersion,
-  deleteUnprocessedInputs,
   deleteSpecificInput,
 } from '@/api/project'
 import { useToast } from 'vue-toastification'
 import AppModal from '@/components/AppModal.vue'
+
 export default {
   name: 'ProjectDetailView',
   components: { AppModal },
   data() {
     return {
       project: {},
-      currentVersion: null,
       versions: [],
       inputs: [],
       useCases: [],
-      chatLogs: [],
       selectedVersionId: null,
-      prompt: '',
       expandedUseCaseId: null,
       expandedInputId: null,
       showDescription: false,
+
+      // Retry state
       isRetrying: false,
+      processingProgress: 0,
+      currentStage: 'Initializing...',
       pollingInterval: null,
-      toast: useToast(),
-      // loading overlay
-      overlayLoading: false,
-      loadingMessage: 'Retrying analysis...',
-      messageInterval: null,
-      messageIndex: 0,
+      currentPollingVersionId: null,
 
-      loadingMessages: [
-        'Retrying analysis...',
-        'Processing data...',
-        'Generating results...',
-        'Finalizing project...',
-      ],
-
-      // dropdown state
+      // UI state
       isOpen: false,
-
-      // New features data
       showAddInputModal: false,
       selectedFiles: [],
       rawText: '',
       isAddingInput: false,
-      isDeletingUnprocessed: false,
-
       showModal: false,
       modalTitle: '',
       modalMessage: '',
       confirmAction: null,
       isDeletingInput: null,
+
+      toast: useToast(),
     }
   },
   computed: {
@@ -501,29 +483,28 @@ export default {
       const v = this.versions.find((x) => x._id === this.selectedVersionId)
       return v ? `Version ${v.version_number} (${v.status})` : 'Select version'
     },
-    hasUnprocessedInputs() {
-      return this.inputs.some((input) => !input.is_processed)
-    },
     canSubmit() {
       return this.selectedFiles.length > 0 || this.rawText.trim().length > 0
+    },
+    // Kiểm tra xem có version nào đang processing không
+    hasProcessingVersion() {
+      return this.versions.some((version) => version.status === 'processing')
+    },
+    processingVersion() {
+      return this.versions.find((version) => version.status === 'processing')
     },
   },
   async created() {
     const projectId = this.$route.params.id
     if (projectId) {
       await this.fetchProjectData(projectId)
+      // Kiểm tra và khôi phục polling nếu có version đang processing
+      this.checkAndRestorePolling()
     }
-
-    // lắng nghe click ngoài dropdown
     document.addEventListener('click', this.handleClickOutside)
   },
   beforeUnmount() {
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval)
-    }
-    if (this.messageInterval) {
-      clearInterval(this.messageInterval)
-    }
+    this.cleanupPolling()
     document.removeEventListener('click', this.handleClickOutside)
   },
   methods: {
@@ -534,26 +515,227 @@ export default {
         const result = data.data || data
         this.project = result.project
         this.versions = result.versions
-        this.currentVersion = result.current_version
         this.inputs = result.inputs
-        this.chatLogs = result.chatLogs
         this.useCases = result.current_version ? result.current_version.requirement_model : []
+
+        // Ưu tiên chọn current_version, nếu không có thì chọn version đầu tiên
         if (this.project.current_version) {
           this.selectedVersionId = this.project.current_version
+        } else if (this.versions.length > 0) {
+          this.selectedVersionId = this.versions[0]._id
         }
       } catch (err) {
         console.error('Error fetching project details:', err)
+        this.toast.error('Failed to load project data')
       }
     },
 
-    // New input methods
+    // Kiểm tra và khôi phục polling nếu có version đang processing
+    checkAndRestorePolling() {
+      if (this.hasProcessingVersion) {
+        const processingVersion = this.processingVersion
+        console.log('🔄 Found processing version, restoring polling:', processingVersion._id)
+
+        this.isRetrying = true
+        this.currentPollingVersionId = processingVersion._id
+        this.startPolling(processingVersion._id)
+
+        // Lấy progress hiện tại từ version
+        if (processingVersion.progress) {
+          this.processingProgress = processingVersion.progress
+        }
+        if (processingVersion.stage) {
+          this.currentStage = this.formatStageName(processingVersion.stage)
+        }
+      }
+    },
+
+    // ========== RETRY FUNCTIONALITY ==========
+    async handleRetry() {
+      if (!this.failedVersion || this.isRetrying) return
+
+      this.isRetrying = true
+      this.processingProgress = 0
+      this.currentStage = 'Initializing...'
+      this.currentPollingVersionId = this.failedVersion._id
+
+      try {
+        // Lưu trạng thái retry vào localStorage để HomePage có thể đọc
+        this.saveRetryState()
+
+        await retryProjectAnalysis(this.project._id, this.failedVersion._id)
+        this.startPolling(this.failedVersion._id)
+      } catch (error) {
+        console.error('Error retrying analysis:', error)
+        this.handleRetryError('Failed to start retry process')
+      }
+    },
+
+    startPolling(versionId) {
+      this.cleanupPolling()
+
+      this.pollingInterval = setInterval(async () => {
+        try {
+          const response = await getVersionStatus(versionId)
+          const { status, version } = response.data.data
+
+          console.log('📊 Polling update:', {
+            versionId,
+            status,
+            progress: version?.progress,
+            stage: version?.stage,
+          })
+
+          // Update progress from backend
+          if (version) {
+            this.updateProgressFromStage(version.stage || 'initializing')
+            if (version.progress) {
+              this.processingProgress = version.progress
+            }
+          }
+
+          // Cập nhật localStorage với progress mới nhất
+          this.saveRetryState()
+
+          if (status !== 'processing') {
+            this.stopPolling()
+            // Xóa khỏi localStorage khi hoàn thành
+            this.clearRetryState()
+
+            if (status === 'completed' || status === 'has_conflicts') {
+              this.handleRetrySuccess()
+            } else {
+              this.handleRetryFailure()
+            }
+          }
+        } catch (error) {
+          console.error('Error during polling:', error)
+          this.handlePollingError()
+        }
+      }, 2000)
+    },
+
+    updateProgressFromStage(stage) {
+      const stageProgressMap = {
+        initializing: 15,
+        input: 25,
+        analyzing: 40,
+        normalization: 70,
+        finalizing: 90,
+        completed: 100,
+      }
+
+      this.currentStage = this.formatStageName(stage)
+      this.processingProgress = stageProgressMap[stage] || 0
+    },
+
+    formatStageName(stage) {
+      const stageNames = {
+        initializing: 'Initializing',
+        input: 'Processing Inputs',
+        analyzing: 'Analyzing Requirements',
+        normalization: 'Normalizing Data',
+        finalizing: 'Finalizing',
+        completed: 'Completed',
+      }
+      return stageNames[stage] || stage.charAt(0).toUpperCase() + stage.slice(1)
+    },
+
+    getStageDescription(stage) {
+      const descriptions = {
+        Initializing: 'Preparing the analysis environment...',
+        'Processing Inputs': 'Reading and processing your input files...',
+        'Analyzing Requirements': 'Extracting use cases and requirements...',
+        'Normalizing Data': 'Organizing and structuring the data...',
+        Finalizing: 'Generating final documentation...',
+        Completed: 'Analysis completed successfully!',
+      }
+      return descriptions[stage] || 'Processing your request...'
+    },
+
+    // Lưu trạng thái retry vào localStorage
+    saveRetryState() {
+      const retryState = {
+        projectId: this.project._id,
+        versionId: this.currentPollingVersionId,
+        projectName: this.project.name,
+        projectDescription: this.project.description,
+        processingProgress: this.processingProgress,
+        currentStage: this.currentStage,
+        timestamp: new Date().getTime(),
+        type: 'retry',
+      }
+      localStorage.setItem(`retry_${this.project._id}`, JSON.stringify(retryState))
+    },
+
+    // Xóa trạng thái retry khỏi localStorage
+    clearRetryState() {
+      localStorage.removeItem(`retry_${this.project._id}`)
+    },
+
+    cleanupPolling() {
+      if (this.pollingInterval) {
+        clearInterval(this.pollingInterval)
+        this.pollingInterval = null
+      }
+    },
+
+    stopPolling() {
+      this.cleanupPolling()
+      this.isRetrying = false
+      this.currentPollingVersionId = null
+    },
+
+    cancelRetry() {
+      this.cleanupPolling()
+      this.isRetrying = false
+      this.currentPollingVersionId = null
+      this.clearRetryState()
+      this.toast.info('Retry process cancelled.')
+
+      // Refresh data để cập nhật trạng thái mới nhất
+      this.fetchProjectData(this.project._id)
+    },
+
+    handleRetrySuccess() {
+      this.processingProgress = 100
+      this.currentStage = 'Completed'
+
+      setTimeout(() => {
+        this.isRetrying = false
+        this.currentPollingVersionId = null
+        this.fetchProjectData(this.project._id)
+        this.toast.success('Retry completed successfully!')
+      }, 1000)
+    },
+
+    handleRetryFailure() {
+      this.isRetrying = false
+      this.currentPollingVersionId = null
+      this.fetchProjectData(this.project._id)
+      this.toast.error('Retry failed. Please try again.')
+    },
+
+    handleRetryError(message) {
+      this.isRetrying = false
+      this.currentPollingVersionId = null
+      this.clearRetryState()
+      this.toast.error(message)
+    },
+
+    handlePollingError() {
+      this.stopPolling()
+      this.clearRetryState()
+      this.toast.error('Error checking retry status.')
+    },
+
+    // ========== INPUT MANAGEMENT ==========
     triggerFileInput() {
       this.$refs.fileInput.click()
     },
 
     handleFileSelect(event) {
       const files = Array.from(event.target.files)
-      // Filter by allowed types
       const allowedTypes = [
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'application/pdf',
@@ -568,8 +750,6 @@ export default {
 
       const validFiles = files.filter((file) => allowedTypes.includes(file.type))
       this.selectedFiles = [...this.selectedFiles, ...validFiles]
-
-      // Reset file input
       event.target.value = ''
     },
 
@@ -590,48 +770,37 @@ export default {
       this.isAddingInput = true
 
       try {
-        const versionId = this.selectedVersionId || this.currentVersion?._id
+        const versionId = this.selectedVersionId
         if (!versionId) {
           throw new Error('No version selected')
         }
 
         const formData = new FormData()
-
-        // Thêm files nếu có
         if (this.selectedFiles.length > 0) {
           this.selectedFiles.forEach((file) => {
             formData.append('files', file)
           })
         }
-
-        // Thêm raw text nếu có
         if (this.rawText.trim()) {
           formData.append('rawText', this.rawText.trim())
         }
 
-        // Loading tối thiểu 2 giây
         const minLoadingTime = new Promise((resolve) => setTimeout(resolve, 2000))
         const apiCall = addInputsToVersion(versionId, formData)
 
         const [_, response] = await Promise.all([minLoadingTime, apiCall])
 
         if (response.data && response.data.status === 'Success') {
-          this.toast.success('Input đã được thêm thành công!', {
-            toastClassName: 'my-success-toast',
-          })
-
-          // Reset form + đóng modal
+          this.toast.success('Input added successfully!')
           this.resetInputForm()
           this.showAddInputModal = false
-
-          // Refresh dữ liệu dự án (không reload toàn trang)
           await this.fetchProjectData(this.project._id)
         } else {
-          this.toast.error(response.data.message || 'Thêm input thất bại, vui lòng thử lại.')
+          this.toast.error(response.data.message || 'Failed to add input')
         }
       } catch (error) {
         console.error('Error adding inputs:', error)
-        this.toast.error('Có lỗi xảy ra khi thêm input!')
+        this.toast.error('Error adding input')
       } finally {
         this.isAddingInput = false
       }
@@ -642,29 +811,9 @@ export default {
       this.rawText = ''
     },
 
-    async deleteUnprocessedInputs() {
-      if (!this.hasUnprocessedInputs) return
-
-      this.isDeletingUnprocessed = true
-
-      try {
-        const versionId = this.selectedVersionId || this.currentVersion?._id
-        if (!versionId) {
-          throw new Error('No version selected')
-        }
-
-        await deleteUnprocessedInputs(versionId)
-        await this.fetchProjectData(this.project._id)
-      } catch (error) {
-        console.error('Error deleting unprocessed inputs:', error)
-      } finally {
-        this.isDeletingUnprocessed = false
-      }
-    },
-
     openDeleteSpecificModal(inputId) {
-      this.modalTitle = 'Xác nhận xóa'
-      this.modalMessage = 'Bạn có chắc chắn muốn xóa input này không?'
+      this.modalTitle = 'Confirm Delete'
+      this.modalMessage = 'Are you sure you want to delete this input?'
       this.showModal = true
       this.confirmAction = () => this.deleteSpecificInput(inputId)
     },
@@ -678,27 +827,25 @@ export default {
     async deleteSpecificInput(inputId) {
       try {
         this.isDeletingInput = inputId
-        const versionId = this.selectedVersionId || this.currentVersion?._id
+        const versionId = this.selectedVersionId
         if (!versionId) throw new Error('No version selected')
 
         const response = await deleteSpecificInput(versionId, inputId)
         if (response.data?.status === 'Success') {
-          this.toast.success('Input đã được xóa thành công!', {
-            toastClassName: 'my-success-toast',
-          })
+          this.toast.success('Input deleted successfully!')
           await this.fetchProjectData(this.project._id)
         } else {
-          this.toast.error(response.data?.message || 'Xóa thất bại.')
+          this.toast.error(response.data?.message || 'Delete failed')
         }
       } catch (err) {
         console.error(err)
-        this.toast.error('Có lỗi xảy ra khi xóa input!')
+        this.toast.error('Error deleting input')
       } finally {
         this.isDeletingInput = null
       }
     },
 
-    // Helper methods for input data
+    // Helper methods
     getCleanText(input) {
       return input.cleaned_text || input.clean_text || input.raw_text || 'No content available'
     },
@@ -711,128 +858,50 @@ export default {
       return input.quality_score || 0
     },
 
-    // xử lý click ngoài dropdown
     handleClickOutside(e) {
       const dropdown = this.$el.querySelector('.dropdown')
       if (dropdown && !dropdown.contains(e.target)) {
         this.isOpen = false
       }
     },
+
     toggleDropdown() {
       this.isOpen = !this.isOpen
     },
-    // chọn version
+
     selectVersion(v) {
       this.selectedVersionId = v._id
       this.isOpen = false
-      console.log('Selected version ID:', this.selectedVersionId)
     },
 
-    // Loading messages
-    startLoadingMessages() {
-      this.overlayLoading = true
-      this.messageIndex = 0
-      this.loadingMessage = this.loadingMessages[0]
-      this.messageInterval = setInterval(() => {
-        this.messageIndex = (this.messageIndex + 1) % this.loadingMessages.length
-        this.loadingMessage = this.loadingMessages[this.messageIndex]
-      }, 4000)
-    },
-    stopLoadingMessages() {
-      this.overlayLoading = false
-      if (this.messageInterval) {
-        clearInterval(this.messageInterval)
-        this.messageInterval = null
-      }
-    },
-
-    // Polling check status
-    startPolling(versionId) {
-      if (this.pollingInterval) {
-        clearInterval(this.pollingInterval)
-      }
-
-      this.pollingInterval = setInterval(async () => {
-        try {
-          const response = await getVersionStatus(versionId)
-          const { status } = response.data.data
-
-          console.log(`Polling status: ${status}`)
-
-          if (status !== 'processing') {
-            clearInterval(this.pollingInterval)
-            this.pollingInterval = null
-
-            if (status === 'completed' || status === 'has_conflicts') {
-              console.log('Retry completed successfully! Reloading data...')
-              this.stopLoadingMessages()
-              this.isRetrying = false
-              await this.fetchProjectData(this.project._id)
-            } else {
-              console.log('Retry failed')
-              this.stopLoadingMessages()
-              this.isRetrying = false
-              await this.fetchProjectData(this.project._id)
-            }
-          }
-        } catch (error) {
-          console.error('Error during polling:', error)
-          clearInterval(this.pollingInterval)
-          this.pollingInterval = null
-          this.stopLoadingMessages()
-          this.isRetrying = false
-        }
-      }, 5000)
-    },
-
-    async retryFailedVersion() {
-      if (!this.failedVersion || this.isRetrying) return
-
-      this.isRetrying = true
-      this.startLoadingMessages()
-
-      try {
-        console.log('Starting retry analysis...')
-        await retryProjectAnalysis(this.project._id, this.failedVersion._id)
-
-        this.startPolling(this.failedVersion._id)
-      } catch (error) {
-        console.error('Error retrying analysis:', error)
-        this.stopLoadingMessages()
-        this.isRetrying = false
-        alert('Failed to retry analysis. Please try again.')
-      }
-    },
-
-    // UI toggle helpers
     toggleUseCase(useCaseId) {
       this.expandedUseCaseId = this.expandedUseCaseId === useCaseId ? null : useCaseId
     },
+
     toggleInput(inputId) {
       this.expandedInputId = this.expandedInputId === inputId ? null : inputId
     },
+
     toggleDescription() {
       this.showDescription = !this.showDescription
     },
 
-    // Format utils
     formatDate(dateString) {
       if (!dateString) return 'N/A'
-      const date = new Date(dateString)
-      return date.toLocaleDateString('en-US')
+      return new Date(dateString).toLocaleDateString('en-US')
     },
+
     formatDateTime(dateString) {
       if (!dateString) return 'N/A'
-      const date = new Date(dateString)
-      return date.toLocaleString('en-US')
+      return new Date(dateString).toLocaleString('en-US')
     },
+
     goBack() {
       this.$router.push('/dashboard')
     },
   },
 }
 </script>
-
 <style scoped>
 /* Existing styles remain the same, adding new styles for new features */
 
@@ -1319,7 +1388,7 @@ export default {
   background-color: #dbeafe;
   color: #1e40af;
 }
-.input-section h4{
+.input-section h4 {
   font-weight: bold;
 }
 /* === CSS MỚI CHO PHẦN INPUT VỚI CHẤM MÀU === */
@@ -1815,7 +1884,7 @@ export default {
   margin-top: 4px;
 }
 /* Mini loading overlay */
-.mini-loading-overlay {
+/* .mini-loading-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -1826,7 +1895,7 @@ export default {
   justify-content: center;
   align-items: center;
   z-index: 1001;
-}
+} */
 
 .mini-loading-content {
   background: white;
@@ -1971,5 +2040,218 @@ export default {
     width: 95%;
     margin: 20px;
   }
+}
+/* PROCESSING STATUS STYLES */
+.processing-status {
+  width: 100%;
+  margin-top: 25px;
+  text-align: center;
+}
+
+.progress-container {
+  width: 100%;
+  margin: 15px 0;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #ece8e8;
+  gap: 12px;
+}
+
+.stage-text {
+  font-weight: 500;
+  color: #ece8e8;
+}
+
+.progress-percent {
+  font-weight: 600;
+  color: #ece8e8;
+}
+
+.progress-bar {
+  width: 300px;
+  height: 10px;
+  background-color: #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1a365d, #2c5282);
+  border-radius: 8px;
+  transition: width 0.5s ease-in-out;
+  box-shadow: 0 2px 4px rgba(26, 54, 93, 0.3);
+}
+
+.stage-description {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #d1d5db;
+  font-style: italic;
+}
+
+/* LOADING OVERLAY */
+.fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(6px);
+}
+
+.loading-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  padding: 60px 40px 40px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  min-width: 400px;
+}
+
+.spinner-flashlight {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #f3f4f6;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+.close-loading-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.close-loading-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+.close-loading-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+/* INLINE PROGRESS CONTAINER */
+.inline-progress-container {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 300px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.progress-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a365d;
+}
+
+.cancel-retry-btn {
+  background: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.cancel-retry-btn:hover {
+  background: #4b5563;
+}
+
+.cancel-retry-btn .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.inline-progress-container .progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #374151;
+}
+
+.inline-progress-container .stage-text {
+  font-weight: 600;
+  color: #1a365d;
+}
+
+.inline-progress-container .progress-percent {
+  font-weight: 700;
+  color: #1a365d;
+}
+
+.inline-progress-container .progress-bar {
+  width: 100%;
+  height: 6px;
+  background-color: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.inline-progress-container .progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1a365d, #2c5282);
+  border-radius: 3px;
+  transition: width 0.5s ease-in-out;
+}
+
+.inline-progress-container .stage-description {
+  font-size: 11px;
+  color: #6b7280;
+  font-style: italic;
 }
 </style>

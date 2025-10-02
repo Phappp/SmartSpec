@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { OrchestratorService } from '../domain/service';
 import Project from "../../../../../internal/model/project";
+import Version from '../../../../../internal/model/version';
 
 export class OrchestratorController {
     constructor(private readonly service: OrchestratorService) { }
@@ -53,7 +54,7 @@ export class OrchestratorController {
         }
     }
     // Hàm RETRY chuyên dụng
-    async retryHandler(req: Request, res: Response) {
+    async retryProjectAnalysis(req: Request, res: Response) {
         try {
             const { project_id, version_id } = req.params;
 
@@ -67,6 +68,16 @@ export class OrchestratorController {
             }
 
             const language = project.language;
+            await Version.findByIdAndUpdate(version_id, {
+                $set: {
+                    status: "processing",
+                    stage: "initializing",
+                    progress: 15,
+                    processing_errors: [],
+                    pending_conflicts: [],
+                    updated_at: new Date()
+                }
+            });
 
             // Chạy nền với mode 'full' và không có dữ liệu mới
             // Service sẽ tự động dọn dẹp kết quả cũ

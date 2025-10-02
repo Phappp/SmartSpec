@@ -6,7 +6,7 @@ export default function initOrchestratorRoute(controller: OrchestratorController
     const router = Router();
     const runHandler = controller.run.bind(controller);
     const resolveHandler = controller.resolveDuplicate.bind(controller);
-    const retryHandler = controller.retryHandler.bind(controller);
+    const retryProjectAnalysis = controller.retryProjectAnalysis.bind(controller);
 
     // Run API (full/incremental mode)
     router.post(
@@ -25,7 +25,7 @@ export default function initOrchestratorRoute(controller: OrchestratorController
     router.post(
         '/projects/:project_id/versions/:version_id/retry',
         requireAuthorizedUser,
-        retryHandler 
+        retryProjectAnalysis
     );
 
     // Resolve duplicate API
