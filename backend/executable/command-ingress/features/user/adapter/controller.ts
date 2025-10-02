@@ -130,6 +130,27 @@ class UserController extends BaseController {
       }
     );
   }
+
+  async getAllUsers(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const serviceResponse = await this.service.getAllUsers();
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Get all users successfully",
+          data: serviceResponse,
+        });
+      }
+    );
+  }
 }
 
 export { UserController };

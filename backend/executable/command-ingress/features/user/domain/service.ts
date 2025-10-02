@@ -15,9 +15,21 @@ import mailService from "../../../services/sendMail.service";
 import { StringModule } from "@faker-js/faker/.";
 
 export class UserServiceImpl implements UserService {
-  async getAllUsers(token: string): Promise<UserResponse[]> {
-    throw new Error("Method not implemented.");
+  async getAllUsers(): Promise<UserResponse[]> {
+    const users = await User.find();
+    return users.map((user) => ({
+      id: user.id,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      name: user.name,
+      dob: user.dob,
+      system_role: user.system_role,
+      status: user.status,
+      gender: user.gender,
+      isTwoFactorEnabled: user.isTwoFactorEnabled,
+    }));
   }
+
   async getUserById(id: string, token: string): Promise<UserResponse> {
     throw new Error("Method not implemented.");
   }

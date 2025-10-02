@@ -368,8 +368,7 @@ export class AuthServiceImpl implements AuthService {
 
   async resetPassword(token: string, newPassword: string): Promise<string> {
     try {
-      // ✨ FIX: Dùng secret key riêng cho email/reset password.
-      const payload = jwt.verify(token, this.jwtSecret) as { email: string }; // THAY this.jwtSecret BẰNG this.jwtEmailSecret
+      const payload = jwt.verify(token, this.jwtSecret) as { email: string }; 
       const user = await User.findOne({ email: payload.email });
       if (!user) {
         throw new Error("User not found");

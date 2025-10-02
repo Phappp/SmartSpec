@@ -22,7 +22,7 @@ interface UserResponse {
 }
 
 interface UserService {
-  getAllUsers(token: string): Promise<UserResponse[]>;
+  getAllUsers(): Promise<UserResponse[]>;
   getUserById(id: string, token: string): Promise<UserResponse>;
 
   getme(token: string): Promise<any>;
