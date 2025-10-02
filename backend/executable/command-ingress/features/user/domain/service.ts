@@ -24,8 +24,27 @@ export class UserServiceImpl implements UserService {
   async getme(token: string): Promise<any> {
     throw new Error("Method not implemented.");
   }
-  async changePassword(token: string, body: any): Promise<string> {
-    throw new Error("Method not implemented.");
+  async changePassword(
+    userId: string,
+    body: { oldPassword: string; newPassword: string }
+  ): Promise<string> {
+    const user = await User.findOne({ _id: userId });
+    if (!user) {
+      throw new Error("User not found");
+    }
+    if (body.oldPassword === body.newPassword) {
+      throw new Error("New password must be different from old password");
+    }
+
+    const isMatch = await bcrypt.compare(body.oldPassword, user.password);
+    if (!isMatch) {
+      throw new Error("Old password is incorrect");
+    }
+
+    const hashedPassword = await bcrypt.hash(body.newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+    return "Password changed successfully";
   }
   async updateProfile(
     userId: string,

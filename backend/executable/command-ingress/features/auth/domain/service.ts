@@ -101,6 +101,7 @@ export class AuthServiceImpl implements AuthService {
       _id: user._id,
       sub: user._id,
       sid: sessionID,
+      system_role: user.system_role
     };
     const accessToken = this.signAccessToken(jwtPayload);
     const refreshToken = this.signRefreshToken(jwtPayload);
@@ -204,7 +205,7 @@ export class AuthServiceImpl implements AuthService {
     if (existingUser) {
       throw new Error("User already exists");
     }
-
+    console.log("password before hash:", password)
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({
       email,
@@ -213,8 +214,6 @@ export class AuthServiceImpl implements AuthService {
       isTwoFactorEnabled,
       dob,
       gender,
-      // ✨ FIX: Loại bỏ việc lưu trữ token trong model User.
-      // accessToken và refreshToken không nên được lưu ở đây.
     });
     await user.save();
 
@@ -223,6 +222,7 @@ export class AuthServiceImpl implements AuthService {
       _id: user._id,
       sub: user._id,
       sid: sessionID,
+      system_role: user.system_role
     };
     const accessToken = this.signAccessToken(jwtPayload);
     const refreshToken = this.signRefreshToken(jwtPayload);
@@ -230,7 +230,6 @@ export class AuthServiceImpl implements AuthService {
     const session = new Session({ sessionID, userID: user._id });
     await session.save();
 
-    // ✨ FIX: Loại bỏ logic cập nhật token vào đối tượng user một lần nữa.
     return {
       refreshToken,
       accessToken,
@@ -270,6 +269,7 @@ export class AuthServiceImpl implements AuthService {
       _id: user._id,
       sub: user._id,
       sid: sessionID,
+      system_role: user.system_role
     };
     const accessToken = this.signAccessToken(jwtPayload);
     const refreshToken = this.signRefreshToken(jwtPayload);
@@ -311,6 +311,7 @@ export class AuthServiceImpl implements AuthService {
       _id: user._id,
       sub: user._id,
       sid: sessionID,
+      system_role: user.system_role
     };
     const accessToken = this.signAccessToken(jwtPayload);
     const refreshToken = this.signRefreshToken(jwtPayload);

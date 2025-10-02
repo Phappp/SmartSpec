@@ -1,6 +1,6 @@
 import express from 'express';
 import { AuthController } from './controller';
-import requireAuthorizedUser from '../../../middlewares/auth';
+import {requireAuthorizedUser} from '../../../middlewares/auth';
 
 const initAuthRoute: (controller: AuthController) => express.Router = (controller) => {
   const router = express.Router();

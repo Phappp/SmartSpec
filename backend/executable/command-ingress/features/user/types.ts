@@ -27,7 +27,7 @@ interface UserService {
 
   getme(token: string): Promise<any>;
   updateProfile(userId: string, body: any): Promise<UserResponse>;
-  changePassword(token: string, body: any): Promise<string>;
+  changePassword(userId: string, body: any): Promise<string>;
 }
 
 export { UserService, ExchangeTokenRequest, ExchangeTokenResult, UserResponse };

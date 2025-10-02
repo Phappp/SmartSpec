@@ -1,6 +1,6 @@
 import express from "express";
 import { UserController } from "./controller";
-import requireAuthorizedUser from "../../../middlewares/auth";
+import { requireAuthorizedUser, requireRole } from "../../../middlewares/auth";
 
 const initUserRoute: (controller: UserController) => express.Router = (
   controller
@@ -9,11 +9,20 @@ const initUserRoute: (controller: UserController) => express.Router = (
 
   // router.route('/get-all').get(requireAuthorizedUser, controller.getAllUsers.bind(controller));
   // router.route('/get-by-id/:id').get(requireAuthorizedUser, controller.getUserById.bind(controller));
+
   // router.route('/getme').get(requireAuthorizedUser, requireAuthorizedUser, controller.getProfile.bind(controller));
   router
     .route("/update-profile")
-    .patch(requireAuthorizedUser, controller.updateProfile.bind(controller));
-  // router.route('/change-password').post(requireAuthorizedUser, controller.changePassword.bind(controller));
+    .patch(
+      requireAuthorizedUser,
+      controller.updateProfile.bind(controller)
+    );
+  router
+    .route("/change-password")
+    .post(
+      requireAuthorizedUser,
+      controller.changePassword.bind(controller)
+    );
 
   return router;
 };
