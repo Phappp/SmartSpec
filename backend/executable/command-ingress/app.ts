@@ -18,6 +18,10 @@ import initUserRoute from "./features/user/adapter/route";
 import { UserController } from "./features/user/adapter/controller";
 import { UserServiceImpl } from "./features/user/domain/service";
 
+import initApiKeyRoute from "./features/api_key/adapter/route";
+import { ApiKeyController } from "./features/api_key/adapter/controller";
+import { ApiKeyServiceImpl } from "./features/api_key/domain/service";
+
 import initOcrRoute from "./features/handle_image/adapter/route";
 import { OcrController } from "./features/handle_image/adapter/controller";
 import { OcrService } from "./features/handle_image/domain/service";
@@ -122,7 +126,17 @@ const createHttpServer = (redisClient: any) => {
   const projectController = new ProjectController(projectService);
   // Setup route
   app.use("/api/auth", initAuthRoute(new AuthController(authService)));
-  app.use("/api/user", initUserRoute(new UserController(new UserServiceImpl())));
+
+  app.use(
+    "/api/keys",
+    initApiKeyRoute(new ApiKeyController(new ApiKeyServiceImpl()))
+  );
+
+  app.use(
+    "/api/users",
+    initUserRoute(new UserController(new UserServiceImpl()))
+  );
+
   app.use(
     "/api/handle_docx",
     initReadDocxRoute(new ReadDocxController(new ReadDocxService()))

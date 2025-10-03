@@ -76,13 +76,13 @@ export class UserServiceImpl implements UserService {
   async updateProfile(
     userId: string,
     body: {
-      email: string;
-      name: string;
-      isTwoFactorEnabled: boolean;
-      newDob: Date;
-      gender: string;
-      avatarUrl: string;
-      status: string;
+      email?: string;
+      name?: string;
+      isTwoFactorEnabled?: boolean;
+      newDob?: Date;
+      gender?: string;
+      avatarUrl?: string;
+      status?: string;
     }
   ): Promise<UserResponse> {
     const user = await User.findOne({ _id: userId });
