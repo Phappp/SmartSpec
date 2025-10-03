@@ -159,4 +159,55 @@ export class UserServiceImpl implements UserService {
 
     return "User deleted successfully";
   }
+
+  async searchUsersByNameOrEmail(content: string): Promise<UserResponse[]> {
+    const regex = new RegExp(content, "i"); // 'i' makes it case-insensitive
+    const users = await User.find({
+      $or: [{ name: { $regex: regex } }, { email: { $regex: regex } }],
+    });
+
+    return users.map((user) => ({
+      id: user.id,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      name: user.name,
+      dob: user.dob,
+      system_role: user.system_role,
+      status: user.status,
+      gender: user.gender,
+      isTwoFactorEnabled: user.isTwoFactorEnabled,
+    }));
+  }
+
+  async filterUsers(
+    system_role?: string,
+    status?: string,
+    gender?: string
+  ): Promise<UserResponse[]> {
+    const filter: Record<string, any> = {};
+
+    if (system_role && system_role.toLowerCase() !== "all") {
+      filter.system_role = new RegExp(`^${system_role}$`, "i");
+    }
+    if (status && status.toLowerCase() !== "all") {
+      filter.status = new RegExp(`^${status}$`, "i");
+    }
+    if (gender && gender.toLowerCase() !== "all") {
+      filter.gender = new RegExp(`^${gender}$`, "i");
+    }
+
+    const users = await User.find(filter);
+
+    return users.map((user) => ({
+      id: user.id,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      name: user.name,
+      dob: user.dob,
+      system_role: user.system_role,
+      status: user.status,
+      gender: user.gender,
+      isTwoFactorEnabled: user.isTwoFactorEnabled,
+    }));
+  }
 }

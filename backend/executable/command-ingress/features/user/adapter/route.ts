@@ -9,6 +9,19 @@ const initUserRoute: (controller: UserController) => express.Router = (
 
   //for admin
   router
+    .route("/search")
+    .get(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.searchUsersByNameAndEmail.bind(controller)
+    );
+  router.route("/filter")
+  .get(
+    requireAuthorizedUser,
+    requireRole("ADMIN"),
+    controller.filterUsers.bind(controller)
+  )
+  router
     .route("")
     .get(
       requireAuthorizedUser,
@@ -36,6 +49,7 @@ const initUserRoute: (controller: UserController) => express.Router = (
       requireRole("ADMIN"),
       controller.resetPasswordById.bind(controller)
     );
+
   router
     .route("/:id")
     .delete(
@@ -43,6 +57,7 @@ const initUserRoute: (controller: UserController) => express.Router = (
       requireRole("ADMIN"),
       controller.deleteUserById.bind(controller)
     );
+
   //for user
   router
     .route("/update-profile")

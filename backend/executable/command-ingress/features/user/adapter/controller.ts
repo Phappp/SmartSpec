@@ -288,6 +288,65 @@ class UserController extends BaseController {
       }
     );
   }
+
+  async searchUsersByNameAndEmail(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const content = req.body.content;
+        if (!content) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "Content is required",
+          });
+          return;
+        }
+        
+        const serviceResponse = await this.service.searchUsersByNameOrEmail(content);
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Search users successfully",
+          data: serviceResponse,
+        });
+
+      }
+    );
+  }
+
+  async filterUsers(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const {system_role, status, gender} = req.body;
+        if (!system_role && !status && !gender){
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "Please select all fields to filter",
+          });
+          return;
+        }
+        const serviceResponse = await this.service.filterUsers(system_role, status, gender);
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Search users successfully",
+          data: serviceResponse,
+        });
+
+      }
+    );
+  }
 }
 
 export { UserController };

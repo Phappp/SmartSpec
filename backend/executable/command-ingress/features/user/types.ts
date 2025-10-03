@@ -29,6 +29,8 @@ interface UserService {
   changePassword(userId: string, body: any): Promise<string>;
   resetPasswordById(id: string): Promise<string>;
   deleteUserById(id: string): Promise<string>;
+  searchUsersByNameOrEmail(content: string): Promise<UserResponse[]>;
+  filterUsers(system_role?: string, status?: string, gender?: string): Promise<UserResponse[]>;
 }
 
 export { UserService, ExchangeTokenRequest, ExchangeTokenResult, UserResponse };
