@@ -91,7 +91,7 @@ const projectSchema = new Schema({
   members: [memberSchema],
   current_version: {
     type: Schema.Types.ObjectId,
-    ref: 'project_versions',
+    ref: 'versions',
     default: null
   },
   status: statusSchema,

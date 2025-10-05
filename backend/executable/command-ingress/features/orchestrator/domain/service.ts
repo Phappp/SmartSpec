@@ -25,7 +25,6 @@ export class OrchestratorService {
         // Độ trễ ngẫu nhiên từ 2000ms (2 giây) đến 3000ms (3 giây)
         const randomDelay = Math.floor(Math.random() * (3000 - 2000 + 1)) + 2000;
 
-
         // 🟢 Bắt đầu: clear lỗi cũ
         console.log(`[SERVICE] Clearing previous errors for version ${versionId} before running...`);
         await Version.findByIdAndUpdate(versionId, {
@@ -35,6 +34,19 @@ export class OrchestratorService {
         const version = await Version.findById(versionId).lean();
         if (!version) throw new Error("Version not found");
 
+        // 🧠 AUTO SWITCH MODE
+        if (opts.mode === "full") {
+            const hasUnprocessed = await Input.exists({
+                version_id: versionId,
+                is_processed: { $ne: true }
+            });
+
+            if (hasUnprocessed) {
+                console.log("⚙️ Detected unprocessed inputs → forcing incremental mode");
+                opts.mode = "incremental";
+            }
+        }
+
         // 1️⃣ Xử lý input (file + raw text)
         const { newFilesCount, newTextProvided } = await this.inputService.handleInputs(
             opts.files,
@@ -42,7 +54,7 @@ export class OrchestratorService {
             projectId,
             versionId
         );
-        await delay(randomDelay); // Chờ độ trễ ngẫu nhiên
+        await delay(randomDelay);
 
         await Version.findByIdAndUpdate(versionId, { $set: { stage: "input", progress: 25 } });
 
@@ -65,13 +77,15 @@ export class OrchestratorService {
             }).lean();
         } else {
             if (targetIds.length > 0) {
-                // Có input mới -> chờ xử lý
+                // Có input mới -> chỉ lấy những input mới
                 inputs = await this.util.waitForInputsCompletionByIds(targetIds);
             } else {
-                // Retry -> lấy tất cả input đã hoàn tất
+                // Retry hoặc incremental không có input mới
+                // ❗ Chỉ lấy input chưa được processed
                 inputs = await Input.find({
                     version_id: versionId,
                     processing_status: "completed",
+                    is_processed: { $ne: true }
                 }).lean();
             }
         }
@@ -87,28 +101,21 @@ export class OrchestratorService {
         }
 
         // Debug log
-        console.log("Mode:", opts.mode || "full");
+        console.log(`[RUN MODE] Final mode resolved: ${opts.mode}`);
         console.log("Language:", language);
         console.log(
             "Inputs to process:",
-            inputs.map((i) => ({ id: i._id, status: i.processing_status }))
+            inputs.map((i) => ({ id: i._id, status: i.processing_status, is_processed: i.is_processed }))
         );
 
-
-
-        await delay(randomDelay); // Chờ độ trễ ngẫu nhiên
-
+        await delay(randomDelay);
 
         // 4️⃣ Phân tích requirement
         await Version.findByIdAndUpdate(versionId, { $set: { stage: "analyzing", progress: 40 } });
-
-        await delay(randomDelay); // Chờ độ trễ ngẫu nhiên
+        await delay(randomDelay);
 
         await Version.findByIdAndUpdate(versionId, { $set: { stage: "normalization", progress: 70 } });
-
-
-
-        await delay(randomDelay); // Chờ độ trễ ngẫu nhiên
+        await delay(randomDelay);
 
         // 5️⃣ Finalizing
         await Version.findByIdAndUpdate(versionId, { $set: { stage: "finalizing", progress: 90 } });
@@ -120,8 +127,6 @@ export class OrchestratorService {
             this.gemini,
             language
         );
-
-
 
         // 6️⃣ Hoàn tất
         await Version.findByIdAndUpdate(versionId, {

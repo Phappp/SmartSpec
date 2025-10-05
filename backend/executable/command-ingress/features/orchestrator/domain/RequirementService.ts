@@ -313,24 +313,29 @@ export class RequirementService {
         };
     }
 
+    
 
     // Check conflict giữa 2 use case
-    private async isConflict(reqA: any, reqB: any, gemini: GeminiService, language: string): Promise<boolean> {
-        const a = (reqA.name || reqA.goal || "").toLowerCase();
-        const b = (reqB.name || reqB.goal || "").toLowerCase();
+    // Check conflict giữa 2 use case
+    private async isConflict(
+        reqA: any,
+        reqB: any,
+        gemini: GeminiService,
+        language: string
+    ): Promise<boolean> {
+        const a = (reqA.name || reqA.goal || "").trim();
+        const b = (reqB.name || reqB.goal || "").trim();
         if (!a || !b) return false;
 
-        // 1. Check exact match
-        if (a === b) return true;
-
-        // 2. Check string similarity
-        const score = stringSimilarity.compareTwoStrings(a, b, language);
-        if (score >= 0.95) return true; // chỉ khi cực kỳ giống nhau mới coi là conflict
-        if (score >= 0.75) {
-            return await gemini.checkConflictWithGemini(a, b, language);
+        try {
+            // Luôn gọi Gemini để xác định
+            const result: boolean = await gemini.checkConflictWithGemini(a, b, language);
+            return result;
+        } catch (err: any) {
+            console.error("❌ Lỗi khi gọi Gemini checkConflict:", err.message);
+            return false; // fallback: coi như không conflict nếu lỗi
         }
-        return false;
-
     }
+
 
 }

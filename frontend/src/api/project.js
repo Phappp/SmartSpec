@@ -16,7 +16,19 @@ export const retryProjectAnalysis = (projectId, versionId) => {
     mode: 'full'
   });
 };
+// 🔥 THÊM API MỚI CHO INCREMENTAL ANALYSIS
+export const startIncrementalAnalysis = (projectId, versionId) => {
+  return axiosClient.post(`/api/orchestrate/projects/${projectId}/versions/${versionId}/process`, {
+    mode: 'incremental'
+  });
+};
 
+// 🔥 THÊM API CHO CONFLICT RESOLUTION
+export const resolveConflict = (versionId, conflictId, resolution) => {
+  return axiosClient.post(`/api/projects/versions/${versionId}/conflicts/${conflictId}/resolve`, {
+    keep: resolution // 'old' or 'new'
+  });
+};
 // Versions
 export const addInputsToVersion = (versionId, data) => axiosClient.post(`/api/projects/versions/${versionId}/inputs`, data);
 export const deleteUnprocessedInputs = (versionId) => axiosClient.delete(`/api/projects/versions/${versionId}/inputs/unprocessed-inputs`);
@@ -50,5 +62,7 @@ export default {
   getCurrentUser,
   getVersionStatus,
   getProjectDetail,
-  retryProjectAnalysis
+  retryProjectAnalysis,
+  startIncrementalAnalysis,
+  resolveConflict
 };

@@ -45,7 +45,28 @@ YÊU CẦU QUAN TRỌNG:
 - Nếu không còn use case nào thì trả về [].
 `,
         relatedUseCases: (simplified: any, incremental?: boolean) => `Đây là danh sách use case phần mềm đã có:\n${JSON.stringify(simplified, null, 2)}\n\nNhiệm vụ của bạn:\n${incremental ? `- KHÔNG được xóa hoặc ghi đè related_usecases cũ.\n- Chỉ bổ sung liên kết giữa use case mới và use case cũ.` : `- Phân tích và sinh lại toàn bộ related_usecases cho tất cả use case.`}\n\nYÊU CẦU:\n- related_usecases[] chỉ tham chiếu tới use case trong danh sách trên.\n- Format: "UCx: Tên use case".\n- Nếu không có liên quan, để mảng rỗng [].\n- Trả về toàn bộ danh sách use case với related_usecases được cập nhật.`,
-        conflictCheck: (textA: string, textB: string) => `So sánh hai mô tả use case sau:\nA: "${textA}"\nB: "${textB}"\n\nTrả lời duy nhất bằng JSON:\n{ "conflict": true } nếu chúng THỰC SỰ là cùng một use case (chỉ khác cách viết, nhưng cùng ý nghĩa).\n{ "conflict": false } nếu chúng là hai use case khác nhau (ví dụ: "Đăng nhập" KHÁC "Đăng ký").`
+        conflictCheck: (textA: string, textB: string) => `
+Bạn là một công cụ kiểm tra trùng lặp use case, cần đánh giá thật nghiêm ngặt.
+
+Nhiệm vụ: Xác định xem hai mô tả use case sau đây có thực sự diễn tả CÙNG một chức năng hay không.
+
+A: "${textA}"
+B: "${textB}"
+
+Quy tắc:
+1. Trả về { "conflict": true } chỉ khi cả hai mô tả đều nói về CÙNG một mục tiêu/chức năng, 
+   ngay cả khi cách viết khác nhau hoặc có lỗi chính tả nhỏ 
+   (ví dụ: "Đăng nhập" và "Loginn" → cùng một use case).
+2. Trả về { "conflict": false } nếu chúng là HAI chức năng khác nhau,
+   kể cả khi có liên quan (ví dụ: "Đăng nhập" KHÁC với "Đăng ký").
+3. Không được giả định rằng các từ giống nhau một phần là cùng chức năng,
+   chỉ coi là trùng nếu ý nghĩa hoàn toàn giống.
+
+Chỉ trả lời đúng một trong hai JSON sau, không kèm giải thích:
+{ "conflict": true }
+{ "conflict": false }
+`
+
     },
     'en-US': {
         schemaDescription: (batchSize: number, offset: number) => `REQUIRED: ONLY return a valid JSON array and NOTHING ELSE.
@@ -90,7 +111,25 @@ CRITICAL REQUIREMENTS:
 - If no more use cases are found, return [].
 `,
         relatedUseCases: (simplified: any, incremental?: boolean) => `Here is a list of existing software use cases:\n${JSON.stringify(simplified, null, 2)}\n\nYour task:\n${incremental ? `- DO NOT delete or overwrite existing related_usecases.\n- Only add links between new and old use cases.` : `- Analyze and regenerate all related_usecases for all use cases.`}\n\nREQUIREMENTS:\n- related_usecases[] must only reference use cases from the list above.\n- Format: "UCx: Use case name".\n- If a use case has no relations, return an empty array [].\n- Return the entire list of use cases with the 'related_usecases' field updated.`,
-        conflictCheck: (textA: string, textB: string) => `Compare the following two use case descriptions:\nA: "${textA}"\nB: "${textB}"\n\nRespond ONLY with JSON:\n{ "conflict": true } if they are TRULY the same use case (different wording, same meaning).\n{ "conflict": false } if they are two different use cases (e.g., "Login" is DIFFERENT from "Register").`
+        conflictCheck: (textA: string, textB: string) => `
+You are a strict use case comparison engine.
+
+Task: Decide if the following two use case descriptions represent the SAME functional requirement.
+
+A: "${textA}"
+B: "${textB}"
+
+Rules:
+1. They are the SAME (conflict = true) ONLY IF they describe the exact same user goal or functionality,
+   even if the wording is slightly different (e.g., "Login" vs "Sign in").
+2. They are DIFFERENT (conflict = false) if they serve different purposes (e.g., "Login" vs "Register").
+3. Do NOT confuse related but distinct actions as the same.
+
+Respond ONLY with JSON, no explanation:
+{ "conflict": true }   // same meaning
+{ "conflict": false }  // different meaning
+`
+
     }
 };
 
@@ -386,16 +425,27 @@ export class GeminiService {
 
                 let text: string = resp?.response?.text?.() || "{}";
                 text = this.cleanJsonString(text);
+
+                // 🔍 Debug log
+                console.log("🔎 Gemini conflict check raw response:", text);
+
                 const parsed = JSON.parse(text.trim());
 
                 if (typeof parsed.conflict === "boolean") {
+                    console.log(
+                        `✅ Gemini conflict decision: ${parsed.conflict ? "CONFLICT" : "NO CONFLICT"} | A="${textA}" | B="${textB}"`
+                    );
                     return parsed.conflict;
+                } else {
+                    console.warn("⚠️ Gemini did not return a valid { conflict: boolean } object:", text);
                 }
             } catch (err) {
                 lastError = err;
+                console.error("❌ Gemini checkConflictWithGemini error:", err);
                 continue;
             }
         }
         throw lastError || new Error("All Gemini API keys failed for conflict check");
     }
+
 }
