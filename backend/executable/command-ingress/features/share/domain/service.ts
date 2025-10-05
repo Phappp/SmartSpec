@@ -43,7 +43,7 @@ export class ShareProjectService {
             }
 
             // nếu đã cancel, reject, left → reset về pending
-            if (['cancelled', 'rejected', 'left'].includes(existingMember.status)) {
+            if (['canceled', 'rejected', 'left'].includes(existingMember.status)) {
                 existingMember.role = role;
                 existingMember.status = 'pending';
                 existingMember.invited_by = new Types.ObjectId(inviterId);
@@ -293,13 +293,13 @@ export class ShareProjectService {
             return new ServiceResponse(ResponseStatus.Failed, "Cannot cancel a processed invitation", null, 400);
         }
 
-        member.status = "cancelled";
+        member.status = "canceled";
         member.responded_at = new Date();
-        member.history.push({action: "cancelled",by: userId,at: new Date()});
+        member.history.push({action: "canceled",by: userId,at: new Date()});
 
         await project.save();
 
-        return new ServiceResponse<any>(ResponseStatus.Success,"Invite has been cancelled",{ status: "cancelled" },200);
+        return new ServiceResponse<any>(ResponseStatus.Success,"Invite has been canceled",{ status: "canceled" },200);
     }
 
     async removeMember(projectId: string, memberId: string, userId: string): Promise<ServiceResponse> {
