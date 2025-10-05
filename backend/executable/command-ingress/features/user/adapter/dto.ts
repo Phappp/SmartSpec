@@ -126,7 +126,7 @@ export class UpdateProfileRequestBody extends RequestDto {
 
   @IsString()
   @IsOptional()
-  avatarUrl?: string;
+  avatar_url?: string;
 
   @IsString()
   @IsOptional()
@@ -145,7 +145,7 @@ export class UpdateProfileRequestBody extends RequestDto {
           year: body.dob.year,
         };
       }
-      this.avatarUrl = body.avatarUrl;
+      this.avatar_url = body.avatar_url;
       this.status = body.status;
     }
   }

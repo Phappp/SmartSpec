@@ -12,7 +12,7 @@ type ExchangeTokenRequest = {
 interface UserResponse {
   id: string;
   email: string;
-  avatarUrl: string;
+  avatar_url: string;
   name: string;
   dob: Date;
   system_role: string;

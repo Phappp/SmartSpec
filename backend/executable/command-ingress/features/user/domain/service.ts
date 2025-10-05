@@ -20,7 +20,7 @@ export class UserServiceImpl implements UserService {
     return users.map((user) => ({
       id: user.id,
       email: user.email,
-      avatarUrl: user.avatarUrl,
+      avatar_url: user.avatar_url,
       name: user.name,
       dob: user.dob,
       system_role: user.system_role,
@@ -38,7 +38,7 @@ export class UserServiceImpl implements UserService {
     return {
       id: user.id,
       email: user.email,
-      avatarUrl: user.avatarUrl,
+      avatar_url: user.avatar_url,
       name: user.name,
       dob: user.dob,
       system_role: user.system_role,
@@ -81,7 +81,7 @@ export class UserServiceImpl implements UserService {
       isTwoFactorEnabled?: boolean;
       newDob?: Date;
       gender?: string;
-      avatarUrl?: string;
+      avatar_url?: string;
       status?: string;
     }
   ): Promise<UserResponse> {
@@ -104,8 +104,8 @@ export class UserServiceImpl implements UserService {
     if (body.gender) {
       user.gender = body.gender;
     }
-    if (body.avatarUrl) {
-      user.avatarUrl = body.avatarUrl;
+    if (body.avatar_url) {
+      user.avatar_url = body.avatar_url;
     }
     if (body.status === "ACTIVE" || body.status === "INACTIVE") {
       user.status = body.status;
@@ -116,7 +116,7 @@ export class UserServiceImpl implements UserService {
     return {
       id: user.id,
       email: user.email,
-      avatarUrl: user.avatarUrl,
+      avatar_url: user.avatar_url,
       name: user.name,
       dob: user.dob,
       system_role: user.system_role,
@@ -169,7 +169,7 @@ export class UserServiceImpl implements UserService {
     return users.map((user) => ({
       id: user.id,
       email: user.email,
-      avatarUrl: user.avatarUrl,
+      avatar_url: user.avatar_url,
       name: user.name,
       dob: user.dob,
       system_role: user.system_role,
@@ -201,7 +201,7 @@ export class UserServiceImpl implements UserService {
     return users.map((user) => ({
       id: user.id,
       email: user.email,
-      avatarUrl: user.avatarUrl,
+      avatar_url: user.avatar_url,
       name: user.name,
       dob: user.dob,
       system_role: user.system_role,

@@ -59,7 +59,7 @@ class UserController extends BaseController {
           return;
         }
 
-        const { email, name, dob, gender, avatarUrl, status } = req.body;
+        const { email, name, dob, gender, avatar_url, status } = req.body;
         const { day, month, year } = dob;
         const newDob = new Date(year, month - 1, day);
         const updateProfileRequestBody = new UpdateProfileRequestBody(req.body);
@@ -75,7 +75,7 @@ class UserController extends BaseController {
           name,
           newDob,
           gender,
-          avatarUrl,
+          avatar_url,
           status,
         });
 
@@ -200,7 +200,7 @@ class UserController extends BaseController {
           return;
         }
 
-        const { email, name, dob, gender, avatarUrl, status } = req.body;
+        const { email, name, dob, gender, avatar_url, status } = req.body;
 
         const { day, month, year } = dob;
         const newDob = new Date(year, month - 1, day);
@@ -217,7 +217,7 @@ class UserController extends BaseController {
           name,
           newDob,
           gender,
-          avatarUrl,
+          avatar_url,
           status,
         });
 
