@@ -28,7 +28,13 @@ export class OrchestratorService {
         // 🟢 Bắt đầu: clear lỗi cũ
         console.log(`[SERVICE] Clearing previous errors for version ${versionId} before running...`);
         await Version.findByIdAndUpdate(versionId, {
-            $set: { processing_errors: [], stage: "initializing", progress: 15 }
+            $set: {
+                status: "processing", // QUAN TRỌNG: Set status thành processing
+                processing_errors: [],
+                stage: "initializing",
+                progress: 15,
+                is_processing: true // Nếu có field này
+            }
         });
 
         const version = await Version.findById(versionId).lean();

@@ -466,53 +466,51 @@ export default {
       useCases: [],
       selectedVersionId: null,
 
-      // Retry state
+      // ========== RETRY STATE ==========
       isRetrying: false,
       processingProgress: 0,
       currentStage: 'Initializing...',
       pollingInterval: null,
       currentPollingVersionId: null,
 
-      // Incremental Analysis state
+      // ========== INCREMENTAL ANALYSIS STATE ==========
       isProcessingIncremental: false,
       showIncrementalButton: false,
       unprocessedInputsCount: 0,
       currentVersionDetails: null,
 
-      // Conflict Resolution state
+      // ========== CONFLICT RESOLUTION STATE ==========
       hasConflicts: false,
       pendingConflicts: [],
       selectedResolutions: {},
       isResolvingConflicts: false,
-
-      // Conflict Detail Modal
-      showConflictDetailModal: false,
-      currentDetailUseCase: {},
       isFindingConflicts: false,
 
-      // UI state
+      // ========== MODAL STATES ==========
+      showConflictDetailModal: false,
+      currentDetailUseCase: {},
       showAddInputModal: false,
-      selectedFiles: [],
-      rawText: '',
-      isAddingInput: false,
       showModal: false,
       modalTitle: '',
       modalMessage: '',
       confirmAction: null,
+
+      // ========== INPUT MANAGEMENT ==========
+      selectedFiles: [],
+      rawText: '',
+      isAddingInput: false,
       isDeletingInput: null,
 
       toast: useToast(),
     }
   },
   computed: {
+    // ========== VERSION STATUS COMPUTED ==========
     hasFailedVersion() {
       return this.versions.some((version) => version.status === 'failed')
     },
     failedVersion() {
       return this.versions.find((version) => version.status === 'failed')
-    },
-    canSubmit() {
-      return this.selectedFiles.length > 0 || this.rawText.trim().length > 0
     },
     hasProcessingVersion() {
       return this.versions.some((version) => version.status === 'processing')
@@ -520,6 +518,13 @@ export default {
     processingVersion() {
       return this.versions.find((version) => version.status === 'processing')
     },
+
+    // ========== FORM VALIDATION ==========
+    canSubmit() {
+      return this.selectedFiles.length > 0 || this.rawText.trim().length > 0
+    },
+
+    // ========== CONFLICT RESOLUTION COMPUTED ==========
     canResolveAllConflicts() {
       return (
         this.resolvedConflictsCount === this.pendingConflicts.length &&
@@ -530,11 +535,14 @@ export default {
       return Object.keys(this.selectedResolutions).length
     },
   },
+
+  // ========== LIFECYCLE HOOKS ==========
   async created() {
     const projectId = this.$route.params.id
     if (projectId) {
       await this.fetchProjectData(projectId)
       this.checkAndRestorePolling()
+      this.checkIncrementalProcessingStatus()
     }
     document.addEventListener('click', this.handleClickOutside)
   },
@@ -542,7 +550,12 @@ export default {
     this.cleanupPolling()
     document.removeEventListener('click', this.handleClickOutside)
   },
+
   methods: {
+    // ========== DATA FETCHING ==========
+    /**
+     * Fetch project data including versions, inputs, and use cases
+     */
     async fetchProjectData(projectId) {
       try {
         const userId = 'CURRENT_LOGGED_IN_USER_ID'
@@ -575,6 +588,10 @@ export default {
       }
     },
 
+    // ========== CONFLICT RESOLUTION ==========
+    /**
+     * Scan for duplicate use cases
+     */
     async findAndHandleConflicts() {
       if (!this.selectedVersionId) {
         this.toast.error('Please select a version first.')
@@ -593,6 +610,9 @@ export default {
       }
     },
 
+    /**
+     * Check conflicts on component load
+     */
     checkConflictsOnLoad() {
       const currentVersion = this.versions.find((v) => v._id === this.selectedVersionId)
       if (currentVersion && currentVersion.pending_conflicts?.length > 0) {
@@ -605,12 +625,109 @@ export default {
       }
     },
 
+    /**
+     * Check conflicts from current version details
+     */
+    checkConflicts() {
+      if (this.currentVersionDetails && this.currentVersionDetails.pending_conflicts?.length > 0) {
+        this.hasConflicts = true
+        this.pendingConflicts = this.currentVersionDetails.pending_conflicts
+        this.selectedResolutions = {}
+      } else {
+        this.hasConflicts = false
+        this.pendingConflicts = []
+      }
+    },
+
+    /**
+     * Select resolution for a conflict
+     */
+    selectResolution(conflictId, useCaseId) {
+      this.selectedResolutions = {
+        ...this.selectedResolutions,
+        [conflictId]: useCaseId,
+      }
+    },
+
+    /**
+     * Show detailed view of a use case in conflict
+     */
+    showConflictDetail(useCase) {
+      this.currentDetailUseCase = useCase
+      this.showConflictDetailModal = true
+    },
+
+    /**
+     * Resolve all selected conflicts
+     */
+    async resolveAllConflicts() {
+      if (!this.canResolveAllConflicts || this.isResolvingConflicts) return
+
+      this.isResolvingConflicts = true
+
+      // --- THÊM DÒNG KHAI BÁO BIẾN TẠI ĐÂY ---
+      let resolvedCount = 0
+      const totalToResolve = this.resolvedConflictsCount
+
+      try {
+        // Vòng lặp tuần tự for...of vẫn được giữ nguyên
+        for (const [conflictId, keepUseCaseId] of Object.entries(this.selectedResolutions)) {
+          const payload = {
+            conflict_id: conflictId,
+            keep_use_case_id: keepUseCaseId,
+          }
+
+          await resolveProjectConflict(this.project._id, this.selectedVersionId, payload)
+
+          // Giờ biến resolvedCount đã tồn tại và có thể sử dụng
+          resolvedCount++
+        }
+
+        this.toast.success(`${resolvedCount} conflict(s) resolved successfully!`)
+        // Tải lại dữ liệu một lần duy nhất sau khi tất cả đã xong
+        await this.fetchProjectData(this.project._id)
+      } catch (error) {
+        console.error('Error resolving conflicts:', error)
+        this.toast.error(
+          error.response?.data?.error ||
+            `Failed to resolve conflicts after ${resolvedCount} successes.`
+        )
+      } finally {
+        this.isResolvingConflicts = false
+      }
+    },
+
     // ========== INCREMENTAL ANALYSIS ==========
+    /**
+     * Check for unprocessed inputs and show incremental analysis button
+     */
     checkUnprocessedInputs() {
       this.unprocessedInputsCount = this.inputs.filter((input) => !input.is_processed).length
       this.showIncrementalButton = this.unprocessedInputsCount > 0 && !this.isProcessingIncremental
     },
 
+    /**
+     * Check if incremental analysis is already in progress
+     */
+    async checkIncrementalProcessingStatus() {
+      try {
+        const response = await getVersionStatus(this.selectedVersionId)
+        const { status, version } = response.data.data
+
+        if (status === 'processing' && version.is_processing) {
+          this.isProcessingIncremental = true
+          this.processingProgress = version.progress || 0
+          this.currentStage = this.formatStageName(version.stage || 'initializing')
+          this.startPolling(this.selectedVersionId, 'incremental')
+        }
+      } catch (error) {
+        console.error('Error checking processing status:', error)
+      }
+    },
+
+    /**
+     * Start incremental analysis process
+     */
     async startIncrementalAnalysis() {
       if (!this.selectedVersionId || this.isProcessingIncremental) return
 
@@ -623,7 +740,10 @@ export default {
         const response = await startIncrementalAnalysis(this.project._id, this.selectedVersionId)
 
         if (response.data && response.data.success) {
-          this.startPolling(this.selectedVersionId, 'incremental')
+          // Wait for backend to update processing status
+          setTimeout(() => {
+            this.startPolling(this.selectedVersionId, 'incremental')
+          }, 500)
         } else {
           throw new Error(response.data?.message || 'Failed to start incremental analysis')
         }
@@ -633,66 +753,19 @@ export default {
       }
     },
 
-    // ========== CONFLICT RESOLUTION ==========
-    checkConflicts() {
-      if (this.currentVersionDetails && this.currentVersionDetails.pending_conflicts?.length > 0) {
-        this.hasConflicts = true
-        this.pendingConflicts = this.currentVersionDetails.pending_conflicts
-        this.selectedResolutions = {}
-      } else {
-        this.hasConflicts = false
-        this.pendingConflicts = []
-      }
-    },
-
-    selectResolution(conflictId, useCaseId) {
-      this.selectedResolutions = {
-        ...this.selectedResolutions,
-        [conflictId]: useCaseId,
-      }
-    },
-
-    showConflictDetail(useCase) {
-      this.currentDetailUseCase = useCase
-      this.showConflictDetailModal = true
-    },
-
-    async resolveAllConflicts() {
-      if (!this.canResolveAllConflicts || this.isResolvingConflicts) return
-
-      this.isResolvingConflicts = true
-
-      try {
-        const resolutionPromises = Object.entries(this.selectedResolutions).map(
-          ([conflictId, keepUseCaseId]) => {
-            const payload = {
-              conflict_id: conflictId,
-              keep_use_case_id: keepUseCaseId,
-            }
-            // Gọi hàm với ĐỦ 3 tham số: projectId, versionId, và payload
-            return resolveProjectConflict(this.project._id, this.selectedVersionId, payload)
-          }
-        )
-
-        await Promise.all(resolutionPromises)
-
-        this.toast.success('All conflicts resolved successfully!')
-        await this.fetchProjectData(this.project._id)
-      } catch (error) {
-        console.error('Error resolving conflicts:', error)
-        this.toast.error(error.response?.data?.error || 'Failed to resolve conflicts.')
-      } finally {
-        this.isResolvingConflicts = false
-      }
-    },
-
     // ========== VERSION MANAGEMENT ==========
+    /**
+     * Handle version selection change
+     */
     handleVersionSelect(versionId) {
       this.selectedVersionId = versionId
       this.fetchProjectData(this.project._id)
     },
 
-    // ========== ENHANCED POLLING ==========
+    // ========== POLLING & PROGRESS MANAGEMENT ==========
+    /**
+     * Start polling for processing status
+     */
     startPolling(versionId, mode = 'retry') {
       this.cleanupPolling()
 
@@ -701,10 +774,15 @@ export default {
           const response = await getVersionStatus(versionId)
           const { status, version } = response.data.data
 
-          // Cập nhật trực tiếp progress và stage từ API
+          // Update progress and stage from API
           if (version) {
             this.processingProgress = version.progress || this.processingProgress
             this.currentStage = this.formatStageName(version.stage || 'initializing')
+
+            // Update incremental state
+            if (mode === 'incremental' && status === 'processing') {
+              this.isProcessingIncremental = true
+            }
           }
 
           if (mode === 'retry') {
@@ -728,6 +806,9 @@ export default {
       }, 2000)
     },
 
+    /**
+     * Update progress based on current stage
+     */
     updateProgressFromStage(stage) {
       const stageProgressMap = {
         initializing: 15,
@@ -742,6 +823,9 @@ export default {
       this.processingProgress = stageProgressMap[stage] || 0
     },
 
+    /**
+     * Format stage name for display
+     */
     formatStageName(stage) {
       const stageNames = {
         initializing: 'Initializing',
@@ -754,6 +838,9 @@ export default {
       return stageNames[stage] || stage.charAt(0).toUpperCase() + stage.slice(1)
     },
 
+    /**
+     * Check and restore polling for processing versions
+     */
     checkAndRestorePolling() {
       if (this.hasProcessingVersion) {
         const processingVersion = this.processingVersion
@@ -772,6 +859,9 @@ export default {
       }
     },
 
+    /**
+     * Save retry state to localStorage
+     */
     saveRetryState() {
       const retryState = {
         projectId: this.project._id,
@@ -786,10 +876,16 @@ export default {
       localStorage.setItem(`retry_${this.project._id}`, JSON.stringify(retryState))
     },
 
+    /**
+     * Clear retry state from localStorage
+     */
     clearRetryState() {
       localStorage.removeItem(`retry_${this.project._id}`)
     },
 
+    /**
+     * Clean up polling interval
+     */
     cleanupPolling() {
       if (this.pollingInterval) {
         clearInterval(this.pollingInterval)
@@ -797,6 +893,9 @@ export default {
       }
     },
 
+    /**
+     * Stop all polling activities
+     */
     stopPolling() {
       this.cleanupPolling()
       this.isRetrying = false
@@ -804,6 +903,9 @@ export default {
       this.currentPollingVersionId = null
     },
 
+    /**
+     * Handle successful processing completion
+     */
     async handleProcessingSuccess(mode) {
       this.processingProgress = 100
       this.currentStage = 'Completed'
@@ -823,6 +925,9 @@ export default {
       this.toast.success(message)
     },
 
+    /**
+     * Handle processing failure
+     */
     handleProcessingFailure(mode) {
       this.stopPolling()
       this.fetchProjectData(this.project._id)
@@ -832,12 +937,18 @@ export default {
       this.toast.error(message)
     },
 
+    /**
+     * Handle incremental analysis errors
+     */
     handleIncrementalError(message) {
       this.isProcessingIncremental = false
       this.showIncrementalButton = true
       this.toast.error(message)
     },
 
+    /**
+     * Handle polling errors
+     */
     handlePollingError(mode) {
       this.stopPolling()
       const message =
@@ -848,6 +959,9 @@ export default {
     },
 
     // ========== RETRY FUNCTIONALITY ==========
+    /**
+     * Handle retry analysis for failed versions
+     */
     async handleRetry() {
       if (!this.failedVersion || this.isRetrying) return
 
@@ -866,6 +980,9 @@ export default {
       }
     },
 
+    /**
+     * Handle retry errors
+     */
     handleRetryError(message) {
       this.isRetrying = false
       this.currentPollingVersionId = null
@@ -874,10 +991,16 @@ export default {
     },
 
     // ========== INPUT MANAGEMENT ==========
+    /**
+     * Trigger file input click
+     */
     triggerFileInput() {
       this.$refs.fileInput.click()
     },
 
+    /**
+     * Handle file selection
+     */
     handleFileSelect(event) {
       const files = Array.from(event.target.files)
       const allowedTypes = [
@@ -897,10 +1020,16 @@ export default {
       event.target.value = ''
     },
 
+    /**
+     * Remove selected file
+     */
     removeFile(index) {
       this.selectedFiles.splice(index, 1)
     },
 
+    /**
+     * Format file size for display
+     */
     formatFileSize(bytes) {
       if (bytes === 0) return '0 Bytes'
       const k = 1024
@@ -909,6 +1038,9 @@ export default {
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
     },
 
+    /**
+     * Add new inputs to version
+     */
     async addInputs() {
       if (!this.canSubmit) return
       this.isAddingInput = true
@@ -950,11 +1082,17 @@ export default {
       }
     },
 
+    /**
+     * Reset input form
+     */
     resetInputForm() {
       this.selectedFiles = []
       this.rawText = ''
     },
 
+    /**
+     * Open delete confirmation modal
+     */
     openDeleteSpecificModal(inputId) {
       this.modalTitle = 'Confirm Delete'
       this.modalMessage = 'Are you sure you want to delete this input?'
@@ -962,12 +1100,18 @@ export default {
       this.confirmAction = () => this.deleteSpecificInput(inputId)
     },
 
+    /**
+     * Handle modal confirmation
+     */
     async handleConfirm() {
       if (this.confirmAction) {
         await this.confirmAction()
       }
     },
 
+    /**
+     * Delete specific input
+     */
     async deleteSpecificInput(inputId) {
       try {
         this.isDeletingInput = inputId
@@ -990,6 +1134,9 @@ export default {
     },
 
     // ========== HELPER METHODS ==========
+    /**
+     * Handle click outside dropdown
+     */
     handleClickOutside(e) {
       const dropdown = this.$el.querySelector('.dropdown')
       if (dropdown && !dropdown.contains(e.target)) {
@@ -997,13 +1144,15 @@ export default {
       }
     },
 
+    /**
+     * Navigate back to dashboard
+     */
     goBack() {
       this.$router.push('/dashboard')
     },
   },
 }
 </script>
-
 <style scoped>
 /* Existing styles remain the same, adding only new styles for conflict detail */
 

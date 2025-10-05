@@ -32,7 +32,8 @@
 
           <ul v-if="isOpen" class="dropdown-menu">
             <li v-for="v in versions" :key="v._id" @click="selectVersion(v)">
-              Version {{ v.version_number }} <span class="counter-badge">{{ v.status }}</span>
+              <span class="material-symbols-outlined">history</span>
+              Version {{ v.version_number }}
             </li>
           </ul>
 
@@ -112,7 +113,7 @@ export default {
     },
     selectedLabel() {
       const v = this.versions.find((x) => x._id === this.selectedVersionId)
-      return v ? `Version ${v.version_number} (${v.status})` : 'Select version'
+      return v ? `Version ${v.version_number} ` : 'Select version'
     },
   },
   methods: {
@@ -251,6 +252,7 @@ export default {
   align-items: center;
   gap: 8px;
   position: relative;
+  transform: translateX(-15%);
 }
 
 .dropdown {
@@ -280,20 +282,26 @@ export default {
   top: 100%;
   left: 36px;
   margin-top: 6px;
-  min-width: 200px;
+  width: 100%;
   background: white;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
   z-index: 20;
+  transform: translateX(-21%);
 }
 
 .dropdown-menu li {
-  padding: 8px 12px;
+  padding: 4px 0px;
+  padding-left: 12px;
   width: 100%;
   font-size: 14px;
   cursor: pointer;
   list-style: none;
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  font-weight: bold;
 }
 
 .dropdown-menu li:hover {
@@ -355,6 +363,7 @@ export default {
   min-width: 300px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   margin-top: 8px;
+  transform: translateX(-15%);
 }
 
 .inline-progress-container .progress-info {
