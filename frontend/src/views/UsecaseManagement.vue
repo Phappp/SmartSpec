@@ -12,8 +12,25 @@
       @go-back="goBack"
     />
 
+    <!-- Incremental Analysis Progress -->
+    <div v-if="isProcessingIncremental" class="processing-banner">
+      <div class="progress-content">
+        <span class="material-symbols-outlined progress-icon">update</span>
+        <div class="progress-text">
+          <h4>Incremental Analysis in Progress</h4>
+          <p>{{ currentStage }} - {{ processingProgress }}%</p>
+        </div>
+        <div class="progress-bar-small">
+          <div class="progress-fill" :style="{ width: processingProgress + '%' }"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Incremental Analysis Button -->
-    <div v-if="showIncrementalButton" class="incremental-analysis-section">
+    <div
+      v-if="showIncrementalButton && !isProcessingIncremental"
+      class="incremental-analysis-section"
+    >
       <div class="incremental-banner">
         <div class="banner-content">
           <span class="material-symbols-outlined banner-icon">update</span>
@@ -37,10 +54,21 @@
     </div>
 
     <!-- Conflict Resolution Section -->
+    <div class="actions-toolbar">
+      <button class="action-btn" @click="findAndHandleConflicts" :disabled="isFindingConflicts">
+        <span v-if="isFindingConflicts" class="button-spinner-small"></span>
+        <span v-else class="material-symbols-outlined">rule</span>
+        {{ isFindingConflicts ? 'Scanning...' : 'Find Duplicates' }}
+      </button>
+    </div>
+
     <div v-if="hasConflicts" class="conflicts-section">
       <div class="conflicts-header">
         <h3>Conflicts Detected</h3>
-        <p>Please resolve the following conflicts to complete the analysis:</p>
+        <p>
+          We found {{ pendingConflicts.length }} group(s) of duplicate use cases. Please select one
+          version to keep from each group.
+        </p>
       </div>
 
       <div class="conflicts-list">
@@ -50,96 +78,45 @@
           class="conflict-item"
         >
           <div class="conflict-header">
-            <h4>Conflict {{ index + 1 }}</h4>
+            <h4>Conflict Group {{ index + 1 }}</h4>
             <span class="conflict-id">ID: {{ conflict.conflict_id }}</span>
           </div>
 
-          <div class="conflict-comparison">
-            <!-- Existing Use Case -->
+          <div class="conflict-options-grid">
             <div
+              v-for="useCase in conflict.items"
+              :key="useCase.id"
               class="conflict-option"
-              :class="{ selected: selectedResolutions[conflict.conflict_id] === 'old' }"
+              :class="{ selected: selectedResolutions[conflict.conflict_id] === useCase.id }"
+              @click="selectResolution(conflict.conflict_id, useCase.id)"
             >
               <div class="option-header">
-                <span class="option-badge old">Existing</span>
-                <div class="option-actions">
-                  <button class="detail-btn" @click="showConflictDetail(conflict, 'old')">
-                    <span class="material-symbols-outlined">visibility</span>
-                    Detail
-                  </button>
-                  <button
-                    class="select-option-btn"
-                    :class="{ selected: selectedResolutions[conflict.conflict_id] === 'old' }"
-                    @click="selectResolution(conflict.conflict_id, 'old')"
+                <span class="option-badge old">{{ useCase.id }}</span>
+                <button
+                  class="select-option-btn"
+                  :class="{ selected: selectedResolutions[conflict.conflict_id] === useCase.id }"
+                >
+                  <span
+                    v-if="selectedResolutions[conflict.conflict_id] === useCase.id"
+                    class="material-symbols-outlined"
+                    >check_circle</span
                   >
-                    <span
-                      v-if="selectedResolutions[conflict.conflict_id] === 'old'"
-                      class="material-symbols-outlined"
-                      >check_circle</span
-                    >
-                    {{
-                      selectedResolutions[conflict.conflict_id] === 'old' ? 'Selected' : 'Select'
-                    }}
-                  </button>
-                </div>
+                  {{
+                    selectedResolutions[conflict.conflict_id] === useCase.id
+                      ? 'Selected'
+                      : 'Select to Keep'
+                  }}
+                </button>
               </div>
               <div class="use-case-preview">
-                <h5>{{ conflict.existing.name || conflict.existing.goal }}</h5>
+                <h5>{{ useCase.name || useCase.goal }}</h5>
                 <p class="use-case-description">
-                  {{ conflict.existing.description || 'No description' }}
+                  {{ useCase.reason || 'No reason provided.' }}
                 </p>
-                <div class="use-case-meta">
-                  <div v-if="conflict.existing.actors" class="meta-item">
-                    <strong>Actors:</strong> {{ conflict.existing.actors.join(', ') }}
-                  </div>
-                  <div v-if="conflict.existing.preconditions" class="meta-item">
-                    <strong>Preconditions:</strong> {{ conflict.existing.preconditions.join(', ') }}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- New Use Case -->
-            <div
-              class="conflict-option"
-              :class="{ selected: selectedResolutions[conflict.conflict_id] === 'new' }"
-            >
-              <div class="option-header">
-                <span class="option-badge new">New</span>
-                <div class="option-actions">
-                  <button class="detail-btn" @click="showConflictDetail(conflict, 'new')">
-                    <span class="material-symbols-outlined">visibility</span>
-                    Detail
-                  </button>
-                  <button
-                    class="select-option-btn"
-                    :class="{ selected: selectedResolutions[conflict.conflict_id] === 'new' }"
-                    @click="selectResolution(conflict.conflict_id, 'new')"
-                  >
-                    <span
-                      v-if="selectedResolutions[conflict.conflict_id] === 'new'"
-                      class="material-symbols-outlined"
-                      >check_circle</span
-                    >
-                    {{
-                      selectedResolutions[conflict.conflict_id] === 'new' ? 'Selected' : 'Select'
-                    }}
-                  </button>
-                </div>
-              </div>
-              <div class="use-case-preview">
-                <h5>{{ conflict.new.name || conflict.new.goal }}</h5>
-                <p class="use-case-description">
-                  {{ conflict.new.description || 'No description' }}
-                </p>
-                <div class="use-case-meta">
-                  <div v-if="conflict.new.actors" class="meta-item">
-                    <strong>Actors:</strong> {{ conflict.new.actors.join(', ') }}
-                  </div>
-                  <div v-if="conflict.new.preconditions" class="meta-item">
-                    <strong>Preconditions:</strong> {{ conflict.new.preconditions.join(', ') }}
-                  </div>
-                </div>
+                <button class="detail-btn" @click.stop="showConflictDetail(useCase)">
+                  <span class="material-symbols-outlined">visibility</span>
+                  View Details
+                </button>
               </div>
             </div>
           </div>
@@ -156,7 +133,7 @@
           {{
             isResolvingConflicts
               ? 'Resolving...'
-              : `Resolve All (${resolvedConflictsCount}/${pendingConflicts.length})`
+              : `Resolve All Selected (${resolvedConflictsCount}/${pendingConflicts.length})`
           }}
         </button>
       </div>
@@ -243,26 +220,6 @@
             <span v-if="isAddingInput" class="button-spinner-small"></span>
             {{ isAddingInput ? 'Adding...' : 'Add Input' }}
           </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Processing Progress Modal -->
-    <div v-if="showProcessingModal" class="modal-overlay">
-      <div class="modal-content processing-modal">
-        <div class="modal-header">
-          <h3>{{ processingTitle }}</h3>
-        </div>
-        <div class="modal-body">
-          <div class="progress-section">
-            <div class="progress-info">
-              <span class="current-stage">{{ currentStage }}</span>
-              <span class="progress-percentage">{{ processingProgress }}%</span>
-            </div>
-            <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: processingProgress + '%' }"></div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -470,9 +427,6 @@
         </div>
         <div class="modal-footer">
           <button class="cancel-btn" @click="showConflictDetailModal = false">Close</button>
-          <button class="submit-btn" @click="selectFromDetail" :disabled="!currentDetailConflict">
-            Select This Version
-          </button>
         </div>
       </div>
     </div>
@@ -487,7 +441,8 @@ import {
   addInputsToVersion,
   deleteSpecificInput,
   startIncrementalAnalysis,
-  resolveConflict,
+  findProjectConflicts,
+  resolveProjectConflict,
 } from '@/api/project'
 import { useToast } from 'vue-toastification'
 import AppModal from '@/components/AppModal.vue'
@@ -533,13 +488,10 @@ export default {
       // Conflict Detail Modal
       showConflictDetailModal: false,
       currentDetailUseCase: {},
-      currentDetailConflict: null,
-      currentDetailType: null,
+      isFindingConflicts: false,
 
       // UI state
       showAddInputModal: false,
-      showProcessingModal: false,
-      processingTitle: '',
       selectedFiles: [],
       rawText: '',
       isAddingInput: false,
@@ -611,7 +563,7 @@ export default {
         } else if (this.versions.length > 0) {
           this.selectedVersionId = this.versions[0]._id
         }
-
+        this.checkConflictsOnLoad()
         this.checkUnprocessedInputs()
         this.checkConflicts()
 
@@ -623,10 +575,40 @@ export default {
       }
     },
 
+    async findAndHandleConflicts() {
+      if (!this.selectedVersionId) {
+        this.toast.error('Please select a version first.')
+        return
+      }
+      this.isFindingConflicts = true
+      try {
+        await findProjectConflicts(this.project._id, this.selectedVersionId)
+        this.toast.success('Scan completed! Refreshing data...')
+        await this.fetchProjectData(this.project._id)
+      } catch (error) {
+        console.error('Error finding conflicts:', error)
+        this.toast.error(error.response?.data?.error || 'Failed to scan for duplicates.')
+      } finally {
+        this.isFindingConflicts = false
+      }
+    },
+
+    checkConflictsOnLoad() {
+      const currentVersion = this.versions.find((v) => v._id === this.selectedVersionId)
+      if (currentVersion && currentVersion.pending_conflicts?.length > 0) {
+        this.hasConflicts = true
+        this.pendingConflicts = currentVersion.pending_conflicts
+        this.selectedResolutions = {}
+      } else {
+        this.hasConflicts = false
+        this.pendingConflicts = []
+      }
+    },
+
     // ========== INCREMENTAL ANALYSIS ==========
     checkUnprocessedInputs() {
       this.unprocessedInputsCount = this.inputs.filter((input) => !input.is_processed).length
-      this.showIncrementalButton = this.unprocessedInputsCount > 0
+      this.showIncrementalButton = this.unprocessedInputsCount > 0 && !this.isProcessingIncremental
     },
 
     async startIncrementalAnalysis() {
@@ -635,8 +617,7 @@ export default {
       this.isProcessingIncremental = true
       this.processingProgress = 0
       this.currentStage = 'Initializing...'
-      this.showProcessingModal = true
-      this.processingTitle = 'Incremental Analysis'
+      this.showIncrementalButton = false
 
       try {
         const response = await startIncrementalAnalysis(this.project._id, this.selectedVersionId)
@@ -664,22 +645,16 @@ export default {
       }
     },
 
-    selectResolution(conflictId, resolution) {
-      this.$set(this.selectedResolutions, conflictId, resolution)
-    },
-
-    showConflictDetail(conflict, type) {
-      this.currentDetailConflict = conflict
-      this.currentDetailType = type
-      this.currentDetailUseCase = type === 'old' ? conflict.existing : conflict.new
-      this.showConflictDetailModal = true
-    },
-
-    selectFromDetail() {
-      if (this.currentDetailConflict && this.currentDetailType) {
-        this.selectResolution(this.currentDetailConflict.conflict_id, this.currentDetailType)
-        this.showConflictDetailModal = false
+    selectResolution(conflictId, useCaseId) {
+      this.selectedResolutions = {
+        ...this.selectedResolutions,
+        [conflictId]: useCaseId,
       }
+    },
+
+    showConflictDetail(useCase) {
+      this.currentDetailUseCase = useCase
+      this.showConflictDetailModal = true
     },
 
     async resolveAllConflicts() {
@@ -689,21 +664,23 @@ export default {
 
       try {
         const resolutionPromises = Object.entries(this.selectedResolutions).map(
-          ([conflictId, resolution]) =>
-            resolveConflict(this.project._id, this.selectedVersionId, conflictId, resolution)
+          ([conflictId, keepUseCaseId]) => {
+            const payload = {
+              conflict_id: conflictId,
+              keep_use_case_id: keepUseCaseId,
+            }
+            // Gọi hàm với ĐỦ 3 tham số: projectId, versionId, và payload
+            return resolveProjectConflict(this.project._id, this.selectedVersionId, payload)
+          }
         )
 
         await Promise.all(resolutionPromises)
 
         this.toast.success('All conflicts resolved successfully!')
         await this.fetchProjectData(this.project._id)
-
-        this.hasConflicts = false
-        this.pendingConflicts = []
-        this.selectedResolutions = {}
       } catch (error) {
         console.error('Error resolving conflicts:', error)
-        this.toast.error('Failed to resolve conflicts')
+        this.toast.error(error.response?.data?.error || 'Failed to resolve conflicts.')
       } finally {
         this.isResolvingConflicts = false
       }
@@ -724,19 +701,10 @@ export default {
           const response = await getVersionStatus(versionId)
           const { status, version } = response.data.data
 
-          console.log('📊 Polling update:', {
-            versionId,
-            status,
-            progress: version?.progress,
-            stage: version?.stage,
-            mode,
-          })
-
+          // Cập nhật trực tiếp progress và stage từ API
           if (version) {
-            this.updateProgressFromStage(version.stage || 'initializing')
-            if (version.progress) {
-              this.processingProgress = version.progress
-            }
+            this.processingProgress = version.progress || this.processingProgress
+            this.currentStage = this.formatStageName(version.stage || 'initializing')
           }
 
           if (mode === 'retry') {
@@ -745,10 +713,7 @@ export default {
 
           if (status !== 'processing') {
             this.stopPolling()
-
-            if (mode === 'retry') {
-              this.clearRetryState()
-            }
+            if (mode === 'retry') this.clearRetryState()
 
             if (status === 'completed' || status === 'has_conflicts') {
               this.handleProcessingSuccess(mode)
@@ -842,7 +807,6 @@ export default {
     async handleProcessingSuccess(mode) {
       this.processingProgress = 100
       this.currentStage = 'Completed'
-      this.showProcessingModal = false
       this.stopPolling()
 
       const fetchSuccess = await this.fetchProjectData(this.project._id)
@@ -860,7 +824,6 @@ export default {
     },
 
     handleProcessingFailure(mode) {
-      this.showProcessingModal = false
       this.stopPolling()
       this.fetchProjectData(this.project._id)
 
@@ -871,12 +834,11 @@ export default {
 
     handleIncrementalError(message) {
       this.isProcessingIncremental = false
-      this.showProcessingModal = false
+      this.showIncrementalButton = true
       this.toast.error(message)
     },
 
     handlePollingError(mode) {
-      this.showProcessingModal = false
       this.stopPolling()
       const message =
         mode === 'incremental'
@@ -892,8 +854,6 @@ export default {
       this.isRetrying = true
       this.processingProgress = 0
       this.currentStage = 'Initializing...'
-      this.showProcessingModal = true
-      this.processingTitle = 'Retry Analysis'
       this.currentPollingVersionId = this.failedVersion._id
 
       try {
@@ -908,7 +868,6 @@ export default {
 
     handleRetryError(message) {
       this.isRetrying = false
-      this.showProcessingModal = false
       this.currentPollingVersionId = null
       this.clearRetryState()
       this.toast.error(message)
@@ -1763,6 +1722,271 @@ export default {
   .option-actions {
     flex-direction: column;
     gap: 6px;
+  }
+}
+.actions-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.action-btn {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.conflict-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.conflict-option {
+  cursor: pointer;
+}
+.processing-banner {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  color: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.progress-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.progress-icon {
+  font-size: 28px;
+}
+
+.progress-text {
+  flex: 1;
+}
+
+.progress-text h4 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.progress-text p {
+  margin: 0;
+  opacity: 0.9;
+  font-size: 14px;
+}
+
+.progress-bar-small {
+  width: 120px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar-small .progress-fill {
+  height: 100%;
+  background: white;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* Existing styles remain the same, adding only new styles for conflict detail */
+
+.project-detail-view {
+  padding: 30px;
+  background: #f9fafb;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.view-body {
+  display: flex;
+  gap: 24px;
+  flex: 1;
+}
+
+/* Conflict Option Selection */
+.conflict-option.selected {
+  border-color: #3b82f6;
+  background: #f0f9ff;
+}
+
+.detail-btn {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+
+.detail-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+/* Conflict Detail Modal */
+.conflict-detail-modal {
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.detail-content {
+  padding: 8px 0;
+}
+
+.detail-section {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.detail-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.detail-title {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.detail-item label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detail-item span {
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.4;
+}
+
+.priority-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  display: inline-block;
+  width: fit-content;
+}
+
+.priority-badge.high {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.priority-badge.medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.priority-badge.low {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  padding: 4px 8px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.detail-list {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.detail-list li {
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.4;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .view-body {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 768px) {
+  .project-detail-view {
+    padding: 16px;
+  }
+
+  .progress-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .progress-bar-small {
+    width: 100%;
   }
 }
 </style>

@@ -95,21 +95,55 @@ export class OrchestratorController {
         }
     }
 
-    async resolveDuplicate(req: Request, res: Response) {
-        const project_id = req.params.project_id || (req.query.project_id as string) || (req.body.project_id as string) || (req.headers['x-project-id'] as string);
-        const version_id = req.params.version_id || (req.query.version_id as string) || (req.body.version_id as string) || (req.headers['x-version-id'] as string);
-        const { conflict_id, keep } = req.body;
+    // async resolveDuplicate(req: Request, res: Response) {
+    //     const project_id = req.params.project_id || (req.query.project_id as string) || (req.body.project_id as string) || (req.headers['x-project-id'] as string);
+    //     const version_id = req.params.version_id || (req.query.version_id as string) || (req.body.version_id as string) || (req.headers['x-version-id'] as string);
+    //     const { conflict_id, keep } = req.body;
 
-        if (!project_id || !version_id) {
-            return res.status(400).json({ success: false, error: 'Missing project_id or version_id' });
-        }
+    //     if (!project_id || !version_id) {
+    //         return res.status(400).json({ success: false, error: 'Missing project_id or version_id' });
+    //     }
 
-        if (!conflict_id || !['old', 'new'].includes(keep)) {
-            return res.status(400).json({ success: false, error: 'Missing conflict_id or invalid keep value (old/new)' });
-        }
+    //     if (!conflict_id || !['old', 'new'].includes(keep)) {
+    //         return res.status(400).json({ success: false, error: 'Missing conflict_id or invalid keep value (old/new)' });
+    //     }
 
+    //     try {
+    //         const result = await this.service.resolveDuplicate(version_id, conflict_id, keep);
+    //         return res.status(200).json({ success: true, data: result });
+    //     } catch (e: any) {
+    //         return res.status(500).json({ success: false, error: e?.message || 'Internal error' });
+    //     }
+    // }
+    /**
+     * HÀM MỚI: Xử lý request tìm kiếm xung đột.
+     */
+    async findConflicts(req: Request, res: Response) {
         try {
-            const result = await this.service.resolveDuplicate(version_id, conflict_id, keep);
+            const { version_id, project_id } = req.params;
+            const project = await Project.findById(project_id).lean();
+            if (!project) {
+                return res.status(404).json({ success: false, error: 'Project not found' });
+            }
+            const result = await this.service.findConflicts(version_id, project.language);
+            return res.status(200).json({ success: true, data: result });
+        } catch (e: any) {
+            return res.status(500).json({ success: false, error: e?.message || 'Internal error' });
+        }
+    }
+    /**
+     * HÀM ĐÃ SỬA: Xử lý request giải quyết xung đột.
+     */
+    async resolveConflict(req: Request, res: Response) {
+        try {
+            const { version_id } = req.params;
+            const { conflict_id, keep_use_case_id } = req.body;
+
+            if (!conflict_id || !keep_use_case_id) {
+                return res.status(400).json({ success: false, error: 'Missing conflict_id or keep_use_case_id' });
+            }
+
+            const result = await this.service.resolveConflict(version_id, conflict_id, keep_use_case_id);
             return res.status(200).json({ success: true, data: result });
         } catch (e: any) {
             return res.status(500).json({ success: false, error: e?.message || 'Internal error' });

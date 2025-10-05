@@ -137,7 +137,21 @@ export class OrchestratorService {
     }
 
 
-    async resolveDuplicate(versionId: string, conflictId: string, keep: "old" | "new") {
-        return this.requirementService.resolveDuplicate(versionId, conflictId, keep);
+    // async resolveDuplicate(versionId: string, conflictId: string, keep: "old" | "new") {
+    //     return this.requirementService.resolveDuplicate(versionId, conflictId, keep);
+    // }
+
+    /**
+     * HÀM MỚI: Cung cấp tính năng tìm xung đột.
+     */
+    async findConflicts(versionId: string, language: string) {
+        return this.requirementService.findConflicts(versionId, this.gemini, language);
+    }
+
+    /**
+     * HÀM MỚI: Cung cấp tính năng giải quyết xung đột.
+     */
+    async resolveConflict(versionId: string, conflictId: string, keepUseCaseId: string) {
+        return this.requirementService.resolveConflict(versionId, conflictId, keepUseCaseId);
     }
 }

@@ -65,6 +65,32 @@ Quy tắc:
 Chỉ trả lời đúng một trong hai JSON sau, không kèm giải thích:
 { "conflict": true }
 { "conflict": false }
+`,
+        // --- PROMPT MỚI: Yêu cầu Gemini gom nhóm các UC trùng lặp ---
+        groupConflicts: (useCasesJson: string) => `
+Bạn là một chuyên gia phân tích yêu cầu phần mềm cực kỳ chính xác.
+Nhiệm vụ của bạn là đọc danh sách các use case sau đây và GOM NHÓM các use case bị TRÙNG LẶP về mặt chức năng.
+
+DANH SÁCH USE CASE:
+${useCasesJson}
+
+QUY TẮC:
+1. Hai use case được coi là trùng lặp NẾU chúng mô tả CÙNG MỘT MỤC TIÊU hoặc CÙNG MỘT CHỨC NĂNG, bất kể cách diễn đạt.
+   Ví dụ: "Đăng nhập vào hệ thống" và "Cho phép người dùng sign-in" là TRÙNG LẶP.
+2. Các chức năng liên quan nhưng khác mục tiêu thì KHÔNG trùng lặp.
+   Ví dụ: "Đăng nhập" và "Đăng ký" là KHÁC NHAU.
+3. Chỉ nhóm các use case bị trùng lặp. Các use case không trùng với bất kỳ use case nào khác thì bỏ qua.
+
+YÊU CẦU OUTPUT:
+- CHỈ trả về một JSON array hợp lệ và KHÔNG GÌ KHÁC.
+- Mỗi phần tử trong array là một NHÓM các 'id' của các use case bị trùng lặp.
+- KHÔNG giải thích, KHÔNG markdown.
+
+Ví dụ output:
+[
+  ["UC1", "UC5", "UC12"],
+  ["UC2", "UC8"]
+]
 `
 
     },
@@ -128,7 +154,33 @@ Rules:
 Respond ONLY with JSON, no explanation:
 { "conflict": true }   // same meaning
 { "conflict": false }  // different meaning
+`,
+        groupConflicts: (useCasesJson: string) => `
+You are an extremely accurate software requirements analyst.
+Your task is to read the following list of use cases and GROUP the ones that are functional DUPLICATES.
+
+LIST OF USE CASES:
+${useCasesJson}
+
+RULES:
+1. Two use cases are duplicates IF they describe THE SAME GOAL or THE SAME FUNCTIONALITY, regardless of wording.
+   Example: "Log into the system" and "Allow user to sign-in" are DUPLICATES.
+2. Related but distinct functions are NOT duplicates.
+   Example: "Login" and "Register" are DIFFERENT.
+3. Only group the use cases that have duplicates. Ignore unique use cases.
+
+OUTPUT REQUIREMENTS:
+- ONLY return a valid JSON array and NOTHING ELSE.
+- Each element in the array should be a GROUP of 'id's of the duplicate use cases.
+- NO explanations, NO markdown.
+
+Example output:
+[
+  ["UC1", "UC5", "UC12"],
+  ["UC2", "UC8"]
+]
 `
+
 
     }
 };
@@ -195,35 +247,53 @@ export class GeminiService {
     }
 
     private safeJsonParseRobust(txt: string): { items: any[]; incomplete: boolean } {
-        if (!txt || txt.trim().length === 0) return { items: [], incomplete: false };
+        if (!txt || txt.trim().length === 0) {
+            return { items: [], incomplete: false };
+        }
 
+        // Chiến lược 1: Thử phân tích toàn bộ chuỗi dưới dạng JSON array/object
         const whole = this.tryParseWhole(txt);
-        if (whole) return { items: whole, incomplete: false };
+        if (whole) {
+            const filtered = this.filterValidUseCases(whole);
+            // Chỉ trả về nếu lọc ra có kết quả, hoặc nếu chuỗi gốc là một mảng rỗng '[]'
+            if (filtered.length > 0 || txt.trim() === '[]') {
+                return { items: filtered, incomplete: false };
+            }
+        }
 
+        // Chiến lược 2: Trích xuất một mảng JSON cân bằng (thường nằm trong markdown)
         const extracted = this.extractBalancedArray(txt);
         if (extracted.jsonText) {
             try {
                 const parsed = JSON.parse(extracted.jsonText);
-                if (Array.isArray(parsed)) {
-                    return { items: parsed, incomplete: !extracted.complete };
-                } else {
-                    return { items: [parsed], incomplete: !extracted.complete };
-                }
+                const items = Array.isArray(parsed) ? parsed : [parsed];
+                const filtered = this.filterValidUseCases(items);
+                return { items: filtered, incomplete: !extracted.complete };
             } catch {
+                // Nếu thất bại và chuỗi không hoàn chỉnh, thử thêm ký tự đóng mảng ']'
                 if (!extracted.complete) {
                     try {
                         const attempt = JSON.parse(extracted.jsonText + "]");
-                        return { items: Array.isArray(attempt) ? attempt : [attempt], incomplete: false };
+                        const items = Array.isArray(attempt) ? attempt : [attempt];
+                        const filtered = this.filterValidUseCases(items);
+                        return { items: filtered, incomplete: false };
                     } catch {
-                        // continue to next strategies
+                        // Thất bại, tiếp tục các chiến lược khác
                     }
                 }
             }
         }
 
+        // Chiến lược 3: Thử phân tích dưới dạng JSON mỗi dòng (ndjson)
         const nd = this.tryParseNdjson(txt);
-        if (nd) return { items: nd, incomplete: false };
+        if (nd) {
+            const filtered = this.filterValidUseCases(nd);
+            if (filtered.length > 0) {
+                return { items: filtered, incomplete: false };
+            }
+        }
 
+        // Chiến lược 4 (Fallback): Dùng regex để tìm tất cả các object JSON có thể có
         const objMatches = txt.match(/\{[\s\S]*?\}/g);
         if (objMatches && objMatches.length > 0) {
             const parsedObjs: any[] = [];
@@ -231,13 +301,29 @@ export class GeminiService {
                 try {
                     parsedObjs.push(JSON.parse(m));
                 } catch {
-                    // skip unparseable
+                    // Bỏ qua các object không thể parse
                 }
             }
-            if (parsedObjs.length > 0) return { items: parsedObjs, incomplete: true };
+            if (parsedObjs.length > 0) {
+                const filtered = this.filterValidUseCases(parsedObjs);
+                if (filtered.length > 0) {
+                    return { items: filtered, incomplete: true };
+                }
+            }
         }
 
+        // Nếu tất cả các chiến lược đều thất bại, trả về mảng rỗng
         return { items: [], incomplete: true };
+    }
+    private filterValidUseCases(items: any[]): any[] {
+        if (!Array.isArray(items)) return [];
+        return items.filter(item =>
+            item &&
+            typeof item === 'object' &&
+            !Array.isArray(item) &&
+            ((typeof item.name === 'string' && item.name.trim() !== '') ||
+                (typeof item.goal === 'string' && item.goal.trim() !== ''))
+        );
     }
 
     private safeJsonParse(txt: string): any[] {
@@ -447,5 +533,51 @@ export class GeminiService {
         }
         throw lastError || new Error("All Gemini API keys failed for conflict check");
     }
+    // --- HÀM MỚI: Gọi Gemini để tìm các nhóm ID xung đột ---
+    async findConflictGroups(useCases: any[], language: string): Promise<string[][]> {
+        if (!useCases || useCases.length < 2) {
+            return [];
+        }
 
+        const simplifiedUseCases = useCases.map(uc => ({
+            id: uc.id,
+            name: uc.name,
+            goal: uc.goal
+        }));
+
+        const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+        const prompt = prompts[lang].groupConflicts(JSON.stringify(simplifiedUseCases, null, 2));
+
+        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
+        if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
+
+        let lastError: any;
+        for (const k of keys) {
+            try {
+                const { GoogleGenerativeAI } = await import("@google/generative-ai");
+                const client = new GoogleGenerativeAI(k.key_value);
+                const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
+
+                const resp: any = await model.generateContent({
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                });
+
+                let text: string = resp?.response?.text?.() || "[]";
+                text = this.cleanJsonString(text);
+                const parsed = JSON.parse(text.trim());
+
+                if (Array.isArray(parsed) && (parsed.length === 0 || Array.isArray(parsed[0]))) {
+                    console.log(`✅ Gemini found ${parsed.length} conflict groups.`);
+                    return parsed;
+                } else {
+                    console.warn("⚠️ Gemini did not return a valid array of arrays:", text);
+                }
+            } catch (err) {
+                lastError = err;
+                console.error("❌ Gemini findConflictGroups error:", err);
+                continue;
+            }
+        }
+        throw lastError || new Error("All Gemini API keys failed for conflict grouping");
+    }
 }

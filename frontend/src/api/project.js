@@ -24,11 +24,22 @@ export const startIncrementalAnalysis = (projectId, versionId) => {
 };
 
 // 🔥 THÊM API CHO CONFLICT RESOLUTION
-export const resolveConflict = (versionId, conflictId, resolution) => {
-  return axiosClient.post(`/api/projects/versions/${versionId}/conflicts/${conflictId}/resolve`, {
-    keep: resolution // 'old' or 'new'
-  });
-};
+// export const resolveConflict = (versionId, conflictId, resolution) => {
+//   return axiosClient.post(`/api/projects/versions/${versionId}/conflicts/${conflictId}/resolve`, {
+//     keep: resolution // 'old' or 'new'
+//   });
+// };
+
+// HÀM MỚI: Kích hoạt việc tìm kiếm conflict
+export function findProjectConflicts(projectId, versionId) {
+  return axiosClient.post(`/api/orchestrate/projects/${projectId}/versions/${versionId}/find-conflicts`);
+}
+
+// HÀM MỚI: Gửi yêu cầu giải quyết một nhóm conflict
+export function resolveProjectConflict(projectId, versionId, data) {
+  // Đảm bảo URL đúng với định nghĩa route ở backend
+  return axiosClient.post(`/api/orchestrate/projects/${projectId}/versions/${versionId}/resolve-conflict`, data);
+}
 // Versions
 export const addInputsToVersion = (versionId, data) => axiosClient.post(`/api/projects/versions/${versionId}/inputs`, data);
 export const deleteUnprocessedInputs = (versionId) => axiosClient.delete(`/api/projects/versions/${versionId}/inputs/unprocessed-inputs`);
@@ -64,5 +75,5 @@ export default {
   getProjectDetail,
   retryProjectAnalysis,
   startIncrementalAnalysis,
-  resolveConflict
+  // resolveConflict
 };

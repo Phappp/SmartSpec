@@ -5,8 +5,10 @@ import { OrchestratorController } from './controller';
 export default function initOrchestratorRoute(controller: OrchestratorController): Router {
     const router = Router();
     const runHandler = controller.run.bind(controller);
-    const resolveHandler = controller.resolveDuplicate.bind(controller);
+    // const resolveHandler = controller.resolveDuplicate.bind(controller);
     const retryProjectAnalysis = controller.retryProjectAnalysis.bind(controller);
+    const findConflictsHandler = controller.findConflicts.bind(controller);
+    const resolveConflictHandler = controller.resolveConflict.bind(controller);
 
     // Run API (full/incremental mode)
     router.post(
@@ -29,16 +31,30 @@ export default function initOrchestratorRoute(controller: OrchestratorController
     );
 
     // Resolve duplicate API
+    // router.post(
+    //     '/projects/:project_id/versions/:version_id/resolve-duplicate',
+    //     requireAuthorizedUser,
+    //     resolveHandler
+    // );
+
+    // router.post(
+    //     '/resolve-duplicate',
+    //     requireAuthorizedUser,
+    //     resolveHandler
+    // );
+
+    // API mới để người dùng bấm nút và tìm tất cả xung đột
     router.post(
-        '/projects/:project_id/versions/:version_id/resolve-duplicate',
+        '/projects/:project_id/versions/:version_id/find-conflicts',
         requireAuthorizedUser,
-        resolveHandler
+        findConflictsHandler
     );
 
+    // API đã sửa để giải quyết một nhóm xung đột
     router.post(
-        '/resolve-duplicate',
+        '/projects/:project_id/versions/:version_id/resolve-conflict',
         requireAuthorizedUser,
-        resolveHandler
+        resolveConflictHandler
     );
 
     return router;

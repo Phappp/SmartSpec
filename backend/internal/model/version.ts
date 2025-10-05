@@ -26,18 +26,15 @@ const requirementModelSchema = new Schema({
 const conflictSchema = new Schema({
     conflict_id: {
         type: String,
-        default: () => randomUUID(), // ✅ UUID tự sinh
+        default: () => randomUUID(),
         required: true
     },
-    existing: {
-        type: requirementModelSchema,
-        required: true
-    },
-    new: {
-        type: requirementModelSchema,
+    // Chứa một mảng các use case bị trùng lặp
+    items: {
+        type: [requirementModelSchema],
         required: true
     }
-}); // ⚠️ không để _id: false, để mỗi conflict có _id riêng
+});
 
 const versionSchema = new Schema({
     project_id: { type: Schema.Types.ObjectId, ref: "projects", required: true },
@@ -48,7 +45,7 @@ const versionSchema = new Schema({
     inputs: [{ type: Schema.Types.ObjectId, ref: "inputs" }],
     outputs: [{ type: Schema.Types.ObjectId, ref: "outputs" }],
     progress: { type: Number, default: 0 }, // %
-    stage: { type: String, enum: ["normalization","input", "analyzing", "finalizing", "completed", "failed"], default: "input" },
+    stage: { type: String, enum: ["normalization", "input", "analyzing", "finalizing", "completed", "failed"], default: "input" },
     status: {
         type: String,
         enum: ['processing', 'completed', 'failed', 'has_conflicts'],
