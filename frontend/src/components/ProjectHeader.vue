@@ -160,7 +160,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: #f3f4f6;
+  background: white;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   font-size: 15px;
@@ -200,7 +200,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: #f3f4f6;
+  background: white;
   border: 1px solid #d1d5db;
   border-radius: 6px;
   padding: 2px 8px;

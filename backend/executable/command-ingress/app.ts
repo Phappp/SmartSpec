@@ -48,6 +48,9 @@ import initProjectRoute from './features/project/adapter/route';
 import input from '@/internal/model/input';
 import { InputService } from './features/orchestrator/domain/InputService';
 
+import { UsecaseService } from './features/usecase/domain/service';
+import { UsecaseController } from './features/usecase/adapter/controller';
+import initUsecaseRoute from './features/usecase/adapter/route';
 
 const app = express();
 
@@ -105,20 +108,16 @@ const createHttpServer = (redisClient: any) => {
   const inputService = new InputService();
   // 2. Khởi tạo ProjectService và "inject" orchestratorService vào
   const projectService = new ProjectService(orchestratorService, inputService);
-
   // 3. Khởi tạo ProjectController và inject projectService vào
   const projectController = new ProjectController(projectService);
+  const usecaseService = new UsecaseService();
+  const usecaseController = new UsecaseController(usecaseService);
+
   // Setup route
   app.use('/api/auth', initAuthRoute(new AuthController(authService)));
-  app.use('/api/handle_docx', initReadDocxRoute(new ReadDocxController(new ReadDocxService())));
-  app.use('/api/handle_pdf', initPdfRoute(new PdfController(new PdfService())));
-  app.use('/api/handle_extraction', initExtractorRoute(new ExtractorController(new ExtractorService())));
-  app.use('/api/handle_audio', initSpeechRoute(new SpeechController(new SpeechToTextService())));
-  app.use('/api/handle_image', initOcrRoute(new OcrController(new OcrService())));
-  app.use('/api/handle_text', initTextRoute(new TextController(new TextService())));
   app.use('/api/orchestrate', initOrchestratorRoute(new OrchestratorController(new OrchestratorService())));
   app.use('/api/projects', initProjectRoute(projectController));
-
+  app.use('/api/usecaseManagement', initUsecaseRoute(usecaseController));
 
   app.use(recoverMiddleware);
 

@@ -112,7 +112,7 @@ export class RequirementService {
                 async (input) => {
                     const text = input.cleaned_text || input.raw_text;
                     if (!text || text.trim().length === 0) return [];
-                    
+
                     const chunks = this.splitTextIntoChunks(text, 12000);
                     let inputResults: any[] = [];
                     for (const chunk of chunks) {
@@ -318,7 +318,10 @@ export class RequirementService {
         const version = await Version.findById(versionId);
         if (!version) throw new Error("Version not found");
 
-        const conflictIndex = version.pending_conflicts.findIndex((c: any) => c.conflict_id === conflictId);
+        // 🔍 Bước 1: Tìm conflict theo ID
+        const conflictIndex = version.pending_conflicts.findIndex(
+            (c: any) => c.conflict_id === conflictId
+        );
         if (conflictIndex === -1) throw new Error("Conflict not found");
 
         const conflict = version.pending_conflicts[conflictIndex];
@@ -329,21 +332,54 @@ export class RequirementService {
         );
 
         if (idsToRemove.size !== conflict.items.length - 1) {
-            throw new Error(`Invalid keepUseCaseId '${keepUseCaseId}' for this conflict group.`);
+            throw new Error(
+                `Invalid keepUseCaseId '${keepUseCaseId}' for this conflict group.`
+            );
         }
 
-        // Lọc và xóa các UC không được chọn khỏi model chính
-        const finalRequirements = version.requirement_model.filter(
+        // ✅ Bước 2: Xóa các use case bị loại khỏi requirement_model
+        const beforeNormalize = version.requirement_model.filter(
             (uc: any) => !idsToRemove.has(uc.id)
         );
 
-        // Xóa nhóm xung đột đã được giải quyết
+        // ✅ Bước 3: Dọn sạch references đến các use case bị loại
+        beforeNormalize.forEach((uc: any) => {
+            if (Array.isArray(uc.related_usecases) && uc.related_usecases.length > 0) {
+                uc.related_usecases = uc.related_usecases.filter(
+                    (relId: string) => !idsToRemove.has(relId)
+                );
+            }
+        });
+
+        // ✅ Bước 4: Normalize lại ID (UC1, UC2, UC3, ...)
+        const normalized = this.normalizeUseCaseIds(beforeNormalize, "UC");
+
+        // ✅ Bước 5: Đồng bộ lại references theo ID mới (map từ ID cũ → ID mới)
+        const idMap = new Map<string, string>();
+        for (let i = 0; i < beforeNormalize.length; i++) {
+            const oldId = beforeNormalize[i].id;
+            const newId = normalized[i]?.id;
+            if (oldId && newId) idMap.set(oldId, newId);
+        }
+
+        const synced = normalized.map((uc: any) => {
+            if (Array.isArray(uc.related_usecases) && uc.related_usecases.length > 0) {
+                uc.related_usecases = uc.related_usecases
+                    .map((oldId: string) => idMap.get(oldId) || oldId)
+                    .filter((id: string) => normalized.some((x: any) => x.id === id));
+            }
+            return uc;
+        });
+
+        // ✅ Bước 6: Cập nhật lại version
         version.pending_conflicts.splice(conflictIndex, 1);
         if (version.pending_conflicts.length === 0) {
             version.status = "completed";
         }
 
-        version.set('requirement_model', this.normalizeUseCaseIds(finalRequirements, "UC"));
+        version.set("requirement_model", synced);
+        version.updated_at = new Date();
+
         await version.save();
 
         return {
@@ -352,5 +388,4 @@ export class RequirementService {
             resolved: { conflict_id: conflictId, kept_id: keepUseCaseId },
         };
     }
-
 }

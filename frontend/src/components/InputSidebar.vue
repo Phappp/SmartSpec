@@ -8,6 +8,7 @@
 
         <button class="add-input-btn" @click="$emit('add-input-click')">
           <span class="material-symbols-outlined">add</span>
+          Add Input
         </button>
       </div>
       <ul class="file-list">
@@ -193,23 +194,22 @@ export default {
 }
 
 .add-input-btn {
-  background: linear-gradient(90deg, #1a365d6a, #2c52829a);
+  background: #1a365d;
   display: flex;
   justify-content: center;
   align-items: center;
-  backdrop-filter: blur(10px);
   color: #ffffff;
+  gap: 12px;
   border: 1px solid #c1bdbd1a;
   border-radius: 6px;
   padding: 4px 12px;
   font-weight: 600;
   cursor: pointer;
   align-self: center;
-  box-shadow: 0 4px 6px rgba(77, 77, 77, 0.7);
 }
 
 .add-input-btn:hover {
-  background: linear-gradient(90deg, #1a365d8a, #2c5282);
+  background: #12337c;
 }
 
 .add-input-btn span {

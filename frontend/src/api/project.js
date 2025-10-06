@@ -16,6 +16,23 @@ export const retryProjectAnalysis = (projectId, versionId) => {
     mode: 'full'
   });
 };
+//Usecase
+export const usecaseApi = {
+  // GET /versions/:versionId/usecases
+  getUsecases: (versionId) => axiosClient.get(`/api/usecaseManagement/versions/${versionId}/usecases`),
+
+  // POST /versions/:versionId/usecases
+  createUsecase: (versionId, data) => axiosClient.post(`/api/usecaseManagement/versions/${versionId}/usecases`, data),
+
+  // PUT /versions/:versionId/usecases/:usecaseId
+  updateUsecase: (versionId, usecaseId, data) =>
+    axiosClient.put(`/api/usecaseManagement/versions/${versionId}/usecases/${usecaseId}`, data),
+
+  // DELETE /versions/:versionId/usecases/:usecaseId
+  deleteUsecase: (versionId, usecaseId) =>
+    axiosClient.delete(`/api/usecaseManagement/versions/${versionId}/usecases/${usecaseId}`)
+};
+
 // 🔥 THÊM API MỚI CHO INCREMENTAL ANALYSIS
 export const startIncrementalAnalysis = (projectId, versionId) => {
   return axiosClient.post(`/api/orchestrate/projects/${projectId}/versions/${versionId}/process`, {
