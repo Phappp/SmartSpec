@@ -1,0 +1,360 @@
+<template>
+  <div class="admin-dashboard">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <i class="fa-brands fa-slack"></i>
+          <h1>SmartSpec Admin</h1>
+        </div>
+      </div>
+      
+      <nav class="navigation">
+        <ul>
+          <li>
+            <router-link to="/admin" :class="{ active: $route.path === '/admin' }">
+              <i class=""></i>
+              <span>Dashboard</span>
+            </router-link>
+          </li>
+          <li>
+            <router-link to="/admin/users" :class="{ active: $route.path === '/admin/users' }">
+              <i class=""></i>
+              <span>Quản lý người dùng</span>
+            </router-link>
+          </li>
+          <li>
+            <router-link to="/admin/api-keys" :class="{ active: $route.path === '/admin/api-keys' }">
+              <i class=""></i>
+              <span>Quản lý API Keys</span>
+            </router-link>
+          </li>
+          <li>
+            <router-link to="/admin/projects" :class="{ active: $route.path === '/admin/projects' }">
+              <i class=""></i>
+              <span>Quản lý dự án</span>
+            </router-link>
+          </li>
+        </ul>
+      </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-left">
+          <h2>{{ pageTitle }}</h2>
+        </div>
+        <div class="header-right">
+          <div class="notification-icon">
+            <i class="fas fa-bell"></i>
+            <span class="badge" v-if="notifications > 0">{{ notifications }}</span>
+          </div>
+          <div class="user-info">
+            <div class="avatar">{{ currentUser.name.charAt(0) }}</div>
+            <div class="user-details">
+              <span class="user-name">{{ currentUser.name }}</span>
+              <span class="user-role">{{ currentUser.role }}</span>
+            </div>
+            <button class="logout-btn" @click="logout">
+              <i class="fas fa-sign-out-alt"></i>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Content Area -->
+      <div class="content-area">
+        <router-view />
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { getUserInfo, logout as authLogout } from '@/utils/authGuard'
+
+const router = useRouter()
+
+// State
+const notifications = ref(3)
+const currentUser = ref({
+  name: 'Admin User',
+  role: 'Super Admin',
+  email: 'admin@smartspec.com'
+})
+
+// Computed
+const pageTitle = computed(() => {
+  const titles = {
+    '/admin': 'Dashboard',
+    '/admin/users': 'Quản lý người dùng',
+    '/admin/api-keys': 'Quản lý API Keys',
+    '/admin/projects': 'Quản lý dự án'
+  }
+  return titles[router.currentRoute.value.path] || 'Admin Panel'
+})
+
+// Methods
+const logout = () => {
+  console.log('🚪 Logging out...')
+  authLogout()
+  router.push('/login')
+}
+
+onMounted(() => {
+  console.log('🔧 Admin dashboard mounted')
+  
+  // Load user info from token
+  const userInfo = getUserInfo()
+  if (userInfo) {
+    currentUser.value = {
+      name: userInfo.name || 'Admin User',
+      role: userInfo.role || 'ADMIN',
+      email: userInfo.email || 'admin@smartspec.com'
+    }
+    console.log('👤 User info loaded:', currentUser.value)
+  } else {
+    console.warn('⚠️ No user info found, using default')
+  }
+})
+</script>
+
+<style scoped>
+.admin-dashboard {
+  display: flex;
+  min-height: 100vh;
+  background: #f8fafc;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Sidebar */
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  width: 280px;
+  background: white;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  border-right: 1px solid #e2e8f0;
+}
+
+.sidebar-header {
+  padding: 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo i {
+  font-size: 28px;
+  color: #0a1a4d;
+  
+}
+
+.logo h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.navigation {
+  padding: 24px 0;
+}
+
+.navigation ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.navigation li {
+  margin-bottom: 4px;
+}
+
+.navigation a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  color: #64748b;
+  text-decoration: none;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.navigation a:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.navigation a.active {
+  background: #dbeafe;
+  color: #1e40af;
+  border-right: 3px solid #3b82f6;
+}
+
+.navigation a i {
+  width: 20px;
+  text-align: center;
+  font-size: 16px;
+}
+
+/* Main Content */
+.main-content {
+  margin-left: 280px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  background: white;
+  padding: 20px 32px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.header-left h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.notification-icon {
+  position: relative;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.notification-icon:hover {
+  background: #f1f5f9;
+}
+
+.notification-icon i {
+  font-size: 20px;
+  color: #64748b;
+}
+
+.notification-icon .badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #ef4444;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+}
+
+.user-role {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.logout-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  background: #f1f5f9;
+  color: #ef4444;
+}
+
+.content-area {
+  flex: 1;
+  padding: 32px;
+  overflow-y: auto;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 240px;
+  }
+  
+  .main-content {
+    margin-left: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s;
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .main-content {
+    margin-left: 0;
+  }
+  
+  .content-area {
+    padding: 16px;
+  }
+}
+</style>

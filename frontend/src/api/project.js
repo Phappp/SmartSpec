@@ -11,6 +11,11 @@ export const createProject = (data) => axiosClient.post(`/api/projects`, data);
 export const updateProject = (id, data) => axiosClient.put(`/api/projects/${id}`, data);
 export const deleteProject = (id) => axiosClient.delete(`/api/projects/${id}`);
 export const restoreProject = (id) => axiosClient.post(`/api/projects/${id}/restore`);
+export const retryProjectAnalysis = (projectId, versionId) => {
+  return axiosClient.post(`/api/orchestrate/projects/${projectId}/versions/${versionId}/retry`, {
+      mode: 'full'
+    });
+  };
 
 export const getVersionStatus = (versionId) => axiosClient.get(`/api/projects/versions/${versionId}/status`);
 // Attachments
