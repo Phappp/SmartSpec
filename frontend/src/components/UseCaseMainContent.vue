@@ -1,14 +1,58 @@
+[file name]: UseCaseMainContent.vue
+[file content begin]
 <template>
   <div class="main-content">
     <div class="usecase-area">
-      <div class="usecase-header">
-        <h2>
-          Use Cases <span class="counter-badge">{{ useCases.length }}</span>
-        </h2>
-        <button class="add-usecase-btn" @click="showAddUsecaseModal">
+      <!-- Header với thống kê -->
+      <div class="content-header">
+        <div class="header-info">
+          <h2>Use Cases Management</h2>
+          <p class="subtitle">Manage and organize your system use cases and requirements</p>
+        </div>
+        <button class="btn-primary" @click="showAddUsecaseModal">
           <span class="material-symbols-outlined">add</span>
           Add Use Case
         </button>
+      </div>
+
+      <!-- Statistics Cards -->
+      <div class="stats-grid">
+        <div class="stat-card total">
+          <div class="stat-icon">
+            <span class="material-symbols-outlined">list_alt</span>
+          </div>
+          <div class="stat-info">
+            <h3>{{ useCases.length }}</h3>
+            <p>Total Use Cases</p>
+          </div>
+        </div>
+        <div class="stat-card roles">
+          <div class="stat-icon">
+            <span class="material-symbols-outlined">groups</span>
+          </div>
+          <div class="stat-info">
+            <h3>{{ Object.keys(groupedUseCases).length }}</h3>
+            <p>Roles</p>
+          </div>
+        </div>
+        <div class="stat-card high-priority">
+          <div class="stat-icon">
+            <span class="material-symbols-outlined">priority_high</span>
+          </div>
+          <div class="stat-info">
+            <h3>{{ highPriorityCount }}</h3>
+            <p>High Priority</p>
+          </div>
+        </div>
+        <div class="stat-card completed">
+          <div class="stat-icon">
+            <span class="material-symbols-outlined">check_circle</span>
+          </div>
+          <div class="stat-info">
+            <h3>{{ completedCount }}</h3>
+            <p>Completed</p>
+          </div>
+        </div>
       </div>
 
       <!-- Loading State -->
@@ -19,170 +63,220 @@
 
       <!-- Empty State -->
       <div v-else-if="useCases.length === 0" class="empty-state">
-        <div class="empty-icon">📋</div>
+        <div class="empty-icon">
+          <span class="material-symbols-outlined">list_alt</span>
+        </div>
         <h3>No Use Cases Yet</h3>
         <p>Start by creating your first use case to define system requirements.</p>
-        <button class="primary-btn" @click="showAddUsecaseModal">Create First Use Case</button>
+        <button class="btn-primary" @click="showAddUsecaseModal">
+          <span class="material-symbols-outlined">add</span>
+          Create First Use Case
+        </button>
       </div>
 
-      <!-- Use Cases List -->
-      <div v-else v-for="(group, role) in groupedUseCases" :key="role" class="usecase-group">
-        <h3 class="group-title" @click="toggleGroup(role)">
-          {{ role }}
-          <span class="expand-icon">{{ expandedGroups[role] ? '−' : '+' }}</span>
-        </h3>
-        <ul v-if="expandedGroups[role]" class="usecase-list">
-          <li v-for="uc in group" :key="uc.id" class="usecase-item">
-            <div class="usecase-summary" @click="toggleUseCase(uc.id)">
-              <div class="summary-left">
-                <span class="usecase-id">[{{ uc.id }}]</span>
-                <span class="usecase-name">{{ uc.name }}</span>
+      <!-- Use Cases Content -->
+      <div v-else class="usecase-content">
+        <!-- Search and Filter Bar -->
+        <div class="toolbar">
+          <div class="search-box">
+            <span class="material-symbols-outlined">search</span>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search use cases..."
+              class="search-input"
+            />
+          </div>
+          <div class="filter-options">
+            <select v-model="roleFilter" class="filter-select">
+              <option value="">All Roles</option>
+              <option v-for="role in availableRoles" :key="role" :value="role">{{ role }}</option>
+            </select>
+            <select v-model="priorityFilter" class="filter-select">
+              <option value="">All Priorities</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Use Cases Groups -->
+        <div class="usecase-groups">
+          <div
+            v-for="(group, role) in filteredGroupedUseCases"
+            :key="role"
+            class="usecase-group-card"
+          >
+            <div class="group-header" @click="toggleGroup(role)">
+              <div class="group-info">
+                <h3 class="group-title">{{ role }}</h3>
+                <span class="group-count">{{ group.length }} use cases</span>
               </div>
-              <div class="summary-actions">
-                <span class="usecase-role">{{ uc.role }}</span>
-                <button class="action-btn edit-btn" @click.stop="showEditUsecaseModal(uc)">
-                  <span class="material-symbols-outlined">edit</span>
-                </button>
-                <button class="action-btn delete-btn" @click.stop="showDeleteConfirm(uc)">
-                  <span class="material-symbols-outlined">delete</span>
-                </button>
+              <div class="group-actions">
+                <span class="expand-icon">{{ expandedGroups[role] ? '−' : '+' }}</span>
               </div>
             </div>
-            <div v-if="expandedUseCaseId === uc.id" class="usecase-detail">
-              <!-- Use Case Detail Content (giữ nguyên) -->
-              <div class="usecase-grid">
-                <div class="usecase-section span-2">
-                  <h4>Goal</h4>
-                  <p>{{ uc.goal }}</p>
-                </div>
-                <div class="usecase-section span-1">
-                  <h4>Priority</h4>
-                  <p>
-                    <span :class="['priority-badge', `priority-${uc.priority}`]">{{
-                      uc.priority
-                    }}</span>
-                  </p>
-                </div>
-                <div class="usecase-section span-3">
-                  <h4>Reason</h4>
-                  <p>{{ uc.reason }}</p>
-                </div>
 
-                <div class="usecase-section">
-                  <h4>Preconditions</h4>
-                  <ul class="detail-list">
-                    <li v-for="(item, i) in uc.preconditions" :key="i">{{ item }}</li>
-                    <li v-if="!uc.preconditions || uc.preconditions.length === 0">None</li>
-                  </ul>
-                </div>
-                <div class="usecase-section">
-                  <h4>Postconditions</h4>
-                  <ul class="detail-list">
-                    <li v-for="(item, i) in uc.postconditions" :key="i">{{ item }}</li>
-                    <li v-if="!uc.postconditions || uc.postconditions.length === 0">None</li>
-                  </ul>
-                </div>
-                <div class="usecase-section">
-                  <h4>Triggers</h4>
-                  <ul class="detail-list">
-                    <li v-for="(item, i) in uc.triggers" :key="i">{{ item }}</li>
-                    <li v-if="!uc.triggers || uc.triggers.length === 0">None</li>
-                  </ul>
-                </div>
-
-                <div class="usecase-section span-3">
-                  <h4>Tasks (Main Flow)</h4>
-                  <ol class="detail-list ordered">
-                    <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
-                  </ol>
-                </div>
-
-                <div class="usecase-section">
-                  <h4>Inputs</h4>
-                  <div class="tag-list">
-                    <span v-for="item in uc.inputs" :key="item" class="tag tag-input">{{
-                      item
-                    }}</span>
-                  </div>
-                </div>
-                <div class="usecase-section">
-                  <h4>Outputs</h4>
-                  <div class="tag-list">
-                    <span v-for="item in uc.outputs" :key="item" class="tag tag-output">{{
-                      item
-                    }}</span>
-                  </div>
-                </div>
-                <div class="usecase-section">
-                  <h4>Context</h4>
-                  <p>{{ uc.context }}</p>
-                </div>
-
-                <div class="usecase-section span-2">
-                  <h4>Business Rules</h4>
-                  <ul class="detail-list">
-                    <li v-for="(item, i) in uc.rules" :key="i">{{ item }}</li>
-                  </ul>
-                </div>
-                <div class="usecase-section">
-                  <h4>Constraints</h4>
-                  <ul class="detail-list">
-                    <li v-for="(item, i) in uc.constraints" :key="i">{{ item }}</li>
-                  </ul>
-                </div>
-
-                <div class="usecase-section span-3">
-                  <h4>Exceptions (Alternate Flows)</h4>
-                  <ul class="detail-list exception">
-                    <li v-for="(item, i) in uc.exceptions" :key="i">
-                      <span class="material-symbols-outlined">error</span>{{ item }}
-                    </li>
-                  </ul>
-                </div>
-
-                <div class="usecase-section">
-                  <h4>Stakeholders</h4>
-                  <div class="tag-list">
-                    <span v-for="item in uc.stakeholders" :key="item" class="tag tag-meta">{{
-                      item
-                    }}</span>
-                  </div>
-                </div>
-                <div class="usecase-section">
-                  <h4>Related Usecases</h4>
-                  <div class="tag-list">
-                    <span
-                      v-for="relatedId in uc.related_usecases"
-                      :key="relatedId"
-                      class="tag tag-meta"
-                    >
-                      <template v-if="useCaseMap[relatedId]">
-                        [{{ relatedId }}] {{ useCaseMap[relatedId].name }}
-                      </template>
-                      <template v-else> [{{ relatedId }}] (Not found) </template>
+            <div v-if="expandedGroups[role]" class="group-content">
+              <div
+                v-for="uc in group"
+                :key="uc.id"
+                class="usecase-card"
+                :class="{ expanded: expandedUseCaseId === uc.id }"
+              >
+                <div class="usecase-header" @click="toggleUseCase(uc.id)">
+                  <div class="usecase-basic-info">
+                    <div class="usecase-id-badge">UC-{{ uc.id }}</div>
+                    <h4 class="usecase-name">{{ uc.name }}</h4>
+                    <span class="priority-badge" :class="`priority-${uc.priority}`">
+                      {{ uc.priority }}
                     </span>
                   </div>
+                  <div class="usecase-meta">
+                    <!-- <span class="meta-item">
+                      <span class="material-symbols-outlined">schedule</span>
+                      {{ formatLastModified(uc.updated_at) }}
+                    </span> -->
+                    <div class="action-buttons">
+                      <button class="btn-icon" @click.stop="showEditUsecaseModal(uc)" title="Edit">
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                      <button
+                        class="btn-icon danger"
+                        @click.stop="showDeleteConfirm(uc)"
+                        title="Delete"
+                      >
+                        <span class="material-symbols-outlined">delete</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div class="usecase-section">
-                  <h4>Feedback</h4>
-                  <p>{{ uc.feedback || 'No feedback yet' }}</p>
-                </div>
-              </div>
 
-              <!-- Action Buttons in Detail View -->
-              <div class="detail-actions">
-                <button class="secondary-btn" @click="showEditUsecaseModal(uc)">
-                  <span class="material-symbols-outlined">edit</span>
-                  Edit Use Case
-                </button>
-                <button class="danger-btn" @click="showDeleteConfirm(uc)">
-                  <span class="material-symbols-outlined">delete</span>
-                  Delete Use Case
-                </button>
+                <!-- Expanded Details -->
+                <div v-if="expandedUseCaseId === uc.id" class="usecase-details">
+                  <div class="details-grid">
+                    <div class="detail-section">
+                      <h5>Goal</h5>
+                      <p>{{ uc.goal || 'No goal specified' }}</p>
+                    </div>
+                    <div class="detail-section">
+                      <h5>Description</h5>
+                      <p>{{ uc.reason || 'No description available' }}</p>
+                    </div>
+                    <div class="detail-section">
+                      <h5>Context</h5>
+                      <p>{{ uc.context || 'No context specified' }}</p>
+                    </div>
+
+                    <div class="detail-section full-width">
+                      <h5>Main Flow</h5>
+                      <ol class="task-list">
+                        <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                        <li v-if="!uc.tasks || uc.tasks.length === 0">No tasks defined</li>
+                      </ol>
+                    </div>
+
+                    <div class="detail-section">
+                      <h5>Preconditions</h5>
+                      <ul class="condition-list">
+                        <li v-for="(item, i) in uc.preconditions" :key="i">{{ item }}</li>
+                        <li v-if="!uc.preconditions || uc.preconditions.length === 0">None</li>
+                      </ul>
+                    </div>
+                    <div class="detail-section">
+                      <h5>Postconditions</h5>
+                      <ul class="condition-list">
+                        <li v-for="(item, i) in uc.postconditions" :key="i">{{ item }}</li>
+                        <li v-if="!uc.postconditions || uc.postconditions.length === 0">None</li>
+                      </ul>
+                    </div>
+
+                    <div class="detail-section">
+                      <h5>Inputs</h5>
+                      <div class="tag-list">
+                        <span v-for="item in uc.inputs" :key="item" class="tag tag-input">{{
+                          item
+                        }}</span>
+                        <span v-if="!uc.inputs || uc.inputs.length === 0" class="tag tag-meta"
+                          >None</span
+                        >
+                      </div>
+                    </div>
+                    <div class="detail-section">
+                      <h5>Outputs</h5>
+                      <div class="tag-list">
+                        <span v-for="item in uc.outputs" :key="item" class="tag tag-output">{{
+                          item
+                        }}</span>
+                        <span v-if="!uc.outputs || uc.outputs.length === 0" class="tag tag-meta"
+                          >None</span
+                        >
+                      </div>
+                    </div>
+
+                    <div class="detail-section full-width">
+                      <h5>Exceptions</h5>
+                      <ul class="exception-list">
+                        <li v-for="(item, i) in uc.exceptions" :key="i">
+                          <span class="material-symbols-outlined">warning</span>
+                          {{ item }}
+                        </li>
+                        <li v-if="!uc.exceptions || uc.exceptions.length === 0">
+                          No exceptions defined
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div class="detail-section">
+                      <h5>Stakeholders</h5>
+                      <div class="tag-list">
+                        <span v-for="item in uc.stakeholders" :key="item" class="tag tag-meta">{{
+                          item
+                        }}</span>
+                        <span
+                          v-if="!uc.stakeholders || uc.stakeholders.length === 0"
+                          class="tag tag-meta"
+                          >None</span
+                        >
+                      </div>
+                    </div>
+                    <div class="detail-section">
+                      <h5>Related Use Cases</h5>
+                      <div class="tag-list">
+                        <span
+                          v-for="relatedId in uc.related_usecases"
+                          :key="relatedId"
+                          class="tag tag-related"
+                        >
+                          <template v-if="useCaseMap[relatedId]"> UC-{{ relatedId }} </template>
+                          <template v-else> {{ relatedId }} </template>
+                        </span>
+                        <span
+                          v-if="!uc.related_usecases || uc.related_usecases.length === 0"
+                          class="tag tag-meta"
+                          >None</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Action Buttons -->
+                  <div class="detail-actions">
+                    <button class="btn-secondary" @click="showEditUsecaseModal(uc)">
+                      <span class="material-symbols-outlined">edit</span>
+                      Edit Use Case
+                    </button>
+                    <button class="btn-danger" @click="showDeleteConfirm(uc)">
+                      <span class="material-symbols-outlined">delete</span>
+                      Delete Use Case
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-          </li>
-        </ul>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -203,7 +297,7 @@
       <div class="modal-content delete-modal" @click.stop>
         <div class="modal-header">
           <h3>Delete Use Case</h3>
-          <button class="close-btn" @click="closeDeleteModal">
+          <button class="btn-close" @click="closeDeleteModal">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -217,8 +311,9 @@
           </p>
         </div>
         <div class="modal-actions">
-          <button class="secondary-btn" @click="closeDeleteModal">Cancel</button>
-          <button class="danger-btn" @click="confirmDelete" :disabled="deleting">
+          <button class="btn-secondary" @click="closeDeleteModal">Cancel</button>
+          <button class="btn-danger" @click="confirmDelete" :disabled="deleting">
+            <span v-if="deleting" class="button-spinner"></span>
             {{ deleting ? 'Deleting...' : 'Delete Use Case' }}
           </button>
         </div>
@@ -260,9 +355,11 @@ export default {
   },
   data() {
     return {
-      loading: false,
       expandedUseCaseId: null,
       expandedGroups: this.loadExpandedGroupsState(),
+      searchQuery: '',
+      roleFilter: '',
+      priorityFilter: '',
 
       // Modal states
       showUsecaseModal: false,
@@ -310,6 +407,54 @@ export default {
 
       return groups
     },
+    filteredGroupedUseCases() {
+      let filtered = { ...this.groupedUseCases }
+
+      // Apply role filter
+      if (this.roleFilter) {
+        if (this.roleFilter in filtered) {
+          const temp = {}
+          temp[this.roleFilter] = filtered[this.roleFilter]
+          filtered = temp
+        } else {
+          return {}
+        }
+      }
+
+      // Apply search and priority filters to each group
+      Object.keys(filtered).forEach((role) => {
+        filtered[role] = filtered[role].filter((uc) => {
+          const matchesSearch =
+            !this.searchQuery ||
+            uc.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+            uc.goal?.toLowerCase().includes(this.searchQuery.toLowerCase())
+
+          const matchesPriority = !this.priorityFilter || uc.priority === this.priorityFilter
+
+          return matchesSearch && matchesPriority
+        })
+      })
+
+      // Remove empty groups
+      Object.keys(filtered).forEach((role) => {
+        if (filtered[role].length === 0) {
+          delete filtered[role]
+        }
+      })
+
+      return filtered
+    },
+    availableRoles() {
+      return Object.keys(this.groupedUseCases)
+    },
+    highPriorityCount() {
+      return this.useCases.filter((uc) => uc.priority === 'high').length
+    },
+    completedCount() {
+      // Assuming a use case is completed if it has all required fields
+      return this.useCases.filter((uc) => uc.name && uc.goal && uc.tasks && uc.tasks.length > 0)
+        .length
+    },
   },
   methods: {
     // Use Case CRUD Operations
@@ -326,14 +471,9 @@ export default {
             usecaseId: formData.id,
             data: formData,
           })
-          // ❌ Bỏ dòng toast ở đây
-          // this.toast.success('Use case updated successfully')
         } else {
           await this.$emit('addUsecase', formData)
-          // ❌ Bỏ dòng này luôn
-          // this.toast.success('Use case created successfully')
         }
-
         this.closeUsecaseModal()
       } catch (error) {
         this.toast.error(error.message || 'Failed to save use case')
@@ -348,6 +488,7 @@ export default {
         this.closeDeleteModal()
       } catch (error) {
         console.error('Deletion failed from parent:', error)
+        this.toast.error('Failed to delete use case')
       } finally {
         this.deleting = false
       }
@@ -362,7 +503,6 @@ export default {
 
     showEditUsecaseModal(usecase) {
       this.usecaseForm = { ...usecase }
-      this.currentEditingUseCase = usecase
       this.isEditing = true
       this.showUsecaseModal = true
     },
@@ -375,7 +515,6 @@ export default {
     closeUsecaseModal() {
       this.showUsecaseModal = false
       this.usecaseForm = this.getEmptyForm()
-      this.currentEditingUseCase = null
     },
 
     closeDeleteModal() {
@@ -407,7 +546,7 @@ export default {
       }
     },
 
-    // Existing methods
+    // UI Methods
     toggleUseCase(useCaseId) {
       this.expandedUseCaseId = this.expandedUseCaseId === useCaseId ? null : useCaseId
     },
@@ -418,6 +557,11 @@ export default {
         [role]: !this.expandedGroups[role],
       }
       this.saveExpandedGroupsState()
+    },
+
+    formatLastModified(dateString) {
+      if (!dateString) return 'Unknown'
+      return new Date(dateString).toLocaleDateString('en-US')
     },
 
     saveExpandedGroupsState() {
@@ -432,15 +576,6 @@ export default {
         console.error('Error loading expanded groups state:', error)
         return {}
       }
-    },
-    isCurrentUseCase(usecaseId) {
-      return this.isEditing && this.usecaseForm.id === usecaseId
-    },
-
-    isAlreadySelected(usecaseId, currentIndex) {
-      return this.usecaseForm.related_usecases.some(
-        (id, index) => index !== currentIndex && id === usecaseId
-      )
     },
   },
 
@@ -470,185 +605,411 @@ export default {
 </script>
 
 <style scoped>
-/* Existing CSS styles remain the same */
 .main-content {
   flex: 3;
-  background: white;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  padding: 20px;
+  background: #f9fafb;
+  padding: 0;
   overflow-y: auto;
 }
 
-.usecase-header {
+.usecase-area {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* Header Styles */
+.content-header {
   display: flex;
-  justify-content: left;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+}
+
+.header-info h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1a365d;
+  margin: 0 0 8px 0;
+}
+
+.subtitle {
+  color: #6b7280;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.btn-primary {
+  display: flex;
   align-items: center;
-  margin-bottom: 20px;
-  font-weight: bold;
-  font-size: 100%;
-}
-
-.usecase-header h2 {
-  font-weight: bold;
-}
-
-.usecase-header span {
-  font-size: 18px;
-}
-
-.counter-badge {
-  padding: 2px 8px;
-  background: #e2e8f0;
-  color: #475569;
-  border-radius: 12px;
+  gap: 8px;
+  padding: 12px 20px;
+  background: #1a365d;
+  color: white;
+  border: none;
+  border-radius: 8px;
   font-weight: 600;
-  margin-left: 8px;
+  cursor: pointer;
+  transition: background 0.3s ease;
 }
 
-.usecase-area h2 {
-  margin-top: 0;
-  margin-bottom: 0;
-  color: #111827;
+.btn-primary:hover {
+  background: #2d4a8a;
 }
 
-.usecase-group {
-  margin-bottom: 25px;
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
 }
 
-.group-title {
-  font-size: 16px;
-  font-weight: bold;
-  color: #000000;
-  padding-bottom: 8px;
+.stat-card {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #3b82f6;
+}
+
+.stat-card.total {
+  border-left-color: #3b82f6;
+}
+
+.stat-card.roles {
+  border-left-color: #8b5cf6;
+}
+
+.stat-card.high-priority {
+  border-left-color: #ef4444;
+}
+
+.stat-card.completed {
+  border-left-color: #10b981;
+}
+
+.stat-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+}
+
+.stat-card.total .stat-icon {
+  background: #dbeafe;
+  color: #3b82f6;
+}
+
+.stat-card.roles .stat-icon {
+  background: #ede9fe;
+  color: #8b5cf6;
+}
+
+.stat-card.high-priority .stat-icon {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.stat-card.completed .stat-icon {
+  background: #d1fae5;
+  color: #10b981;
+}
+
+.stat-info h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: #1f2937;
+}
+
+.stat-info p {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+
+.search-box {
+  position: relative;
+  flex: 1;
+  max-width: 400px;
+}
+
+.search-box .material-symbols-outlined {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 12px 10px 40px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  transition: border-color 0.3s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #1a365d;
+}
+
+.filter-options {
+  display: flex;
+  gap: 12px;
+}
+
+.filter-select {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background: white;
+  cursor: pointer;
+}
+
+/* Use Case Groups */
+.usecase-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.usecase-group-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.group-header {
+  padding: 20px;
+  background: #f8fafc;
   border-bottom: 1px solid #e5e7eb;
-  margin-bottom: 12px;
-  text-transform: capitalize;
-  background-color: #27375a6a;
-  padding: 6px 12px;
-  border-radius: 5px;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.3s ease;
 }
 
-.group-title:hover {
-  background-color: #22222230;
+.group-header:hover {
+  background: #f1f5f9;
+}
+
+.group-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.group-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+  text-transform: capitalize;
+}
+
+.group-count {
+  background: #e5e7eb;
+  color: #6b7280;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .expand-icon {
+  font-size: 1.25rem;
   font-weight: bold;
-  font-size: 18px;
-  width: 20px;
-  height: 20px;
+  color: #6b7280;
+  transition: transform 0.3s ease;
+}
+
+.group-content {
+  padding: 16px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.usecase-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.usecase-item {
+/* Use Case Cards */
+.usecase-card {
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  margin-bottom: 10px;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   cursor: pointer;
 }
 
-.usecase-item:hover {
+.usecase-card:hover {
   border-color: #9ca3af;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-.usecase-summary {
-  padding: 12px 16px;
+.usecase-card.expanded {
+  border-color: #1a365d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.usecase-header {
+  padding: 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.summary-left {
+.usecase-basic-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  flex: 1;
 }
 
-.usecase-id {
-  font-family: monospace;
-  font-size: 14px;
-  color: #6b7280;
+.usecase-id-badge {
+  background: #1a365d;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
 }
 
 .usecase-name {
+  font-size: 1rem;
   font-weight: 600;
   color: #1f2937;
+  margin: 0;
+  flex: 1;
 }
 
-.usecase-role {
-  font-size: 12px;
-  padding: 3px 8px;
+.priority-badge {
+  padding: 4px 8px;
   border-radius: 12px;
-  background-color: #e0e7ff;
-  color: #4338ca;
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
 }
 
-.usecase-detail {
-  padding: 16px;
-  border-top: 1px solid #e5e7eb;
-  margin-top: 12px;
+.priority-high {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
-.usecase-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+.priority-medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.priority-low {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.usecase-meta {
+  display: flex;
+  align-items: center;
   gap: 16px;
 }
 
-.usecase-section {
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-icon {
+  padding: 6px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.3s ease;
+}
+
+.btn-icon:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.btn-icon.danger:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* Use Case Details */
+.usecase-details {
+  padding: 20px;
+  border-top: 1px solid #e5e7eb;
   background: white;
-  padding: 12px;
-  border-radius: 6px;
+  border-radius: 0 0 8px 8px;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.detail-section {
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
   border: 1px solid #e5e7eb;
-  font-size: 14px;
 }
 
-.usecase-section.span-1 {
-  grid-column: span 1;
+.detail-section.full-width {
+  grid-column: 1 / -1;
 }
 
-.usecase-section.span-2 {
-  grid-column: span 2;
-}
-
-.usecase-section.span-3 {
-  grid-column: span 3;
-}
-
-.usecase-section h4 {
-  margin: 0 0 8px 0;
-  font-size: 13px;
+.detail-section h5 {
+  font-size: 0.875rem;
   font-weight: 600;
-  color: #111827;
+  color: #374151;
+  margin: 0 0 8px 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.usecase-section p {
+.detail-section p {
   margin: 0;
-  line-height: 1.5;
   color: #4b5563;
+  line-height: 1.5;
+  font-size: 0.875rem;
 }
 
-.detail-list {
+.task-list,
+.condition-list,
+.exception-list {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -657,25 +1018,31 @@ export default {
   gap: 6px;
 }
 
-.detail-list.ordered {
-  padding-left: 20px;
+.task-list {
+  padding-left: 12px;
   list-style-type: decimal;
 }
 
-.detail-list li {
-  line-height: 1.5;
+.task-list li,
+.condition-list li {
   color: #4b5563;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
-.detail-list.exception li {
+.exception-list li {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  color: #b91c1c;
+  color: #dc2626;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
-.detail-list.exception .material-symbols-outlined {
+.exception-list .material-symbols-outlined {
   font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .tag-list {
@@ -685,9 +1052,9 @@ export default {
 }
 
 .tag {
-  padding: 3px 10px;
+  padding: 4px 8px;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 
@@ -706,188 +1073,116 @@ export default {
   color: #374151;
 }
 
-.priority-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: capitalize;
+.tag-related {
+  background: #f3e8ff;
+  color: #7c3aed;
 }
 
-.priority-high {
-  background-color: #fee2e2;
-  color: #b91c1c;
-}
-
-.priority-medium {
-  background-color: #fef3c7;
-  color: #b45309;
-}
-
-.priority-low {
-  background-color: #dbeafe;
-  color: #1e40af;
-}
-
-@media (max-width: 1200px) {
-  .usecase-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .usecase-section.span-3 {
-    grid-column: span 2;
-  }
-}
-
-@media (max-width: 768px) {
-  .usecase-grid {
-    grid-template-columns: 1fr;
-  }
-  .usecase-section.span-2,
-  .usecase-section.span-3 {
-    grid-column: span 1;
-  }
-
-  .usecase-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-}
-/* Header with Add Button */
-.usecase-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.add-usecase-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: #1a365d;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.add-usecase-btn:hover {
-  background: #12337c;
-}
-
-.add-usecase-btn span {
-  font-size: 24px;
-  transition: 0.2s ease;
-}
-
-.add-usecase-btn:hover span {
-  transform: rotate(90deg);
-}
-
-/* Summary Actions */
-.summary-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.action-btn {
-  padding: 6px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.edit-btn {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.edit-btn:hover {
-  background: #bfdbfe;
-}
-
-.delete-btn {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.delete-btn:hover {
-  background: #fecaca;
-}
-
-/* Detail Actions */
 .detail-actions {
   display: flex;
   gap: 12px;
-  margin-top: 20px;
+  justify-content: flex-end;
   padding-top: 16px;
   border-top: 1px solid #e5e7eb;
 }
 
-/* Buttons */
-.primary-btn {
-  background: #1a365d;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.primary-btn:hover:not(:disabled) {
-  background: #12337c;
-}
-
-.primary-btn:disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
-}
-
-.secondary-btn {
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
   background: #f3f4f6;
   color: #374151;
   border: 1px solid #d1d5db;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 600;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
 }
 
-.secondary-btn:hover {
+.btn-secondary:hover {
   background: #e5e7eb;
 }
 
-.danger-btn {
+.btn-danger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
   background: #ef4444;
   color: white;
   border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 600;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.3s ease;
 }
 
-.danger-btn:hover:not(:disabled) {
+.btn-danger:hover:not(:disabled) {
   background: #dc2626;
 }
 
-.danger-btn:disabled {
+.btn-danger:disabled {
   background: #fca5a5;
   cursor: not-allowed;
+}
+
+/* Loading and Empty States */
+.loading-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-left: 4px solid #1a365d;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.empty-icon {
+  width: 80px;
+  height: 80px;
+  background: #f3f4f6;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.empty-icon .material-symbols-outlined {
+  font-size: 40px;
+  color: #9ca3af;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px 0;
+  color: #374151;
+  font-size: 1.25rem;
+}
+
+.empty-state p {
+  margin: 0 0 24px 0;
+  color: #6b7280;
+  text-align: center;
 }
 
 /* Modal Styles */
@@ -908,11 +1203,15 @@ export default {
 .modal-content {
   background: white;
   border-radius: 12px;
-  max-width: 800px;
-  width: 100%;
+  width: 90%;
+  max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.delete-modal {
+  max-width: 500px;
 }
 
 .modal-header {
@@ -925,26 +1224,22 @@ export default {
 
 .modal-header h3 {
   margin: 0;
-  color: #111827;
+  color: #1f2937;
+  font-size: 1.25rem;
 }
 
-.close-btn {
-  background: none;
-  border: none;
+.btn-close {
   padding: 8px;
-  cursor: pointer;
+  border: none;
+  background: transparent;
   border-radius: 6px;
+  cursor: pointer;
   color: #6b7280;
-  transition: background 0.2s;
+  transition: background 0.3s ease;
 }
 
-.close-btn:hover {
+.btn-close:hover {
   background: #f3f4f6;
-}
-
-/* Delete Modal */
-.delete-modal {
-  max-width: 500px;
 }
 
 .modal-body {
@@ -955,6 +1250,7 @@ export default {
   color: #dc2626;
   font-weight: 500;
   margin-top: 8px;
+  font-size: 0.875rem;
 }
 
 .modal-actions {
@@ -965,70 +1261,76 @@ export default {
   border-top: 1px solid #e5e7eb;
 }
 
-/* Loading and Empty States */
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  color: #6b7280;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #e5e7eb;
-  border-left: 4px solid #3b82f6;
+.button-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin-bottom: 16px;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: #6b7280;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.empty-state h3 {
-  margin: 0 0 8px 0;
-  color: #374151;
-}
-
-.empty-state p {
-  margin: 0 0 24px 0;
+  display: inline-block;
+  margin-right: 8px;
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .usecase-header {
+  .usecase-area {
+    padding: 16px;
+  }
+
+  .content-header {
     flex-direction: column;
     gap: 16px;
+    align-items: stretch;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-box {
+    max-width: none;
+  }
+
+  .filter-options {
+    justify-content: space-between;
+  }
+
+  .usecase-header {
+    flex-direction: column;
     align-items: flex-start;
+    gap: 12px;
+  }
+
+  .usecase-basic-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .usecase-meta {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .detail-actions {
     flex-direction: column;
   }
 
-  .modal-content {
-    margin: 20px;
-    max-height: calc(100vh - 40px);
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
+[file content end]

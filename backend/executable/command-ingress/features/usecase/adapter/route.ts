@@ -37,5 +37,12 @@ export default function initUsecaseRoute(controller: UsecaseController) {
     (req: Request, res: Response, next: NextFunction) => controller.deleteUsecaseFromVersion(req as any, res, next)
   );
 
+  // DELETE /versions/:versionId/usecases/:usecaseId -> Xóa usecase
+  router.delete(
+    '/versions/:versionId/conflicts/:conflictId',
+    requireAuthorizedUser,
+    (req: Request, res: Response, next: NextFunction) => controller.deleteConflicts(req as any, res, next)
+  );
+
   return router;
 }

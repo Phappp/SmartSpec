@@ -14,7 +14,7 @@
         <h3>Conflicts Detected</h3>
         <p>
           We found {{ pendingConflicts.length }} group(s) of duplicate use cases. Please select one
-          version to keep from each group.
+          version to keep from each group, or skip conflicts you want to handle later.
         </p>
       </div>
 
@@ -26,7 +26,18 @@
         >
           <div class="conflict-header">
             <h4>Conflict Group {{ index + 1 }}</h4>
-            <span class="conflict-id">ID: {{ conflict.conflict_id }}</span>
+            <div class="conflict-actions">
+              <span class="conflict-id">ID: {{ conflict.conflict_id }}</span>
+              <button
+                class="skip-btn"
+                @click="$emit('skip-conflict', conflict.conflict_id)"
+                :disabled="isSkippingConflict"
+                title="Skip this conflict for now"
+              >
+                <span class="material-symbols-outlined">close</span>
+                Skip
+              </button>
+            </div>
           </div>
 
           <div class="conflict-options-grid">
@@ -71,18 +82,23 @@
       </div>
 
       <div class="conflicts-actions">
-        <button
-          class="resolve-all-btn"
-          @click="$emit('resolve-all')"
-          :disabled="!canResolveAllConflicts || isResolvingConflicts"
-        >
-          <span v-if="isResolvingConflicts" class="button-spinner-small"></span>
-          {{
-            isResolvingConflicts
-              ? 'Resolving...'
-              : `Resolve All Selected (${resolvedConflictsCount}/${pendingConflicts.length})`
-          }}
-        </button>
+        <div class="conflicts-info">
+          <span class="resolved-count">
+            Resolved: {{ resolvedConflictsCount }}/{{ pendingConflicts.length }}
+          </span>
+        </div>
+        <div class="conflicts-buttons">
+          <button
+            class="resolve-all-btn"
+            @click="$emit('resolve-all')"
+            :disabled="!canResolveAllConflicts || isResolvingConflicts"
+          >
+            <span v-if="isResolvingConflicts" class="button-spinner-small"></span>
+            {{
+              isResolvingConflicts ? 'Resolving...' : `Resolve Selected (${resolvedConflictsCount})`
+            }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -112,6 +128,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    isSkippingConflict: {
+      type: Boolean,
+      default: false,
+    },
     canResolveAllConflicts: {
       type: Boolean,
       default: false,
@@ -121,7 +141,7 @@ export default {
       default: 0,
     },
   },
-  emits: ['find-conflicts', 'select-resolution', 'resolve-all', 'show-detail'],
+  emits: ['find-conflicts', 'select-resolution', 'resolve-all', 'show-detail', 'skip-conflict'],
 }
 </script>
 
@@ -203,10 +223,41 @@ export default {
   color: #374151;
 }
 
+.conflict-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .conflict-id {
   font-size: 12px;
   color: #6b7280;
   font-family: monospace;
+}
+
+.skip-btn {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.skip-btn:hover:not(:disabled) {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.skip-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .conflict-options-grid {
@@ -313,7 +364,25 @@ export default {
 
 .conflicts-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.conflicts-info {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.resolved-count {
+  font-weight: 500;
+}
+
+.conflicts-buttons {
+  display: flex;
+  gap: 12px;
 }
 
 .resolve-all-btn {
@@ -370,7 +439,22 @@ export default {
     gap: 8px;
   }
 
+  .conflict-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .actions-toolbar {
+    justify-content: center;
+  }
+
+  .conflicts-actions {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .conflicts-buttons {
     justify-content: center;
   }
 }

@@ -4,9 +4,21 @@
       <!-- Header -->
       <div class="modal-header">
         <h2>Use Case Details</h2>
-        <button class="close-btn" @click="$emit('close')">
-          <span class="material-symbols-outlined">close</span>
-        </button>
+        <div class="header-actions">
+          <button
+            v-if="showSkipButton"
+            class="skip-conflict-btn"
+            @click="$emit('skip-conflict')"
+            :disabled="isSkipping"
+          >
+            <span v-if="isSkipping" class="button-spinner-small"></span>
+            <span v-else class="material-symbols-outlined">close</span>
+            {{ isSkipping ? 'Skipping...' : 'Skip Conflict' }}
+          </button>
+          <button class="close-btn" @click="$emit('close')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
       </div>
 
       <!-- Content -->
@@ -192,8 +204,16 @@ export default {
       required: true,
       default: () => ({}),
     },
+    showSkipButton: {
+      type: Boolean,
+      default: false,
+    },
+    isSkipping: {
+      type: Boolean,
+      default: false,
+    },
   },
-  emits: ['close'],
+  emits: ['close', 'skip-conflict'],
 }
 </script>
 
@@ -238,6 +258,37 @@ export default {
   font-size: 24px;
   font-weight: 700;
   color: #1f2937;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.skip-conflict-btn {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.skip-conflict-btn:hover:not(:disabled) {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.skip-conflict-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .close-btn {
@@ -483,6 +534,24 @@ export default {
   transform: translateY(-1px);
 }
 
+.button-spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 /* Scrollbar styling */
 .modal-body::-webkit-scrollbar {
   width: 6px;
@@ -499,5 +568,18 @@ export default {
 
 .modal-body::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .modal-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 </style>

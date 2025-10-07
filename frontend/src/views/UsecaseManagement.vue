@@ -12,6 +12,18 @@
       @go-back="goBack"
     />
 
+    <!-- Navigation Tabs -->
+    <div class="navigation-tabs">
+      <button class="tab-button active" @click="navigateToUsecase">
+        <span class="material-symbols-outlined">list_alt</span>
+        Use Cases Management
+      </button>
+      <button class="tab-button" @click="navigateToOutput">
+        <span class="material-symbols-outlined">output</span>
+        Output Management
+      </button>
+    </div>
+
     <!-- Incremental Analysis Component -->
     <IncrementalAnalysis
       :is-processing-incremental="isProcessingIncremental"
@@ -29,12 +41,14 @@
       :selected-resolutions="selectedResolutions"
       :is-finding-conflicts="isFindingConflicts"
       :is-resolving-conflicts="isResolvingConflicts"
+      :is-skipping-conflict="isSkippingConflict"
       :can-resolve-all-conflicts="canResolveAllConflicts"
       :resolved-conflicts-count="resolvedConflictsCount"
       @find-conflicts="findAndHandleConflicts"
       @select-resolution="selectResolution"
       @resolve-all="resolveAllConflicts"
       @show-detail="showConflictDetail"
+      @skip-conflict="skipConflict"
     />
 
     <div class="view-body">
@@ -77,7 +91,10 @@
     <ConflictDetailModal
       v-if="showConflictDetailModal"
       :use-case="currentDetailUseCase"
+      :show-skip-button="true"
+      :is-skipping="isSkippingConflict"
       @close="showConflictDetailModal = false"
+      @skip-conflict="skipCurrentConflict"
     />
   </div>
 </template>
@@ -92,6 +109,7 @@ import {
   startIncrementalAnalysis,
   findProjectConflicts,
   resolveProjectConflict,
+  skipConflict,
   usecaseApi,
 } from '@/api/project'
 import { useToast } from 'vue-toastification'
@@ -143,6 +161,7 @@ export default {
       selectedResolutions: {},
       isResolvingConflicts: false,
       isFindingConflicts: false,
+      isSkippingConflict: false,
 
       // ========== MODAL STATES ==========
       showConflictDetailModal: false,
@@ -158,7 +177,7 @@ export default {
       isDeletingInput: null,
 
       // ========== USECASE =============
-      isManagingUsecase: false, // ĐÚNG VỊ TRÍ
+      isManagingUsecase: false,
       currentEditingUseCase: null,
 
       toast: useToast(),
@@ -199,11 +218,7 @@ export default {
           id: uc.id,
           name: uc.name,
         }))
-        .filter(
-          (uc) =>
-            // Loại bỏ use case hiện tại khi đang edit (nếu có)
-            !this.currentEditingUseCase || uc.id !== this.currentEditingUseCase.id
-        )
+        .filter((uc) => !this.currentEditingUseCase || uc.id !== this.currentEditingUseCase.id)
     },
   },
 
@@ -223,6 +238,18 @@ export default {
   },
 
   methods: {
+    // ========== NAVIGATION METHODS ==========
+    navigateToUsecase() {
+      // Đã ở trang usecase management
+    },
+
+    navigateToOutput() {
+      this.$router.push({
+        name: 'OutputManagement',
+        params: { id: this.project._id },
+      })
+    },
+
     // ========== DATA FETCHING ==========
     /**
      * Fetch project data including versions, inputs, and use cases
@@ -273,6 +300,8 @@ export default {
         this.toast.error('Failed to load use cases')
       }
     },
+
+    // ========== USECASE MANAGEMENT ==========
     /**
      * Add new use case to version
      */
@@ -284,7 +313,6 @@ export default {
         if (response.data.status === 'Success') {
           this.toast.success('Use case created successfully')
           await this.fetchUseCases()
-          // Đánh dấu có thay đổi requirement
           await this.fetchProjectData(this.project._id)
         } else {
           throw new Error(response.data.message || 'Failed to create use case')
@@ -294,7 +322,7 @@ export default {
         this.toast.error(
           error.response?.data?.error || error.message || 'Failed to create use case'
         )
-        throw error // Re-throw để component con xử lý
+        throw error
       } finally {
         this.isManagingUsecase = false
       }
@@ -311,7 +339,6 @@ export default {
         if (response.data.status === 'Success') {
           this.toast.success('Use case updated successfully')
           await this.fetchUseCases()
-          // Đánh dấu có thay đổi requirement
           await this.fetchProjectData(this.project._id)
         } else {
           throw new Error(response.data.message || 'Failed to update use case')
@@ -330,30 +357,13 @@ export default {
     /**
      * Delete use case from version
      */
-    // Thay thế hàm cũ bằng hàm này
-
-    /**
-     * Delete use case from version
-     */
     async handleDeleteUsecase(usecaseId) {
       this.isManagingUsecase = true
       try {
-        // Gọi API để thực sự xóa trên server
         const response = await usecaseApi.deleteUsecase(this.selectedVersionId, usecaseId)
 
         if (response.data.status === 'Success') {
-          // Cha chịu trách nhiệm thông báo thành công
           this.toast.success('Use case deleted successfully')
-
-          // === GIẢI PHÁP "THỰC HIỆN 2 HÀNH ĐỘNG" ===
-
-          // 1. "XÓA LẦN 1": Cập nhật giao diện ngay lập tức trên client
-          //    Người dùng sẽ thấy use case biến mất ngay lập tức.
-          // this.useCases = this.useCases.filter((uc) => uc.id !== usecaseId)
-
-          // 2. "XÓA LẦN 2": Đồng bộ hóa trạng thái cuối cùng với server
-          //    Gọi lại API để lấy dữ liệu mới nhất, đảm bảo mọi thứ (bao gồm
-          //    các thay đổi ngầm như affects_requirement) đều được cập nhật.
           await this.fetchProjectData(this.project._id)
         } else {
           throw new Error(response.data.message || 'Failed to delete use case')
@@ -363,7 +373,6 @@ export default {
         this.toast.error(
           error.response?.data?.error || error.message || 'Failed to delete use case'
         )
-        // Ném lỗi ra ngoài để component con có thể bắt được
         throw error
       } finally {
         this.isManagingUsecase = false
@@ -472,6 +481,38 @@ export default {
         )
       } finally {
         this.isResolvingConflicts = false
+      }
+    },
+
+    // ========== CONFLICT SKIPPING ==========
+    /**
+     * Skip a specific conflict
+     */
+    async skipConflict(conflictId) {
+      if (!this.selectedVersionId || !conflictId) return
+
+      this.isSkippingConflict = true
+      try {
+        await skipConflict(this.selectedVersionId, conflictId)
+        this.toast.success('Conflict skipped successfully')
+
+        // Refresh data to update conflict list
+        await this.fetchProjectData(this.project._id)
+      } catch (error) {
+        console.error('Error skipping conflict:', error)
+        this.toast.error(error.response?.data?.error || 'Failed to skip conflict')
+      } finally {
+        this.isSkippingConflict = false
+      }
+    },
+
+    /**
+     * Skip conflict from detail modal
+     */
+    async skipCurrentConflict() {
+      if (this.currentDetailUseCase?.conflict_id) {
+        await this.skipConflict(this.currentDetailUseCase.conflict_id)
+        this.showConflictDetailModal = false
       }
     },
 
@@ -878,5 +919,42 @@ export default {
   display: flex;
   gap: 24px;
   flex: 1;
+}
+
+/* Navigation Tabs */
+.navigation-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 0 8px;
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.tab-button:hover {
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.tab-button.active {
+  background: #1a365d;
+  border-color: #1a365d;
+  color: white;
+}
+
+.tab-button .material-symbols-outlined {
+  font-size: 20px;
 }
 </style>

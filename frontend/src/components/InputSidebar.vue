@@ -1,112 +1,156 @@
 <template>
-  <div class="sidebar">
-    <div class="sidebar-item">
-      <div class="sidebar-header">
-        <h3>
-          Inputs <span class="counter-badge">{{ inputs.length }}</span>
-        </h3>
+  <div class="input-sidebar" :class="{ collapsed: isCollapsed }">
+    <!-- Collapse Toggle Button -->
+    <button
+      class="collapse-toggle"
+      @click="toggleCollapse"
+      :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+    >
+      <span class="material-symbols-outlined">
+        {{ isCollapsed ? 'chevron_left' : 'chevron_right' }}
+      </span>
+    </button>
 
-        <button class="add-input-btn" @click="$emit('add-input-click')">
-          <span class="material-symbols-outlined">add</span>
-          Add Input
-        </button>
-      </div>
-      <ul class="file-list">
-        <li
-          v-for="input in inputs"
-          :key="input._id"
-          class="expandable-input-item"
-          @click="toggleInput(input._id)"
-        >
-          <div class="input-summary">
-            <div class="input-status">
-              <span
-                class="status-dot"
-                :class="{ processed: input.is_processed, 'not-processed': !input.is_processed }"
-                :title="input.is_processed ? 'Processed' : 'Not Processed'"
-              ></span>
-              <span class="material-symbols-outlined file-icon">notes</span>
-            </div>
-            <div class="input-info">
-              <div class="input-main">
-                <span class="clean-text">{{ getCleanText(input) }}</span>
+    <div class="sidebar-content" :class="{ hidden: isCollapsed }">
+      <div class="sidebar-section">
+        <div class="section-header">
+          <h3>
+            Inputs
+            <span class="counter-badge">{{ inputs.length }}</span>
+          </h3>
+          <button class="btn-primary" @click="$emit('add-input-click')">
+            <span class="material-symbols-outlined">add</span>
+            Add Input
+          </button>
+        </div>
+
+        <!-- Filter Tabs - Compact in collapsed mode -->
+        <div class="filter-tabs" :class="{ compact: isCollapsed }">
+          <button
+            v-for="filter in inputFilters"
+            :key="filter.type"
+            class="filter-tab"
+            :class="{ active: activeFilter === filter.type }"
+            @click="setActiveFilter(filter.type)"
+            :title="filter.label"
+          >
+            <span class="material-symbols-outlined">{{ filter.icon }}</span>
+            <span class="filter-label" v-if="!isCollapsed">{{ filter.label }}</span>
+            <span class="filter-count" v-if="!isCollapsed">{{ getFilterCount(filter.type) }}</span>
+            <span class="filter-count-badge" v-else>{{ getFilterCount(filter.type) }}</span>
+          </button>
+        </div>
+
+        <div class="inputs-list">
+          <div
+            v-for="input in filteredInputs"
+            :key="input._id"
+            class="input-card"
+            :class="[
+              input.type,
+              { expanded: expandedInputId === input._id, processed: input.is_processed },
+            ]"
+            @click="toggleInput(input._id)"
+          >
+            <div class="input-header">
+              <div class="input-type-icon">
+                <span class="material-symbols-outlined">{{ getTypeIcon(input.type) }}</span>
               </div>
-              <div class="input-meta">
-                <span class="input-type">{{ input.type }}</span>
-                <span class="input-language">{{ getLanguage(input) }}</span>
-                <span class="input-date">{{ formatDate(input.updated_at) }}</span>
+
+              <div class="input-main-info" v-if="!isCollapsed">
+                <h4 class="input-title">{{ getCleanText(input) }}</h4>
+                <div class="input-meta">
+                  <span class="quality-badge" :class="getQualityClass(input)">
+                    {{ Math.round(getQualityScore(input) * 100) }}%
+                  </span>
+                </div>
+              </div>
+
+              <!-- Collapsed View -->
+              <div class="input-collapsed" v-else>
+                <span class="material-symbols-outlined mini-icon">{{
+                  getTypeIcon(input.type)
+                }}</span>
+                <span class="status-dot" :class="{ processed: input.is_processed }"></span>
+              </div>
+
+              <div class="input-actions" v-if="!isCollapsed">
+                <button
+                  class="btn-icon danger"
+                  @click.stop="$emit('delete-input', input._id)"
+                  :disabled="isDeletingInput === input._id"
+                  title="Delete input"
+                >
+                  <span v-if="isDeletingInput === input._id" class="button-spinner"></span>
+                  <span v-else class="material-symbols-outlined">delete</span>
+                </button>
               </div>
             </div>
-            <div class="quality-score">
-              <div class="score-circle">
-                <svg width="40" height="40" viewBox="0 0 40 40">
-                  <circle cx="20" cy="20" r="18" fill="none" stroke="#e5e7eb" stroke-width="4" />
-                  <circle
-                    cx="20"
-                    cy="20"
-                    r="18"
-                    fill="none"
-                    stroke="#10b981"
-                    :stroke-dasharray="113.097"
-                    :stroke-dashoffset="113.097 - 113.097 * getQualityScore(input)"
-                    stroke-width="4"
-                    stroke-linecap="round"
-                    transform="rotate(-90 20 20)"
-                  />
-                </svg>
-                <span class="score-text">{{ Math.round(getQualityScore(input) * 100) }}%</span>
+
+            <!-- Expanded Details -->
+            <div v-if="expandedInputId === input._id && !isCollapsed" class="input-details">
+              <div class="details-grid">
+                <div class="detail-item">
+                  <span class="detail-label">Status</span>
+                  <span class="detail-value">
+                    <span class="status-badge" :class="{ processed: input.is_processed }">
+                      {{ input.is_processed ? 'Processed' : 'Not Processed' }}
+                    </span>
+                  </span>
+                </div>
+
+                <div class="detail-item">
+                  <span class="detail-label">Type</span>
+                  <span class="detail-value">{{ input.type }}</span>
+                </div>
+
+                <div class="detail-item">
+                  <span class="detail-label">Language</span>
+                  <span class="detail-value">{{ getLanguage(input) }}</span>
+                </div>
+
+                <div class="detail-item full-width">
+                  <span class="detail-label">Content</span>
+                  <div class="content-preview">
+                    {{ getCleanText(input, 200) }}
+                  </div>
+                </div>
               </div>
             </div>
-            <button
-              class="delete-input-btn"
-              @click.stop="$emit('delete-input', input._id)"
-              :disabled="isDeletingInput === input._id"
-              :title="`Delete ${input.type} input`"
-            >
-              <span v-if="isDeletingInput === input._id" class="button-spinner-small"></span>
-              <span v-else class="material-symbols-outlined">delete</span>
+          </div>
+
+          <!-- Empty State -->
+          <div v-if="filteredInputs.length === 0 && !isCollapsed" class="empty-state">
+            <span class="material-symbols-outlined empty-icon">description</span>
+            <p>No {{ activeFilter === 'all' ? '' : activeFilter }} inputs found</p>
+            <button class="btn-secondary" @click="$emit('add-input-click')">
+              <span class="material-symbols-outlined">add</span>
+              Add Input
             </button>
           </div>
-          <div v-if="expandedInputId === input._id" class="input-detail">
-            <div class="input-details">
-              <div class="detail-row">
-                <span class="detail-label">Status:</span>
-                <span class="detail-value">
-                  <span
-                    class="status-badge"
-                    :class="{
-                      processed: input.is_processed,
-                      'not-processed': !input.is_processed,
-                    }"
-                  >
-                    {{ input.is_processed ? 'Processed' : 'Not Processed' }}
-                  </span>
-                </span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Type:</span>
-                <span class="detail-value">{{ input.type }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Language:</span>
-                <span class="detail-value">{{ getLanguage(input) }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Updated:</span>
-                <span class="detail-value">{{ formatDateTime(input.updated_at) }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Quality:</span>
-                <span class="detail-value">{{ Math.round(getQualityScore(input) * 100) }}%</span>
-              </div>
-              <div class="detail-row full-width">
-                <span class="detail-label">Content:</span>
-                <span class="detail-value content-text">{{ getCleanText(input) }}</span>
-              </div>
-            </div>
+
+          <!-- Collapsed Empty State -->
+          <div v-if="filteredInputs.length === 0 && isCollapsed" class="empty-state-collapsed">
+            <span class="material-symbols-outlined">add</span>
           </div>
-        </li>
-      </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Stats in Collapsed Mode -->
+    <div class="collapsed-stats" v-if="isCollapsed">
+      <div class="stat-item" :title="`Total inputs: ${inputs.length}`">
+        <span class="material-symbols-outlined">description</span>
+        <span class="stat-number">{{ inputs.length }}</span>
+      </div>
+      <div class="stat-item" :title="`Processed: ${processedCount}`">
+        <span class="material-symbols-outlined success">check_circle</span>
+        <span class="stat-number">{{ processedCount }}</span>
+      </div>
+      <div class="stat-item" :title="`Pending: ${pendingCount}`">
+        <span class="material-symbols-outlined warning">schedule</span>
+        <span class="stat-number">{{ pendingCount }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -127,246 +171,498 @@ export default {
   data() {
     return {
       expandedInputId: null,
+      activeFilter: 'all',
+      isCollapsed: false, // Default là hiển thị
+      inputFilters: [
+        { type: 'all', label: 'All', icon: 'apps' },
+        { type: 'pdf', label: 'PDF', icon: 'picture_as_pdf' },
+        { type: 'docx', label: 'DOCX', icon: 'description' },
+        { type: 'image', label: 'Images', icon: 'image' },
+        { type: 'audio', label: 'Audio', icon: 'audiotrack' },
+        { type: 'text', label: 'Text', icon: 'text_snippet' },
+      ],
     }
   },
+  computed: {
+    filteredInputs() {
+      if (this.activeFilter === 'all') {
+        return this.inputs
+      }
+      return this.inputs.filter((input) => input.type === this.activeFilter)
+    },
+    processedCount() {
+      return this.inputs.filter((input) => input.is_processed).length
+    },
+    pendingCount() {
+      return this.inputs.filter((input) => !input.is_processed).length
+    },
+  },
+  mounted() {
+    // Load trạng thái từ localStorage khi component được mount
+    this.loadCollapsedState()
+  },
   methods: {
+    toggleCollapse() {
+      this.isCollapsed = !this.isCollapsed
+      this.expandedInputId = null
+      // Lưu trạng thái vào localStorage
+      this.saveCollapsedState()
+    },
+
+    saveCollapsedState() {
+      // Lưu trạng thái collapse vào localStorage với key duy nhất cho component này
+      localStorage.setItem('inputSidebarCollapsed', JSON.stringify(this.isCollapsed))
+    },
+
+    loadCollapsedState() {
+      // Load trạng thái từ localStorage
+      const savedState = localStorage.getItem('inputSidebarCollapsed')
+      if (savedState !== null) {
+        this.isCollapsed = JSON.parse(savedState)
+      }
+    },
+
     toggleInput(inputId) {
-      this.expandedInputId = this.expandedInputId === inputId ? null : inputId
+      if (this.isCollapsed) {
+        this.isCollapsed = false
+        this.saveCollapsedState() // Lưu trạng thái khi auto-expand
+        // Auto-expand the clicked input after expanding sidebar
+        setTimeout(() => {
+          this.expandedInputId = inputId
+        }, 100)
+      } else {
+        this.expandedInputId = this.expandedInputId === inputId ? null : inputId
+      }
     },
-    getCleanText(input) {
-      return input.cleaned_text || input.clean_text || input.raw_text || 'No content available'
+
+    setActiveFilter(filterType) {
+      this.activeFilter = filterType
+      this.expandedInputId = null
     },
+
+    getFilterCount(filterType) {
+      if (filterType === 'all') return this.inputs.length
+      return this.inputs.filter((input) => input.type === filterType).length
+    },
+
+    getTypeIcon(type) {
+      const icons = {
+        pdf: 'picture_as_pdf',
+        docx: 'description',
+        image: 'image',
+        audio: 'audiotrack',
+        text: 'text_snippet',
+      }
+      return icons[type] || 'description'
+    },
+
+    getCleanText(input, maxLength = 60) {
+      const text =
+        input.cleaned_text || input.clean_text || input.raw_text || 'No content available'
+      return text.length > maxLength ? text.substring(0, maxLength) + '...' : text
+    },
+
     getLanguage(input) {
       return input.metadata?.language || input.language || 'Unknown'
     },
+
     getQualityScore(input) {
       return input.quality_score || 0
     },
+
+    getQualityClass(input) {
+      const score = this.getQualityScore(input)
+      if (score >= 0.8) return 'high'
+      if (score >= 0.5) return 'medium'
+      return 'low'
+    },
+
     formatDate(dateString) {
       if (!dateString) return 'N/A'
       return new Date(dateString).toLocaleDateString('en-US')
     },
+
     formatDateTime(dateString) {
       if (!dateString) return 'N/A'
       return new Date(dateString).toLocaleString('en-US')
     },
   },
+
+  // Optional: Lưu trạng thái khi component bị destroy (trong trường hợp trang bị reload)
+  beforeUnmount() {
+    this.saveCollapsedState()
+  },
 }
 </script>
-
 <style scoped>
-.sidebar {
+.input-sidebar {
+  position: relative;
   flex: 1;
-  background: white;
+  /* background: white; */
   border-radius: 12px;
   border: 1px solid #e5e7eb;
   padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  min-width: 280px;
+  max-width: 400px;
 }
 
-.sidebar-item {
-  margin-bottom: 25px;
+.input-sidebar.collapsed {
+  max-height: 250px;
+  min-width: 80px;
+  max-width: 80px;
+  padding: 16px 12px;
+}
+
+.collapse-toggle {
+  position: absolute;
+  top: 12px;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  background: #1a365d;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  z-index: 10;
 }
 
-.sidebar-header {
+.collapse-toggle:hover {
+  background: #2d4a8a;
+  transform: scale(1.1);
+}
+
+.sidebar-content {
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-content.hidden {
+  max-height: 12px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
-.sidebar-header h3 {
-  font-size: 16px;
+.section-header h3 {
+  font-size: 1.25rem;
   font-weight: 600;
-  margin-bottom: 0;
-  color: #111827;
+  color: #1f2937;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .counter-badge {
-  padding: 2px 8px;
-  background: #e2e8f0;
-  color: #475569;
+  background: #e5e7eb;
+  color: #374151;
+  padding: 4px 8px;
   border-radius: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
-  margin-left: 8px;
 }
 
-.add-input-btn {
-  background: #1a365d;
+.btn-primary {
   display: flex;
-  justify-content: center;
   align-items: center;
-  color: #ffffff;
-  gap: 12px;
-  border: 1px solid #c1bdbd1a;
-  border-radius: 6px;
-  padding: 4px 12px;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #1a365d;
+  color: white;
+  border: none;
+  border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
-  align-self: center;
+  transition: background 0.3s ease;
 }
 
-.add-input-btn:hover {
-  background: #12337c;
+.btn-primary:hover {
+  background: #2d4a8a;
 }
 
-.add-input-btn span {
-  font-size: 24px;
-  transition: 0.2s ease;
-}
-
-.add-input-btn:hover span {
-  transform: rotate(90deg);
-}
-
-.file-list {
-  list-style: none;
+/* Filter Tabs */
+.filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 20px;
   padding: 0;
-  margin: 0;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.filter-tabs.compact {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.filter-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex: 1;
+  justify-content: center;
+}
+
+.filter-tabs.compact .filter-tab {
+  padding: 8px;
+  justify-content: center;
+}
+
+.filter-tab:hover {
+  color: #374151;
+  background: #f1f5f9;
+}
+
+.filter-tab.active {
+  background: white;
+  color: #1a365d;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.filter-label {
+  white-space: nowrap;
+}
+
+.filter-count {
+  background: #e5e7eb;
+  color: #374151;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.625rem;
+  font-weight: 600;
+}
+
+.filter-count-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: #ef4444;
+  color: white;
+  padding: 1px 4px;
+  border-radius: 8px;
+  font-size: 0.5rem;
+  font-weight: 700;
+  min-width: 12px;
+  text-align: center;
+}
+
+.filter-tab.active .filter-count {
+  background: #1a365d;
+  color: white;
+}
+
+/* Inputs List */
+.inputs-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  max-height: 500px;
+  overflow-y: auto;
 }
 
-.expandable-input-item {
+.input-card {
   background: #f9fafb;
-  border-radius: 6px;
-  font-size: 14px;
-  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
   cursor: pointer;
-  border: 1px solid transparent;
-  transition: border-color 0.2s ease;
+  transition: all 0.3s ease;
+  position: relative;
 }
 
-.expandable-input-item:hover {
+.input-card:hover {
   border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-.input-summary {
+.input-card.expanded {
+  border-color: #1a365d;
+  background: white;
+}
+
+.input-card.processed {
+  border-left: 3px solid #10b981;
+}
+
+.input-card:not(.processed) {
+  border-left: 3px solid #ef4444;
+}
+
+.input-header {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px;
+  min-height: 48px;
 }
 
-.input-status {
+.input-type-icon {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: #e5e7eb;
+  color: #6b7280;
   flex-shrink: 0;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
+.input-card.pdf .input-type-icon {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
-.status-dot.processed {
-  background-color: #10b981;
-  box-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
+.input-card.docx .input-type-icon {
+  background: #dbeafe;
+  color: #3b82f6;
 }
 
-.status-dot.not-processed {
-  background-color: #ef4444;
-  box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+.input-card.image .input-type-icon {
+  background: #f0f9ff;
+  color: #0ea5e9;
 }
 
-.file-icon {
-  font-size: 18px;
-  color: #6b7280;
+.input-card.audio .input-type-icon {
+  background: #f3e8ff;
+  color: #a855f7;
 }
 
-.input-info {
+.input-card.text .input-type-icon {
+  background: #f0fdf4;
+  color: #22c55e;
+}
+
+.input-main-info {
   flex: 1;
   min-width: 0;
 }
 
-.input-main {
-  margin-bottom: 4px;
-  max-width: 200px;
-}
-
-.clean-text {
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 500;
+.input-title {
+  font-size: 0.875rem;
+  font-weight: 600;
   color: #1f2937;
+  margin: 0 0 4px 0;
+  line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
-  pointer-events: none;
-  user-select: none;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .input-meta {
   display: flex;
-  gap: 8px;
-  font-size: 12px;
+  align-items: center;
+  gap: 6px;
+}
+
+.quality-badge {
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+.quality-badge.high {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.quality-badge.medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.quality-badge.low {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* Collapsed View */
+.input-collapsed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.mini-icon {
+  font-size: 20px;
   color: #6b7280;
 }
 
-.input-type,
-.input-language,
-.input-date {
-  background: #e5e7eb;
-  padding: 2px 6px;
-  border-radius: 4px;
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
 }
 
-.quality-score {
-  flex-shrink: 0;
+.status-dot.processed {
+  background: #10b981;
 }
 
-.score-circle {
-  position: relative;
-  width: 40px;
-  height: 40px;
+.input-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.score-text {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 10px;
-  font-weight: 600;
-  color: #059669;
-}
-
-.delete-input-btn {
-  background: transparent;
+.btn-icon {
+  padding: 6px;
   border: none;
-  border-radius: 4px;
-  padding: 4px;
+  background: transparent;
+  border-radius: 6px;
   cursor: pointer;
   color: #6b7280;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.delete-input-btn:hover:not(:disabled) {
+.btn-icon:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.btn-icon.danger:hover {
   background: #fee2e2;
   color: #dc2626;
 }
 
-.delete-input-btn:disabled {
+.btn-icon:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
 
-.button-spinner-small {
-  width: 14px;
-  height: 14px;
+.button-spinner {
+  width: 16px;
+  height: 16px;
   border: 2px solid transparent;
   border-top: 2px solid #dc2626;
   border-radius: 50%;
@@ -382,63 +678,46 @@ export default {
   }
 }
 
-.input-detail {
+/* Input Details */
+.input-details {
   padding: 12px;
   border-top: 1px solid #e5e7eb;
-  background: white;
-  border-radius: 0 0 6px 6px;
+  background: #f8fafc;
 }
 
-.input-details {
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.detail-item {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
-.detail-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.detail-row.full-width {
-  flex-direction: column;
-  align-items: stretch;
+.detail-item.full-width {
+  grid-column: 1 / -1;
 }
 
 .detail-label {
+  font-size: 0.75rem;
   font-weight: 600;
   color: #374151;
-  min-width: 60px;
-  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .detail-value {
+  font-size: 0.875rem;
   color: #6b7280;
-  font-size: 12px;
-  word-break: break-word;
-}
-
-.detail-row.full-width .detail-value {
-  margin-top: 4px;
-}
-
-.content-text {
-  background: #f3f4f6;
-  padding: 8px;
-  border-radius: 4px;
-  border: 1px solid #e5e7eb;
-  font-family: monospace;
-  font-size: 11px;
-  line-height: 1.4;
-  max-height: 120px;
-  overflow-y: auto;
 }
 
 .status-badge {
-  padding: 2px 8px;
+  padding: 4px 8px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -448,29 +727,123 @@ export default {
   color: #065f46;
 }
 
-.status-badge.not-processed {
+.status-badge:not(.processed) {
   background: #fee2e2;
   color: #b91c1c;
 }
 
+.content-preview {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #4b5563;
+  max-height: 80px;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+}
+
+/* Empty States */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6b7280;
+}
+
+.empty-state-collapsed {
+  text-align: center;
+  padding: 20px;
+  color: #d1d5db;
+}
+
+.empty-icon {
+  font-size: 48px;
+  color: #d1d5db;
+  margin-bottom: 12px;
+}
+
+.empty-state p {
+  margin: 0 0 16px 0;
+  font-size: 0.875rem;
+}
+
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb;
+}
+
+/* Collapsed Stats */
+.collapsed-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  background: #f8fafc;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.stat-item:hover {
+  background: #f1f5f9;
+}
+
+.stat-item .material-symbols-outlined {
+  font-size: 16px;
+  color: #6b7280;
+}
+
+.stat-item .material-symbols-outlined.success {
+  color: #10b981;
+}
+
+.stat-item .material-symbols-outlined.warning {
+  color: #f59e0b;
+}
+
+.stat-number {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
 @media (max-width: 768px) {
-  .input-summary {
+  .input-sidebar {
+    min-width: auto;
+    max-width: none;
+  }
+
+  .input-sidebar.collapsed {
+    min-width: 60px;
+    max-width: 60px;
+    padding: 12px 8px;
+  }
+
+  .filter-tabs {
     flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .quality-score {
-    order: 1;
-    margin-left: auto;
-  }
-
-  .delete-input-btn {
-    order: 2;
-  }
-
-  .input-meta {
-    flex-wrap: wrap;
-    gap: 4px;
   }
 }
 </style>

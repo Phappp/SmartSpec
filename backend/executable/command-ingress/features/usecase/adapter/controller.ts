@@ -93,4 +93,15 @@ export class UsecaseController extends BaseController {
       handleServiceResponse(result, res);
     });
   };
+
+  async deleteConflicts(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { versionId, conflictId } = req.params;
+      await this.service.deleteConflicts(versionId, conflictId);
+      // Trả về status 204 No Content khi xóa thành công
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  }
 }

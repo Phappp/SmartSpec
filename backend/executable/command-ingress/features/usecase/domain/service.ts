@@ -254,6 +254,34 @@ export class UsecaseService {
     }
   }
 
+  async deleteConflicts(versionId: string, conflictId: string): Promise<void> {
+    const version = await Version.findById(versionId);
+
+    if (!version) {
+      throw new Error("Version not found");
+    }
+
+    if (!version.pending_conflicts || version.pending_conflicts.length === 0) {
+      throw new Error("No pending conflicts to delete");
+    }
+
+    const initialConflictCount = version.pending_conflicts.length;
+
+    // Lọc và giữ lại những conflict không trùng với conflictId cần xóa
+    version.set('pending_conflicts', version.pending_conflicts.filter(
+      conflict => conflict.conflict_id !== conflictId
+    ));
+
+    // Nếu không có conflict nào bị xóa, nghĩa là không tìm thấy conflictId
+    if (version.pending_conflicts.length === initialConflictCount) {
+      throw new Error("Conflict not found");
+    }
+
+    // Lưu lại sự thay đổi
+    await version.save();
+  }
+
+
   /**
    * Lấy danh sách usecases của version
    */

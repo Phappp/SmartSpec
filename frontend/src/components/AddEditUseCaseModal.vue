@@ -980,9 +980,10 @@ export default {
   width: 100%;
   top: calc(15% - 20px);
   display: flex;
-  padding: 0 24px;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 8px 24px;
+  border-bottom: 1px solid #b0b2b5;
   background: #f9fafb;
+  z-index: 1;
 }
 
 .step {
@@ -1041,6 +1042,7 @@ export default {
   font-size: 0.75rem;
   font-weight: 500;
   color: #6b7280;
+  transform: translatey(15px) translateX(-20%);
   transition: color 0.3s;
 }
 

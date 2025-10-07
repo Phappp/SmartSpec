@@ -9,38 +9,68 @@
         </header>
 
         <div class="content-area">
+          <!-- Filter Section -->
+          <div class="filter-section" v-if="currentView !== 'trash'">
+            <div class="filter-controls">
+              <div class="search-input-container">
+                <span class="material-symbols-outlined search-icon">search</span>
+                <input
+                  v-model="searchQuery"
+                  type="text"
+                  placeholder="Search projects..."
+                  class="search-input"
+                />
+              </div>
+              <select v-model="languageFilter" class="filter-select">
+                <option value="">All Languages</option>
+                <option value="vi-VN">Vietnamese</option>
+                <option value="en-US">English</option>
+              </select>
+              <select v-model="sortBy" class="filter-select">
+                <option value="updatedAt">Last Updated</option>
+                <option value="createdAt">Date Created</option>
+                <option value="name">Name</option>
+              </select>
+            </div>
+            <div class="filter-stats">
+              <span class="stat-text">{{ filteredProjects.length }} projects found</span>
+              <span v-if="languageFilter" class="language-badge" :class="languageFilter">
+                {{ languageLabel }}
+              </span>
+            </div>
+          </div>
+
           <!-- Hiển thị projects đang được tạo -->
           <div
-            v-if="
-              creatingProjects.length > 0 &&
-              (currentView === 'my-projects' || currentView === 'recent-projects')
-            "
+            v-if="filteredCreatingProjects.length > 0 && currentView !== 'trash'"
             class="projects-view creating-projects-section"
           >
-            <div class="projects-header">
+            <div class="section-header">
               <h2>Creating Projects</h2>
-              <p>{{ creatingProjects.length }} project(s) in progress</p>
+              <p>{{ filteredCreatingProjects.length }} project(s) in progress</p>
             </div>
             <div class="projects-grid">
               <ProjectCard
-                v-for="p in creatingProjects"
+                v-for="p in filteredCreatingProjects"
                 :key="p._id"
                 :project="p"
                 :user="user"
                 :is-creating="true"
                 @open="openProject"
+                @retry-creation="retryCreatingProject"
               />
             </div>
           </div>
 
+          <!-- Recent Projects -->
           <div v-if="currentView === 'recent-projects'" class="projects-view">
-            <div class="projects-header">
+            <div class="section-header">
               <h2>Recent Projects</h2>
-              <p></p>
+              <p>Your recently accessed projects</p>
             </div>
-            <div class="projects-grid">
+            <div v-if="filteredProjects.length > 0" class="projects-grid">
               <ProjectCard
-                v-for="p in recentProjects"
+                v-for="p in filteredProjects"
                 :key="p._id"
                 :project="p"
                 :user="user"
@@ -49,16 +79,28 @@
                 @delete="confirmMoveToTrash"
               />
             </div>
+            <div v-else class="empty-state">
+              <div class="empty-icon">
+                <span class="material-symbols-outlined">folder_open</span>
+              </div>
+              <h3>No Recent Projects</h3>
+              <p>Projects you've recently worked on will appear here</p>
+              <button class="btn-primary" @click="openNewProjectModal">
+                <span class="material-symbols-outlined">add</span>
+                Create New Project
+              </button>
+            </div>
           </div>
 
+          <!-- My Projects -->
           <div v-if="currentView === 'my-projects'" class="projects-view">
-            <div class="projects-header">
+            <div class="section-header">
               <h2>My Projects</h2>
-              <p>{{ myProjects.length }} projects found</p>
+              <p>Projects you own</p>
             </div>
-            <div class="projects-grid">
+            <div v-if="filteredProjects.length > 0" class="projects-grid">
               <ProjectCard
-                v-for="p in myProjects"
+                v-for="p in filteredProjects"
                 :key="p._id"
                 :project="p"
                 :user="user"
@@ -67,16 +109,28 @@
                 @delete="confirmMoveToTrash"
               />
             </div>
+            <div v-else class="empty-state">
+              <div class="empty-icon">
+                <span class="material-symbols-outlined">create_new_folder</span>
+              </div>
+              <h3>No Projects</h3>
+              <p>Create your first project to get started</p>
+              <button class="btn-primary" @click="openNewProjectModal">
+                <span class="material-symbols-outlined">add</span>
+                Create New Project
+              </button>
+            </div>
           </div>
 
+          <!-- Shared Projects -->
           <div v-if="currentView === 'shared-projects'" class="projects-view">
-            <div class="projects-header">
+            <div class="section-header">
               <h2>Shared Projects</h2>
-              <p>{{ sharedProjects.length }} project found</p>
+              <p>Projects shared with you</p>
             </div>
-            <div class="projects-grid">
+            <div v-if="filteredProjects.length > 0" class="projects-grid">
               <ProjectCard
-                v-for="p in sharedProjects"
+                v-for="p in filteredProjects"
                 :key="p._id"
                 :project="p"
                 :user="user"
@@ -85,12 +139,20 @@
                 @delete="confirmMoveToTrash"
               />
             </div>
+            <div v-else class="empty-state">
+              <div class="empty-icon">
+                <span class="material-symbols-outlined">people</span>
+              </div>
+              <h3>No Shared Projects</h3>
+              <p>Projects shared with you will appear here</p>
+            </div>
           </div>
 
-          <div v-if="currentView === 'trash'" class="trash-view projects-view">
-            <div class="projects-header">
+          <!-- Trash -->
+          <div v-if="currentView === 'trash'" class="projects-view">
+            <div class="section-header">
               <h2>Trashed Projects</h2>
-              <p>{{ trashedProjects.length }} projects found</p>
+              <p>Projects moved to trash</p>
             </div>
             <div v-if="trashedProjects.length > 0" class="projects-grid">
               <ProjectCard
@@ -107,7 +169,8 @@
               <div class="empty-icon">
                 <span class="material-symbols-outlined">delete_outline</span>
               </div>
-              <p>No projects found in Trash</p>
+              <h3>Trash is Empty</h3>
+              <p>No projects found in trash</p>
             </div>
           </div>
         </div>
@@ -132,6 +195,7 @@
 </template>
 
 <script>
+import { useToast } from 'vue-toastification'
 import Sidebar from '@/components/Sidebar.vue'
 import NewProjectModal from '@/components/NewProjectForm.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
@@ -175,7 +239,65 @@ export default {
         onConfirm: () => {},
       },
       pollingIntervals: {},
+      toast: useToast(),
+
+      // Filter states
+      searchQuery: '',
+      languageFilter: '',
+      sortBy: 'updatedAt',
     }
+  },
+  computed: {
+    currentProjects() {
+      switch (this.currentView) {
+        case 'recent-projects':
+          return this.recentProjects
+        case 'my-projects':
+          return this.myProjects
+        case 'shared-projects':
+          return this.sharedProjects
+        default:
+          return []
+      }
+    },
+
+    languageLabel() {
+      const labels = {
+        'vi-VN': 'Vietnamese',
+        'en-US': 'English',
+      }
+      return labels[this.languageFilter] || this.languageFilter
+    },
+
+    filteredCreatingProjects() {
+      return this.creatingProjects.filter((project) =>
+        project.name.toLowerCase().includes(this.searchQuery.toLowerCase())
+      )
+    },
+
+    filteredProjects() {
+      let filtered = this.currentProjects.filter(
+        (project) =>
+          project.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+          (project.description &&
+            project.description.toLowerCase().includes(this.searchQuery.toLowerCase()))
+      )
+
+      // Filter by language
+      if (this.languageFilter) {
+        filtered = filtered.filter((project) => project.language === this.languageFilter)
+      }
+
+      // Sort projects
+      filtered.sort((a, b) => {
+        if (this.sortBy === 'name') {
+          return a.name.localeCompare(b.name)
+        }
+        return new Date(b[this.sortBy]) - new Date(a[this.sortBy])
+      })
+
+      return filtered
+    },
   },
   created() {
     this.fetchInitialData()
@@ -233,7 +355,7 @@ export default {
         this.showNotification(
           'Error',
           'Cannot track project creation progress. Please check the project later.'
-        )
+        )`Project "${realProject.name}" created successfully!`
         this.isNewProjectModalVisible = false
         return
       }
@@ -414,7 +536,8 @@ export default {
         this.creatingProjects.splice(projectIndex, 1)
         this.myProjects.unshift(realProject)
         this.recentProjects.unshift(realProject)
-        this.showNotification('Success', `Project "${realProject.name}" created successfully!`)
+        // this.showNotification('Success', `Project "${realProject.name}" created successfully!`)
+        this.toast.success(`Project "${realProject.name}" created successfully!`)
       }
     },
 
@@ -587,92 +710,313 @@ export default {
   },
 }
 </script>
+
 <style scoped>
 .homepage {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #f5f5f5;
+  background-color: #f9fafb;
+  min-height: 100vh;
 }
+
 .app-container {
   display: flex;
   min-height: 100vh;
 }
+
 .main-content {
   flex: 1;
   background-color: #ffffff;
   margin-left: 250px;
+  display: flex;
+  flex-direction: column;
 }
+
 .page-header {
   padding: 20px 30px;
-  border-bottom: 1px solid #e0e0e0;
-  background-color: #f8f9fa;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #ffffff;
 }
+
 .page-header h1 {
-  font-size: 16px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a365d;
+  margin: 0;
+}
+
+/* Navigation Tabs */
+.navigation-tabs {
+  display: flex;
+  gap: 12px;
+  margin: 0 30px 24px;
+  padding: 0 8px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 16px;
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
   font-weight: 600;
-  color: #333;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
+
+.tab-button:hover {
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.tab-button.active {
+  background: #1a365d;
+  border-color: #1a365d;
+  color: white;
+}
+
+.tab-button .material-symbols-outlined {
+  font-size: 20px;
+}
+
 .content-area {
-  padding: 30px;
+  padding: 0 30px 30px;
+  flex: 1;
 }
-.projects-header {
+
+/* Filter Section */
+.filter-section {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.filter-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.search-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  color: #6b7280;
+  font-size: 20px;
+}
+
+.search-input {
+  padding: 10px 12px 10px 40px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  width: 300px;
+  transition: border-color 0.3s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #1a365d;
+}
+
+.filter-select {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.3s ease;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #1a365d;
+}
+
+.filter-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stat-text {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.language-badge {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.language-badge.vi-VN {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.language-badge.en-US {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+/* Section Headers */
+.section-header {
   margin-bottom: 30px;
   text-align: left;
 }
-.projects-header h2 {
-  font-size: 20px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 5px;
+
+.section-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a365d;
+  margin-bottom: 8px;
 }
-.projects-header p {
-  font-size: 14px;
-  color: #666;
-  min-height: 24px;
+
+.section-header p {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
 }
+
+/* Projects Grid */
 .projects-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
 }
-.trash-view {
-  text-align: center;
-}
-.empty-state {
-  margin-top: 60px;
-}
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 20px;
-}
-.empty-icon .material-symbols-outlined {
-  font-size: 64px;
-  color: #9ca3af;
-}
-.empty-state p {
-  font-size: 16px;
-  color: #666;
-}
-@media (max-width: 768px) {
-  .app-container {
-    flex-direction: column;
-  }
-  .projects-grid {
-    grid-template-columns: 1fr;
-  }
-}
-/* Styles cho section projects đang tạo */
+
+/* Creating Projects Section */
 .creating-projects-section {
   border-bottom: 2px solid #e3f2fd;
   padding-bottom: 30px;
   margin-bottom: 30px;
 }
 
-.creating-projects-section .projects-header h2 {
+.creating-projects-section .section-header h2 {
   color: #1a365d;
 }
 
-.creating-projects-section .projects-header p {
+.creating-projects-section .section-header p {
   color: #2c5282;
   font-weight: 500;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 12px;
+  margin-top: 20px;
+}
+
+.empty-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+  background: #f3f4f6;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-icon .material-symbols-outlined {
+  font-size: 40px;
+  color: #9ca3af;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px 0;
+  color: #374151;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.empty-state p {
+  margin: 0 0 24px 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: #1a365d;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.btn-primary:hover {
+  background: #2d4a8a;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .main-content {
+    margin-left: 0;
+  }
+
+  .projects-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-section {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .filter-controls {
+    flex-direction: column;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  .filter-stats {
+    justify-content: space-between;
+  }
+
+  .navigation-tabs {
+    flex-wrap: wrap;
+    margin: 0 16px 16px;
+  }
+
+  .content-area {
+    padding: 0 16px 16px;
+  }
 }
 </style>

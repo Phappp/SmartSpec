@@ -1,46 +1,57 @@
 <template>
-  <div class="view-header">
-    <button class="back-button" @click="goBack">
-      <span class="material-symbols-outlined">arrow_back</span>
-      Back to Projects
-    </button>
-    <div class="project-info">
-      <h2>{{ project.name }}</h2>
-      <div class="description-container">
-        <button class="toggle-description" @click="toggleDescription">
-          <span class="material-symbols-outlined">
-            {{ showDescription ? 'expand_less' : 'expand_more' }}
-          </span>
-          {{ showDescription ? 'Hide Description' : 'Show Description' }}
+  <div class="project-header">
+    <div class="header-content">
+      <div class="header-left">
+        <button class="back-btn" @click="goBack">
+          <span class="material-symbols-outlined">arrow_back</span>
+          Back to Projects
         </button>
-        <div v-if="showDescription" class="project-description">
-          <p>{{ project.description || 'No description available' }}</p>
+
+        <div class="project-info">
+          <h1>{{ project.name }}</h1>
+          <div class="description-section">
+            <button class="toggle-description-btn" @click="toggleDescription">
+              <span class="material-symbols-outlined">
+                {{ showDescription ? 'expand_less' : 'expand_more' }}
+              </span>
+              {{ showDescription ? 'Hide Description' : 'Show Description' }}
+            </button>
+            <div v-if="showDescription" class="project-description">
+              <p>{{ project.description || 'No description available' }}</p>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="actions">
-      <div class="version-section">
-        <div class="version-selector">
-          <span class="material-symbols-outlined">history</span>
 
-          <div class="dropdown" @click="toggleDropdown">
-            <span>{{ selectedLabel }}</span>
-            <span class="material-symbols-outlined arrow" :class="{ open: isOpen }">
-              <span class="material-symbols-outlined"> chevron_right </span>
-            </span>
-          </div>
-
-          <ul v-if="isOpen" class="dropdown-menu">
-            <li v-for="v in versions" :key="v._id" @click="selectVersion(v)">
+      <div class="header-right">
+        <div class="version-control">
+          <div class="version-selector">
+            <div class="selector-header" @click="toggleDropdown">
               <span class="material-symbols-outlined">history</span>
-              Version {{ v.version_number }}
-            </li>
-          </ul>
+              <span class="version-label">{{ selectedLabel }}</span>
+              <span class="material-symbols-outlined dropdown-arrow" :class="{ open: isOpen }">
+                expand_more
+              </span>
+            </div>
+
+            <div v-if="isOpen" class="dropdown-menu">
+              <div
+                v-for="version in versions"
+                :key="version._id"
+                class="version-option"
+                @click="selectVersion(version)"
+              >
+                <span class="material-symbols-outlined">history</span>
+                Version {{ version.version_number }}
+                <span class="version-status" :class="version.status">{{ version.status }}</span>
+              </div>
+            </div>
+          </div>
 
           <button
             v-if="hasFailedVersion && !isRetrying"
-            @click="handleRetry"
             class="retry-btn"
+            @click="handleRetry"
             :disabled="isPolling"
           >
             <span class="material-symbols-outlined">refresh</span>
@@ -48,23 +59,22 @@
           </button>
         </div>
 
-        <!-- PROGRESS BAR HIỂN THỊ TRỰC TIẾP -->
-        <div v-if="isRetrying" class="inline-progress-container">
-          <div class="progress-info">
-            <span class="stage-text">{{ currentStage }}</span>
-            <span class="progress-percent">{{ processingProgress }}%</span>
+        <div v-if="isRetrying" class="progress-indicator">
+          <div class="progress-header">
+            <span class="stage-name">{{ currentStage }}</span>
+            <span class="progress-percentage">{{ processingProgress }}%</span>
           </div>
           <div class="progress-bar">
             <div class="progress-fill" :style="{ width: processingProgress + '%' }"></div>
           </div>
           <div class="stage-description">{{ getStageDescription(currentStage) }}</div>
         </div>
-      </div>
 
-      <button class="members-button">
-        <span class="material-symbols-outlined">group</span>
-        {{ project.members ? project.members.length : 0 }} Members
-      </button>
+        <button class="members-btn">
+          <span class="material-symbols-outlined">group</span>
+          {{ project.members ? project.members.length : 0 }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -108,12 +118,9 @@ export default {
     hasFailedVersion() {
       return this.versions.some((version) => version.status === 'failed')
     },
-    failedVersion() {
-      return this.versions.find((version) => version.status === 'failed')
-    },
     selectedLabel() {
-      const v = this.versions.find((x) => x._id === this.selectedVersionId)
-      return v ? `Version ${v.version_number} ` : 'Select version'
+      const version = this.versions.find((v) => v._id === this.selectedVersionId)
+      return version ? `Version ${version.version_number}` : 'Select version'
     },
   },
   methods: {
@@ -123,8 +130,8 @@ export default {
     toggleDropdown() {
       this.isOpen = !this.isOpen
     },
-    selectVersion(v) {
-      this.$emit('version-selected', v._id)
+    selectVersion(version) {
+      this.$emit('version-selected', version._id)
       this.isOpen = false
     },
     handleRetry() {
@@ -149,188 +156,225 @@ export default {
 </script>
 
 <style scoped>
-.view-header {
+.project-header {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.header-content {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 25px;
+  gap: 24px;
 }
 
-.back-button {
+.header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex: 1;
+}
+
+.back-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: 8px 16px;
   background: white;
   border: 1px solid #d1d5db;
   border-radius: 8px;
-  font-size: 15px;
-  padding: 8px 14px;
   color: #374151;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  font-weight: 500;
 }
 
-.back-button:hover {
-  background: #e5e7eb;
+.back-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
 }
 
 .project-info {
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
-  text-align: center;
-  max-width: 50%;
 }
 
-.project-info h2 {
-  font-size: 22px;
+.project-info h1 {
+  font-size: 1.75rem;
   font-weight: 700;
-  color: #111827;
-  margin-bottom: 8px;
+  color: #1a365d;
+  margin: 0 0 12px 0;
 }
 
-.description-container {
+.description-section {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 8px;
 }
 
-.toggle-description {
+.toggle-description-btn {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: white;
+  padding: 6px 12px;
+  background: #f3f4f6;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  padding: 2px 8px;
-  font-size: 10px;
   color: #6b7280;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  font-size: 0.875rem;
+  font-weight: 500;
+  align-self: center;
 }
 
-.toggle-description:hover {
+.toggle-description-btn:hover {
   background: #e5e7eb;
   color: #374151;
 }
 
 .project-description {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  background: #f8fafc;
   border-radius: 6px;
-  padding: 8px 12px;
-  width: 100%;
-  max-width: 800px;
+  border: 1px solid #e5e7eb;
   text-align: justify;
-}
-
-.description-container span {
-  font-size: 10px;
 }
 
 .project-description p {
   margin: 0;
-  font-size: 14px;
   color: #6b7280;
-  line-height: 1.4;
-  justify-self: center;
+  line-height: 1.5;
+  font-size: 0.875rem;
 }
 
-.actions {
+.header-right {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
 }
 
+.version-control {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 200px;
+}
+
 .version-selector {
-  padding: 0 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: white;
-  font-size: 14px;
-  cursor: pointer;
+  position: relative;
+}
+
+.selector-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  position: relative;
-  transform: translateX(-15%);
-}
-
-.dropdown {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex: 1;
-  padding: 6px 10px;
-  border-radius: 6px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
   cursor: pointer;
-  user-select: none;
+  transition: border-color 0.3s ease;
 }
 
-.arrow {
-  margin-left: 8px;
-  font-size: 12px;
+.selector-header:hover {
+  border-color: #9ca3af;
+}
+
+.version-label {
+  font-weight: 500;
+  color: #374151;
+  flex: 1;
+}
+
+.dropdown-arrow {
+  font-size: 18px;
   color: #6b7280;
-  transition: transform 0.2s ease;
+  transition: transform 0.3s ease;
 }
 
-.arrow.open {
-  transform: rotate(90deg);
+.dropdown-arrow.open {
+  transform: rotate(180deg);
 }
 
 .dropdown-menu {
   position: absolute;
   top: 100%;
-  left: 36px;
-  margin-top: 6px;
-  width: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
   background: white;
   border: 1px solid #d1d5db;
   border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-  z-index: 20;
-  transform: translateX(-21%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
-.dropdown-menu li {
-  padding: 4px 0px;
-  padding-left: 12px;
-  width: 100%;
-  font-size: 14px;
-  cursor: pointer;
-  list-style: none;
+.version-option {
   display: flex;
-  gap: 24px;
   align-items: center;
-  font-weight: bold;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  border-bottom: 1px solid #f3f4f6;
 }
 
-.dropdown-menu li:hover {
+.version-option:last-child {
+  border-bottom: none;
+}
+
+.version-option:hover {
   background: #f3f4f6;
 }
 
-.counter-badge {
+.version-status {
+  margin-left: auto;
   padding: 2px 8px;
-  background: #e2e8f0;
-  color: #475569;
   border-radius: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
-  margin-left: 8px;
+  text-transform: capitalize;
+}
+
+.version-status.completed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.version-status.failed {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.version-status.processing {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .retry-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
   background: #ef4444;
   color: white;
   border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 500;
+  border-radius: 8px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.2s ease;
-  margin-left: 8px;
+  transition: background-color 0.3s ease;
+  font-weight: 500;
+  font-size: 0.875rem;
 }
 
 .retry-btn:hover:not(:disabled) {
@@ -342,102 +386,99 @@ export default {
   cursor: not-allowed;
 }
 
-.members-button {
-  padding: 8px 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: white;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* INLINE PROGRESS CONTAINER */
-.inline-progress-container {
+.progress-indicator {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 12px;
-  min-width: 300px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  margin-top: 8px;
-  transform: translateX(-15%);
+  min-width: 250px;
 }
 
-.inline-progress-container .progress-info {
+.progress-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 8px;
-  font-size: 12px;
-  color: #374151;
 }
 
-.inline-progress-container .stage-text {
+.stage-name {
+  font-size: 0.875rem;
   font-weight: 600;
   color: #1a365d;
 }
 
-.inline-progress-container .progress-percent {
+.progress-percentage {
+  font-size: 0.875rem;
   font-weight: 700;
   color: #1a365d;
 }
 
-.inline-progress-container .progress-bar {
+.progress-bar {
   width: 100%;
   height: 6px;
-  background-color: #e5e7eb;
+  background: #e5e7eb;
   border-radius: 3px;
   overflow: hidden;
   margin-bottom: 6px;
 }
 
-.inline-progress-container .progress-fill {
+.progress-fill {
   height: 100%;
   background: linear-gradient(90deg, #1a365d, #2c5282);
   border-radius: 3px;
   transition: width 0.5s ease-in-out;
 }
 
-.inline-progress-container .stage-description {
-  font-size: 11px;
+.stage-description {
+  font-size: 0.75rem;
   color: #6b7280;
   font-style: italic;
 }
 
+.members-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 16px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.members-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
 @media (max-width: 768px) {
-  .view-header {
+  .header-content {
     flex-direction: column;
-    gap: 15px;
-    align-items: center;
+    gap: 16px;
   }
 
-  .project-info {
-    max-width: 100%;
-    order: 2;
-  }
-
-  .back-button {
-    order: 1;
-    align-self: flex-start;
-  }
-
-  .actions {
-    order: 3;
-    align-self: flex-end;
+  .header-left {
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
 
-  .version-selector {
-    flex-direction: column;
-    align-items: flex-start;
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
   }
 
-  .retry-btn {
-    margin-left: 0;
-    margin-top: 8px;
+  .version-control {
+    min-width: auto;
+    flex: 1;
+  }
+
+  .progress-indicator {
+    min-width: auto;
+    flex: 1;
   }
 }
 </style>

@@ -33,6 +33,11 @@ export const usecaseApi = {
     axiosClient.delete(`/api/usecaseManagement/versions/${versionId}/usecases/${usecaseId}`)
 };
 
+// 🔥 THÊM API CHO BỎ QUA CONFLICT
+export const skipConflict = (versionId, conflictId) => {
+  return axiosClient.delete(`/api/usecaseManagement/versions/${versionId}/conflicts/${conflictId}`);
+};
+
 // 🔥 THÊM API MỚI CHO INCREMENTAL ANALYSIS
 export const startIncrementalAnalysis = (projectId, versionId) => {
   return axiosClient.post(`/api/orchestrate/projects/${projectId}/versions/${versionId}/process`, {
@@ -92,5 +97,6 @@ export default {
   getProjectDetail,
   retryProjectAnalysis,
   startIncrementalAnalysis,
+  skipConflict,
   // resolveConflict
 };
