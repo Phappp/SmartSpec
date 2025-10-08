@@ -27,7 +27,30 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const { key_value, provider, is_active } = req.body;
+        if (!key_value || !provider) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "Key value and provider are required",
+          });
+          return;
+        }
+        if (!is_active) {
+          const is_active = true;
+        }
+        const created_by = req.getSubject();
+        const serviceResponse = await this.service.createAPIKey(
+          key_value,
+          provider,
+          is_active,
+          created_by
+        );
+
+        res.status(StatusCodes.CREATED).json({
+          status: "Success",
+          message: "Create API keys successfully",
+          data: serviceResponse,
+        });
       }
     );
   }
@@ -87,7 +110,13 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const serviceResponse = await this.service.getAllAPIKey();
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Get all API keys successfully",
+          data: serviceResponse,
+        });
       }
     );
   }
@@ -102,7 +131,21 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const { id } = req.params;
+        if (!id) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "Key ID is required",
+          });
+          return;
+        }
+        const serviceResponse = await this.service.getAPIKeyById(id);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Get API keys by id successfully",
+          data: serviceResponse,
+        });
       }
     );
   }
@@ -117,7 +160,26 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const { key_value, provider, is_active } = req.body;
+        const { id } = req.params;
+        if (!id) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "Key ID is required",
+          });
+          return;
+        }
+        const serviceResponse = await this.service.updateAPIKey(id, {
+          key_value,
+          provider,
+          is_active,
+        });
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Update API keys successfully",
+          data: serviceResponse,
+        });
       }
     );
   }
@@ -132,7 +194,20 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const { id } = req.params;
+        if (!id) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "Key ID is required",
+          });
+          return;
+        }
+        const serviceResponse = await this.service.deleteAPIKey(id);
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Delete API keys successfully",
+          data: serviceResponse,
+        });
       }
     );
   }

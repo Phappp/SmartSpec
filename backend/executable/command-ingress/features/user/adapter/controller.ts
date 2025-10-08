@@ -59,7 +59,7 @@ class UserController extends BaseController {
           return;
         }
 
-        const { email, name, dob, gender, avatar_url, status } = req.body;
+        const { name, dob, gender, avatar_url, status } = req.body;
         const { day, month, year } = dob;
         const newDob = new Date(year, month - 1, day);
         const updateProfileRequestBody = new UpdateProfileRequestBody(req.body);
@@ -71,7 +71,6 @@ class UserController extends BaseController {
         }
 
         const serviceResponse = await this.service.updateProfile(userId, {
-          email,
           name,
           newDob,
           gender,
@@ -125,6 +124,49 @@ class UserController extends BaseController {
         res.status(StatusCodes.OK).json({
           status: "Success",
           message: "Password changed successfull",
+          data: serviceResponse,
+        });
+      }
+    );
+  }
+
+  async changeEmail(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const userId = req.getSubject();
+        if (!userId) {
+          res.status(StatusCodes.UNAUTHORIZED).json({
+            status: "Error",
+            message: "Unauthorized",
+          });
+          return;
+        }
+
+        const { newEmail } = req.body;
+
+        if (!newEmail) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "New email are required",
+          });
+          return;
+        }
+
+        const serviceResponse = await this.service.changeEmail(
+          userId,
+          newEmail
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Email changed successfull",
           data: serviceResponse,
         });
       }
@@ -200,7 +242,7 @@ class UserController extends BaseController {
           return;
         }
 
-        const { email, name, dob, gender, avatar_url, status } = req.body;
+        const { name, dob, gender, avatar_url, status } = req.body;
 
         const { day, month, year } = dob;
         const newDob = new Date(year, month - 1, day);
@@ -213,7 +255,6 @@ class UserController extends BaseController {
         }
 
         const serviceResponse = await this.service.updateProfile(id, {
-          email,
           name,
           newDob,
           gender,
@@ -307,14 +348,15 @@ class UserController extends BaseController {
           });
           return;
         }
-        
-        const serviceResponse = await this.service.searchUsersByNameOrEmail(content);
+
+        const serviceResponse = await this.service.searchUsersByNameOrEmail(
+          content
+        );
         res.status(StatusCodes.OK).json({
           status: "Success",
           message: "Search users successfully",
           data: serviceResponse,
         });
-
       }
     );
   }
@@ -329,21 +371,24 @@ class UserController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        const {system_role, status, gender} = req.body;
-        if (!system_role && !status && !gender){
+        const { system_role, status, gender } = req.body;
+        if (!system_role && !status && !gender) {
           res.status(StatusCodes.BAD_REQUEST).json({
             status: "Error",
             message: "Please select all fields to filter",
           });
           return;
         }
-        const serviceResponse = await this.service.filterUsers(system_role, status, gender);
+        const serviceResponse = await this.service.filterUsers(
+          system_role,
+          status,
+          gender
+        );
         res.status(StatusCodes.OK).json({
           status: "Success",
           message: "Search users successfully",
           data: serviceResponse,
         });
-
       }
     );
   }

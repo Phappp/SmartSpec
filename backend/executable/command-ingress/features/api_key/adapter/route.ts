@@ -16,31 +16,29 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
 
   router.route("/statistics")
   .get(requireAuthorizedUser, requireRole("ADMIN"), controller.getAPIKeyStatistics.bind(controller));
-
+  
+  //
   router
     .route("")
     .post(requireAuthorizedUser, controller.createAPIKey.bind(controller));
 
+  //
   router
     .route("")
     .get(requireAuthorizedUser, controller.getAllAPIKey.bind(controller));
-
+  //
   router
     .route("/:id")
     .get(requireAuthorizedUser, controller.getAPIKeyById.bind(controller));
-
+  //
   router
     .route("/:id")
     .patch(requireAuthorizedUser, controller.updateAPIKey.bind(controller));
 
+  //
   router
     .route("/:id")
     .delete(requireAuthorizedUser, controller.deleteAPIKey.bind(controller));
-
-  router
-    .route("/:id")
-    .delete(requireAuthorizedUser, controller.deleteAPIKey.bind(controller));
-
   return router;
 };
 

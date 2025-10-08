@@ -76,7 +76,6 @@ export class UserServiceImpl implements UserService {
   async updateProfile(
     userId: string,
     body: {
-      email?: string;
       name?: string;
       isTwoFactorEnabled?: boolean;
       newDob?: Date;
@@ -91,9 +90,6 @@ export class UserServiceImpl implements UserService {
     console.log("Found user:", user);
     if (!user) {
       throw new Error("User not found");
-    }
-    if (body.email) {
-      user.email = body.email;
     }
     if (body.name) {
       user.name = body.name;
@@ -137,7 +133,9 @@ export class UserServiceImpl implements UserService {
     await user.save();
 
     const subject = "Password Reset Notification";
-    const data = `Your password has been reset. Your new password is: ${newPassword}. Please change it after logging in.`;
+    const data = `<p>Your password has been reset.</p>
+                  <p>Your new password is: <b>${newPassword}</b>.</p>
+                  <p>Please change it after logging in.</p>`;
     const mailIsSent = await mailService.sendEmail({
       emailFrom: "hngvtdat010@gmail.com",
       emailTo: user.email,
@@ -177,6 +175,24 @@ export class UserServiceImpl implements UserService {
       gender: user.gender,
       isTwoFactorEnabled: user.isTwoFactorEnabled,
     }));
+  }
+  async changeEmail(userId: string, newEmail: string): Promise<string> {
+    const user = await User.findOne({ _id: userId });
+    if (!user) {
+      throw new Error("User not found");
+    }
+    if (user.email === newEmail) {
+      throw new Error("New email must be different from current email");
+    }
+
+    const emailExists = await User.findOne({ email: newEmail });
+    if (emailExists) {
+      throw new Error("Email is already in use");
+    }
+
+    user.email = newEmail;
+    await user.save();
+    return "Email changed successfully";
   }
 
   async filterUsers(
