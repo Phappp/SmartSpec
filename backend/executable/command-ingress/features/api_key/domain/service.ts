@@ -61,24 +61,33 @@ export class ApiKeyServiceImpl implements ApiKeyService {
     id: string,
     body: { key_value?: string; provider?: string; is_active?: boolean }
   ): Promise<APIKeysResponse> {
-    const key = await Key.findOne({_id: id});
+    const key = await Key.findOne({ _id: id });
     if (!key) {
       throw new Error("API Key not found");
     }
-    if(body.key_value){
+    if (body.key_value) {
       key.key_value = body.key_value;
     }
-    if(body.provider && body.provider === "gemini" || body.provider === "openai" || body.provider === "claude"){
+    if (
+      (body.provider && body.provider === "gemini") ||
+      body.provider === "openai" ||
+      body.provider === "claude"
+    ) {
       key.provider = body.provider;
     }
-    if(body.is_active !== undefined){
+    if (body.is_active !== undefined) {
       key.is_active = body.is_active;
     }
     await key.save();
-    
+
     return await this.getAPIKeyById(id);
   }
-  deleteAPIKey(id: string): Promise<string> {
-    throw new Error("Method not implemented.");
+  async deleteAPIKey(id: string): Promise<string> {
+    const key = await Key.findOne({ _id: id });
+    if (!key) {
+      throw new Error("API Key not found");
+    }
+    await Key.deleteOne({ _id: id });
+    return "API Key deleted successfully";
   }
 }

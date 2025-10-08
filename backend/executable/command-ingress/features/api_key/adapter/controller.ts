@@ -171,7 +171,20 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const { id } = req.params;
+        if (!id) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "Key ID is required",
+          });
+          return;
+        }
+        const serviceResponse = await this.service.deleteAPIKey(id);
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Delete API keys successfully",
+          data: serviceResponse,
+        });
       }
     );
   }
