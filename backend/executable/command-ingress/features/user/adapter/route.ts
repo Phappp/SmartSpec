@@ -13,14 +13,14 @@ const initUserRoute: (controller: UserController) => express.Router = (
     .patch(requireAuthorizedUser, controller.updateProfile.bind(controller));
   router
     .route("/search")
-    .get(
+    .post(
       requireAuthorizedUser,
       requireRole("ADMIN"),
       controller.searchUsersByNameAndEmail.bind(controller)
     );
   router
     .route("/filter")
-    .get(
+    .post(
       requireAuthorizedUser,
       requireRole("ADMIN"),
       controller.filterUsers.bind(controller)

@@ -11,22 +11,22 @@ const adminRoutes = [
       {
         path: '',
         name: 'AdminHome',
-        component: () => import('../views/admin/Dashboard.vue')
+        component: () => import('../components/admin/Dashboard.vue')
       },
       {
         path: 'users',
         name: 'AdminUsers',
-        component: () => import('../views/admin/UserManagement.vue')
+        component: () => import('../components/admin/UserManagement.vue')
       },
       {
         path: 'api-keys',
         name: 'AdminApiKeys',
-        component: () => import('../views/admin/ApiKeysManagement.vue')
+        component: () => import('../components/admin/ApiKeysManagement.vue')
       },
       {
         path: 'projects',
         name: 'AdminProjects',
-        component: () => import('../views/admin/ProjectManagement.vue')
+        component: () => import('../components/admin/ProjectManagement.vue')
       },
       {
         path: 'access-denied',

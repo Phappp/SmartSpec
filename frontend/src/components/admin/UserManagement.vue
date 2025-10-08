@@ -41,7 +41,7 @@
           <input 
             type="text" 
             v-model="filters.search" 
-            @input="applyFilters"
+            @input="debouncedSearch"
             placeholder="Tìm theo tên, email..."
             class="search-input"
           >
@@ -336,7 +336,7 @@ import { ref, computed, onMounted } from 'vue'
 // PUT /api/admin/users/:id, DELETE /api/admin/users/:id,
 // PATCH /api/admin/users/:id/status, POST /api/admin/users/:id/reset-password,
 // POST /api/admin/users/bulk-action
-import { getUsers, createUser, updateUser, deleteUser as apiDeleteUser, resetUserPassword, toggleUserStatus, bulkUserAction } from '@/api/admin'
+import { getUsers, createUser, updateUser, deleteUser as apiDeleteUser, resetUserPassword, toggleUserStatus, bulkUserAction, searchUsers, filterUsers } from '@/api/admin'
 import DebugPanel from '@/components/DebugPanel.vue'
 
 // State
@@ -370,47 +370,41 @@ const resetPasswordForm = ref({
 })
 
 const users = ref([])
+const searchTimeout = ref(null)
 
 // Computed
 const totalUsers = computed(() => users.value.length)
 
 const filteredUsers = computed(() => {
-  let result = users.value
-
-  if (filters.value.role) {
-    result = result.filter(user => user.role === filters.value.role)
-  }
-
-  if (filters.value.status) {
-    const isActive = filters.value.status === 'active'
-    result = result.filter(user => user.active === isActive)
-  }
-
-  if (filters.value.search) {
-    const search = filters.value.search.toLowerCase()
-    result = result.filter(user => 
-      user.name.toLowerCase().includes(search) ||
-      user.email.toLowerCase().includes(search)
-    )
-  }
-
-  return result
+  // Bây giờ filtering được thực hiện ở backend, chỉ cần trả về users
+  return users.value
 })
 
 const totalPages = computed(() => Math.ceil(filteredUsers.value.length / itemsPerPage.value))
 
 // Methods
-const applyFilters = () => {
-  currentPage.value = 1
+const debouncedSearch = () => {
+  if (searchTimeout.value) {
+    clearTimeout(searchTimeout.value)
+  }
+  searchTimeout.value = setTimeout(() => {
+    applyFilters()
+  }, 500) // 500ms delay
 }
 
-const resetFilters = () => {
+const applyFilters = async () => {
+  currentPage.value = 1
+  await loadUsers()
+}
+
+const resetFilters = async () => {
   filters.value = {
     role: '',
     status: '',
     search: ''
   }
   currentPage.value = 1
+  await loadUsers()
 }
 
 const toggleSelectAll = () => {
@@ -547,32 +541,61 @@ const bulkDelete = async () => {
 const loadUsers = async () => {
   // NOTE: GET /api/users (admin only)
   try {
-    console.log(' Loading users...')
-    console.log(' Token check:', localStorage.getItem('accessToken') ? 'Present' : 'Missing')
+    console.log('Loading users...')
+    console.log('Token check:', localStorage.getItem('accessToken') ? 'Present' : 'Missing')
     
-    const res = await getUsers({
-      role: filters.value.role || undefined,
-      status: filters.value.status || undefined,
-      q: filters.value.search || undefined,
-      page: currentPage.value,
-      size: itemsPerPage.value,
-    })
+    let res
     
-    console.log(' API Response:', res) // Debug log
+    // Ưu tiên search trước, sau đó mới filter
+    if (filters.value.search && filters.value.search.trim() !== '') {
+      console.log('Using search API for:', filters.value.search)
+      res = await searchUsers(filters.value.search)
+    }
+    // Nếu có filter criteria, sử dụng filter API
+    else if (filters.value.role || filters.value.status) {
+      console.log('Using filter API for:', { role: filters.value.role, status: filters.value.status })
+      
+      // Chỉ gửi filter nếu có ít nhất một giá trị không rỗng
+      const filterData = {}
+      if (filters.value.role && filters.value.role.trim() !== '') {
+        filterData.system_role = filters.value.role
+      }
+      if (filters.value.status && filters.value.status.trim() !== '') {
+        filterData.status = filters.value.status
+      }
+      
+      // Chỉ gọi filter API nếu có ít nhất một filter
+      if (Object.keys(filterData).length > 0) {
+        res = await filterUsers(filterData)
+      } else {
+        // Nếu không có filter nào, lấy tất cả users
+        res = await getUsers()
+      }
+    }
+    // Nếu không có filter, lấy tất cả users
+    else {
+      console.log('Using getAllUsers API')
+      res = await getUsers()
+    }
+    
+    console.log('API Response:', res) // Debug log
     
     // BE trả về format: { status: "Success", message: "...", data: [...] }
     let items = []
-    if (res?.data && Array.isArray(res.data)) {
+    if (res?.data?.data && Array.isArray(res.data.data)) {
+      items = res.data.data
+      console.log('Found data in res.data.data:', items.length, 'users')
+    } else if (res?.data && Array.isArray(res.data)) {
       items = res.data
-      console.log(' Found data in res.data:', items.length, 'users')
+      console.log('Found data in res.data:', items.length, 'users')
     } else if (Array.isArray(res)) {
       items = res
-      console.log(' Found data in res:', items.length, 'users')
+      console.log('Found data in res:', items.length, 'users')
     } else {
-      console.warn(' No data found in response:', res)
+      console.warn('No data found in response:', res)
     }
     
-    console.log(' Parsed items:', items) // Debug log
+    console.log('Parsed items:', items) // Debug log
     
     // Chuẩn hóa field theo BE: system_role/status -> role/active
     users.value = items.map(u => ({
@@ -586,18 +609,18 @@ const loadUsers = async () => {
       projectCount: u.projectCount || 0,
     }))
     
-    console.log(' Mapped users:', users.value.length, 'users loaded')
+    console.log('Mapped users:', users.value.length, 'users loaded')
   } catch (e) {
-    console.error(' Error loading users:', e)
+    console.error('Error loading users:', e)
     console.error('Error details:', e.response?.data || e.message)
     
     // Hiển thị thông báo lỗi chi tiết
     if (e.response?.status === 401) {
-      console.error('🔐 Authentication failed - Please login again')
+      console.error('Authentication failed - Please login again')
     } else if (e.response?.status === 403) {
-      console.error('🚫 Access denied - Admin role required')
+      console.error('Access denied - Admin role required')
     } else if (e.response?.status === 500) {
-      console.error('🔥 Server error - Check backend logs')
+      console.error('Server error - Check backend logs')
     }
     
     users.value = []

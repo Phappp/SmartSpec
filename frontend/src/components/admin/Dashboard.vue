@@ -7,7 +7,6 @@
           <div class="stat-info">
             <p class="stat-label">Tổng người dùng</p>
             <p class="stat-value">{{ stats.totalUsers.toLocaleString() }}</p>
-            <p class="stat-change positive">+12% so với tháng trước</p>
           </div>
           <div class="stat-icon blue">
           
@@ -21,7 +20,6 @@
           <div class="stat-info">
             <p class="stat-label">Người dùng hoạt động</p>
             <p class="stat-value green">{{ stats.activeUsers.toLocaleString() }}</p>
-            <p class="stat-change positive">+8% so với tháng trước</p>
           </div>
           <div class="stat-icon green">
           
@@ -35,7 +33,6 @@
           <div class="stat-info">
             <p class="stat-label">Tổng số dự án</p>
             <p class="stat-value purple">{{ stats.totalProjects.toLocaleString() }}</p>
-            <p class="stat-change positive">+25% so với tháng trước</p>
           </div>
           <div class="stat-icon purple">
 
@@ -49,7 +46,6 @@
           <div class="stat-info">
             <p class="stat-label">API Keys hoạt động</p>
             <p class="stat-value orange">{{ stats.activeApiKeys.toLocaleString() }}</p>
-            <p class="stat-change positive">+5% so với tháng trước</p>
           </div>
           <div class="stat-icon orange">
 
