@@ -176,6 +176,24 @@ export class UserServiceImpl implements UserService {
       isTwoFactorEnabled: user.isTwoFactorEnabled,
     }));
   }
+  async changeEmail(userId: string, newEmail: string): Promise<string> {
+    const user = await User.findOne({ _id: userId });
+    if (!user) {
+      throw new Error("User not found");
+    }
+    if (user.email === newEmail) {
+      throw new Error("New email must be different from current email");
+    }
+
+    const emailExists = await User.findOne({ email: newEmail });
+    if (emailExists) {
+      throw new Error("Email is already in use");
+    }
+
+    user.email = newEmail;
+    await user.save();
+    return "Email changed successfully";
+  }
 
   async filterUsers(
     system_role?: string,

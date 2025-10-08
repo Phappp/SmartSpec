@@ -130,6 +130,49 @@ class UserController extends BaseController {
     );
   }
 
+  async changeEmail(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const userId = req.getSubject();
+        if (!userId) {
+          res.status(StatusCodes.UNAUTHORIZED).json({
+            status: "Error",
+            message: "Unauthorized",
+          });
+          return;
+        }
+
+        const { newEmail } = req.body;
+
+        if (!newEmail) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "New email are required",
+          });
+          return;
+        }
+
+        const serviceResponse = await this.service.changeEmail(
+          userId,
+          newEmail
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Email changed successfull",
+          data: serviceResponse,
+        });
+      }
+    );
+  }
+
   async getAllUsers(
     req: HttpRequest,
     res: Response,

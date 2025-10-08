@@ -63,7 +63,9 @@ const initUserRoute: (controller: UserController) => express.Router = (
     );
 
   //for user
-
+  router
+    .route("/change-email")
+    .post(requireAuthorizedUser, controller.changeEmail.bind(controller));
   router
     .route("/change-password")
     .post(requireAuthorizedUser, controller.changePassword.bind(controller));
