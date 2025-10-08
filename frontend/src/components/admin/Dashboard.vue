@@ -63,25 +63,46 @@
           <h3>Phân bố người dùng theo vai trò</h3>
           <div class="chart-actions">
             <button class="btn-icon" @click="refreshUserStats">
-
-              <i class=""></i>
+              <i class="fas fa-sync-alt"></i>
             </button>
           </div>
         </div>
-        <div class="chart-content">
-          <div class="chart-row" v-for="role in userRoleStats" :key="role.name">
-            <div class="role-info">
-              <span class="role-name">{{ role.name }}</span>
-              <span class="role-count">{{ role.count }}</span>
+        <div class="chart-content-split">
+          <!-- Biểu đồ tròn bên trái -->
+          <div class="pie-chart-container">
+            <div class="pie-chart" :style="getPieChartStyle(userRoleStats)">
+              <div class="pie-chart-center">
+                <!-- Để trống -->
+              </div>
+              <!-- Hiển thị phần trăm cho từng phần -->
+              <div class="pie-percentages">
+                <div 
+                  v-for="(role, index) in userRoleStats" 
+                  :key="role.name"
+                  class="pie-percentage-item"
+                  :style="getPercentagePosition(role, index, userRoleStats)"
+                >
+                  <span class="pie-percentage-text">{{ role.percentage }}%</span>
+                </div>
+              </div>
             </div>
-            <div class="progress-bar">
-              <div 
-                class="progress-fill" 
-                :class="role.color"
-                :style="{ width: role.percentage + '%' }"
-              ></div>
+          </div>
+          
+          <!-- Thanh tiến trình bên phải -->
+          <div class="progress-list">
+            <div class="progress-item" v-for="role in userRoleStats" :key="role.name">
+              <div class="progress-info">
+                <span class="progress-name">{{ role.name }}</span>
+                <span class="progress-count">{{ role.count }}</span>
+              </div>
+              <div class="progress-bar">
+                <div 
+                  class="progress-fill" 
+                  :class="role.color"
+                  :style="{ width: role.percentage + '%' }"
+                ></div>
+              </div>
             </div>
-            <span class="percentage">{{ role.percentage }}%</span>
           </div>
         </div>
       </div>
@@ -92,32 +113,53 @@
           <h3>Phân bố API Keys theo nhà cung cấp</h3>
           <div class="chart-actions">
             <button class="btn-icon" @click="refreshApiStats">
-
-              <i class=""></i>
+              <i class="fas fa-sync-alt"></i>
             </button>
           </div>
         </div>
-        <div class="chart-content">
-          <div class="chart-row" v-for="provider in apiProviderStats" :key="provider.name">
-            <div class="provider-info">
-              <span class="provider-name">{{ provider.name }}</span>
-              <span class="provider-count">{{ provider.count }}</span>
+        <div class="chart-content-split">
+          <!-- Biểu đồ tròn bên trái -->
+          <div class="pie-chart-container">
+            <div class="pie-chart" :style="getPieChartStyle(apiProviderStats)">
+              <div class="pie-chart-center">
+                <!-- Để trống -->
+              </div>
+              <!-- Hiển thị phần trăm cho từng phần -->
+              <div class="pie-percentages">
+                <div 
+                  v-for="(provider, index) in apiProviderStats" 
+                  :key="provider.name"
+                  class="pie-percentage-item"
+                  :style="getPercentagePosition(provider, index, apiProviderStats)"
+                >
+                  <span class="pie-percentage-text">{{ provider.percentage }}%</span>
+                </div>
+              </div>
             </div>
-            <div class="progress-bar">
-              <div 
-                class="progress-fill" 
-                :class="provider.color"
-                :style="{ width: provider.percentage + '%' }"
-              ></div>
+          </div>
+          
+          <!-- Thanh tiến trình bên phải -->
+          <div class="progress-list">
+            <div class="progress-item" v-for="provider in apiProviderStats" :key="provider.name">
+              <div class="progress-info">
+                <span class="progress-name">{{ provider.name }}</span>
+                <span class="progress-count">{{ provider.count }}</span>
+              </div>
+              <div class="progress-bar">
+                <div 
+                  class="progress-fill" 
+                  :class="provider.color"
+                  :style="{ width: provider.percentage + '%' }"
+                ></div>
+              </div>
             </div>
-            <span class="percentage">{{ provider.percentage }}%</span>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Recent Activity -->
-    <div class="activity-section">
+    <!-- <div class="activity-section">
       <div class="activity-card">
         <div class="activity-header">
           <h3>Hoạt động gần đây</h3>
@@ -144,62 +186,200 @@
           </div>
         </div>
       </div>
-    </div>
+    </div> -->
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-// NOTE: Dashboard APIs cần từ BE:
-// GET /api/admin/dashboard/stats, GET /api/admin/dashboard/activities
-import { getDashboardStats, getRecentActivities } from '@/api/admin'
+import { getUsers, getProjects, getApiKeys } from '@/api/admin'
 
 // State
 const stats = ref({ totalUsers: 0, activeUsers: 0, totalProjects: 0, activeApiKeys: 0 })
-
-const userRoleStats = ref([]) // sẽ đổ từ API
-
-const apiProviderStats = ref([]) // sẽ đổ từ API
-
+const userRoleStats = ref([])
+const apiProviderStats = ref([])
 const recentActivities = ref([])
 
 // Methods
-const refreshUserStats = async () => {
-  // NOTE: GET /api/admin/dashboard/stats
+const loadDashboardData = async () => {
   try {
-    const data = await getDashboardStats()
-    // Kỳ vọng schema: { totalUsers, activeUsers, totalProjects, activeApiKeys, userRoleStats, apiProviderStats }
+    console.log('Loading dashboard data...')
+    
+    // Gọi các API có sẵn song song
+    const [usersRes, projectsRes, apiKeysRes] = await Promise.all([
+      getUsers(),
+      getProjects(),
+      getApiKeys()
+    ])
+    
+    // Xử lý dữ liệu users
+    const users = usersRes?.data?.data || usersRes?.data || []
+    const totalUsers = users.length
+    const activeUsers = users.filter(user => user.status === 'ACTIVE').length
+    
+    // Xử lý dữ liệu projects
+    const projects = projectsRes?.data?.data || projectsRes?.data || []
+    const totalProjects = projects.length
+    
+    // Xử lý dữ liệu API keys
+    const apiKeys = apiKeysRes?.data?.data || apiKeysRes?.data || []
+    const activeApiKeys = apiKeys.filter(key => key.is_active).length
+    
+    // Cập nhật stats
     stats.value = {
-      totalUsers: data?.totalUsers || 0,
-      activeUsers: data?.activeUsers || 0,
-      totalProjects: data?.totalProjects || 0,
-      activeApiKeys: data?.activeApiKeys || 0,
+      totalUsers,
+      activeUsers,
+      totalProjects,
+      activeApiKeys
     }
-    userRoleStats.value = data?.userRoleStats || []
-    apiProviderStats.value = data?.apiProviderStats || []
-  } catch (e) {
-    // Để trống nếu BE chưa có
+    
+    // Tính toán user role stats
+    const roleCounts = {}
+    users.forEach(user => {
+      const role = user.system_role || user.role || 'USER'
+      roleCounts[role] = (roleCounts[role] || 0) + 1
+    })
+    
+    userRoleStats.value = Object.entries(roleCounts).map(([role, count], index) => ({
+      name: role,
+      count,
+      percentage: totalUsers > 0 ? Math.round((count / totalUsers) * 100) : 0,
+      color: ['blue', 'green', 'purple', 'orange'][index % 4]
+    }))
+    
+    // Tính toán API provider stats
+    const providerCounts = {}
+    apiKeys.forEach(key => {
+      const provider = key.provider || 'Unknown'
+      providerCounts[provider] = (providerCounts[provider] || 0) + 1
+    })
+    
+    apiProviderStats.value = Object.entries(providerCounts).map(([provider, count], index) => ({
+      name: provider,
+      count,
+      percentage: apiKeys.length > 0 ? Math.round((count / apiKeys.length) * 100) : 0,
+      color: ['blue', 'green', 'purple', 'orange'][index % 4]
+    }))
+    
+    // Mock recent activities
+    recentActivities.value = [
+      {
+        id: 1,
+        type: 'user',
+        icon: 'fas fa-user-plus',
+        description: `Người dùng mới đăng ký`,
+        time: '5 phút trước',
+        status: 'success',
+        statusText: 'Thành công'
+      },
+      {
+        id: 2,
+        type: 'project',
+        icon: 'fas fa-project-diagram',
+        description: `Dự án mới được tạo`,
+        time: '15 phút trước',
+        status: 'success',
+        statusText: 'Thành công'
+      },
+      {
+        id: 3,
+        type: 'api',
+        icon: 'fas fa-key',
+        description: `API Key mới được tạo`,
+        time: '1 giờ trước',
+        status: 'success',
+        statusText: 'Thành công'
+      }
+    ]
+    
+    console.log('Dashboard data loaded:', stats.value)
+    
+  } catch (error) {
+    console.error('Error loading dashboard:', error)
+    
+    // Set default values on error
+    stats.value = {
+      totalUsers: 0,
+      activeUsers: 0,
+      totalProjects: 0,
+      activeApiKeys: 0
+    }
     userRoleStats.value = []
     apiProviderStats.value = []
+    recentActivities.value = []
   }
+}
+
+const refreshUserStats = async () => {
+  await loadDashboardData()
 }
 
 const refreshApiStats = async () => {
-  // Tận dụng cùng endpoint stats ở trên nếu BE không tách
-  await refreshUserStats()
+  await loadDashboardData()
 }
 
-const viewAllActivity = () => {}
+const viewAllActivity = () => {
+  console.log('View all activity clicked')
+}
 
-onMounted(async () => {
-  await refreshUserStats()
-  try {
-    // NOTE: GET /api/admin/dashboard/activities
-    const acts = await getRecentActivities()
-    recentActivities.value = Array.isArray(acts) ? acts : (acts?.items || [])
-  } catch (e) {
-    recentActivities.value = []
+// Tạo style cho biểu đồ tròn
+const getPieChartStyle = (data) => {
+  if (!data || data.length === 0) {
+    return {
+      background: 'conic-gradient(#e2e8f0 0deg 360deg)'
+    }
   }
+  
+  let currentAngle = 0
+  const gradients = data.map(item => {
+    const startAngle = currentAngle
+    const endAngle = currentAngle + (item.percentage * 3.6) // 360/100 = 3.6 degrees per 1%
+    currentAngle = endAngle
+    
+    const colorMap = {
+      blue: '#3b82f6',
+      green: '#059669', 
+      purple: '#7c3aed',
+      orange: '#ea580c'
+    }
+    
+    return `${colorMap[item.color] || '#64748b'} ${startAngle}deg ${endAngle}deg`
+  }).join(', ')
+  
+  return {
+    background: `conic-gradient(${gradients})`
+  }
+}
+
+// Tính toán vị trí hiển thị phần trăm trên biểu đồ tròn
+const getPercentagePosition = (item, index, data) => {
+  if (!data || data.length === 0) return {}
+  
+  // Tính góc giữa của phần này
+  let currentAngle = 0
+  for (let i = 0; i < index; i++) {
+    currentAngle += data[i].percentage * 3.6
+  }
+  const middleAngle = currentAngle + (item.percentage * 3.6 / 2)
+  
+  // Chuyển đổi từ độ sang radian
+  const radians = (middleAngle - 90) * Math.PI / 180
+  
+  // Tính vị trí x, y (khoảng cách từ tâm)
+  const radius = 60 // Khoảng cách từ tâm đến vị trí hiển thị phần trăm
+  const x = Math.cos(radians) * radius
+  const y = Math.sin(radians) * radius
+  
+  return {
+    position: 'absolute',
+    left: `calc(50% + ${x}px)`,
+    top: `calc(50% + ${y}px)`,
+    transform: 'translate(-50%, -50%)'
+  }
+}
+
+onMounted(() => {
+  loadDashboardData()
 })
 </script>
 
@@ -359,38 +539,101 @@ onMounted(async () => {
   color: #334155;
 }
 
-.chart-content {
+/* Chart Content Split Layout */
+.chart-content-split {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  gap: 24px;
+  align-items: center;
 }
 
-.chart-row {
+/* Pie Chart */
+.pie-chart-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.pie-chart {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  position: relative;
   display: flex;
   align-items: center;
+  justify-content: center;
+}
+
+.pie-percentages {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+
+.pie-percentage-item {
+  position: absolute;
+  z-index: 10;
+}
+
+.pie-percentage-text {
+  background: rgba(255, 255, 255, 0.9);
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+}
+
+.pie-chart-center {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  background: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+
+/* Progress List */
+.progress-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
-.role-info, .provider-info {
+.progress-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 120px;
+  gap: 8px;
 }
 
-.role-name, .provider-name {
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progress-name {
   font-weight: 500;
   color: #334155;
   font-size: 14px;
 }
 
-.role-count, .provider-count {
-  font-size: 12px;
-  color: #64748b;
+.progress-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
 }
 
 .progress-bar {
-  flex: 1;
   height: 8px;
   background: #e2e8f0;
   border-radius: 4px;
@@ -415,12 +658,8 @@ onMounted(async () => {
   background: #7c3aed;
 }
 
-.percentage {
-  min-width: 40px;
-  text-align: right;
-  font-weight: 600;
-  color: #334155;
-  font-size: 14px;
+.progress-fill.orange {
+  background: #ea580c;
 }
 
 /* Activity Section */
@@ -556,17 +795,22 @@ onMounted(async () => {
     grid-template-columns: 1fr;
   }
   
-  .chart-row {
+  .chart-content-split {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+    gap: 20px;
   }
   
-  .role-info, .provider-info {
-    min-width: auto;
+  .pie-chart {
+    width: 150px;
+    height: 150px;
   }
   
-  .progress-bar {
+  .pie-chart-center {
+    width: 90px;
+    height: 90px;
+  }
+  
+  .progress-list {
     width: 100%;
   }
 }
