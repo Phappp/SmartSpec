@@ -4,7 +4,6 @@ import Key from "../../../../../internal/model/api_key";
 import Session from "../../../../../internal/model/session";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-
 import { generateJwt, generateJwtOTP } from "../../../services/jwtService";
 import mailService from "../../../services/sendMail.service";
 
@@ -32,6 +31,7 @@ export class ApiKeyServiceImpl implements ApiKeyService {
   }
   async getAllAPIKey(): Promise<APIKeysResponse[]> {
     const keys = await Key.find();
+    console.log("Keys in service:", keys); // Debug log
     return keys.map((key) => ({
       id: key.id,
       key_value: key.key_value,
@@ -42,8 +42,20 @@ export class ApiKeyServiceImpl implements ApiKeyService {
       updatedAt: key.updatedAt,
     }));
   }
-  getAPIKeyById(id: string): Promise<APIKeysResponse> {
-    throw new Error("Method not implemented.");
+  async getAPIKeyById(id: string): Promise<APIKeysResponse> {
+    const key = await Key.findOne({ _id: id });
+    if (!key) {
+      throw new Error("API Key not found");
+    }
+    return {
+      id: key.id,
+      key_value: key.key_value,
+      provider: key.provider,
+      is_active: key.is_active,
+      created_by: key.created_by?.toString(),
+      createAt: key.createdAt,
+      updatedAt: key.updatedAt,
+    };
   }
   updateAPIKey(
     id: string,

@@ -41,7 +41,6 @@ const requireAuthorizedUser = (
   next: NextFunction
 ) => {
   try {
-    console.log(11);
     const bearerToken = req.headers["authorization"];
     const jwtToken = bearerToken?.split(" ")[1];
 
