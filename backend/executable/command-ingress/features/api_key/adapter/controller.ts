@@ -27,7 +27,30 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const { key_value, provider, is_active } = req.body;
+        if (!key_value || !provider) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "Key value and provider are required",
+          });
+          return;
+        }
+        if (!is_active) {
+          const is_active = true;
+        }
+        const created_by = req.getSubject();
+        const serviceResponse = await this.service.createAPIKey(
+          key_value,
+          provider,
+          is_active,
+          created_by
+        );
+
+        res.status(StatusCodes.CREATED).json({
+          status: "Success",
+          message: "Create API keys successfully",
+          data: serviceResponse,
+        });
       }
     );
   }

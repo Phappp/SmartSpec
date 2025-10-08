@@ -21,13 +21,41 @@ export class ApiKeyServiceImpl implements ApiKeyService {
   getAPIKeyStatistics(): Promise<any> {
     throw new Error("Method not implemented.");
   }
-  createAPIKey(
+  async createAPIKey(
     key_value: string,
     provider: string,
     is_active: boolean,
     created_by: string
   ): Promise<APIKeysResponse> {
-    throw new Error("Method not implemented.");
+    const keyExists = await Key.findOne({ key_value: key_value });
+    if (keyExists) {
+      throw new Error("API Key already exists");
+    }
+    if (
+      provider !== "gemini" &&
+      provider !== "openai" &&
+      provider !== "claude"
+    ) {
+      throw new Error(
+        "Provider must be one of 'gemini', 'openai', or 'claude'"
+      );
+    }
+    const newKey = new Key({
+      key_value,
+      provider,
+      is_active,
+      created_by,
+    });
+    await newKey.save();
+    return {
+      id: newKey.id,
+      key_value: newKey.key_value,
+      provider: newKey.provider,
+      is_active: newKey.is_active,
+      created_by: newKey.created_by?.toString(),
+      createAt: newKey.createdAt,
+      updatedAt: newKey.updatedAt,
+    };
   }
   async getAllAPIKey(): Promise<APIKeysResponse[]> {
     const keys = await Key.find();
