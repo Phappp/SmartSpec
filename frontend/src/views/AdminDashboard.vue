@@ -1,5 +1,7 @@
 <template>
   <div class="admin-dashboard">
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
     <!-- Sidebar -->
     <div class="sidebar">
       <div class="sidebar-header">
@@ -37,6 +39,34 @@
           </li>
         </ul>
       </nav>
+      
+      <!-- User Account Section ở dưới cùng sidebar -->
+      <div @click="toggleUserMenu" class="user-account">
+        <div class="avatar">
+          <img
+            src="https://static.vecteezy.com/system/resources/previews/024/983/914/original/simple-user-default-icon-free-png.png"
+            alt=""
+          />
+        </div>
+        <div v-if="currentUser" class="user-info">
+          <div class="user-name">{{ currentUser.name }}</div>
+          <div class="user-email">{{ currentUser.email }}</div>
+        </div>
+
+        <!-- Dùng transition để fade/slide -->
+        <transition name="fade-slide">
+          <div v-if="showUserMenu" class="user-menu">
+            <ul class="menu-list">
+              <li><span class="material-symbols-outlined">help</span> Help</li>
+              <li><span class="material-symbols-outlined">settings</span> Settings</li>
+              <hr />
+              <li @click.stop="logout">
+                <span class="material-symbols-outlined">logout</span> Logout
+              </li>
+            </ul>
+          </div>
+        </transition>
+      </div>
     </div>
 
     <!-- Main Content -->
@@ -47,20 +77,7 @@
           <h2>{{ pageTitle }}</h2>
         </div>
         <div class="header-right">
-          <div class="notification-icon">
-            <i class="fas fa-bell"></i>
-            <span class="badge" v-if="notifications > 0">{{ notifications }}</span>
-          </div>
-          <div class="user-info">
-            <div class="avatar">{{ currentUser.name.charAt(0) }}</div>
-            <div class="user-details">
-              <span class="user-name">{{ currentUser.name }}</span>
-              <span class="user-role">{{ currentUser.role }}</span>
-            </div>
-            <button class="logout-btn" @click="logout">
-              <i class="fas fa-sign-out-alt"></i>
-            </button>
-          </div>
+          <!-- Avatar đã được di chuyển xuống sidebar -->
         </div>
       </header>
 
@@ -80,7 +97,7 @@ import { getUserInfo, logout as authLogout } from '@/utils/authGuard'
 const router = useRouter()
 
 // State
-const notifications = ref(3)
+const showUserMenu = ref(false)
 const currentUser = ref({
   name: 'Admin User',
   role: 'Super Admin',
@@ -99,8 +116,29 @@ const pageTitle = computed(() => {
 })
 
 // Methods
+const toggleUserMenu = () => {
+  showUserMenu.value = !showUserMenu.value
+  
+  if (showUserMenu.value) {
+    document.addEventListener('click', handleClickOutside)
+  } else {
+    document.removeEventListener('click', handleClickOutside)
+  }
+}
+
+const handleClickOutside = (event) => {
+  const userMenu = document.querySelector('.user-menu')
+  const userAccount = document.querySelector('.user-account')
+  
+  if (userMenu && !userMenu.contains(event.target) && !userAccount.contains(event.target)) {
+    showUserMenu.value = false
+    document.removeEventListener('click', handleClickOutside)
+  }
+}
+
 const logout = () => {
   console.log('🚪 Logging out...')
+  showUserMenu.value = false
   authLogout()
   router.push('/login')
 }
@@ -142,6 +180,8 @@ onMounted(() => {
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
   z-index: 100;
   border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar-header {
@@ -164,12 +204,13 @@ onMounted(() => {
 .logo h1 {
   font-size: 20px;
   font-weight: 700;
-  color: #1e293b;
+  color: #1a365d;
   margin: 0;
 }
 
 .navigation {
   padding: 24px 0;
+  flex: 1;
 }
 
 .navigation ul {
@@ -231,7 +272,7 @@ onMounted(() => {
 .header-left h2 {
   font-size: 24px;
   font-weight: 700;
-  color: #1e293b;
+  color: #1a365d;
   margin: 0;
 }
 
@@ -241,86 +282,7 @@ onMounted(() => {
   gap: 24px;
 }
 
-.notification-icon {
-  position: relative;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 8px;
-  transition: background 0.2s;
-}
 
-.notification-icon:hover {
-  background: #f1f5f9;
-}
-
-.notification-icon i {
-  font-size: 20px;
-  color: #64748b;
-}
-
-.notification-icon .badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  background: #ef4444;
-  color: white;
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 10px;
-  min-width: 18px;
-  text-align: center;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 16px;
-}
-
-.user-details {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.user-name {
-  font-weight: 600;
-  color: #1e293b;
-  font-size: 14px;
-}
-
-.user-role {
-  font-size: 12px;
-  color: #64748b;
-}
-
-.logout-btn {
-  background: none;
-  border: none;
-  color: #64748b;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 6px;
-  transition: all 0.2s;
-}
-
-.logout-btn:hover {
-  background: #f1f5f9;
-  color: #ef4444;
-}
 
 .content-area {
   flex: 1;
@@ -355,6 +317,155 @@ onMounted(() => {
   
   .content-area {
     padding: 16px;
+  }
+}
+
+/* User Account Section - New Style */
+.user-account {
+  position: absolute;
+  gap: 8px;
+  width: 100%;
+  display: flex;
+  padding-top: 12px;
+  bottom: 0;
+  padding-bottom: 12px;
+  border-top: 1px solid #e0e0e0;
+  align-items: center;
+  justify-content: left;
+  transition: 0.1s ease;
+  cursor: pointer;
+  margin-left: 12px;
+}
+
+.user-account:hover {
+  background-color: #f5f5f5;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 50%;
+  background-color: #1a365d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.25s ease;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  padding: 3px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: left;
+  justify-content: center;
+  border-bottom: 1px solid #eee;
+  color: #333;
+}
+
+.user-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 1; /* số dòng tối đa */
+  -webkit-box-orient: vertical;
+  font-weight: 600;
+  font-size: 14px;
+  padding-right: 10px;
+  color: #333;
+  margin-bottom: 2px;
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-email {
+  font-size: 12px;
+  color: #666;
+  pointer-events: none;
+  user-select: none;
+}
+
+.user-menu {
+  position: absolute;
+  bottom: 80px;
+  left: 0;
+  width: 100%;
+  min-height: 100px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 15px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  padding: 10px;
+  animation: fadeIn 0.2s ease;
+}
+
+.menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menu-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  color: #333;
+}
+
+.menu-list li span {
+  font-size: 16px;
+  width: 18px;
+  text-align: center;
+  color: #444;
+}
+
+.menu-list li:hover {
+  background-color: #f5f5f5;
+}
+
+.menu-list hr {
+  border: none;
+  border-top: 1px solid #eee;
+  margin: 6px 0;
+}
+
+/* Transition animations */
+.fade-slide-enter-active, .fade-slide-leave-active {
+  transition: all 0.2s ease;
+}
+
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 </style>
