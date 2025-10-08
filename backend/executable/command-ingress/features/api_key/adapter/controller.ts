@@ -87,7 +87,13 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const serviceResponse = await this.service.getAllAPIKey();
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Get all API keys successfully",
+          data: serviceResponse,
+        });
       }
     );
   }

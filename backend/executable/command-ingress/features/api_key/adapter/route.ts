@@ -21,6 +21,7 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
     .route("")
     .post(requireAuthorizedUser, controller.createAPIKey.bind(controller));
 
+  //
   router
     .route("")
     .get(requireAuthorizedUser, controller.getAllAPIKey.bind(controller));
@@ -36,11 +37,6 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
   router
     .route("/:id")
     .delete(requireAuthorizedUser, controller.deleteAPIKey.bind(controller));
-
-  router
-    .route("/:id")
-    .delete(requireAuthorizedUser, controller.deleteAPIKey.bind(controller));
-
   return router;
 };
 

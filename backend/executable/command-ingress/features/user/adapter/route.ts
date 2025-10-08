@@ -9,18 +9,22 @@ const initUserRoute: (controller: UserController) => express.Router = (
 
   //for admin
   router
+    .route("/update-profile")
+    .patch(requireAuthorizedUser, controller.updateProfile.bind(controller));
+  router
     .route("/search")
     .get(
       requireAuthorizedUser,
       requireRole("ADMIN"),
       controller.searchUsersByNameAndEmail.bind(controller)
     );
-  router.route("/filter")
-  .get(
-    requireAuthorizedUser,
-    requireRole("ADMIN"),
-    controller.filterUsers.bind(controller)
-  )
+  router
+    .route("/filter")
+    .get(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.filterUsers.bind(controller)
+    );
   router
     .route("")
     .get(
@@ -59,9 +63,7 @@ const initUserRoute: (controller: UserController) => express.Router = (
     );
 
   //for user
-  router
-    .route("/update-profile")
-    .patch(requireAuthorizedUser, controller.updateProfile.bind(controller));
+
   router
     .route("/change-password")
     .post(requireAuthorizedUser, controller.changePassword.bind(controller));

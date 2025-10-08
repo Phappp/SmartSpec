@@ -137,7 +137,9 @@ export class UserServiceImpl implements UserService {
     await user.save();
 
     const subject = "Password Reset Notification";
-    const data = `Your password has been reset. Your new password is: ${newPassword}. Please change it after logging in.`;
+    const data = `<p>Your password has been reset.</p>
+                  <p>Your new password is: <b>${newPassword}</b>.</p>
+                  <p>Please change it after logging in.</p>`;
     const mailIsSent = await mailService.sendEmail({
       emailFrom: "hngvtdat010@gmail.com",
       emailTo: user.email,
