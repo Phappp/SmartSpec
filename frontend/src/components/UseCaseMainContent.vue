@@ -1,5 +1,3 @@
-[file name]: UseCaseMainContent.vue
-[file content begin]
 <template>
   <div class="main-content">
     <div class="usecase-area">
@@ -44,7 +42,7 @@
             <p>High Priority</p>
           </div>
         </div>
-        <div class="stat-card completed">
+        <!-- <div class="stat-card completed">
           <div class="stat-icon">
             <span class="material-symbols-outlined">check_circle</span>
           </div>
@@ -52,7 +50,7 @@
             <h3>{{ completedCount }}</h3>
             <p>Completed</p>
           </div>
-        </div>
+        </div> -->
       </div>
 
       <!-- Loading State -->
@@ -83,7 +81,7 @@
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="Search use cases..."
+              placeholder="Search use cases by name, goal or ID..."
               class="search-input"
             />
           </div>
@@ -156,107 +154,158 @@
                 <!-- Expanded Details -->
                 <div v-if="expandedUseCaseId === uc.id" class="usecase-details">
                   <div class="details-grid">
-                    <div class="detail-section">
-                      <h5>Goal</h5>
-                      <p>{{ uc.goal || 'No goal specified' }}</p>
-                    </div>
-                    <div class="detail-section">
-                      <h5>Description</h5>
-                      <p>{{ uc.reason || 'No description available' }}</p>
-                    </div>
-                    <div class="detail-section">
-                      <h5>Context</h5>
-                      <p>{{ uc.context || 'No context specified' }}</p>
-                    </div>
-
-                    <div class="detail-section full-width">
-                      <h5>Main Flow</h5>
-                      <ol class="task-list">
-                        <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
-                        <li v-if="!uc.tasks || uc.tasks.length === 0">No tasks defined</li>
-                      </ol>
-                    </div>
-
-                    <div class="detail-section">
-                      <h5>Preconditions</h5>
-                      <ul class="condition-list">
-                        <li v-for="(item, i) in uc.preconditions" :key="i">{{ item }}</li>
-                        <li v-if="!uc.preconditions || uc.preconditions.length === 0">None</li>
-                      </ul>
-                    </div>
-                    <div class="detail-section">
-                      <h5>Postconditions</h5>
-                      <ul class="condition-list">
-                        <li v-for="(item, i) in uc.postconditions" :key="i">{{ item }}</li>
-                        <li v-if="!uc.postconditions || uc.postconditions.length === 0">None</li>
-                      </ul>
-                    </div>
-
-                    <div class="detail-section">
-                      <h5>Inputs</h5>
-                      <div class="tag-list">
-                        <span v-for="item in uc.inputs" :key="item" class="tag tag-input">{{
-                          item
-                        }}</span>
-                        <span v-if="!uc.inputs || uc.inputs.length === 0" class="tag tag-meta"
-                          >None</span
-                        >
+                    <!-- Row 1: Goal, Description, Context -->
+                    <div class="detail-row">
+                      <div class="detail-section">
+                        <h5>Goal</h5>
+                        <p>{{ uc.goal || 'No goal specified' }}</p>
                       </div>
-                    </div>
-                    <div class="detail-section">
-                      <h5>Outputs</h5>
-                      <div class="tag-list">
-                        <span v-for="item in uc.outputs" :key="item" class="tag tag-output">{{
-                          item
-                        }}</span>
-                        <span v-if="!uc.outputs || uc.outputs.length === 0" class="tag tag-meta"
-                          >None</span
-                        >
+                      <div class="detail-section">
+                        <h5>Description</h5>
+                        <p>{{ uc.reason || 'No description available' }}</p>
+                      </div>
+                      <div class="detail-section">
+                        <h5>Context</h5>
+                        <p>{{ uc.context || 'No context specified' }}</p>
                       </div>
                     </div>
 
-                    <div class="detail-section full-width">
-                      <h5>Exceptions</h5>
-                      <ul class="exception-list">
-                        <li v-for="(item, i) in uc.exceptions" :key="i">
-                          <span class="material-symbols-outlined">warning</span>
-                          {{ item }}
-                        </li>
-                        <li v-if="!uc.exceptions || uc.exceptions.length === 0">
-                          No exceptions defined
-                        </li>
-                      </ul>
-                    </div>
-
-                    <div class="detail-section">
-                      <h5>Stakeholders</h5>
-                      <div class="tag-list">
-                        <span v-for="item in uc.stakeholders" :key="item" class="tag tag-meta">{{
-                          item
-                        }}</span>
-                        <span
-                          v-if="!uc.stakeholders || uc.stakeholders.length === 0"
-                          class="tag tag-meta"
-                          >None</span
-                        >
+                    <!-- Row 2: Main Flow (Full Width) -->
+                    <div class="detail-row">
+                      <div class="detail-section full-width">
+                        <h5>Main Flow</h5>
+                        <ol class="task-list">
+                          <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                          <li v-if="!uc.tasks || uc.tasks.length === 0">No tasks defined</li>
+                        </ol>
                       </div>
                     </div>
-                    <div class="detail-section">
-                      <h5>Related Use Cases</h5>
-                      <div class="tag-list">
-                        <span
-                          v-for="relatedId in uc.related_usecases"
-                          :key="relatedId"
-                          class="tag tag-related"
-                        >
-                          <template v-if="useCaseMap[relatedId]"> UC-{{ relatedId }} </template>
-                          <template v-else> {{ relatedId }} </template>
-                        </span>
-                        <span
-                          v-if="!uc.related_usecases || uc.related_usecases.length === 0"
-                          class="tag tag-meta"
-                          >None</span
-                        >
+
+                    <!-- Row 3: Preconditions & Postconditions -->
+                    <div class="detail-row">
+                      <div class="detail-section">
+                        <h5>Preconditions</h5>
+                        <ul class="condition-list">
+                          <li v-for="(item, i) in uc.preconditions" :key="i">{{ item }}</li>
+                          <li v-if="!uc.preconditions || uc.preconditions.length === 0">None</li>
+                        </ul>
+                      </div>
+                      <div class="detail-section">
+                        <h5>Postconditions</h5>
+                        <ul class="condition-list">
+                          <li v-for="(item, i) in uc.postconditions" :key="i">{{ item }}</li>
+                          <li v-if="!uc.postconditions || uc.postconditions.length === 0">None</li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <!-- Row 4: Inputs & Outputs -->
+                    <div class="detail-row">
+                      <div class="detail-section">
+                        <h5>Inputs</h5>
+                        <div class="tag-list">
+                          <span v-for="item in uc.inputs" :key="item" class="tag tag-input">{{
+                            item
+                          }}</span>
+                          <span v-if="!uc.inputs || uc.inputs.length === 0" class="tag tag-meta"
+                            >None</span
+                          >
+                        </div>
+                      </div>
+                      <div class="detail-section">
+                        <h5>Outputs</h5>
+                        <div class="tag-list">
+                          <span v-for="item in uc.outputs" :key="item" class="tag tag-output">{{
+                            item
+                          }}</span>
+                          <span v-if="!uc.outputs || uc.outputs.length === 0" class="tag tag-meta"
+                            >None</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Row 5: Triggers, Business Rules & Constraints -->
+                    <div class="detail-row">
+                      <div class="detail-section">
+                        <h5>Triggers</h5>
+                        <ul class="condition-list">
+                          <li v-for="(item, i) in uc.triggers" :key="i">{{ item }}</li>
+                          <li v-if="!uc.triggers || uc.triggers.length === 0">None</li>
+                        </ul>
+                      </div>
+                      <div class="detail-section">
+                        <h5>Business Rules</h5>
+                        <ul class="condition-list">
+                          <li v-for="(item, i) in uc.rules" :key="i">{{ item }}</li>
+                          <li v-if="!uc.rules || uc.rules.length === 0">None</li>
+                        </ul>
+                      </div>
+                      <div class="detail-section">
+                        <h5>Constraints</h5>
+                        <ul class="condition-list">
+                          <li v-for="(item, i) in uc.constraints" :key="i">{{ item }}</li>
+                          <li v-if="!uc.constraints || uc.constraints.length === 0">None</li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <!-- Row 6: Exceptions (Full Width) -->
+                    <div class="detail-row">
+                      <div class="detail-section full-width">
+                        <h5>Exceptions</h5>
+                        <ul class="exception-list">
+                          <li v-for="(item, i) in uc.exceptions" :key="i">
+                            <span class="material-symbols-outlined">warning</span>
+                            {{ item }}
+                          </li>
+                          <li v-if="!uc.exceptions || uc.exceptions.length === 0">
+                            No exceptions defined
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <!-- Row 7: Stakeholders & Related Use Cases -->
+                    <div class="detail-row">
+                      <div class="detail-section">
+                        <h5>Stakeholders</h5>
+                        <div class="tag-list">
+                          <span v-for="item in uc.stakeholders" :key="item" class="tag tag-meta">{{
+                            item
+                          }}</span>
+                          <span
+                            v-if="!uc.stakeholders || uc.stakeholders.length === 0"
+                            class="tag tag-meta"
+                            >None</span
+                          >
+                        </div>
+                      </div>
+                      <div class="detail-section">
+                        <h5>Related Use Cases</h5>
+                        <div class="tag-list">
+                          <span
+                            v-for="relatedId in uc.related_usecases"
+                            :key="relatedId"
+                            class="tag tag-related"
+                          >
+                            <template v-if="useCaseMap[relatedId]"> UC-{{ relatedId }} </template>
+                            <template v-else> {{ relatedId }} </template>
+                          </span>
+                          <span
+                            v-if="!uc.related_usecases || uc.related_usecases.length === 0"
+                            class="tag tag-meta"
+                            >None</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Row 8: Feedback -->
+                    <div v-if="uc.feedback" class="detail-row">
+                      <div class="detail-section full-width">
+                        <h5>Feedback</h5>
+                        <p>{{ uc.feedback }}</p>
                       </div>
                     </div>
                   </div>
@@ -427,7 +476,8 @@ export default {
           const matchesSearch =
             !this.searchQuery ||
             uc.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-            uc.goal?.toLowerCase().includes(this.searchQuery.toLowerCase())
+            uc.goal?.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+            `UC-${uc.id}`.toLowerCase().includes(this.searchQuery.toLowerCase())
 
           const matchesPriority = !this.priorityFilter || uc.priority === this.priorityFilter
 
@@ -974,10 +1024,17 @@ export default {
 }
 
 .details-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 20px;
   margin-bottom: 20px;
+}
+
+.detail-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  align-items: start;
 }
 
 .detail-section {
@@ -985,6 +1042,10 @@ export default {
   padding: 16px;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
+  height: 100%;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
 }
 
 .detail-section.full-width {
@@ -1005,6 +1066,7 @@ export default {
   color: #4b5563;
   line-height: 1.5;
   font-size: 0.875rem;
+  flex: 1;
 }
 
 .task-list,
@@ -1322,7 +1384,7 @@ export default {
     grid-template-columns: 1fr 1fr;
   }
 
-  .details-grid {
+  .detail-row {
     grid-template-columns: 1fr;
   }
 }
@@ -1331,6 +1393,9 @@ export default {
   .stats-grid {
     grid-template-columns: 1fr;
   }
+
+  .detail-row {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
-[file content end]

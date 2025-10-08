@@ -18,21 +18,21 @@ Mỗi use case là một object JSON với các trường:
 - id
 - name (mô tả chức năng phần mềm, ví dụ: "Đăng nhập hệ thống", "Gửi yêu cầu phê duyệt")
 - role (vai trò trong phần mềm: Người dùng, Quản trị viên, Cán bộ thẩm định…)
-- goal
-- reason
-- tasks[] (các bước hệ thống thực hiện, KHÔNG phải thủ tục giấy tờ ngoài đời)
-- inputs[]
-- outputs[]
-- context
+- goal (mục tiêu chính của chức năng)
+- reason (tại sao chức năng này tồn tại)
+- tasks[] (danh sách các bước tương tác phần mềm hỗ trợ người dùng thực hiện mục tiêu, KHÔNG phải thủ tục giấy tờ ngoài đời)
+- inputs[] (dữ liệu đầu vào người dùng cung cấp hoặc hệ thống yêu cầu)
+- outputs[] (dữ liệu, thông báo hoặc hành động hệ thống trả về)
+- context (ngữ cảnh hoạt động hoặc mô-đun phần mềm mà use case này thuộc v)
 - priority ("low"|"medium"|"high")
-- feedback
-- rules[]
-- triggers[]
-- preconditions[]
-- postconditions[]
-- exceptions[]
-- stakeholders[]
-- constraints[]
+- feedback (phản hồi, mong đợi hoặc tiêu chí chấp nhận từ người dùng khi sử dụng chức năng)
+- rules[] (quy tắc, logic xử lý hoặc điều kiện rẽ nhánh liên quan đến chức năng)
+- triggers[] (sự kiện hoặc hành động khởi tạo use case này)
+- preconditions[] (điều kiện phải có trước khi thực hiện)
+- postconditions[] (trạng thái hệ thống sau khi hoàn tất)
+- exceptions[] (các trường hợp lỗi hoặc điều kiện bất thường có thể xảy ra)
+- stakeholders[] (các bên liên quan hưởng lợi hoặc bị ảnh hưởng)
+- constraints[] (giới hạn, điều kiện kỹ thuật hoặc nghiệp vụ áp dụng cho chức năng)
 - related_usecases[]
 
 YÊU CẦU QUAN TRỌNG:
@@ -110,21 +110,21 @@ Each use case is a JSON object with these fields:
 - id
 - name (describes a software function, e.g., "Log into the system", "Submit approval request")
 - role (role in the software: User, Administrator, Approver...)
-- goal
-- reason
-- tasks[] (steps the system performs, NOT real-world paperwork)
-- inputs[]
-- outputs[]
-- context
+- goal (the main objective or intended outcome of this function)
+- reason (the rationale or purpose for why this function exists)
+- tasks[] (list of interaction steps the software supports the user to perform, NOT real-world paperwork)
+- inputs[] (data or parameters provided by the user or required by the system)
+- outputs[] (data, messages, or system actions produced as a result)
+- context (operational context or software module this use case belongs to)
 - priority ("low"|"medium"|"high")
-- feedback
-- rules[]
-- triggers[]
-- preconditions[]
-- postconditions[]
-- exceptions[]
-- stakeholders[]
-- constraints[]
+- feedback (expected user feedback, satisfaction criteria, or acceptance conditions when using this function)
+- rules[] (processing logic, validation rules, or conditional branches involved in this function)
+- triggers[] (events or actions that initiate this use case)
+- preconditions[] (conditions that must be true before execution)
+- postconditions[] (system state after successful completion)
+- exceptions[] (error cases or abnormal situations that may occur)
+- stakeholders[] (parties who benefit from or are affected by this function)
+- constraints[] (technical or business limitations applied to this function)
 - related_usecases[]
 
 CRITICAL REQUIREMENTS:

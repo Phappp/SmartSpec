@@ -23,167 +23,176 @@
 
       <!-- Content -->
       <div class="modal-body">
-        <!-- Use Case Name -->
-        <div class="detail-section">
-          <h3 class="section-title">Use Case Name</h3>
-          <p class="detail-content">{{ useCase.use_case_name || 'N/A' }}</p>
-        </div>
-
-        <!-- Description -->
-        <div class="detail-section">
-          <h3 class="section-title">Description</h3>
-          <p class="detail-content">{{ useCase.description || 'No description available' }}</p>
-        </div>
-
-        <!-- Actors -->
-        <div class="detail-section">
-          <h3 class="section-title">Actors</h3>
-          <div class="actors-list">
-            <span v-for="actor in useCase.actors" :key="actor" class="actor-tag">
-              {{ actor }}
-            </span>
-            <span v-if="!useCase.actors || useCase.actors.length === 0" class="no-data">
-              No actors specified
-            </span>
+        <div class="details-grid">
+          <!-- Row 1: Goal, Description, Context -->
+          <div class="detail-row">
+            <div class="detail-section">
+              <h5>Goal</h5>
+              <p>{{ useCase.goal || 'No goal specified' }}</p>
+            </div>
+            <div class="detail-section">
+              <h5>Description</h5>
+              <p>{{ useCase.reason || 'No description available' }}</p>
+            </div>
+            <div class="detail-section">
+              <h5>Context</h5>
+              <p>{{ useCase.context || 'No context specified' }}</p>
+            </div>
           </div>
-        </div>
 
-        <!-- Preconditions -->
-        <div class="detail-section">
-          <h3 class="section-title">Preconditions</h3>
-          <ul class="preconditions-list">
-            <li
-              v-for="(precondition, index) in useCase.preconditions"
-              :key="index"
-              class="precondition-item"
-            >
-              {{ precondition }}
-            </li>
-            <li v-if="!useCase.preconditions || useCase.preconditions.length === 0" class="no-data">
-              No preconditions specified
-            </li>
-          </ul>
-        </div>
-
-        <!-- Postconditions -->
-        <div class="detail-section">
-          <h3 class="section-title">Postconditions</h3>
-          <ul class="postconditions-list">
-            <li
-              v-for="(postcondition, index) in useCase.postconditions"
-              :key="index"
-              class="postcondition-item"
-            >
-              {{ postcondition }}
-            </li>
-            <li
-              v-if="!useCase.postconditions || useCase.postconditions.length === 0"
-              class="no-data"
-            >
-              No postconditions specified
-            </li>
-          </ul>
-        </div>
-
-        <!-- Normal Flow -->
-        <div class="detail-section">
-          <h3 class="section-title">Normal Flow</h3>
-          <ol class="flow-list">
-            <li v-for="(step, index) in useCase.normal_flow" :key="index" class="flow-step">
-              {{ step }}
-            </li>
-            <li v-if="!useCase.normal_flow || useCase.normal_flow.length === 0" class="no-data">
-              No normal flow steps specified
-            </li>
-          </ol>
-        </div>
-
-        <!-- Alternative Flows -->
-        <div
-          v-if="useCase.alternative_flows && useCase.alternative_flows.length > 0"
-          class="detail-section"
-        >
-          <h3 class="section-title">Alternative Flows</h3>
-          <div
-            v-for="(flow, index) in useCase.alternative_flows"
-            :key="index"
-            class="alternative-flow"
-          >
-            <h4 class="alternative-flow-title">
-              {{ flow.flow_name || `Alternative Flow ${index + 1}` }}
-            </h4>
-            <ol class="flow-list">
-              <li v-for="(step, stepIndex) in flow.steps" :key="stepIndex" class="flow-step">
-                {{ step }}
-              </li>
-            </ol>
+          <!-- Row 2: Main Flow (Full Width) -->
+          <div class="detail-row">
+            <div class="detail-section full-width">
+              <h5>Main Flow</h5>
+              <ol class="task-list">
+                <li v-for="(task, i) in useCase.tasks" :key="i">{{ task }}</li>
+                <li v-if="!useCase.tasks || useCase.tasks.length === 0">No tasks defined</li>
+              </ol>
+            </div>
           </div>
-        </div>
 
-        <!-- Exception Flows -->
-        <div
-          v-if="useCase.exception_flows && useCase.exception_flows.length > 0"
-          class="detail-section"
-        >
-          <h3 class="section-title">Exception Flows</h3>
-          <div v-for="(flow, index) in useCase.exception_flows" :key="index" class="exception-flow">
-            <h4 class="exception-flow-title">
-              {{ flow.flow_name || `Exception Flow ${index + 1}` }}
-            </h4>
-            <ol class="flow-list">
-              <li v-for="(step, stepIndex) in flow.steps" :key="stepIndex" class="flow-step">
-                {{ step }}
-              </li>
-            </ol>
+          <!-- Row 3: Preconditions & Postconditions -->
+          <div class="detail-row">
+            <div class="detail-section">
+              <h5>Preconditions</h5>
+              <ul class="condition-list">
+                <li v-for="(item, i) in useCase.preconditions" :key="i">{{ item }}</li>
+                <li v-if="!useCase.preconditions || useCase.preconditions.length === 0">None</li>
+              </ul>
+            </div>
+            <div class="detail-section">
+              <h5>Postconditions</h5>
+              <ul class="condition-list">
+                <li v-for="(item, i) in useCase.postconditions" :key="i">{{ item }}</li>
+                <li v-if="!useCase.postconditions || useCase.postconditions.length === 0">None</li>
+              </ul>
+            </div>
           </div>
-        </div>
 
-        <!-- Includes -->
-        <div v-if="useCase.includes && useCase.includes.length > 0" class="detail-section">
-          <h3 class="section-title">Includes</h3>
-          <div class="includes-list">
-            <span v-for="include in useCase.includes" :key="include" class="include-tag">
-              {{ include }}
-            </span>
+          <!-- Row 4: Inputs & Outputs -->
+          <div class="detail-row">
+            <div class="detail-section">
+              <h5>Inputs</h5>
+              <div class="tag-list">
+                <span v-for="item in useCase.inputs" :key="item" class="tag tag-input">{{
+                  item
+                }}</span>
+                <span v-if="!useCase.inputs || useCase.inputs.length === 0" class="tag tag-meta"
+                  >None</span
+                >
+              </div>
+            </div>
+            <div class="detail-section">
+              <h5>Outputs</h5>
+              <div class="tag-list">
+                <span v-for="item in useCase.outputs" :key="item" class="tag tag-output">{{
+                  item
+                }}</span>
+                <span v-if="!useCase.outputs || useCase.outputs.length === 0" class="tag tag-meta"
+                  >None</span
+                >
+              </div>
+            </div>
           </div>
-        </div>
 
-        <!-- Extends -->
-        <div v-if="useCase.extends && useCase.extends.length > 0" class="detail-section">
-          <h3 class="section-title">Extends</h3>
-          <div class="extends-list">
-            <span v-for="extend in useCase.extends" :key="extend" class="extend-tag">
-              {{ extend }}
-            </span>
+          <!-- Row 5: Triggers, Business Rules & Constraints -->
+          <div class="detail-row">
+            <div class="detail-section">
+              <h5>Triggers</h5>
+              <ul class="condition-list">
+                <li v-for="(item, i) in useCase.triggers" :key="i">{{ item }}</li>
+                <li v-if="!useCase.triggers || useCase.triggers.length === 0">None</li>
+              </ul>
+            </div>
+            <div class="detail-section">
+              <h5>Business Rules</h5>
+              <ul class="condition-list">
+                <li v-for="(item, i) in useCase.rules" :key="i">{{ item }}</li>
+                <li v-if="!useCase.rules || useCase.rules.length === 0">None</li>
+              </ul>
+            </div>
+            <div class="detail-section">
+              <h5>Constraints</h5>
+              <ul class="condition-list">
+                <li v-for="(item, i) in useCase.constraints" :key="i">{{ item }}</li>
+                <li v-if="!useCase.constraints || useCase.constraints.length === 0">None</li>
+              </ul>
+            </div>
           </div>
-        </div>
 
-        <!-- Priority -->
-        <div class="detail-section">
-          <h3 class="section-title">Priority</h3>
-          <p class="detail-content">
-            <span
-              :class="['priority-badge', `priority-${useCase.priority?.toLowerCase() || 'medium'}`]"
-            >
-              {{ useCase.priority || 'Medium' }}
-            </span>
-          </p>
-        </div>
+          <!-- Row 6: Exceptions (Full Width) -->
+          <div class="detail-row">
+            <div class="detail-section full-width">
+              <h5>Exceptions</h5>
+              <ul class="exception-list">
+                <li v-for="(item, i) in useCase.exceptions" :key="i">
+                  <span class="material-symbols-outlined">warning</span>
+                  {{ item }}
+                </li>
+                <li v-if="!useCase.exceptions || useCase.exceptions.length === 0">
+                  No exceptions defined
+                </li>
+              </ul>
+            </div>
+          </div>
 
-        <!-- Status -->
-        <div class="detail-section">
-          <h3 class="section-title">Status</h3>
-          <p class="detail-content">
-            <span :class="['status-badge', `status-${useCase.status?.toLowerCase() || 'draft'}`]">
-              {{ useCase.status || 'Draft' }}
-            </span>
-          </p>
-        </div>
+          <!-- Row 7: Stakeholders & Related Use Cases -->
+          <div class="detail-row">
+            <div class="detail-section">
+              <h5>Stakeholders</h5>
+              <div class="tag-list">
+                <span v-for="item in useCase.stakeholders" :key="item" class="tag tag-meta">{{
+                  item
+                }}</span>
+                <span
+                  v-if="!useCase.stakeholders || useCase.stakeholders.length === 0"
+                  class="tag tag-meta"
+                  >None</span
+                >
+              </div>
+            </div>
+            <div class="detail-section">
+              <h5>Related Use Cases</h5>
+              <div class="tag-list">
+                <span
+                  v-for="relatedId in useCase.related_usecases"
+                  :key="relatedId"
+                  class="tag tag-related"
+                >
+                  UC-{{ relatedId }}
+                </span>
+                <span
+                  v-if="!useCase.related_usecases || useCase.related_usecases.length === 0"
+                  class="tag tag-meta"
+                  >None</span
+                >
+              </div>
+            </div>
+          </div>
 
-        <!-- Notes -->
-        <div v-if="useCase.notes" class="detail-section">
-          <h3 class="section-title">Notes</h3>
-          <p class="detail-content">{{ useCase.notes }}</p>
+          <!-- Row 8: Priority & Role -->
+          <div class="detail-row">
+            <div class="detail-section">
+              <h5>Priority</h5>
+              <p>
+                <span class="priority-badge" :class="`priority-${useCase.priority || 'medium'}`">
+                  {{ useCase.priority || 'Medium' }}
+                </span>
+              </p>
+            </div>
+            <div class="detail-section">
+              <h5>Role</h5>
+              <p>{{ useCase.role || 'No role specified' }}</p>
+            </div>
+          </div>
+
+          <!-- Row 9: Feedback -->
+          <div v-if="useCase.feedback" class="detail-row">
+            <div class="detail-section full-width">
+              <h5>Feedback</h5>
+              <p>{{ useCase.feedback }}</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -236,7 +245,7 @@ export default {
   background: white;
   border-radius: 12px;
   width: 100%;
-  max-width: 800px;
+  max-width: 1200px;
   max-height: 90vh;
   overflow: hidden;
   display: flex;
@@ -316,156 +325,129 @@ export default {
   background: white;
 }
 
+.details-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.detail-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
 .detail-section {
-  margin-bottom: 24px;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  height: 100%;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
 }
 
-.detail-section:last-child {
-  margin-bottom: 0;
+.detail-section.full-width {
+  grid-column: 1 / -1;
 }
 
-.section-title {
-  font-size: 16px;
+.detail-section h5 {
+  font-size: 0.875rem;
   font-weight: 600;
   color: #374151;
   margin: 0 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.detail-content {
+.detail-section p {
   margin: 0;
   color: #4b5563;
-  line-height: 1.6;
-  font-size: 14px;
+  line-height: 1.5;
+  font-size: 0.875rem;
+  flex: 1;
 }
 
-.actors-list,
-.includes-list,
-.extends-list {
+.task-list,
+.condition-list,
+.exception-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-list {
+  padding-left: 12px;
+  list-style-type: decimal;
+}
+
+.task-list li,
+.condition-list li {
+  color: #4b5563;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.exception-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #dc2626;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.exception-list .material-symbols-outlined {
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.tag-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
-.actor-tag,
-.include-tag,
-.extend-tag {
-  background: #e0e7ff;
-  color: #3730a3;
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 12px;
+.tag {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 
-.preconditions-list,
-.postconditions-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.tag-input {
+  background: #e0e7ff;
+  color: #3730a3;
 }
 
-.precondition-item,
-.postcondition-item {
-  padding: 8px 0;
-  border-bottom: 1px solid #f3f4f6;
-  color: #4b5563;
-  font-size: 14px;
-  line-height: 1.5;
+.tag-output {
+  background: #d1fae5;
+  color: #065f46;
 }
 
-.precondition-item:last-child,
-.postcondition-item:last-child {
-  border-bottom: none;
+.tag-meta {
+  background: #e5e7eb;
+  color: #374151;
 }
 
-.flow-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  counter-reset: flow-counter;
+.tag-related {
+  background: #f3e8ff;
+  color: #7c3aed;
 }
 
-.flow-step {
-  counter-increment: flow-counter;
-  padding: 12px 0 12px 36px;
-  border-bottom: 1px solid #f3f4f6;
-  color: #4b5563;
-  font-size: 14px;
-  line-height: 1.5;
-  position: relative;
-}
-
-.flow-step:last-child {
-  border-bottom: none;
-}
-
-.flow-step::before {
-  content: counter(flow-counter);
-  position: absolute;
-  left: 0;
-  top: 12px;
-  width: 24px;
-  height: 24px;
-  background: #1a365d;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.alternative-flow,
-.exception-flow {
-  margin-bottom: 16px;
-  padding: 16px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border-left: 4px solid #3b82f6;
-}
-
-.alternative-flow:last-child,
-.exception-flow:last-child {
-  margin-bottom: 0;
-}
-
-.alternative-flow-title,
-.exception-flow-title {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.alternative-flow .flow-list,
-.exception-flow .flow-list {
-  margin: 0;
-}
-
-.alternative-flow .flow-step,
-.exception-flow .flow-step {
-  padding-left: 32px;
-  border-bottom-color: #e5e7eb;
-}
-
-.alternative-flow .flow-step::before,
-.exception-flow .flow-step::before {
-  background: #3b82f6;
-  width: 20px;
-  height: 20px;
-  top: 12px;
-  font-size: 11px;
-}
-
-.priority-badge,
-.status-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 12px;
+.priority-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: capitalize;
+  display: inline-block;
 }
 
 .priority-high {
@@ -481,32 +463,6 @@ export default {
 .priority-low {
   background: #d1fae5;
   color: #059669;
-}
-
-.status-draft {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.status-approved {
-  background: #d1fae5;
-  color: #059669;
-}
-
-.status-rejected {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.status-in-review {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.no-data {
-  color: #9ca3af;
-  font-style: italic;
-  font-size: 14px;
 }
 
 .modal-footer {
@@ -570,6 +526,7 @@ export default {
   background: #94a3b8;
 }
 
+/* Responsive Design */
 @media (max-width: 768px) {
   .modal-header {
     flex-direction: column;
@@ -580,6 +537,28 @@ export default {
   .header-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .modal-content {
+    max-width: 95%;
+  }
+
+  .detail-row {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-section {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-body {
+    padding: 16px;
+  }
+
+  .detail-row {
+    gap: 12px;
   }
 }
 </style>

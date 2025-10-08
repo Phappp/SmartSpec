@@ -1,17 +1,63 @@
 <template>
-  <div>
+  <div class="handle-conflict-view">
     <!-- Conflict Resolution Section -->
-    <div class="actions-toolbar">
-      <button class="action-btn" @click="$emit('find-conflicts')" :disabled="isFindingConflicts">
-        <span v-if="isFindingConflicts" class="button-spinner-small"></span>
-        <span v-else class="material-symbols-outlined">rule</span>
-        {{ isFindingConflicts ? 'Scanning...' : 'Find Duplicates' }}
-      </button>
+    <div class="content-header">
+      <div class="header-info">
+        <h2>Conflict Resolution</h2>
+        <p>Manage duplicate use cases in your project</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn-primary" @click="$emit('find-conflicts')" :disabled="isFindingConflicts">
+          <span v-if="isFindingConflicts" class="button-spinner-small"></span>
+          <span v-else class="material-symbols-outlined">rule</span>
+          {{ isFindingConflicts ? 'Scanning...' : 'Scan for Duplicates' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid" v-if="hasConflicts">
+      <div class="stat-card total">
+        <div class="stat-icon">
+          <span class="material-symbols-outlined">warning</span>
+        </div>
+        <div class="stat-info">
+          <h3>{{ pendingConflicts.length }}</h3>
+          <p>Total Conflicts</p>
+        </div>
+      </div>
+      <div class="stat-card resolved">
+        <div class="stat-icon">
+          <span class="material-symbols-outlined">check_circle</span>
+        </div>
+        <div class="stat-info">
+          <h3>{{ resolvedConflictsCount }}</h3>
+          <p>Resolved</p>
+        </div>
+      </div>
+      <div class="stat-card pending">
+        <div class="stat-icon">
+          <span class="material-symbols-outlined">schedule</span>
+        </div>
+        <div class="stat-info">
+          <h3>{{ pendingConflicts.length - resolvedConflictsCount }}</h3>
+          <p>Pending</p>
+        </div>
+      </div>
+      <div class="stat-card progress">
+        <div class="stat-icon">
+          <span class="material-symbols-outlined">trending_up</span>
+        </div>
+        <div class="stat-info">
+          <h3>{{ Math.round((resolvedConflictsCount / pendingConflicts.length) * 100) || 0 }}%</h3>
+          <p>Completion</p>
+        </div>
+      </div>
     </div>
 
     <div v-if="hasConflicts" class="conflicts-section">
-      <div class="conflicts-header">
-        <h3>Conflicts Detected</h3>
+      <div class="section-header">
+        <h3>Duplicate Use Cases Detected</h3>
         <p>
           We found {{ pendingConflicts.length }} group(s) of duplicate use cases. Please select one
           version to keep from each group, or skip conflicts you want to handle later.
@@ -25,11 +71,13 @@
           class="conflict-item"
         >
           <div class="conflict-header">
-            <h4>Conflict Group {{ index + 1 }}</h4>
-            <div class="conflict-actions">
+            <div class="conflict-title">
+              <h4>Conflict Group {{ index + 1 }}</h4>
               <span class="conflict-id">ID: {{ conflict.conflict_id }}</span>
+            </div>
+            <div class="conflict-actions">
               <button
-                class="skip-btn"
+                class="btn-secondary"
                 @click="$emit('skip-conflict', conflict.conflict_id)"
                 :disabled="isSkippingConflict"
                 title="Skip this conflict for now"
@@ -49,9 +97,9 @@
               @click="$emit('select-resolution', conflict.conflict_id, useCase.id)"
             >
               <div class="option-header">
-                <span class="option-badge old">{{ useCase.id }}</span>
+                <span class="option-badge">ID: {{ useCase.id }}</span>
                 <button
-                  class="select-option-btn"
+                  class="select-btn"
                   :class="{ selected: selectedResolutions[conflict.conflict_id] === useCase.id }"
                 >
                   <span
@@ -59,47 +107,63 @@
                     class="material-symbols-outlined"
                     >check_circle</span
                   >
+                  <span v-else class="material-symbols-outlined">radio_button_unchecked</span>
                   {{
-                    selectedResolutions[conflict.conflict_id] === useCase.id
-                      ? 'Selected'
-                      : 'Select to Keep'
+                    selectedResolutions[conflict.conflict_id] === useCase.id ? 'Selected' : 'Select'
                   }}
                 </button>
               </div>
               <div class="use-case-preview">
                 <h5>{{ useCase.name || useCase.goal }}</h5>
                 <p class="use-case-description">
-                  {{ useCase.reason || 'No reason provided.' }}
+                  {{ useCase.reason || 'No description provided.' }}
                 </p>
-                <button class="detail-btn" @click.stop="$emit('show-detail', useCase)">
-                  <span class="material-symbols-outlined">visibility</span>
-                  View Details
-                </button>
+                <div class="use-case-actions">
+                  <button class="btn-outline" @click.stop="$emit('show-detail', useCase)">
+                    <span class="material-symbols-outlined">visibility</span>
+                    View Details
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="conflicts-actions">
-        <div class="conflicts-info">
+      <div class="conflicts-footer">
+        <div class="footer-info">
           <span class="resolved-count">
-            Resolved: {{ resolvedConflictsCount }}/{{ pendingConflicts.length }}
+            Resolved: <strong>{{ resolvedConflictsCount }}/{{ pendingConflicts.length }}</strong>
+          </span>
+          <span class="completion-text">
+            {{ completionStatus }}
           </span>
         </div>
-        <div class="conflicts-buttons">
+        <div class="footer-actions">
           <button
-            class="resolve-all-btn"
+            class="btn-resolve"
             @click="$emit('resolve-all')"
             :disabled="!canResolveAllConflicts || isResolvingConflicts"
           >
             <span v-if="isResolvingConflicts" class="button-spinner-small"></span>
-            {{
-              isResolvingConflicts ? 'Resolving...' : `Resolve Selected (${resolvedConflictsCount})`
-            }}
+            <span v-else class="material-symbols-outlined">checklist</span>
+            {{ isResolvingConflicts ? 'Resolving...' : `Resolve All (${resolvedConflictsCount})` }}
           </button>
         </div>
       </div>
+    </div>
+
+    <!-- Empty State -->
+    <div v-else class="empty-state">
+      <div class="empty-icon">
+        <span class="material-symbols-outlined">check_circle</span>
+      </div>
+      <h3>No Conflicts Found</h3>
+      <p>Your project use cases are clean and free of duplicates.</p>
+      <!-- <button class="btn-primary" @click="$emit('find-conflicts')">
+        <span class="material-symbols-outlined">search</span>
+        Scan for Duplicates
+      </button> -->
     </div>
   </div>
 </template>
@@ -142,134 +206,246 @@ export default {
     },
   },
   emits: ['find-conflicts', 'select-resolution', 'resolve-all', 'show-detail', 'skip-conflict'],
+  computed: {
+    completionStatus() {
+      const percentage = Math.round(
+        (this.resolvedConflictsCount / this.pendingConflicts.length) * 100
+      )
+      if (percentage === 0) return 'No conflicts resolved yet'
+      if (percentage === 100) return 'All conflicts resolved!'
+      return `${percentage}% complete`
+    },
+  },
 }
 </script>
 
 <style scoped>
-.actions-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 24px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid #e5e7eb;
+.handle-conflict-view {
+  padding: 0;
+  margin-bottom: 32px;
 }
 
-.action-btn {
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-weight: 500;
-  cursor: pointer;
+/* Content Header */
+.content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding: 0;
+}
+
+.header-info h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1a365d;
+  margin: 0 0 8px 0;
+}
+
+.header-info p {
+  color: #6b7280;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.btn-primary {
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s ease;
+  padding: 12px 20px;
+  background: #1a365d;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s ease;
 }
 
-.action-btn:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #9ca3af;
+.btn-primary:hover:not(:disabled) {
+  background: #2d4a8a;
 }
 
-.action-btn:disabled {
+.btn-primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.conflicts-section {
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.stat-card {
   background: white;
+  padding: 20px;
   border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 24px;
-  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 16px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.conflicts-header h3 {
-  margin: 0 0 8px 0;
-  color: #dc2626;
-  font-size: 20px;
+.stat-card.total {
+  border-left: 4px solid #f59e0b;
 }
 
-.conflicts-header p {
-  margin: 0;
+.stat-card.resolved {
+  border-left: 4px solid #10b981;
+}
+
+.stat-card.pending {
+  border-left: 4px solid #6b7280;
+}
+
+.stat-card.progress {
+  border-left: 4px solid #3b82f6;
+}
+
+.stat-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-card.total .stat-icon {
+  background: #fef3c7;
+  color: #f59e0b;
+}
+
+.stat-card.resolved .stat-icon {
+  background: #d1fae5;
+  color: #10b981;
+}
+
+.stat-card.pending .stat-icon {
+  background: #f3f4f6;
   color: #6b7280;
 }
 
+.stat-card.progress .stat-icon {
+  background: #dbeafe;
+  color: #3b82f6;
+}
+
+.stat-info h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.stat-info p {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+/* Conflicts Section */
+.conflicts-section {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.section-header {
+  margin-bottom: 30px;
+  text-align: left;
+}
+
+.section-header h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+}
+
+.section-header p {
+  color: #6b7280;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
 .conflicts-list {
-  margin: 20px 0;
+  margin: 0;
 }
 
 .conflict-item {
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 16px;
-  background: #f9fafb;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+  background: #fafafa;
+  transition: all 0.3s ease;
+}
+
+.conflict-item:hover {
+  border-color: #d1d5db;
 }
 
 .conflict-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
   border-bottom: 1px solid #e5e7eb;
 }
 
-.conflict-header h4 {
-  margin: 0;
+.conflict-title h4 {
+  margin: 0 0 4px 0;
   color: #374151;
-}
-
-.conflict-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  font-size: 1.125rem;
+  font-weight: 600;
 }
 
 .conflict-id {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: #6b7280;
-  font-family: monospace;
+  font-family: 'Courier New', monospace;
 }
 
-.skip-btn {
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #6b7280;
-  cursor: pointer;
+.btn-secondary {
   display: flex;
   align-items: center;
-  gap: 4px;
-  transition: all 0.2s ease;
-}
-
-.skip-btn:hover:not(:disabled) {
-  background: #e5e7eb;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #f3f4f6;
   color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
-.skip-btn:disabled {
+.btn-secondary:hover:not(:disabled) {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.btn-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 .conflict-options-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
 }
 
 .conflict-option {
   background: white;
   border-radius: 8px;
-  padding: 16px;
+  padding: 20px;
   border: 2px solid #e5e7eb;
   transition: all 0.3s ease;
   cursor: pointer;
@@ -277,139 +453,191 @@ export default {
 
 .conflict-option:hover {
   border-color: #d1d5db;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .conflict-option.selected {
-  border-color: #3b82f6;
-  background: #f0f9ff;
+  border-color: #1a365d;
+  background: #f0f4ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
 }
 
 .option-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .option-badge {
   padding: 4px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
-  text-transform: uppercase;
+  background: #f3f4f6;
+  color: #374151;
+  font-family: 'Courier New', monospace;
 }
 
-.option-badge.old {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.select-option-btn {
+.select-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
   background: white;
   color: #374151;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
 }
 
-.select-option-btn:hover {
-  background: #f3f4f6;
+.select-btn:hover {
+  background: #f9fafb;
 }
 
-.select-option-btn.selected {
+.select-btn.selected {
   background: #1a365d;
   color: white;
   border-color: #1a365d;
 }
 
 .use-case-preview h5 {
-  margin: 0 0 8px 0;
-  color: #111827;
-  font-size: 16px;
-}
-
-.use-case-description {
   margin: 0 0 12px 0;
-  color: #6b7280;
-  font-size: 14px;
+  color: #1f2937;
+  font-size: 1rem;
+  font-weight: 600;
   line-height: 1.4;
 }
 
-.detail-btn {
-  padding: 6px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: white;
-  color: #374151;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
+.use-case-description {
+  margin: 0 0 16px 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.use-case-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-outline {
   display: flex;
   align-items: center;
-  gap: 4px;
-  transition: all 0.2s ease;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  color: #1a365d;
+  border: 1px solid #1a365d;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
-.detail-btn:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
+.btn-outline:hover {
+  background: #1a365d;
+  color: white;
 }
 
-.conflicts-actions {
+/* Conflicts Footer */
+.conflicts-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 20px;
+  margin-top: 30px;
   padding-top: 20px;
   border-top: 1px solid #e5e7eb;
 }
 
-.conflicts-info {
-  color: #6b7280;
-  font-size: 14px;
+.footer-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .resolved-count {
-  font-weight: 500;
+  color: #374151;
+  font-size: 0.875rem;
 }
 
-.conflicts-buttons {
-  display: flex;
-  gap: 12px;
+.completion-text {
+  color: #6b7280;
+  font-size: 0.75rem;
 }
 
-.resolve-all-btn {
-  background: #dc2626;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 24px;
-  font-weight: 500;
-  cursor: pointer;
+.btn-resolve {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 12px 24px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
   transition: all 0.3s ease;
 }
 
-.resolve-all-btn:hover:not(:disabled) {
-  background: #b91c1c;
+.btn-resolve:hover:not(:disabled) {
+  background: #059669;
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
-.resolve-all-btn:disabled {
+.btn-resolve:disabled {
   background: #9ca3af;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.empty-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+  background: #d1fae5;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-icon .material-symbols-outlined {
+  font-size: 40px;
+  color: #10b981;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px 0;
+  color: #374151;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.empty-state p {
+  margin: 0 0 24px 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* Spinner */
 .button-spinner-small {
   width: 16px;
   height: 16px;
@@ -428,7 +656,18 @@ export default {
   }
 }
 
+/* Responsive Design */
 @media (max-width: 768px) {
+  .content-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .conflict-options-grid {
     grid-template-columns: 1fr;
   }
@@ -436,26 +675,31 @@ export default {
   .conflict-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
-  }
-
-  .conflict-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .actions-toolbar {
-    justify-content: center;
-  }
-
-  .conflicts-actions {
-    flex-direction: column;
     gap: 12px;
+  }
+
+  .conflicts-footer {
+    flex-direction: column;
+    gap: 16px;
     align-items: stretch;
   }
 
-  .conflicts-buttons {
-    justify-content: center;
+  .footer-info {
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .conflicts-section {
+    padding: 20px;
+  }
+
+  .conflict-item {
+    padding: 16px;
   }
 }
 </style>
