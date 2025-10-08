@@ -58,6 +58,7 @@
         :version-id="selectedVersionId"
         :loading="isManagingUsecase"
         :available-use-cases="availableUseCases"
+        :project-data="project"
         @addUsecase="handleAddUsecase"
         @updateUsecase="handleUpdateUsecase"
         @deleteUsecase="handleDeleteUsecase"

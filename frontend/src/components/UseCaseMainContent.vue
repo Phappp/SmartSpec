@@ -2,15 +2,22 @@
   <div class="main-content">
     <div class="usecase-area">
       <!-- Header với thống kê -->
+      <!-- Thay thế phần content-header hiện tại -->
       <div class="content-header">
         <div class="header-info">
           <h2>Use Cases Management</h2>
           <p class="subtitle">Manage and organize your system use cases and requirements</p>
         </div>
-        <button class="btn-primary" @click="showAddUsecaseModal">
-          <span class="material-symbols-outlined">add</span>
-          Add Use Case
-        </button>
+        <div class="header-actions">
+          <button class="btn-primary" @click="showAddUsecaseModal">
+            <span class="material-symbols-outlined">add</span>
+            Add Use Case
+          </button>
+          <button class="btn-secondary" @click="showExportModal">
+            <span class="material-symbols-outlined">download</span>
+            Export
+          </button>
+        </div>
       </div>
 
       <!-- Statistics Cards -->
@@ -368,17 +375,28 @@
         </div>
       </div>
     </div>
+    <!-- Export Modal -->
+    <UsecaseSpecDocExport
+      v-if="showExportModalFlag"
+      :show-export-modal="showExportModalFlag"
+      :use-cases="useCases"
+      :selected-use-cases="selectedUseCases"
+      :project-info="projectInfo"
+      @close="closeExportModal"
+    />
   </div>
 </template>
 
 <script>
 import { useToast } from 'vue-toastification'
 import AddEditUseCaseModal from './AddEditUseCaseModal.vue'
+import UsecaseSpecDocExport from './UsecaseSpecDocExport.vue'
 
 export default {
   name: 'UseCaseMainContent',
   components: {
     AddEditUseCaseModal,
+    UsecaseSpecDocExport,
   },
   props: {
     useCases: {
@@ -401,6 +419,10 @@ export default {
       type: Array,
       default: () => [],
     },
+    projectData: {
+      type: Object,
+      default: () => ({}),
+    },
   },
   data() {
     return {
@@ -413,6 +435,7 @@ export default {
       // Modal states
       showUsecaseModal: false,
       showDeleteModal: false,
+      showExportModalFlag: false,
       isEditing: false,
       submitting: false,
       deleting: false,
@@ -420,6 +443,10 @@ export default {
       // Form data
       usecaseForm: this.getEmptyForm(),
       usecaseToDelete: null,
+
+      // Export data
+      selectedUseCases: [],
+      projectInfo: {},
 
       toast: useToast(),
     }
@@ -572,6 +599,22 @@ export default {
       this.usecaseToDelete = null
     },
 
+    // Export Methods
+    showExportModal() {
+      this.projectInfo = {
+        id: this.projectId,
+        name: this.projectData.name || 'Project',
+        version: this.versionId,
+        description: this.projectData.description || '',
+      }
+      this.showExportModalFlag = true // Sử dụng biến mới
+    },
+
+    closeExportModal() {
+      this.showExportModalFlag = false // Sử dụng biến mới
+      this.selectedUseCases = []
+    },
+
     // Form Helpers
     getEmptyForm() {
       return {
@@ -701,6 +744,11 @@ export default {
   font-weight: 600;
   cursor: pointer;
   transition: background 0.3s ease;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
 }
 
 .btn-primary:hover {
