@@ -76,7 +76,6 @@ export class UserServiceImpl implements UserService {
   async updateProfile(
     userId: string,
     body: {
-      email?: string;
       name?: string;
       isTwoFactorEnabled?: boolean;
       newDob?: Date;
@@ -91,9 +90,6 @@ export class UserServiceImpl implements UserService {
     console.log("Found user:", user);
     if (!user) {
       throw new Error("User not found");
-    }
-    if (body.email) {
-      user.email = body.email;
     }
     if (body.name) {
       user.name = body.name;
