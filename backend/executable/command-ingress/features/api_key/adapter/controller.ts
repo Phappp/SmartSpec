@@ -8,6 +8,7 @@ import { HttpRequest } from "../../../types";
 import { handleServiceResponse } from "../../../services/httpHandlerResponse";
 import { StatusCodes } from "http-status-codes";
 import { th } from "@faker-js/faker/.";
+import { connect } from "http2";
 
 class ApiKeyController extends BaseController {
   service: ApiKeyService;
@@ -65,7 +66,21 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const {content} = req.body;
+        if (!content) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "Content to find are required",
+          });
+          return;
+        }
+        const serviceResponse = await this.service.searchAPIKeys(String(content));
+
+        res.status(StatusCodes.CREATED).json({
+          status: "Success",
+          message: "Search successfully",
+          data: serviceResponse,
+        });
       }
     );
   }
