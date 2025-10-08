@@ -269,6 +269,33 @@ export class ProjectController extends BaseController {
     });
   };
 
+  public getAllProjectsForAdmin = async (req: HttpRequest, res: Response, next: NextFunction) => {
+    await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
+      // 🔐 Kiểm tra quyền admin
+      const userId = req.getSubject();
+      if (!userId) {
+        handleServiceResponse(
+          new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401),
+          res
+        );
+        return;
+      }
+
+      // (Tuỳ chọn) kiểm tra role admin nếu User có field roles
+      // const user = await User.findById(userId);
+      // if (!user || !user.roles?.includes('admin')) {
+      //   handleServiceResponse(
+      //     new ServiceResponse(ResponseStatus.Failed, "Access denied", null, 403),
+      //     res
+      //   );
+      //   return;
+      // }
+
+      const result = await this.service.getAllProjectsForAdmin();
+      handleServiceResponse(result, res);
+    });
+  };
+
   // public suggestRelations = async (req: HttpRequest, res: Response, next: NextFunction) => {
   //   await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
   //     const { versionId } = req.params;

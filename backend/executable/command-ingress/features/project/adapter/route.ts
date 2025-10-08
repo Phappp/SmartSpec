@@ -57,6 +57,15 @@ export default function initProjectRoute(controller: ProjectController) {
     requireAuthorizedUser,
     controller.getVersionStatus // Thêm phương thức này vào controller
   )
+
+  // GET /admin/all -> Lấy tất cả dự án (dành cho admin)
+  router.get(
+    '/admin/all',
+    requireAuthorizedUser,
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.getAllProjectsForAdmin(req as any, res, next)
+  );
+
   // POST /versions/:versionId/inputs -> Thêm input (file/text) vào một version đã có
   router.post(
     '/versions/:versionId/inputs',
@@ -76,6 +85,7 @@ export default function initProjectRoute(controller: ProjectController) {
     requireAuthorizedUser,
     (req: Request, res: Response, next: NextFunction) => controller.deleteSpecificInput(req as any, res, next)
   );
+
   // router.post('/:versionId/suggest-relations',
   //   requireAuthorizedUser, (req: Request, res: Response, next: NextFunction) => controller.suggestRelations(req as any, res, next));
 

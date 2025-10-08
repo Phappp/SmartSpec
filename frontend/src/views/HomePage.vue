@@ -352,9 +352,9 @@ export default {
 
       if (!creationData.pollingData?.versionId) {
         console.error('❌ No versionId provided for polling')
-        this.showNotification(
-          'Error',
-          'Cannot track project creation progress. Please check the project later.'
+        // this.showNotification('Error','Cannot track project creation progress. Please check the project later.')`Project "${realProject.name}" created successfully!`
+        this.toast.error(
+          `Cannot track project creation progress. Please check the project later!`
         )`Project "${realProject.name}" created successfully!`
         this.isNewProjectModalVisible = false
         return
@@ -581,11 +581,13 @@ export default {
     async handleEditProject({ projectId, data }) {
       try {
         await updateProject(projectId, data)
-        this.showNotification('Success', 'Project updated successfully!')
+        // this.showNotification('Success', 'Project updated successfully!')
+        this.toast.success(`Project "${realProject.name}" updated successfully!`)
         this.updateProjectInLists(projectId, data)
       } catch (err) {
         console.error('Update project error', err)
-        this.showNotification('Error', 'Failed to update project!')
+        // this.showNotification('Error', 'Failed to update project!')
+        this.toast.error(`Failed to update project!`)
       }
     },
 
@@ -661,22 +663,26 @@ export default {
     async moveToTrash(projectId) {
       try {
         await deleteProject(projectId)
-        this.showNotification('Success', 'Project moved to trash successfully!')
+        // this.showNotification('Success', 'Project moved to trash successfully!')
+        this.toast.success(`Project "${realProject.name}" trashed successfully!`)
         this.fetchInitialData()
       } catch (err) {
         console.error('Move to trash error', err)
-        this.showNotification('Error', 'Failed to move project to trash!')
+        // this.showNotification('Error', 'Failed to move project to trash!')
+        this.toast.error(`Failed to trash project!`)
       }
     },
 
     async restoreProject(projectId) {
       try {
         await apiRestoreProject(projectId)
-        this.showNotification('Success', 'Project restored successfully.')
+        // this.showNotification('Success', 'Project restored successfully.')
+        this.toast.success(`Project "${realProject.name}" restored successfully!`)
         this.fetchInitialData()
       } catch (err) {
         console.error('Restore error', err)
-        this.showNotification('Error', 'Failed to restore project!')
+        // this.showNotification('Error', 'Failed to restore project!')
+        this.toast.error(`Failed to restore project!`)
       }
     },
 
@@ -691,11 +697,13 @@ export default {
     async deleteProjectPermanently(projectId) {
       try {
         await deleteProject(projectId)
-        this.showNotification('Success', 'Project permanently deleted!')
+        // this.showNotification('Success', 'Project permanently deleted!')
+        this.toast.success(`Project "${realProject.name}" deleted successfully!`)
         this.fetchInitialData()
       } catch (err) {
         console.error('Permanent delete error', err)
-        this.showNotification('Error', 'Failed to permanently delete project!')
+        // this.showNotification('Error', 'Failed to permanently delete project!')
+        this.toast.error(`Failed to permanently delete project!`)
       }
     },
 
