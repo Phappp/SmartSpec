@@ -29,7 +29,7 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
   router
     .route("/:id")
     .get(requireAuthorizedUser, controller.getAPIKeyById.bind(controller));
-
+  //
   router
     .route("/:id")
     .patch(requireAuthorizedUser, controller.updateAPIKey.bind(controller));
