@@ -26,3 +26,4 @@ export default function initTextRoute(controller: TextController): Router {
 
 
 
+

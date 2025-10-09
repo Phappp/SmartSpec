@@ -52,6 +52,7 @@ import { UsecaseService } from './features/usecase/domain/service';
 import { UsecaseController } from './features/usecase/adapter/controller';
 import initUsecaseRoute from './features/usecase/adapter/route';
 
+import initDatabaseRoute from './features/database/adapter/route';
 const app = express();
 
 const createHttpServer = (redisClient: any) => {
@@ -118,6 +119,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/orchestrate', initOrchestratorRoute(new OrchestratorController(new OrchestratorService())));
   app.use('/api/projects', initProjectRoute(projectController));
   app.use('/api/usecaseManagement', initUsecaseRoute(usecaseController));
+  app.use('/api/databases', initDatabaseRoute())
 
   app.use(recoverMiddleware);
 

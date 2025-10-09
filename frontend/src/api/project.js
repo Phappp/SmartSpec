@@ -1,3 +1,4 @@
+// 🔥 CẬP NHẬT project.js HOÀN CHỈNH
 import axiosClient from "./../utils/axiosClient";
 
 // Projects
@@ -16,6 +17,7 @@ export const retryProjectAnalysis = (projectId, versionId) => {
     mode: 'full'
   });
 };
+
 //Usecase
 export const usecaseApi = {
   // GET /versions/:versionId/usecases
@@ -33,6 +35,71 @@ export const usecaseApi = {
     axiosClient.delete(`/api/usecaseManagement/versions/${versionId}/usecases/${usecaseId}`)
 };
 
+// DATABASE
+// 🔥 THÊM API MỚI ĐỂ SINH DATABASE
+export const generateDatabaseSchema = (versionId) => {
+  return axiosClient.post(`/api/databases/versions/${versionId}/generate-database`);
+};
+
+export const getDatabasesByVersion = (versionId) => {
+  return axiosClient.get(`/api/databases?versionId=${versionId}`);
+};
+
+export const getDatabaseById = (databaseId) => {
+  return axiosClient.get(`/api/databases/${databaseId}`);
+};
+
+// 🔥 THÊM API MỚI CHO REFERENCES
+export const getDatabaseWithReferences = (databaseId) => {
+  return axiosClient.get(`/api/databases/${databaseId}/with-references`);
+};
+
+export const getTableRelationships = (databaseId, tableName) => {
+  return axiosClient.get(`/api/databases/${databaseId}/tables/${tableName}/relationships`);
+};
+
+export const validateForeignKey = (databaseId, data) => {
+  return axiosClient.post(`/api/databases/${databaseId}/validate-foreign-key`, data);
+};
+
+export const getAvailableTablesForReferences = (databaseId, excludeTable = null) => {
+  const params = excludeTable ? { excludeTable } : {};
+  return axiosClient.get(`/api/databases/${databaseId}/available-tables`, { params });
+};
+
+export const updateDatabase = (databaseId, data) => {
+  return axiosClient.put(`/api/databases/${databaseId}`, data);
+};
+
+export const deleteDatabase = (databaseId) => {
+  return axiosClient.delete(`/api/databases/${databaseId}`);
+};
+
+// --- CRUD cho từng Bảng (trong một Schema) ---
+export const addTableToDatabase = (databaseId, tableData) => {
+  return axiosClient.post(`/api/databases/${databaseId}/tables`, tableData);
+};
+
+export const updateTableInDatabase = (databaseId, tableName, tableData) => {
+  return axiosClient.put(`/api/databases/${databaseId}/tables/${tableName}`, tableData);
+};
+
+export const deleteTableFromDatabase = (databaseId, tableName) => {
+  return axiosClient.delete(`/api/databases/${databaseId}/tables/${tableName}`);
+};
+
+// 🔥 THÊM API CHO CẬP NHẬT POSITION CÁC BẢNG
+export const updateTablePosition = (databaseId, tableName, position) => {
+  return axiosClient.put(`/api/databases/${databaseId}/tables/${tableName}/position`, {
+    position
+  });
+};
+
+export const updateMultipleTablePositions = (databaseId, positionUpdates) => {
+  // Gửi trực tiếp mảng positionUpdates làm body, không gói trong object
+  return axiosClient.put(`/api/databases/${databaseId}/tables/positions`, positionUpdates);
+};
+
 // 🔥 THÊM API CHO BỎ QUA CONFLICT
 export const skipConflict = (versionId, conflictId) => {
   return axiosClient.delete(`/api/usecaseManagement/versions/${versionId}/conflicts/${conflictId}`);
@@ -46,27 +113,20 @@ export const startIncrementalAnalysis = (projectId, versionId) => {
 };
 
 // 🔥 THÊM API CHO CONFLICT RESOLUTION
-// export const resolveConflict = (versionId, conflictId, resolution) => {
-//   return axiosClient.post(`/api/projects/versions/${versionId}/conflicts/${conflictId}/resolve`, {
-//     keep: resolution // 'old' or 'new'
-//   });
-// };
-
-// HÀM MỚI: Kích hoạt việc tìm kiếm conflict
 export function findProjectConflicts(projectId, versionId) {
   return axiosClient.post(`/api/orchestrate/projects/${projectId}/versions/${versionId}/find-conflicts`);
 }
 
-// HÀM MỚI: Gửi yêu cầu giải quyết một nhóm conflict
 export function resolveProjectConflict(projectId, versionId, data) {
-  // Đảm bảo URL đúng với định nghĩa route ở backend
   return axiosClient.post(`/api/orchestrate/projects/${projectId}/versions/${versionId}/resolve-conflict`, data);
 }
+
 // Versions
 export const addInputsToVersion = (versionId, data) => axiosClient.post(`/api/projects/versions/${versionId}/inputs`, data);
 export const deleteUnprocessedInputs = (versionId) => axiosClient.delete(`/api/projects/versions/${versionId}/inputs/unprocessed-inputs`);
 export const deleteSpecificInput = (versionId, inputId) => axiosClient.delete(`/api/projects/versions/${versionId}/inputs/${inputId}`);
 export const getVersionStatus = (versionId) => axiosClient.get(`/api/projects/versions/${versionId}/status`);
+
 // Attachments
 export const uploadAttachments = (projectId, formData) =>
   axiosClient.post(`/api/projects/${projectId}/attachments`, formData, {
@@ -75,8 +135,9 @@ export const uploadAttachments = (projectId, formData) =>
 
 // User
 export function getCurrentUser() {
-  return axiosClient.get("/api/auth/me"); // confirm endpoint này đúng chưa
+  return axiosClient.get("/api/auth/me");
 }
+
 // Documentation generation
 export const generateDocumentation = (projectId, payload = {}) =>
   axiosClient.post(`/api/projects/${projectId}/generate`, payload);
@@ -98,5 +159,20 @@ export default {
   retryProjectAnalysis,
   startIncrementalAnalysis,
   skipConflict,
-  // resolveConflict
+  generateDatabaseSchema,
+  getDatabaseWithReferences,
+  getTableRelationships,
+  validateForeignKey,
+  getAvailableTablesForReferences,
+  getDatabaseById,
+  updateDatabase,
+  deleteDatabase,
+  addTableToDatabase,
+  updateTableInDatabase,
+  deleteTableFromDatabase,
+  findProjectConflicts,
+  resolveProjectConflict,
+  updateTablePosition,
+  updateMultipleTablePositions,
+
 };

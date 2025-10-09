@@ -91,7 +91,59 @@ Ví dụ output:
   ["UC1", "UC5", "UC12"],
   ["UC2", "UC8"]
 ]
+`,
+        databaseDesign: (requirementsJson: string) => `
+BẠN LÀ MỘT KỸ SƯ CSDL VÀ KIẾN TRÚC SƯ HỆ THỐNG ĐẲNG CẤP THẾ GIỚI, chuyên tạo ra các lược đồ CSDL quan hệ tối ưu và đã được chuẩn hóa từ các yêu cầu nghiệp vụ.
+
+Nhiệm vụ của bạn là phân tích danh sách các use case của phần mềm sau đây và thiết kế một cấu trúc CSDL hoàn chỉnh và logic.
+
+DANH SÁCH USE CASE:
+${requirementsJson}
+
+Phản hồi của bạn BẮT BUỘC CHỈ LÀ một đối tượng JSON hợp lệ. KHÔNG bao gồm bất kỳ lời giải thích, bình luận, hay định dạng markdown nào như \`\`\`json. Đầu ra phải sẵn sàng để được một chương trình phân tích ngay lập tức.
+
+Đối tượng JSON BẮT BUỘC phải tuân thủ nghiêm ngặt cấu trúc chi tiết sau. Bao gồm TẤT CẢ các trường cho mỗi cột.
+{
+  "name": "TenDatabase",
+  "description": "Mô tả ngắn gọn nhưng rõ ràng về mục đích của CSDL.",
+  "tables": [
+    {
+      "name": "users",
+      "description": "Lưu trữ thông tin tài khoản và thông tin xác thực của người dùng.",
+      "columns": [
+        { "name": "id", "type": "INT", "is_primary_key": true, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": [] },
+        { "name": "username", "type": "VARCHAR(50)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": ["UC1", "UC2"] },
+        { "name": "email", "type": "VARCHAR(100)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": ["UC2", "UC15"] },
+        { "name": "password_hash", "type": "VARCHAR(255)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": false, "related_usecase_ids": ["UC1", "UC2"] },
+        { "name": "full_name", "type": "VARCHAR(255)", "is_primary_key": false, "is_foreign_key": false, "nullable": true, "unique": false, "related_usecase_ids": ["UC15"] }
+      ]
+    },
+    {
+        "name": "projects",
+        "description": "Lưu trữ thông tin về các dự án của người dùng.",
+        "columns": [
+            { "name": "id", "type": "INT", "is_primary_key": true, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": [] },
+            { "name": "project_name", "type": "VARCHAR(255)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": false, "related_usecase_ids": ["UC5"] },
+            { "name": "owner_id", "type": "INT", "is_primary_key": false, "is_foreign_key": true, "nullable": false, "unique": false, "references": "users", "related_usecase_ids": ["UC5"] },
+            { "name": "created_at", "type": "DATETIME", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": false, "related_usecase_ids": ["UC5"] }
+        ]
+    }
+  ],
+  "relationships": [
+    { "from_table": "projects", "to_table": "users", "type": "many-to-one" }
+  ]
+}
+
+QUY TẮC VÀ LOGIC THIẾT KẾ:
+- Tên bảng và tên cột BẮT BUỘC phải ở dạng chữ thường và dùng dấu gạch dưới (snake_case).
+- Mỗi bảng BẮT BUỘC phải có một cột 'id' duy nhất làm khóa chính.
+- Bất kỳ cột nào có 'is_primary_key' là true thì BẮT BUỘC phải có 'nullable' là false. Đây là một quy tắc nghiêm ngặt.
+- Xác định chính xác tất cả các mối quan hệ (one-to-one, one-to-many,...) và định nghĩa CẢ cột khóa ngoại (với 'is_foreign_key: true' và 'references') VÀ mục tương ứng trong mảng 'relationships' chính.
+- Sử dụng các kiểu dữ liệu phù hợp từ danh sách sau: INT, VARCHAR(n), TEXT, BOOLEAN, DATETIME, DATE, DECIMAL(p, s).
+- Suy luận các bảng cần thiết từ các use case được cung cấp. Ví dụ: "Đăng nhập người dùng" ngụ ý cần có bảng 'users'.
+- **YÊU CẦU TRUY VẾT QUAN TRỌNG**: Đối với mỗi cột riêng lẻ, bạn BẮT BUỘC phải xác định những use case nào yêu cầu sự tồn tại của nó. Điền vào mảng 'related_usecase_ids' ID của mọi use case có liên quan. Nếu một cột được yêu cầu bởi nhiều use case (ví dụ: 'username' cho cả đăng nhập và đăng ký), hãy bao gồm tất cả các ID đó. Nếu không thể xác định nguồn gốc, hãy trả về một mảng rỗng [].
 `
+
 
     },
     'en-US': {
@@ -179,10 +231,61 @@ Example output:
   ["UC1", "UC5", "UC12"],
   ["UC2", "UC8"]
 ]
+`,
+        databaseDesign: (requirementsJson: string) => `
+YOU ARE A WORLD-CLASS DATABASE ENGINEER AND SYSTEM ARCHITECT, specializing in creating optimal, normalized relational database schemas from business requirements.
+
+Your task is to analyze the following list of software use cases and design a complete and logical database structure.
+
+LIST OF USE CASES:
+${requirementsJson}
+
+Your response MUST be ONLY a single, valid JSON object. DO NOT include any explanations, comments, or markdown formatting like \`\`\`json. The output must be ready for immediate parsing by a program.
+
+The JSON object MUST strictly follow this detailed structure. Include ALL fields for every column.
+{
+  "name": "DatabaseName",
+  "description": "A brief but clear description of the database's purpose.",
+  "tables": [
+    {
+      "name": "users",
+      "description": "Stores user account information and credentials.",
+      "columns": [
+        { "name": "id", "type": "INT", "is_primary_key": true, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": [] },
+        { "name": "username", "type": "VARCHAR(50)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": ["UC1", "UC2"] },
+        { "name": "email", "type": "VARCHAR(100)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": ["UC2", "UC15"] },
+        { "name": "password_hash", "type": "VARCHAR(255)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": false, "related_usecase_ids": ["UC1", "UC2"] },
+        { "name": "full_name", "type": "VARCHAR(255)", "is_primary_key": false, "is_foreign_key": false, "nullable": true, "unique": false, "related_usecase_ids": ["UC15"] }
+      ]
+    },
+    {
+        "name": "projects",
+        "description": "Stores information about user projects.",
+        "columns": [
+            { "name": "id", "type": "INT", "is_primary_key": true, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": [] },
+            { "name": "project_name", "type": "VARCHAR(255)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": false, "related_usecase_ids": ["UC5"] },
+            { "name": "owner_id", "type": "INT", "is_primary_key": false, "is_foreign_key": true, "nullable": false, "unique": false, "references": "users", "related_usecase_ids": ["UC5"] },
+            { "name": "created_at", "type": "DATETIME", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": false, "related_usecase_ids": ["UC5"] }
+        ]
+    }
+  ],
+  "relationships": [
+    { "from_table": "projects", "to_table": "users", "type": "many-to-one" }
+  ]
+}
+
+DESIGN RULES AND LOGIC:
+- Table and column names MUST be in lowercase snake_case.
+- Every table MUST have a single 'id' column as its primary key.
+- Any column where 'is_primary_key' is true MUST also have 'nullable' set to false. This is a strict rule.
+- Correctly identify all relationships (one-to-one, one-to-many, etc.) and define BOTH the foreign key column (with 'is_foreign_key: true' and 'references') AND the corresponding entry in the main 'relationships' array.
+- Use appropriate data types from this list: INT, VARCHAR(n), TEXT, BOOLEAN, DATETIME, DATE, DECIMAL(p, s).
+- Infer necessary tables from the provided use cases. For example, "User Login" implies a 'users' table.
+- **CRITICAL TRACEABILITY REQUIREMENT**: For each individual column, you MUST determine which use cases require its existence. Populate the 'related_usecase_ids' array with the 'id' of every relevant use case. If a column is required by multiple use cases (e.g., 'username' for login and registration), include all their IDs. If the origin is unclear, return an empty array [].
 `
 
-
     }
+
 };
 
 
@@ -198,6 +301,25 @@ export class GeminiService {
         const match = pattern.exec(text.trim());
         // Nếu tìm thấy khối mã, trả về nội dung bên trong, nếu không, trả về chuỗi gốc
         return match ? match[1].trim() : text.trim();
+    }
+    private cleanJsonStringDatabase(text: string): string {
+        if (!text) return "";
+
+        let cleanedText = text.trim();
+
+        // Tìm vị trí của ```json và ```
+        const startIndex = cleanedText.indexOf('```json');
+        const endIndex = cleanedText.lastIndexOf('```');
+
+        // Nếu cả hai đều tồn tại và hợp lệ, trích xuất nội dung ở giữa
+        if (startIndex !== -1 && endIndex > startIndex) {
+            cleanedText = cleanedText.substring(startIndex + 7, endIndex).trim();
+        } else {
+            // Fallback: Xóa các dòng chỉ chứa ``` một cách đơn giản hơn
+            cleanedText = cleanedText.replace(/^```(json)?\s*/, '').replace(/```\s*$/, '');
+        }
+
+        return cleanedText.trim();
     }
 
     private tryParseWhole(text: string): any[] | null {
@@ -344,6 +466,120 @@ export class GeminiService {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const schemaDescription = prompts[lang].schemaDescription(batchSize, offset);
         return `${schemaDescription}\n\nVăn bản nguồn (Source text):\n${cleanText}`;
+    }
+
+    /**
+     * Một hàm chung để gửi prompt tới Gemini và trả về kết quả dạng chuỗi JSON đã được làm sạch.
+     * Hàm này đóng gói logic lặp lại: lấy key, thử lại, xử lý lỗi.
+     * @param prompt - Chuỗi prompt để gửi cho Gemini.
+     * @returns Một Promise chứa chuỗi JSON trả về từ API.
+     */
+    async generateJsonContent(prompt: string): Promise<string> {
+        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
+        if (!keys || keys.length === 0) {
+            throw new Error("No active Gemini API key found.");
+        }
+
+        let lastError: any;
+        for (const k of keys) {
+            try {
+                console.log(`🔑 Trying Gemini key for generic content: ${k.key_value.slice(0, 12)}...`);
+                const { GoogleGenerativeAI } = await import("@google/generative-ai");
+                const client = new GoogleGenerativeAI(k.key_value);
+                const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
+
+                const resp: any = await model.generateContent({
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                });
+
+                const text: string = resp?.response?.text?.() || "";
+
+                // Trả về ngay sau khi thành công
+                return this.cleanJsonStringDatabase(text);
+
+            } catch (err: any) {
+                lastError = err;
+                const msg = (err?.message || "").toLowerCase();
+                console.error(`❌ Gemini key ${k._id} failed during generic content generation:`, err?.message || err);
+
+                // Vô hiệu hóa key nếu nó không hợp lệ
+                if (msg.includes("invalid") || msg.includes("unauthorized")) {
+                    try {
+                        await this.apiKeyService.disableKey(k._id);
+                        console.warn(`⚠️ Disabled invalid Gemini key: ${k._id}`);
+                    } catch { /* Bỏ qua lỗi khi disable key */ }
+                }
+                // Thử key tiếp theo
+                continue;
+            }
+        }
+
+        // Nếu tất cả các key đều thất bại
+        throw lastError || new Error("All Gemini API keys failed during generic content generation.");
+    }
+
+    /**
+     * [MỚI] Duyệt qua schema từ Gemini và tách các loại dữ liệu có độ dài (vd: VARCHAR(255))
+     * thành hai trường riêng biệt: `type` và `length`.
+     * @param databaseSchema Đối tượng schema thô từ Gemini.
+     * @returns Đối tượng schema đã được xử lý.
+     */
+    private _parseColumnTypesAndLengths(databaseSchema: any): any {
+        // Regex để tìm các loại dữ liệu có dạng: NAME(NUMBER), ví dụ: VARCHAR(255)
+        const typeRegex = /(\w+)\s*\((\d+)\)/;
+
+        if (databaseSchema?.tables && Array.isArray(databaseSchema.tables)) {
+            for (const table of databaseSchema.tables) {
+                if (table?.columns && Array.isArray(table.columns)) {
+                    for (const column of table.columns) {
+                        if (typeof column.type === 'string') {
+                            const match = column.type.match(typeRegex);
+                            if (match) {
+                                // match[1] là tên (vd: "VARCHAR")
+                                // match[2] là số (vd: "255")
+                                column.type = match[1].toUpperCase();
+                                column.length = parseInt(match[2], 10);
+                            }
+                        }
+                        // Tự động đặt nullable: false cho khóa chính
+                        if (column.is_primary_key === true) {
+                            column.nullable = false;
+                        }
+                    }
+                }
+            }
+        }
+        return databaseSchema;
+    }
+
+    /**
+     * Tạo database schema từ requirements
+     */
+    async generateDatabaseSchema(requirements: any[], language: string): Promise<any> {
+        // Chỉ lấy các trường cần thiết để prompt ngắn gọn, hiệu quả
+        const simplifiedRequirements = requirements.map(r => ({
+            name: r.name,
+            role: r.role,
+            goal: r.goal,
+            tasks: r.tasks,
+            inputs: r.inputs,
+            outputs: r.outputs,
+        }));
+
+        const requirementsJson = JSON.stringify(simplifiedRequirements, null, 2);
+        const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+        const prompt = prompts[lang].databaseDesign(requirementsJson);
+
+        const generatedJsonString = await this.generateJsonContent(prompt);
+
+        // Parse đối tượng JSON thô từ Gemini
+        let parsedSchema = JSON.parse(generatedJsonString);
+
+        // === THÊM DÒNG XỬ LÝ NÀY VÀO ===
+        // Tách các trường type/length trước khi trả về
+        parsedSchema = this._parseColumnTypesAndLengths(parsedSchema);
+
+        return parsedSchema;
     }
 
     async addRelatedUseCases(

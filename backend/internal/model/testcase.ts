@@ -4,7 +4,11 @@ const testcaseSchema = new Schema({
     // --- Liên kết ---
     project_id: { type: Schema.Types.ObjectId, ref: "projects", required: true },
     version_id: { type: Schema.Types.ObjectId, ref: "versions", required: true },
-    database_id: { type: Schema.Types.ObjectId, ref: "databases" },
+    database_id: { type: Schema.Types.ObjectId, ref: "databases" }, // database cha (tùy chọn)
+    table_refs: [{
+        table_name: { type: String, required: true },
+        column_names: [{ type: String }] // các cột liên quan
+    }],
     source_requirement_ids: [{ type: String }], // mapping với requirement_model.id
 
     // --- Thông tin chính ---
@@ -26,10 +30,24 @@ const testcaseSchema = new Schema({
 
     // --- Test Data (Input/Output) ---
     test_data: {
-        inputs: { type: Schema.Types.Mixed, default: {} },   // object chứa dữ liệu đầu vào
-        expected_outputs: { type: Schema.Types.Mixed, default: {} }, // dữ liệu mong đợi
-        actual_outputs: { type: Schema.Types.Mixed, default: {} } // dữ liệu thực tế khi chạy
+        type: [{
+            name: { type: String }, // tên test data (tùy chọn)
+            inputs: { type: Schema.Types.Mixed, default: {} },   // dữ liệu đầu vào
+            expected_outputs: { type: Schema.Types.Mixed, default: {} }, // dữ liệu mong đợi
+            actual_outputs: { type: Schema.Types.Mixed, default: {} }, // dữ liệu thực tế
+        }],
+        default: []
     },
+
+    // --- Exception & Error Handling ---
+    exceptions: [{
+        message: { type: String },
+        type: { type: String, enum: ["validation", "runtime", "assertion", "system", "other"], default: "other" },
+        occurred_at_step: { type: Number }, // chỉ ra lỗi ở bước nào
+        resolved: { type: Boolean, default: false },
+        resolved_by: { type: Schema.Types.ObjectId, ref: "users" },
+        resolved_at: { type: Date }
+    }],
 
     // --- Thông tin chạy test ---
     environment: {
@@ -41,14 +59,14 @@ const testcaseSchema = new Schema({
     },
     executed_by: { type: Schema.Types.ObjectId, ref: "users" },
     executed_at: { type: Date },
-    execution_logs: [{ type: String }], // log chi tiết khi test
+    execution_logs: [{ type: String }],
 
     // --- Tự động hóa ---
     automation: {
         is_automated: { type: Boolean, default: false },
-        script_path: { type: String }, // đường dẫn script test (nếu có)
-        tool: { type: String }, // ví dụ: Selenium, Postman, Jest, Robot...
-        last_run_duration: { type: Number } // ms
+        script_path: { type: String },
+        tool: { type: String },
+        last_run_duration: { type: Number }
     },
 
     // --- Tracking ---

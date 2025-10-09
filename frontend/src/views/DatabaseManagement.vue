@@ -25,301 +25,252 @@
     </div>
 
     <div class="database-content">
-      <div class="content-header">
-        <h2>Database Schema Management</h2>
-        <button class="btn-primary" @click="showCreateTableModal = true">
-          <span class="material-symbols-outlined">add</span>
-          Create Table
+      <!-- Loading State -->
+      <div v-if="loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading database schema...</p>
+      </div>
+
+      <!-- Error State -->
+      <div v-else-if="error" class="error-state">
+        <span class="material-symbols-outlined">error</span>
+        <h3>Failed to load database</h3>
+        <p>{{ error }}</p>
+        <button class="btn-primary" @click="loadDatabaseData">
+          <span class="material-symbols-outlined">refresh</span>
+          Retry
         </button>
       </div>
 
-      <!-- Statistics Cards -->
-      <div class="stats-grid">
-        <div class="stat-card tables">
-          <div class="stat-icon">
-            <span class="material-symbols-outlined">table</span>
-          </div>
-          <div class="stat-info">
-            <h3>{{ databaseStats.tables }}</h3>
-            <p>Total Tables</p>
-          </div>
-        </div>
-        <div class="stat-card relationships">
-          <div class="stat-icon">
-            <span class="material-symbols-outlined">link</span>
-          </div>
-          <div class="stat-info">
-            <h3>{{ databaseStats.relationships }}</h3>
-            <p>Relationships</p>
-          </div>
-        </div>
-        <div class="stat-card columns">
-          <div class="stat-icon">
-            <span class="material-symbols-outlined">view_column</span>
-          </div>
-          <div class="stat-info">
-            <h3>{{ databaseStats.columns }}</h3>
-            <p>Total Columns</p>
-          </div>
-        </div>
+      <!-- Empty State -->
+      <div v-else-if="!database && !loading" class="empty-state">
+        <span class="material-symbols-outlined">database</span>
+        <h3>No Database Schema</h3>
+        <p>Generate a database schema from your use cases to get started</p>
+        <button class="btn-primary" @click="generateDatabaseSchema" :disabled="generatingSchema">
+          <span class="material-symbols-outlined">auto_awesome</span>
+          {{ generatingSchema ? 'Generating...' : 'Generate Database Schema' }}
+        </button>
       </div>
 
-      <!-- Database Schema Visualization -->
-      <div class="schema-section">
-        <div class="section-header">
-          <h3>Database Schema</h3>
-          <div class="view-options">
-            <button
-              class="btn-secondary"
-              :class="{ active: viewMode === 'diagram' }"
-              @click="viewMode = 'diagram'"
-            >
-              <span class="material-symbols-outlined">schema</span>
-              Diagram View
+      <!-- Main Content -->
+      <div v-else-if="database" class="database-main-content">
+        <div class="content-header">
+          <div class="header-left">
+            <h2>{{ database.name }}</h2>
+            <p class="description">{{ database.description }}</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn-secondary" @click="showRelationshipModal = true">
+              <span class="material-symbols-outlined">link</span>
+              Manage Relationships
             </button>
             <button
               class="btn-secondary"
-              :class="{ active: viewMode === 'list' }"
-              @click="viewMode = 'list'"
+              @click="generateDatabaseSchema"
+              :disabled="generatingSchema"
             >
-              <span class="material-symbols-outlined">list</span>
-              List View
+              <span class="material-symbols-outlined">refresh</span>
+              {{ generatingSchema ? 'Regenerating...' : 'Regenerate' }}
+            </button>
+            <button class="btn-primary" @click="showCreateTableModal = true">
+              <span class="material-symbols-outlined">add</span>
+              Create Table
             </button>
           </div>
         </div>
 
-        <!-- Diagram View -->
-        <div v-if="viewMode === 'diagram'" class="schema-diagram">
-          <div class="tables-container">
-            <div
-              v-for="table in databaseTables"
-              :key="table.id"
-              class="table-card"
-              :style="{ top: table.position.y + 'px', left: table.position.x + 'px' }"
-            >
-              <div class="table-header">
-                <h4>{{ table.name }}</h4>
-                <div class="table-actions">
-                  <button class="btn-icon" @click="editTable(table)" title="Edit">
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
-                  <button class="btn-icon danger" @click="deleteTable(table.id)" title="Delete">
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
-                </div>
-              </div>
-              <div class="table-columns">
-                <div
-                  v-for="column in table.columns"
-                  :key="column.name"
-                  class="table-column"
-                  :class="{ primary: column.primaryKey, foreign: column.foreignKey }"
-                >
-                  <span class="column-name">{{ column.name }}</span>
-                  <span class="column-type">{{ column.type }}</span>
-                  <span v-if="column.primaryKey" class="column-badge pk">PK</span>
-                  <span v-if="column.foreignKey" class="column-badge fk">FK</span>
-                </div>
-              </div>
+        <!-- Statistics Cards -->
+        <DatabaseStats :stats="databaseStats" />
+
+        <!-- Database Schema Visualization -->
+        <div class="schema-section">
+          <div class="section-header">
+            <h3>Database Schema</h3>
+            <div class="view-options">
+              <button
+                class="btn-secondary"
+                :class="{ active: viewMode === 'diagram' }"
+                @click="viewMode = 'diagram'"
+              >
+                <span class="material-symbols-outlined">schema</span>
+                Diagram View
+              </button>
+              <button
+                class="btn-secondary"
+                :class="{ active: viewMode === 'list' }"
+                @click="viewMode = 'list'"
+              >
+                <span class="material-symbols-outlined">list</span>
+                List View
+              </button>
+              <button class="btn-secondary" @click="exportSchema">
+                <span class="material-symbols-outlined">download</span>
+                Export
+              </button>
             </div>
           </div>
+
+          <!-- Diagram View -->
+          <DatabaseDiagram
+            v-if="viewMode === 'diagram'"
+            :tables="databaseTables"
+            :relationships="relationships"
+            :database-id="database?._id"
+            :auto-save-enabled="true"
+            :history-enabled="true"
+            @table-edit="editTable"
+            @table-delete="deleteTable"
+            @table-view="viewTableDetails"
+            @save-positions="handleSavePositions"
+            @tables-updated="handleTablesUpdated"
+          />
+
+          <!-- List View -->
+          <DatabaseList
+            v-else
+            :tables="databaseTables"
+            :relationships="relationships"
+            @table-edit="editTable"
+            @table-delete="deleteTable"
+            @table-view="viewTableDetails"
+          />
         </div>
 
-        <!-- List View -->
-        <div v-else class="schema-list">
-          <div class="tables-list">
-            <div v-for="table in databaseTables" :key="table.id" class="table-list-item">
-              <div class="table-info">
-                <h4>{{ table.name }}</h4>
-                <p class="table-description">{{ table.description }}</p>
-                <div class="table-meta">
-                  <span class="meta-item">
-                    <span class="material-symbols-outlined">view_column</span>
-                    {{ table.columns.length }} columns
-                  </span>
-                  <span class="meta-item">
-                    <span class="material-symbols-outlined">link</span>
-                    {{ table.relationships }} relationships
-                  </span>
-                </div>
-              </div>
-              <div class="table-actions">
-                <button class="btn-secondary" @click="viewTableDetails(table)">
-                  <span class="material-symbols-outlined">visibility</span>
-                  View
-                </button>
-                <button class="btn-secondary" @click="editTable(table)">
-                  <span class="material-symbols-outlined">edit</span>
-                  Edit
-                </button>
-                <button class="btn-danger" @click="deleteTable(table.id)">
-                  <span class="material-symbols-outlined">delete</span>
-                  Delete
-                </button>
-              </div>
+        <!-- SQL Preview -->
+        <div class="sql-preview-section">
+          <div class="section-header">
+            <h3>SQL Preview</h3>
+            <div class="sql-actions">
+              <button class="btn-secondary" @click="copySQL">
+                <span class="material-symbols-outlined">content_copy</span>
+                Copy SQL
+              </button>
+              <button class="btn-primary" @click="downloadSQL">
+                <span class="material-symbols-outlined">download</span>
+                Download SQL File
+              </button>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- SQL Preview -->
-      <div class="sql-preview-section">
-        <div class="section-header">
-          <h3>SQL Preview</h3>
-          <button class="btn-primary" @click="generateSQL">
-            <span class="material-symbols-outlined">download</span>
-            Generate SQL
-          </button>
-        </div>
-        <div class="sql-preview">
-          <pre><code>{{ generatedSQL }}</code></pre>
+          <div class="sql-preview">
+            <pre><code>{{ generatedSQL }}</code></pre>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Create/Edit Table Modal -->
-    <div v-if="showCreateTableModal || editingTable" class="modal-overlay">
-      <div class="modal-content large">
-        <div class="modal-header">
-          <h3>{{ editingTable ? 'Edit Table' : 'Create New Table' }}</h3>
-          <button class="btn-close" @click="closeModal">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
+    <TableModal
+      v-if="showCreateTableModal || editingTable"
+      :table="editingTable"
+      :available-tables="availableTables"
+      :loading="loadingAvailableTables"
+      @save="saveTable"
+      @close="closeModal"
+    />
 
-        <div class="modal-body">
-          <form @submit.prevent="saveTable">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Table Name</label>
-                <input
-                  v-model="tableForm.name"
-                  type="text"
-                  required
-                  placeholder="Enter table name"
-                />
-              </div>
-              <div class="form-group">
-                <label>Description</label>
-                <input
-                  v-model="tableForm.description"
-                  type="text"
-                  placeholder="Enter table description"
-                />
-              </div>
-            </div>
+    <!-- Relationship Management Modal -->
+    <RelationshipModal
+      v-if="showRelationshipModal"
+      :relationships="relationships"
+      :tables="databaseTables"
+      @save-relationship="addRelationship"
+      @remove-relationship="removeRelationship"
+      @close="showRelationshipModal = false"
+    />
 
-            <div class="form-group">
-              <label>Columns</label>
-              <div class="columns-list">
-                <div v-for="(column, index) in tableForm.columns" :key="index" class="column-form">
-                  <input v-model="column.name" type="text" placeholder="Column name" required />
-                  <select v-model="column.type" required>
-                    <option value="">Select type</option>
-                    <option value="INT">INT</option>
-                    <option value="VARCHAR">VARCHAR</option>
-                    <option value="TEXT">TEXT</option>
-                    <option value="DATE">DATE</option>
-                    <option value="DATETIME">DATETIME</option>
-                    <option value="BOOLEAN">BOOLEAN</option>
-                  </select>
-                  <input v-model="column.length" type="number" placeholder="Length" />
-                  <div class="column-options">
-                    <label class="checkbox-label">
-                      <input
-                        v-model="column.primaryKey"
-                        type="checkbox"
-                        @change="handlePrimaryKeyChange(index)"
-                      />
-                      PK
-                    </label>
-                    <label class="checkbox-label">
-                      <input v-model="column.nullable" type="checkbox" />
-                      Null
-                    </label>
-                    <label class="checkbox-label">
-                      <input v-model="column.unique" type="checkbox" />
-                      Unique
-                    </label>
-                  </div>
-                  <button type="button" class="btn-icon danger" @click="removeColumn(index)">
-                    <span class="material-symbols-outlined">remove</span>
-                  </button>
-                </div>
-                <button type="button" class="btn-secondary" @click="addColumn">
-                  <span class="material-symbols-outlined">add</span>
-                  Add Column
-                </button>
-              </div>
-            </div>
-
-            <div class="modal-actions">
-              <button type="button" class="btn-secondary" @click="closeModal">Cancel</button>
-              <button type="submit" class="btn-primary">
-                {{ editingTable ? 'Update' : 'Create' }} Table
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <!-- Table Details Modal -->
+    <TableDetailsModal
+      v-if="selectedTable"
+      :table="selectedTable"
+      :relationships="getTableRelationships(selectedTable.name)"
+      @close="selectedTable = null"
+    />
   </div>
 </template>
 
 <script>
 import { getProjectDetail } from '@/api/project'
+import {
+  generateDatabaseSchema,
+  getDatabasesByVersion,
+  getDatabaseById,
+  updateDatabase,
+  deleteDatabase,
+  addTableToDatabase,
+  updateTableInDatabase,
+  deleteTableFromDatabase,
+  getAvailableTablesForReferences,
+  updateMultipleTablePositions,
+  updateTablePosition,
+} from '@/api/project'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
+import DatabaseStats from '@/components/database/DatabaseStats.vue'
+import DatabaseDiagram from '@/components/database/DatabaseDiagram.vue'
+import DatabaseList from '@/components/database/DatabaseList.vue'
+import TableModal from '@/components/database/TableModal.vue'
+import RelationshipModal from '@/components/database/RelationshipModal.vue'
+import TableDetailsModal from '@/components/database/TableDetailsModal.vue'
 
 export default {
   name: 'DatabaseManagement',
   components: {
     ProjectHeader,
+    DatabaseStats,
+    DatabaseDiagram,
+    DatabaseList,
+    TableModal,
+    RelationshipModal,
+    TableDetailsModal,
   },
   data() {
     return {
       project: {},
       versions: [],
       selectedVersionId: null,
+      database: null,
+      databaseTables: [],
+      relationships: [],
+
+      loading: false,
+      error: null,
+      generatingSchema: false,
 
       databaseStats: {
         tables: 0,
         relationships: 0,
         columns: 0,
+        relatedUsecases: 0,
       },
 
-      databaseTables: [],
       viewMode: 'diagram',
 
       showCreateTableModal: false,
+      showRelationshipModal: false,
       editingTable: null,
-
-      tableForm: {
-        name: '',
-        description: '',
-        columns: [
-          {
-            name: 'id',
-            type: 'INT',
-            length: null,
-            primaryKey: true,
-            nullable: false,
-            unique: true,
-          },
-        ],
-      },
-
+      selectedTable: null,
+      availableTables: [],
+      loadingAvailableTables: false,
       generatedSQL: '',
 
       toast: useToast(),
     }
   },
+  computed: {
+    debugAvailableTables() {
+      console.log('🔍 [DEBUG] availableTables:', this.availableTables)
+      console.log('🔍 [DEBUG] Type:', typeof this.availableTables)
+      console.log('🔍 [DEBUG] Is array:', Array.isArray(this.availableTables))
+      console.log('🔍 [DEBUG] Has data property:', this.availableTables?.data)
+      return this.availableTables
+    },
+  },
   async created() {
     const projectId = this.$route.params.id
     if (projectId) {
       await this.fetchProjectData(projectId)
-      this.loadDatabaseTables()
-      this.generateSQL()
+      await this.loadDatabaseData()
     }
   },
   methods: {
@@ -338,14 +289,17 @@ export default {
       })
     },
 
+    goBack() {
+      this.$router.push('/dashboard')
+    },
+
     // Data methods
     async fetchProjectData(projectId) {
       try {
-        const userId = 'CURRENT_LOGGED_IN_USER_ID'
-        const { data } = await getProjectDetail(projectId, userId)
+        const { data } = await getProjectDetail(projectId)
         const result = data.data || data
-        this.project = result.project
-        this.versions = result.versions
+        this.project = result.project || result
+        this.versions = result.versions || []
 
         if (this.versions.length > 0) {
           this.selectedVersionId = this.versions[0]._id
@@ -356,199 +310,421 @@ export default {
       }
     },
 
-    loadDatabaseTables() {
-      // Mock data - replace with actual API call
-      this.databaseTables = [
-        {
-          id: 1,
-          name: 'users',
-          description: 'Stores user account information',
-          position: { x: 50, y: 50 },
-          columns: [
-            { name: 'id', type: 'INT', primaryKey: true, foreignKey: false },
-            { name: 'username', type: 'VARCHAR', primaryKey: false, foreignKey: false },
-            { name: 'email', type: 'VARCHAR', primaryKey: false, foreignKey: false },
-            { name: 'password', type: 'VARCHAR', primaryKey: false, foreignKey: false },
-            { name: 'created_at', type: 'DATETIME', primaryKey: false, foreignKey: false },
-          ],
-          relationships: 2,
-        },
-        {
-          id: 2,
-          name: 'posts',
-          description: 'Stores blog posts',
-          position: { x: 400, y: 50 },
-          columns: [
-            { name: 'id', type: 'INT', primaryKey: true, foreignKey: false },
-            { name: 'user_id', type: 'INT', primaryKey: false, foreignKey: true },
-            { name: 'title', type: 'VARCHAR', primaryKey: false, foreignKey: false },
-            { name: 'content', type: 'TEXT', primaryKey: false, foreignKey: false },
-            { name: 'created_at', type: 'DATETIME', primaryKey: false, foreignKey: false },
-          ],
-          relationships: 1,
-        },
-        {
-          id: 3,
-          name: 'comments',
-          description: 'Stores post comments',
-          position: { x: 250, y: 300 },
-          columns: [
-            { name: 'id', type: 'INT', primaryKey: true, foreignKey: false },
-            { name: 'post_id', type: 'INT', primaryKey: false, foreignKey: true },
-            { name: 'user_id', type: 'INT', primaryKey: false, foreignKey: true },
-            { name: 'comment', type: 'TEXT', primaryKey: false, foreignKey: false },
-            { name: 'created_at', type: 'DATETIME', primaryKey: false, foreignKey: false },
-          ],
-          relationships: 2,
-        },
-      ]
+    async loadDatabaseData() {
+      if (!this.selectedVersionId) return
 
-      this.updateStats()
+      this.loading = true
+      this.error = null
+
+      try {
+        const { data: databasesData } = await getDatabasesByVersion(this.selectedVersionId)
+        const databases = databasesData.data || databasesData
+
+        if (databases && databases.length > 0) {
+          const databaseId = databases[0]._id
+          const { data: databaseDetail } = await getDatabaseById(databaseId)
+          this.database = databaseDetail.data || databaseDetail
+          this.databaseTables = this.database.tables || []
+          this.relationships = this.database.relationships || []
+
+          this.updateStats()
+          this.generateSQL()
+        } else {
+          this.database = null
+          this.databaseTables = []
+          this.relationships = []
+        }
+      } catch (err) {
+        console.error('Error loading database:', err)
+        this.error = err.response?.data?.message || 'Failed to load database schema'
+        this.toast.error(this.error)
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async generateDatabaseSchema() {
+      if (!this.selectedVersionId) {
+        this.toast.error('Please select a version first')
+        return
+      }
+
+      this.generatingSchema = true
+      try {
+        const { data } = await generateDatabaseSchema(this.selectedVersionId)
+        this.toast.success('Database schema generated successfully!')
+        await this.loadDatabaseData()
+      } catch (err) {
+        console.error('Error generating database schema:', err)
+        this.toast.error(err.response?.data?.message || 'Failed to generate database schema')
+      } finally {
+        this.generatingSchema = false
+      }
     },
 
     updateStats() {
       this.databaseStats.tables = this.databaseTables.length
-      this.databaseStats.relationships = this.databaseTables.reduce(
-        (sum, table) => sum + table.relationships,
-        0
-      )
+      this.databaseStats.relationships = this.relationships.length
       this.databaseStats.columns = this.databaseTables.reduce(
-        (sum, table) => sum + table.columns.length,
+        (sum, table) => sum + (table.columns?.length || 0),
         0
       )
+
+      this.databaseStats.relatedUsecases = this.databaseTables.reduce((count, table) => {
+        const tableUsecases = new Set()
+        table.columns?.forEach((column) => {
+          column.related_usecase_ids?.forEach((usecaseId) => {
+            tableUsecases.add(usecaseId)
+          })
+        })
+        return count + tableUsecases.size
+      }, 0)
+    },
+
+    // Relationship methods
+    getTableRelationships(tableName) {
+      return this.relationships.filter(
+        (rel) => rel.from_table === tableName || rel.to_table === tableName
+      )
+    },
+
+    async addRelationship(relationship) {
+      try {
+        this.relationships.push(relationship)
+
+        if (this.database?._id) {
+          await updateDatabase(this.database._id, {
+            relationships: this.relationships,
+          })
+        }
+
+        this.updateStats()
+        this.generateSQL()
+        this.toast.success('Relationship added successfully')
+      } catch (err) {
+        console.error('Error adding relationship:', err)
+        this.toast.error('Failed to add relationship')
+      }
+    },
+
+    async removeRelationship(index) {
+      try {
+        this.relationships.splice(index, 1)
+
+        if (this.database?._id) {
+          await updateDatabase(this.database._id, {
+            relationships: this.relationships,
+          })
+        }
+
+        this.updateStats()
+        this.generateSQL()
+        this.toast.success('Relationship removed successfully')
+      } catch (err) {
+        console.error('Error removing relationship:', err)
+        this.toast.error('Failed to remove relationship')
+      }
     },
 
     // Table actions
     viewTableDetails(table) {
-      this.toast.info(`Viewing details for table: ${table.name}`)
-      // Implement table details view
+      this.selectedTable = table
     },
 
-    editTable(table) {
-      this.editingTable = table
-      this.tableForm = {
-        name: table.name,
-        description: table.description,
-        columns: table.columns.map((col) => ({
-          ...col,
-          length: col.length || null,
-        })),
+    async editTable(table) {
+      this.editingTable = { ...table }
+      this.loadingAvailableTables = true
+
+      try {
+        // Lấy danh sách available tables từ API
+        const response = await getAvailableTablesForReferences(this.database._id, table.name)
+
+        // Xử lý Proxy object để lấy array thực
+        let availableTablesData = response.data
+
+        // Nếu là Proxy object, truy cập property data
+        if (
+          availableTablesData &&
+          availableTablesData.data &&
+          Array.isArray(availableTablesData.data)
+        ) {
+          availableTablesData = availableTablesData.data
+        }
+
+        // Đảm bảo luôn là array
+        this.availableTables = Array.isArray(availableTablesData) ? availableTablesData : []
+
+        console.log('📋 Available tables for references:', this.availableTables)
+        console.log('📋 Type of availableTables:', typeof this.availableTables)
+        console.log('📋 Is array:', Array.isArray(this.availableTables))
+      } catch (error) {
+        console.error('Failed to load available tables:', error)
+        this.availableTables = [] // Luôn là mảng rỗng nếu có lỗi
+        this.toast.error('Failed to load available tables')
+      } finally {
+        this.loadingAvailableTables = false
       }
     },
 
-    deleteTable(tableId) {
-      if (confirm('Are you sure you want to delete this table?')) {
-        this.databaseTables = this.databaseTables.filter((table) => table.id !== tableId)
+    async deleteTable(tableId) {
+      if (!confirm('Are you sure you want to delete this table? This action cannot be undone.')) {
+        return
+      }
+
+      try {
+        if (this.database?._id) {
+          await deleteTableFromDatabase(this.database._id, tableId)
+        }
+
+        const tableToDelete = this.databaseTables.find((t) => t._id === tableId)
+        this.databaseTables = this.databaseTables.filter((table) => table._id !== tableId)
+
+        // Remove relationships involving this table
+        if (tableToDelete) {
+          this.relationships = this.relationships.filter(
+            (rel) => rel.from_table !== tableToDelete.name && rel.to_table !== tableToDelete.name
+          )
+        }
+
         this.updateStats()
         this.generateSQL()
         this.toast.success('Table deleted successfully')
+      } catch (err) {
+        console.error('Error deleting table:', err)
+        this.toast.error('Failed to delete table')
       }
     },
 
-    // Form methods
-    addColumn() {
-      this.tableForm.columns.push({
-        name: '',
-        type: '',
-        length: null,
-        primaryKey: false,
-        nullable: true,
-        unique: false,
-      })
-    },
-
-    removeColumn(index) {
-      if (this.tableForm.columns.length > 1) {
-        this.tableForm.columns.splice(index, 1)
-      }
-    },
-
-    handlePrimaryKeyChange(changedIndex) {
-      if (this.tableForm.columns[changedIndex].primaryKey) {
-        // Ensure only one primary key
-        this.tableForm.columns.forEach((column, index) => {
-          if (index !== changedIndex) {
-            column.primaryKey = false
-          }
-        })
-      }
-    },
-
-    saveTable() {
-      if (this.editingTable) {
-        // Update existing table
-        const index = this.databaseTables.findIndex((t) => t.id === this.editingTable.id)
-        if (index !== -1) {
-          this.databaseTables[index] = {
-            ...this.databaseTables[index],
-            ...this.tableForm,
-          }
+    async saveTable(tableData) {
+      console.error('⛔️⛔️⛔️ HÀM SAVE_TABLE ĐÃ BỊ GỌI ⛔️⛔️⛔️', tableData.name)
+      console.trace('Lần theo dấu vết xem ai đã gọi saveTable:') // Dòng quan trọng nhất
+      try {
+        if (!this.database?._id) {
+          this.toast.error('No database selected')
+          return
         }
-      } else {
-        // Create new table
-        const newTable = {
-          id: Date.now(),
-          ...this.tableForm,
-          position: { x: Math.random() * 500, y: Math.random() * 400 },
-          relationships: 0,
-        }
-        this.databaseTables.push(newTable)
-      }
 
-      this.updateStats()
-      this.generateSQL()
-      this.closeModal()
-      this.toast.success(this.editingTable ? 'Table updated!' : 'Table created!')
+        if (tableData._id) {
+          // Update existing table
+          await updateTableInDatabase(this.database._id, tableData.name, tableData)
+          const index = this.databaseTables.findIndex((t) => t._id === tableData._id)
+          if (index !== -1) {
+            this.databaseTables[index] = tableData
+          }
+        } else {
+          // Create new table
+          const newTable = {
+            ...tableData,
+            position: { x: Math.random() * 500, y: Math.random() * 400 },
+          }
+          const { data } = await addTableToDatabase(this.database._id, newTable)
+          this.databaseTables.push(data.data || data)
+        }
+
+        this.updateStats()
+        this.generateSQL()
+        this.closeModal()
+        this.toast.success(tableData._id ? 'Table updated!' : 'Table created!')
+      } catch (err) {
+        console.error('Error saving table:', err)
+        this.toast.error('Failed to save table')
+      }
     },
 
+    closeModal() {
+      this.showCreateTableModal = false
+      this.editingTable = null
+      this.availableTables = []
+    },
+
+    handleVersionSelect(versionId) {
+      this.selectedVersionId = versionId
+      this.loadDatabaseData()
+    },
+
+    // SQL Generation
     generateSQL() {
-      // Generate SQL from tables
+      if (!this.databaseTables || this.databaseTables.length === 0) {
+        this.generatedSQL = '-- No tables to generate SQL for'
+        return
+      }
+
       const sqlStatements = this.databaseTables
         .map((table) => {
-          const columns = table.columns
+          const columns = (table.columns || [])
             .map((col) => {
               let columnDef = `${col.name} ${col.type}`
               if (col.length) columnDef += `(${col.length})`
               if (!col.nullable) columnDef += ' NOT NULL'
               if (col.unique) columnDef += ' UNIQUE'
-              if (col.primaryKey) columnDef += ' PRIMARY KEY'
+              if (col.is_primary_key) columnDef += ' PRIMARY KEY AUTO_INCREMENT'
+              if (col.default) columnDef += ` DEFAULT ${col.default}`
               return columnDef
             })
             .join(',\n  ')
 
-          return `CREATE TABLE ${table.name} (\n  ${columns}\n);`
+          const foreignKeys = (table.columns || [])
+            .filter((col) => col.is_foreign_key && col.references)
+            .map((col) => {
+              return `FOREIGN KEY (${col.name}) REFERENCES ${col.references}(id)`
+            })
+            .join(',\n  ')
+
+          const constraints = foreignKeys ? `,\n  ${foreignKeys}` : ''
+
+          return `CREATE TABLE ${table.name} (\n  ${columns}${constraints}\n);`
         })
         .join('\n\n')
 
       this.generatedSQL = sqlStatements
     },
 
-    closeModal() {
-      this.showCreateTableModal = false
-      this.editingTable = null
-      this.tableForm = {
-        name: '',
-        description: '',
-        columns: [
-          {
-            name: 'id',
-            type: 'INT',
-            length: null,
-            primaryKey: true,
-            nullable: false,
-            unique: true,
-          },
-        ],
+    async copySQL() {
+      try {
+        await navigator.clipboard.writeText(this.generatedSQL)
+        this.toast.success('SQL copied to clipboard!')
+      } catch (err) {
+        console.error('Failed to copy SQL:', err)
+        this.toast.error('Failed to copy SQL')
       }
     },
 
-    handleVersionSelect(versionId) {
-      this.selectedVersionId = versionId
-      this.fetchProjectData(this.project._id)
+    downloadSQL() {
+      const blob = new Blob([this.generatedSQL], { type: 'text/sql' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${this.database?.name || 'database'}-schema.sql`
+      link.click()
+      URL.revokeObjectURL(url)
     },
 
-    goBack() {
-      this.$router.push('/dashboard')
+    exportSchema() {
+      const schemaData = {
+        database: this.database,
+        tables: this.databaseTables,
+        relationships: this.relationships,
+        generatedSQL: this.generatedSQL,
+        exportDate: new Date().toISOString(),
+      }
+
+      const dataStr = JSON.stringify(schemaData, null, 2)
+      const dataBlob = new Blob([dataStr], { type: 'application/json' })
+      const url = URL.createObjectURL(dataBlob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${this.database?.name || 'database'}-schema-${new Date().getTime()}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+    },
+    async loadAvailableTables(excludeTable = null) {
+      if (!this.database?._id) return
+
+      this.loadingAvailableTables = true
+      try {
+        const response = await getAvailableTablesForReferences(this.database._id, excludeTable)
+
+        // Xử lý Proxy object để lấy array thực
+        let availableTablesData = response.data
+
+        // Nếu là Proxy object, truy cập property data
+        if (
+          availableTablesData &&
+          availableTablesData.data &&
+          Array.isArray(availableTablesData.data)
+        ) {
+          availableTablesData = availableTablesData.data
+        }
+
+        // ĐẢM BẢO LUÔN LÀ MẢNG
+        this.availableTables = Array.isArray(availableTablesData) ? availableTablesData : []
+
+        console.log('📋 Available tables loaded:', this.availableTables)
+        console.log('📋 Type:', typeof this.availableTables)
+        console.log('📋 Is array:', Array.isArray(this.availableTables))
+      } catch (error) {
+        console.error('Failed to load available tables:', error)
+        this.availableTables = [] // Luôn là mảng rỗng nếu có lỗi
+        this.toast.error('Failed to load available tables')
+      } finally {
+        this.loadingAvailableTables = false
+      }
+    },
+    // Trong methods của DatabaseManagement.vue
+    // TRONG DatabaseManagement.vue - SỬA PHƯƠNG THỨC handleSavePositions
+    async handleSavePositions({ databaseId, positionUpdates }, callback) {
+      console.log('✅✅✅ HÀM HANDLE_SAVE_POSITIONS ĐÃ ĐƯỢC GỌI (ĐÚNG LUỒNG) ✅✅✅')
+      try {
+        // LẤY DANH SÁCH TÊN BẢNG HIỆN CÓ TỪ STATE
+        const currentTableNames = new Set(this.databaseTables.map((t) => t.name))
+
+        // LỌC RA CÁC UPDATE HỢP LỆ
+        const validPositionUpdates = positionUpdates.filter((update) => {
+          if (currentTableNames.has(update.tableName)) {
+            return true
+          }
+          // Ghi log cảnh báo nếu có bảng không khớp
+          console.warn(
+            `[Data Sync Warning] Attempted to save position for a non-existent table: "${update.tableName}". This update will be skipped.`
+          )
+          return false
+        })
+
+        // Nếu không có gì để cập nhật, không cần gọi API
+        if (validPositionUpdates.length === 0) {
+          console.log('No valid table positions to save.')
+          if (callback) callback(true) // Gọi callback thành công vì không có gì sai
+          return
+        }
+
+        console.log('🔄 Saving positions for valid tables:', {
+          databaseId,
+          tableCount: validPositionUpdates.length,
+          tableNames: validPositionUpdates.map((u) => u.tableName),
+        })
+
+        // GỌI API VỚI DỮ LIỆU ĐÃ ĐƯỢC LỌC
+        const response = await updateMultipleTablePositions(databaseId, validPositionUpdates)
+
+        console.log('✅ Backend response:', response)
+
+        if (callback) callback(true)
+        this.toast.success('Table positions saved successfully')
+      } catch (error) {
+        console.error('❌ Failed to save positions:', error)
+        if (callback) callback(false)
+        const errorMessage = error.response?.data?.message || error.message
+        this.toast.error(`Failed to save positions: ${errorMessage}`)
+        console.error('Error details:', {
+          status: error.response?.status,
+          data: error.response?.data,
+          tablesInDb: this.databaseTables.map((t) => t.name),
+          tablesInRequest: positionUpdates.map((u) => u.tableName), // Log dữ liệu gốc để debug
+        })
+      }
+    },
+
+    handleTablesUpdated(updatedTables) {
+      // Cập nhật local state với tables mới
+      this.databaseTables = updatedTables
+      this.updateStats()
+      this.generateSQL()
+    },
+    async savePositionsIndividually(databaseId, positionUpdates) {
+      try {
+        console.log('Trying individual position updates...')
+
+        const updatePromises = positionUpdates.map((update) =>
+          updateTablePosition(databaseId, update.tableName, update.position)
+        )
+
+        await Promise.all(updatePromises)
+        this.toast.success('Table positions saved (individual updates)')
+        console.log('Individual position updates completed')
+      } catch (individualError) {
+        console.error('Individual updates also failed:', individualError)
+        this.toast.error('Failed to save positions after retry')
+      }
     },
   },
 }
@@ -573,14 +749,27 @@ export default {
 .content-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 30px;
 }
 
-.content-header h2 {
+.header-left h2 {
   font-size: 2rem;
   font-weight: 700;
   color: #1a365d;
+  margin-bottom: 8px;
+}
+
+.header-left .description {
+  color: #6b7280;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .btn-primary {
@@ -597,73 +786,91 @@ export default {
   transition: background 0.3s ease;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: #2d4a8a;
 }
 
-/* Stats Grid */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-.stat-card {
-  background: white;
-  padding: 20px;
-  border-radius: 12px;
+.btn-secondary {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb;
+}
+
+/* Loading, Error, Empty States */
+.loading-state,
+.error-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+  background: white;
+  border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.stat-card.tables {
-  border-left: 4px solid #3b82f6;
+.loading-state .spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-top: 4px solid #1a365d;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
 }
 
-.stat-card.relationships {
-  border-left: 4px solid #8b5cf6;
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
-.stat-card.columns {
-  border-left: 4px solid #10b981;
+.error-state .material-symbols-outlined,
+.empty-state .material-symbols-outlined {
+  font-size: 48px;
+  margin-bottom: 16px;
 }
 
-.stat-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.error-state .material-symbols-outlined {
+  color: #ef4444;
 }
 
-.stat-card.tables .stat-icon {
-  background: #dbeafe;
-  color: #3b82f6;
+.empty-state .material-symbols-outlined {
+  color: #9ca3af;
 }
 
-.stat-card.relationships .stat-icon {
-  background: #ede9fe;
-  color: #8b5cf6;
-}
-
-.stat-card.columns .stat-icon {
-  background: #d1fae5;
-  color: #10b981;
-}
-
-.stat-info h3 {
+.error-state h3,
+.empty-state h3 {
   font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  color: #1f2937;
 }
 
-.stat-info p {
+.error-state p,
+.empty-state p {
   color: #6b7280;
-  font-size: 0.875rem;
+  margin-bottom: 20px;
 }
 
 /* Schema Section */
@@ -693,211 +900,10 @@ export default {
   gap: 8px;
 }
 
-.btn-secondary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-secondary:hover {
-  background: #e5e7eb;
-}
-
 .btn-secondary.active {
   background: #1a365d;
   color: white;
   border-color: #1a365d;
-}
-
-/* Diagram View */
-.schema-diagram {
-  padding: 20px;
-  min-height: 500px;
-  background: #f8fafc;
-  position: relative;
-}
-
-.tables-container {
-  position: relative;
-  height: 500px;
-}
-
-.table-card {
-  position: absolute;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
-  min-width: 200px;
-  cursor: move;
-}
-
-.table-header {
-  padding: 12px;
-  background: #1a365d;
-  color: white;
-  border-radius: 8px 8px 0 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.table-header h4 {
-  margin: 0;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.table-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.btn-icon {
-  padding: 4px;
-  border: none;
-  background: transparent;
-  border-radius: 4px;
-  cursor: pointer;
-  color: rgba(255, 255, 255, 0.8);
-  transition: all 0.3s ease;
-}
-
-.btn-icon:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-}
-
-.btn-icon.danger:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fecaca;
-}
-
-.table-columns {
-  padding: 8px 0;
-}
-
-.table-column {
-  padding: 6px 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.75rem;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.table-column:last-child {
-  border-bottom: none;
-}
-
-.table-column.primary {
-  background: #f0f9ff;
-}
-
-.table-column.foreign {
-  background: #fef7ff;
-}
-
-.column-name {
-  font-weight: 500;
-  color: #1f2937;
-}
-
-.column-type {
-  color: #6b7280;
-  font-family: 'Courier New', monospace;
-}
-
-.column-badge {
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.625rem;
-  font-weight: 600;
-  color: white;
-}
-
-.column-badge.pk {
-  background: #3b82f6;
-}
-
-.column-badge.fk {
-  background: #8b5cf6;
-}
-
-/* List View */
-.schema-list {
-  padding: 20px;
-}
-
-.tables-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.table-list-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  background: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.table-info h4 {
-  margin: 0 0 8px 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.table-description {
-  margin: 0 0 12px 0;
-  color: #6b7280;
-  font-size: 0.875rem;
-}
-
-.table-meta {
-  display: flex;
-  gap: 16px;
-}
-
-.meta-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.75rem;
-  color: #6b7280;
-}
-
-.table-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.btn-danger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: #ef4444;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.3s ease;
-}
-
-.btn-danger:hover {
-  background: #dc2626;
 }
 
 /* SQL Preview */
@@ -911,6 +917,8 @@ export default {
   padding: 20px;
   background: #1f2937;
   border-radius: 0 0 12px 12px;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .sql-preview pre {
@@ -919,126 +927,11 @@ export default {
   font-family: 'Courier New', monospace;
   font-size: 0.875rem;
   line-height: 1.5;
-  overflow-x: auto;
 }
 
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-content.large {
-  max-width: 700px;
-}
-
-.modal-header {
-  padding: 20px;
-  border-bottom: 1px solid #e5e7eb;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-header h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.btn-close {
-  padding: 4px;
-  border: none;
-  background: transparent;
-  border-radius: 4px;
-  cursor: pointer;
-  color: #6b7280;
-}
-
-.btn-close:hover {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 500;
-  color: #374151;
-}
-
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-}
-
-.columns-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.column-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr 80px auto 40px;
-  gap: 8px;
-  align-items: center;
-}
-
-.column-options {
-  display: flex;
-  gap: 8px;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.75rem;
-  color: #374151;
-  cursor: pointer;
-}
-
-.modal-actions {
+.sql-actions {
   display: flex;
   gap: 12px;
-  justify-content: flex-end;
-  margin-top: 24px;
 }
 
 /* Navigation Tabs */
