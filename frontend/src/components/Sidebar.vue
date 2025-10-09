@@ -61,21 +61,6 @@
             Trashed
           </a>
         </li>
-        
-        <!-- Admin Section - chỉ hiển thị cho ADMIN -->
-        <li v-if="isAdmin" class="admin-section">
-          <div class="admin-divider">
-            <span>Admin</span>
-          </div>
-          <a
-            class="sidebar-link admin-link"
-            href="/admin"
-            @click.prevent="navigateToAdmin"
-          >
-            <i class="fa-solid fa-shield-halved"></i>
-            Admin Panel
-          </a>
-        </li>
       </ul>
     </nav>
 
@@ -175,10 +160,6 @@ export default {
       this.activeSection = section
       localStorage.setItem('activeSection', section)
       this.$emit('navigate', section)
-    },
-    navigateToAdmin() {
-      console.log('🔐 Navigating to admin panel...')
-      this.$router.push('/admin')
     },
   },
 }
@@ -440,42 +421,6 @@ export default {
 .fade-slide-leave-to {
   opacity: 0;
   transform: translateY(10px);
-}
-
-/* Admin Section Styles */
-.admin-section {
-  margin-top: 20px;
-}
-
-.admin-divider {
-  padding: 8px 16px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-top: 1px solid #e0e0e0;
-  margin-top: 8px;
-  padding-top: 12px;
-}
-
-.admin-link {
-  color: #d32f2f !important;
-  font-weight: 600;
-}
-
-.admin-link:hover {
-  background: #ffebee !important;
-  color: #b71c1c !important;
-}
-
-.admin-link i {
-  color: #d32f2f;
-}
-.fade-slide-enter-to,
-.fade-slide-leave-from {
-  opacity: 1;
-  transform: translateY(0);
 }
 
 /* Responsive */
