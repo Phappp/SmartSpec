@@ -27,6 +27,13 @@ export default function initDatabaseRoute(): Router {
         databaseController.getDatabaseById
     );
 
+    // [U] Cập nhật vị trí nhiều bảng: PUT /api/databases/:databaseId/tables/positions
+    router.put(
+        "/:databaseId/tables/positions",
+        requireAuthorizedUser,
+        databaseController.updateMultipleTablePositions
+    );
+
     // [U] - UPDATE: Cập nhật một DB schema
     router.put(
         "/:databaseId",
@@ -97,12 +104,7 @@ export default function initDatabaseRoute(): Router {
         databaseController.updateTablePosition
     );
 
-    // [U] Cập nhật vị trí nhiều bảng: PUT /api/databases/:databaseId/tables/positions
-    router.put(
-        "/:databaseId/tables/positions",
-        requireAuthorizedUser,
-        databaseController.updateMultipleTablePositions
-    );
+
 
     return router;
 }

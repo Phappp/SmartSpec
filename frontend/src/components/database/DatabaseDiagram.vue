@@ -1141,7 +1141,14 @@ export default {
 
     if (this.localTables.length > 0) {
       this.$nextTick(() => {
-        this.autoLayout()
+        // CHỈ autoLayout nếu tables chưa có position
+        const hasExistingPositions = this.localTables.some(
+          (table) => table.position && (table.position.x !== 0 || table.position.y !== 0)
+        )
+
+        if (!hasExistingPositions) {
+          this.autoLayout()
+        }
         this.updateContainerSize()
       })
     }

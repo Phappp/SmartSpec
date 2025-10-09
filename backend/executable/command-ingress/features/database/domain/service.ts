@@ -98,14 +98,21 @@ export class DatabaseService {
      * [U] Cập nhật một bảng cụ thể trong mảng 'tables'.
      */
     public async updateTableInDatabase(databaseId: string, tableName: string, tableData: any) {
+        // Guard: tránh payload nhầm route khi tên là 'positions'
+        if ((tableName || '').toLowerCase() === 'positions') {
+            console.warn('[updateTableInDatabase] Received reserved name "positions". Skip update.');
+            return await DatabaseModel.findById(databaseId);
+        }
+
         // Sử dụng updateOne với positional operator
         // helper: escape regex special chars
         const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const normalizedName = (tableName || '').trim();
 
         const result = await DatabaseModel.updateOne(
             {
                 _id: databaseId,
-                "tables.name": { $regex: `^${escape((tableName || '').trim())}$`, $options: 'i' } // case/space tolerant
+                "tables.name": { $regex: `^${escape(normalizedName)}$`, $options: 'i' } // case/space tolerant
             },
             { $set: { "tables.$": tableData } }
         );
@@ -117,8 +124,6 @@ export class DatabaseService {
         }
 
         return await DatabaseModel.findById(databaseId);
-
-
     }
 
     /**

@@ -496,6 +496,33 @@ export default {
     },
 
     async saveTable(tableData) {
+      // 1) Bỏ qua hoàn toàn nếu payload liên quan vị trí/positions hoặc không phải object bảng
+      if (
+        !tableData ||
+        typeof tableData !== 'object' ||
+        Array.isArray(tableData) ||
+        'positions' in tableData // batch vị trí hoặc nhầm payload
+      ) {
+        return
+      }
+
+      // 2) Nếu payload chỉ có position/_id/name (kéo thả) → bỏ qua
+      const keys = Object.keys(tableData)
+      const isPositionOnly =
+        keys.length > 0 &&
+        keys.every((k) => ['_id', 'name', 'position'].includes(k)) &&
+        !tableData.columns
+
+      if (isPositionOnly) {
+        return
+      }
+
+      // 3) Chỉ cho phép cập nhật khi thực sự có thay đổi cấu trúc
+      const allowedEditKeys = ['_id', 'name', 'description', 'columns']
+      if (!keys.some((k) => allowedEditKeys.includes(k))) {
+        return
+      }
+
       console.error('⛔️⛔️⛔️ HÀM SAVE_TABLE ĐÃ BỊ GỌI ⛔️⛔️⛔️', tableData.name)
       console.trace('Lần theo dấu vết xem ai đã gọi saveTable:') // Dòng quan trọng nhất
       try {
@@ -689,7 +716,7 @@ export default {
         console.log('✅ Backend response:', response)
 
         if (callback) callback(true)
-        this.toast.success('Table positions saved successfully')
+        // this.toast.success('Table positions saved successfully')
       } catch (error) {
         console.error('❌ Failed to save positions:', error)
         if (callback) callback(false)
@@ -719,7 +746,7 @@ export default {
         )
 
         await Promise.all(updatePromises)
-        this.toast.success('Table positions saved (individual updates)')
+        // this.toast.success('Table positions saved (individual updates)')
         console.log('Individual position updates completed')
       } catch (individualError) {
         console.error('Individual updates also failed:', individualError)
