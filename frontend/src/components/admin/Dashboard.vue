@@ -62,9 +62,7 @@
         <div class="chart-header">
           <h3>Phân bố người dùng theo vai trò</h3>
           <div class="chart-actions">
-            <button class="btn-icon" @click="refreshUserStats">
-              <i class="fas fa-sync-alt"></i>
-            </button>
+            
           </div>
         </div>
         <div class="chart-content-split">
@@ -112,9 +110,7 @@
         <div class="chart-header">
           <h3>Phân bố API Keys theo nhà cung cấp</h3>
           <div class="chart-actions">
-            <button class="btn-icon" @click="refreshApiStats">
-              <i class="fas fa-sync-alt"></i>
-            </button>
+            
           </div>
         </div>
         <div class="chart-content-split">
@@ -262,35 +258,35 @@ const loadDashboardData = async () => {
     }))
     
     // Mock recent activities
-    recentActivities.value = [
-      {
-        id: 1,
-        type: 'user',
-        icon: 'fas fa-user-plus',
-        description: `Người dùng mới đăng ký`,
-        time: '5 phút trước',
-        status: 'success',
-        statusText: 'Thành công'
-      },
-      {
-        id: 2,
-        type: 'project',
-        icon: 'fas fa-project-diagram',
-        description: `Dự án mới được tạo`,
-        time: '15 phút trước',
-        status: 'success',
-        statusText: 'Thành công'
-      },
-      {
-        id: 3,
-        type: 'api',
-        icon: 'fas fa-key',
-        description: `API Key mới được tạo`,
-        time: '1 giờ trước',
-        status: 'success',
-        statusText: 'Thành công'
-      }
-    ]
+    // recentActivities.value = [
+    //   {
+    //     id: 1,
+    //     type: 'user',
+    //     icon: 'fas fa-user-plus',
+    //     description: `Người dùng mới đăng ký`,
+    //     time: '5 phút trước',
+    //     status: 'success',
+    //     statusText: 'Thành công'
+    //   },
+    //   {
+    //     id: 2,
+    //     type: 'project',
+    //     icon: 'fas fa-project-diagram',
+    //     description: `Dự án mới được tạo`,
+    //     time: '15 phút trước',
+    //     status: 'success',
+    //     statusText: 'Thành công'
+    //   },
+    //   {
+    //     id: 3,
+    //     type: 'api',
+    //     icon: 'fas fa-key',
+    //     description: `API Key mới được tạo`,
+    //     time: '1 giờ trước',
+    //     status: 'success',
+    //     statusText: 'Thành công'
+    //   }
+    // ]
     
     console.log('Dashboard data loaded:', stats.value)
     

@@ -2,7 +2,7 @@
   <div class="user-management">
     <!-- Debug Panel -->
     <DebugPanel />
-    
+
     <!-- Header -->
     <div class="page-header">
       <div class="header-left">
@@ -38,13 +38,13 @@
         </div>
         <div class="filter-group">
           <label>Tìm kiếm</label>
-          <input 
-            type="text" 
-            v-model="filters.search" 
+          <input
+            type="text"
+            v-model="filters.search"
             @input="debouncedSearch"
             placeholder="Tìm theo tên, email..."
             class="search-input"
-          >
+          />
         </div>
         <button class="btn btn-secondary" @click="resetFilters">
           <i class="fas fa-times"></i>
@@ -60,7 +60,7 @@
           <thead>
             <tr>
               <th>
-                <input type="checkbox" v-model="selectAll" @change="toggleSelectAll">
+                <input type="checkbox" v-model="selectAll" @change="toggleSelectAll" />
               </th>
               <th>Người dùng</th>
               <th>Email</th>
@@ -72,9 +72,13 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="user in filteredUsers" :key="user.id" :class="{ selected: selectedUsers.includes(user.id) }">
+            <tr
+              v-for="user in filteredUsers"
+              :key="user.id"
+              :class="{ selected: selectedUsers.includes(user.id) }"
+            >
               <td>
-                <input type="checkbox" v-model="selectedUsers" :value="user.id">
+                <input type="checkbox" v-model="selectedUsers" :value="user.id" />
               </td>
               <td>
                 <div class="user-cell">
@@ -95,25 +99,40 @@
               </td>
               <td>
                 <div class="status-cell">
-                  <span class="status-dot" :class="user.active ? 'active' : 'inactive'"></span>
-                  <span>{{ user.active ? 'Hoạt động' : 'Không hoạt động' }}</span>
+                  <span
+                    class="status-dot"
+                    :class="user.active ? 'active' : 'inactive'"
+                  ></span>
+                  <span>{{ user.active ? "Hoạt động" : "Không hoạt động" }}</span>
                 </div>
               </td>
               <td>{{ formatDate(user.createdAt) }}</td>
               <td>{{ formatDate(user.lastActive) }}</td>
               <td>
                 <div class="action-buttons">
-                  <button class="action-btn blue" @click="viewUser(user)" title="Xem chi tiết">
+                  <button
+                    class="action-btn blue"
+                    @click="viewUser(user)"
+                    title="Xem chi tiết"
+                  >
                     <i class="fas fa-eye"></i>
                   </button>
-                  <button class="action-btn green" @click="editUser(user)" title="Chỉnh sửa">
+                  <button
+                    class="action-btn green"
+                    @click="editUser(user)"
+                    title="Chỉnh sửa"
+                  >
                     <i class="fas fa-edit"></i>
                   </button>
-                  <button class="action-btn orange" @click="resetPassword(user)" title="Đặt lại mật khẩu">
-                    <i class="fas fa-key"></i>
+                  <button
+                    class="action-btn orange"
+                    @click="resetPassword(user)"
+                    title="Đặt lại mật khẩu"
+                  >
+                    <span class="material-symbols-outlined"> lock_reset </span>
                   </button>
                   <button class="action-btn red" @click="deleteUser(user)" title="Xóa">
-                    <i class="fas fa-trash"></i>
+                    <span class="material-symbols-outlined"> delete_forever </span>
                   </button>
                 </div>
               </td>
@@ -125,21 +144,22 @@
       <!-- Pagination -->
       <div class="pagination">
         <div class="pagination-info">
-          Hiển thị {{ (currentPage - 1) * itemsPerPage + 1 }} - {{ Math.min(currentPage * itemsPerPage, totalUsers) }} 
-          trong tổng số {{ totalUsers }} người dùng
+          Hiển thị {{ (currentPage - 1) * itemsPerPage + 1 }} -
+          {{ Math.min(currentPage * itemsPerPage, totalUsers) }} trong tổng số
+          {{ totalUsers }} người dùng
         </div>
         <div class="pagination-controls">
-          <button 
-            class="btn btn-secondary" 
-            @click="previousPage" 
+          <button
+            class="btn btn-secondary"
+            @click="previousPage"
             :disabled="currentPage === 1"
           >
             <i class="fas fa-chevron-left"></i>
           </button>
           <span class="page-info">{{ currentPage }} / {{ totalPages }}</span>
-          <button 
-            class="btn btn-secondary" 
-            @click="nextPage" 
+          <button
+            class="btn btn-secondary"
+            @click="nextPage"
             :disabled="currentPage === totalPages"
           >
             <i class="fas fa-chevron-right"></i>
@@ -150,9 +170,7 @@
 
     <!-- Bulk Actions -->
     <div v-if="selectedUsers.length > 0" class="bulk-actions">
-      <div class="bulk-info">
-        Đã chọn {{ selectedUsers.length }} người dùng
-      </div>
+      <div class="bulk-info">Đã chọn {{ selectedUsers.length }} người dùng</div>
       <div class="bulk-buttons">
         <button class="btn btn-secondary" @click="bulkActivate">
           <i class="fas fa-check"></i>
@@ -170,7 +188,11 @@
     </div>
 
     <!-- Add User Modal -->
-    <div v-if="showAddUserModal" class="modal-overlay" @click.self="showAddUserModal = false">
+    <div
+      v-if="showAddUserModal"
+      class="modal-overlay"
+      @click.self="showAddUserModal = false"
+    >
       <div class="modal-content">
         <div class="modal-header">
           <h2>Thêm người dùng mới</h2>
@@ -179,15 +201,20 @@
         <form @submit.prevent="addUser" class="modal-body">
           <div class="form-group">
             <label>Họ tên *</label>
-            <input type="text" v-model="newUser.name" required class="form-input">
+            <input type="text" v-model="newUser.name" required class="form-input" />
           </div>
           <div class="form-group">
             <label>Email *</label>
-            <input type="email" v-model="newUser.email" required class="form-input">
+            <input type="email" v-model="newUser.email" required class="form-input" />
           </div>
           <div class="form-group">
             <label>Mật khẩu *</label>
-            <input type="password" v-model="newUser.password" required class="form-input">
+            <input
+              type="password"
+              v-model="newUser.password"
+              required
+              class="form-input"
+            />
           </div>
           <div class="form-group">
             <label>Vai trò *</label>
@@ -205,7 +232,13 @@
             </select>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="showAddUserModal = false">Hủy</button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              @click="showAddUserModal = false"
+            >
+              Hủy
+            </button>
             <button type="submit" class="btn btn-primary">Thêm người dùng</button>
           </div>
         </form>
@@ -213,7 +246,11 @@
     </div>
 
     <!-- User Detail Modal -->
-    <div v-if="showUserDetailModal" class="modal-overlay" @click.self="showUserDetailModal = false">
+    <div
+      v-if="showUserDetailModal"
+      class="modal-overlay"
+      @click.self="showUserDetailModal = false"
+    >
       <div class="modal-content large">
         <div class="modal-header">
           <h2>Chi tiết người dùng</h2>
@@ -233,12 +270,17 @@
               </div>
               <div class="detail-item">
                 <label>Vai trò:</label>
-                <span class="badge" :class="getRoleClass(selectedUser.role)">{{ selectedUser.role }}</span>
+                <span class="badge" :class="getRoleClass(selectedUser.role)">{{
+                  selectedUser.role
+                }}</span>
               </div>
               <div class="detail-item">
                 <label>Trạng thái:</label>
-                <span class="status-dot" :class="selectedUser.active ? 'active' : 'inactive'"></span>
-                <span>{{ selectedUser.active ? 'Hoạt động' : 'Không hoạt động' }}</span>
+                <span
+                  class="status-dot"
+                  :class="selectedUser.active ? 'active' : 'inactive'"
+                ></span>
+                <span>{{ selectedUser.active ? "Hoạt động" : "Không hoạt động" }}</span>
               </div>
             </div>
             <div class="detail-section">
@@ -262,19 +304,28 @@
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showUserDetailModal = false">Đóng</button>
-            <button class="btn btn-primary" @click="editUser(selectedUser)">Chỉnh sửa</button>
+            <button class="btn btn-secondary" @click="showUserDetailModal = false">
+              Đóng
+            </button>
+            <button class="btn btn-primary" @click="editUser(selectedUser)">
+              Chỉnh sửa
+            </button>
           </div>
         </div>
       </div>
     </div>
 
-
-    <div v-if="showResetPasswordModal" class="modal-overlay" @click.self="showResetPasswordModal = false">
+    <div
+      v-if="showResetPasswordModal"
+      class="modal-overlay"
+      @click.self="showResetPasswordModal = false"
+    >
       <div class="modal-content">
         <div class="modal-header">
           <h2>Đặt lại mật khẩu</h2>
-          <button class="close-btn" @click="showResetPasswordModal = false">&times;</button>
+          <button class="close-btn" @click="showResetPasswordModal = false">
+            &times;
+          </button>
         </div>
         <div class="modal-body" v-if="selectedUser">
           <div class="user-info-box">
@@ -284,42 +335,48 @@
               <div class="user-email">{{ selectedUser.email }}</div>
             </div>
           </div>
-          
+
           <form @submit.prevent="submitResetPassword">
             <div class="form-group">
               <label>Mật khẩu cũ *</label>
-              <input 
-                type="password" 
-                v-model="resetPasswordForm.oldPassword" 
-                required 
+              <input
+                type="password"
+                v-model="resetPasswordForm.oldPassword"
+                required
                 class="form-input"
                 placeholder="Nhập mật khẩu cũ"
-              >
+              />
             </div>
             <div class="form-group">
               <label>Mật khẩu mới *</label>
-              <input 
-                type="password" 
-                v-model="resetPasswordForm.newPassword" 
-                required 
+              <input
+                type="password"
+                v-model="resetPasswordForm.newPassword"
+                required
                 class="form-input"
                 placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
                 minlength="6"
-              >
+              />
             </div>
             <div class="form-group">
               <label>Xác nhận mật khẩu mới *</label>
-              <input 
-                type="password" 
-                v-model="resetPasswordForm.confirmPassword" 
-                required 
+              <input
+                type="password"
+                v-model="resetPasswordForm.confirmPassword"
+                required
                 class="form-input"
                 placeholder="Nhập lại mật khẩu mới"
                 minlength="6"
-              >
+              />
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" @click="showResetPasswordModal = false">Hủy</button>
+              <button
+                type="button"
+                class="btn btn-secondary"
+                @click="showResetPasswordModal = false"
+              >
+                Hủy
+              </button>
               <button type="submit" class="btn btn-primary">Đặt lại mật khẩu</button>
             </div>
           </form>
@@ -330,115 +387,127 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from "vue";
 // NOTE: User APIs cần từ BE:
 // GET /api/admin/users, GET /api/admin/users/:id, POST /api/admin/users,
 // PUT /api/admin/users/:id, DELETE /api/admin/users/:id,
 // PATCH /api/admin/users/:id/status, POST /api/admin/users/:id/reset-password,
 // POST /api/admin/users/bulk-action
-import { getUsers, createUser, updateUser, deleteUser as apiDeleteUser, resetUserPassword, toggleUserStatus, bulkUserAction, searchUsers, filterUsers } from '@/api/admin'
-import DebugPanel from '@/components/DebugPanel.vue'
+import {
+  getUsers,
+  createUser,
+  updateUser,
+  deleteUser as apiDeleteUser,
+  resetUserPassword,
+  toggleUserStatus,
+  bulkUserAction,
+  searchUsers,
+  filterUsers,
+} from "@/api/admin";
+import DebugPanel from "@/components/DebugPanel.vue";
 
 // State
-const showAddUserModal = ref(false)
-const showUserDetailModal = ref(false)
-const selectedUser = ref(null)
-const selectedUsers = ref([])
-const selectAll = ref(false)
-const currentPage = ref(1)
-const itemsPerPage = ref(10)
-const showResetPasswordModal = ref(false)
+const showAddUserModal = ref(false);
+const showUserDetailModal = ref(false);
+const selectedUser = ref(null);
+const selectedUsers = ref([]);
+const selectAll = ref(false);
+const currentPage = ref(1);
+const itemsPerPage = ref(10);
+const showResetPasswordModal = ref(false);
 
 const filters = ref({
-  role: '',
-  status: '',
-  search: ''
-})
+  role: "",
+  status: "",
+  search: "",
+});
 
 const newUser = ref({
-  name: '',
-  email: '',  
-  password: '',
-  role: 'PARTICIPANT',
-  active: true
-})
+  name: "",
+  email: "",
+  password: "",
+  role: "PARTICIPANT",
+  active: true,
+});
 
 const resetPasswordForm = ref({
-  oldPassword: '',
-  newPassword: '',
-  confirmPassword: ''
-})
+  oldPassword: "",
+  newPassword: "",
+  confirmPassword: "",
+});
 
-const users = ref([])
-const searchTimeout = ref(null)
+const users = ref([]);
+const searchTimeout = ref(null);
 
 // Computed
-const totalUsers = computed(() => users.value.length)
+const totalUsers = computed(() => users.value.length);
 
 const filteredUsers = computed(() => {
   // Bây giờ filtering được thực hiện ở backend, chỉ cần trả về users
-  return users.value
-})
+  return users.value;
+});
 
-const totalPages = computed(() => Math.ceil(filteredUsers.value.length / itemsPerPage.value))
+const totalPages = computed(() =>
+  Math.ceil(filteredUsers.value.length / itemsPerPage.value)
+);
 
 // Methods
 const debouncedSearch = () => {
   if (searchTimeout.value) {
-    clearTimeout(searchTimeout.value)
+    clearTimeout(searchTimeout.value);
   }
   searchTimeout.value = setTimeout(() => {
-    applyFilters()
-  }, 500) // 500ms delay
-}
+    applyFilters();
+  }, 500); // 500ms delay
+};
 
 const applyFilters = async () => {
-  currentPage.value = 1
-  await loadUsers()
-}
+  currentPage.value = 1;
+  await loadUsers();
+};
 
 const resetFilters = async () => {
   filters.value = {
-    role: '',
-    status: '',
-    search: ''
-  }
-  currentPage.value = 1
-  await loadUsers()
-}
+    role: "",
+    status: "",
+    search: "",
+  };
+  currentPage.value = 1;
+  await loadUsers();
+};
 
 const toggleSelectAll = () => {
   if (selectAll.value) {
-    selectedUsers.value = filteredUsers.value.map(user => user.id)
+    selectedUsers.value = filteredUsers.value.map((user) => user.id);
   } else {
-    selectedUsers.value = []
+    selectedUsers.value = [];
   }
-}
+};
 
 const previousPage = () => {
   if (currentPage.value > 1) {
-    currentPage.value--
+    currentPage.value--;
   }
-}
+};
 
 const nextPage = () => {
   if (currentPage.value < totalPages.value) {
-    currentPage.value++
+    currentPage.value++;
   }
-}
+};
 
 const getRoleClass = (role) => {
-  return role === 'ADMIN' ? 'badge-blue' : 'badge-green'
-}
+  return role === "ADMIN" ? "badge-blue" : "badge-green";
+};
 
 const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('vi-VN')
-}
+  return new Date(dateString).toLocaleDateString("vi-VN");
+};
 
 const viewUser = (user) => {
-  selectedUser.value = user
-  showUserDetailModal.value = true
-}
+  selectedUser.value = user;
+  showUserDetailModal.value = true;
+};
 
 const editUser = async (user) => {
   // NOTE: PUT /api/admin/users/:id
@@ -448,186 +517,209 @@ const editUser = async (user) => {
       email: user.email,
       role: user.role,
       active: user.active,
-    })
-    await loadUsers()
+    });
+    await loadUsers();
   } catch (e) {}
-}
+};
 
 const resetPassword = async (user) => {
   // Mở modal để nhập mật khẩu cũ và mới
-  selectedUser.value = user
+  selectedUser.value = user;
   resetPasswordForm.value = {
-    oldPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  }
-  showResetPasswordModal.value = true
-}
+    oldPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  };
+  showResetPasswordModal.value = true;
+};
 
 const submitResetPassword = async () => {
   // Validate
   if (!resetPasswordForm.value.oldPassword || !resetPasswordForm.value.newPassword) {
-    alert('Vui lòng nhập đầy đủ mật khẩu cũ và mật khẩu mới!')
-    return
+    alert("Vui lòng nhập đầy đủ mật khẩu cũ và mật khẩu mới!");
+    return;
   }
-  
+
   if (resetPasswordForm.value.newPassword !== resetPasswordForm.value.confirmPassword) {
-    alert('Mật khẩu mới và xác nhận mật khẩu không khớp!')
-    return
+    alert("Mật khẩu mới và xác nhận mật khẩu không khớp!");
+    return;
   }
-  
+
   if (resetPasswordForm.value.newPassword.length < 6) {
-    alert('Mật khẩu mới phải có ít nhất 6 ký tự!')
-    return
+    alert("Mật khẩu mới phải có ít nhất 6 ký tự!");
+    return;
   }
-  
-  if (!confirm(`Bạn có chắc chắn muốn đặt lại mật khẩu cho ${selectedUser.value.name}?`)) return
-  
+
+  if (!confirm(`Bạn có chắc chắn muốn đặt lại mật khẩu cho ${selectedUser.value.name}?`))
+    return;
+
   try {
     // Gọi API với format đúng: { oldPassword, newPassword }
     await resetUserPassword(selectedUser.value.id, {
       oldPassword: resetPasswordForm.value.oldPassword,
-      newPassword: resetPasswordForm.value.newPassword
-    })
-    
-    alert('Đặt lại mật khẩu thành công!')
-    showResetPasswordModal.value = false
+      newPassword: resetPasswordForm.value.newPassword,
+    });
+
+    alert("Đặt lại mật khẩu thành công!");
+    showResetPasswordModal.value = false;
     resetPasswordForm.value = {
-      oldPassword: '',
-      newPassword: '',
-      confirmPassword: ''
-    }
+      oldPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    };
   } catch (e) {
-    console.error('Error resetting password:', e)
-    alert('Đặt lại mật khẩu thất bại: ' + (e.response?.data?.message || e.message))
+    console.error("Error resetting password:", e);
+    alert("Đặt lại mật khẩu thất bại: " + (e.response?.data?.message || e.message));
   }
-}
+};
 
 const deleteUser = async (user) => {
-  if (!confirm(`Bạn có chắc chắn muốn xóa người dùng ${user.name}?`)) return
+  if (!confirm(`Bạn có chắc chắn muốn xóa người dùng ${user.name}?`)) return;
   try {
     // NOTE: DELETE /api/admin/users/:id
-    await apiDeleteUser(user.id)
-    await loadUsers()
+    await apiDeleteUser(user.id);
+    await loadUsers();
   } catch (e) {}
-}
+};
 
 const addUser = async () => {
   // NOTE: POST /api/admin/users
   try {
-    await createUser(newUser.value)
-    showAddUserModal.value = false
-    newUser.value = { name: '', email: '', password: '', role: '', active: true }
-    await loadUsers()
+    await createUser(newUser.value);
+    showAddUserModal.value = false;
+    newUser.value = { name: "", email: "", password: "", role: "", active: true };
+    await loadUsers();
   } catch (e) {}
-}
+};
 
 const bulkActivate = async () => {
   // NOTE: POST /api/admin/users/bulk-action { action: 'activate' }
-  try { await bulkUserAction(selectedUsers.value, 'activate'); await loadUsers() } catch (e) {}
-}
+  try {
+    await bulkUserAction(selectedUsers.value, "activate");
+    await loadUsers();
+  } catch (e) {}
+};
 
 const bulkDeactivate = async () => {
   // NOTE: POST /api/admin/users/bulk-action { action: 'deactivate' }
-  try { await bulkUserAction(selectedUsers.value, 'deactivate'); await loadUsers() } catch (e) {}
-}
+  try {
+    await bulkUserAction(selectedUsers.value, "deactivate");
+    await loadUsers();
+  } catch (e) {}
+};
 
 const bulkDelete = async () => {
-  if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedUsers.value.length} người dùng đã chọn?`)) return
+  if (
+    !confirm(
+      `Bạn có chắc chắn muốn xóa ${selectedUsers.value.length} người dùng đã chọn?`
+    )
+  )
+    return;
   // NOTE: POST /api/admin/users/bulk-action { action: 'delete' }
-  try { await bulkUserAction(selectedUsers.value, 'delete'); await loadUsers() } catch (e) {}
-}
+  try {
+    await bulkUserAction(selectedUsers.value, "delete");
+    await loadUsers();
+  } catch (e) {}
+};
 
 const loadUsers = async () => {
   // NOTE: GET /api/users (admin only)
   try {
-    console.log('Loading users...')
-    console.log('Token check:', localStorage.getItem('accessToken') ? 'Present' : 'Missing')
-    
-    let res
-    
+    console.log("Loading users...");
+    console.log(
+      "Token check:",
+      localStorage.getItem("accessToken") ? "Present" : "Missing"
+    );
+
+    let res;
+
     // Ưu tiên search trước, sau đó mới filter
-    if (filters.value.search && filters.value.search.trim() !== '') {
-      console.log('Using search API for:', filters.value.search)
-      res = await searchUsers(filters.value.search)
+    if (filters.value.search && filters.value.search.trim() !== "") {
+      console.log("Using search API for:", filters.value.search);
+      res = await searchUsers(filters.value.search);
     }
     // Nếu có filter criteria, sử dụng filter API
     else if (filters.value.role || filters.value.status) {
-      console.log('Using filter API for:', { role: filters.value.role, status: filters.value.status })
-      
+      console.log("Using filter API for:", {
+        role: filters.value.role,
+        status: filters.value.status,
+      });
+
       // Chỉ gửi filter nếu có ít nhất một giá trị không rỗng
-      const filterData = {}
-      if (filters.value.role && filters.value.role.trim() !== '') {
-        filterData.system_role = filters.value.role
+      const filterData = {};
+      if (filters.value.role && filters.value.role.trim() !== "") {
+        filterData.system_role = filters.value.role;
       }
-      if (filters.value.status && filters.value.status.trim() !== '') {
-        filterData.status = filters.value.status
+      if (filters.value.status && filters.value.status.trim() !== "") {
+        filterData.status = filters.value.status;
       }
-      
+
       // Chỉ gọi filter API nếu có ít nhất một filter
       if (Object.keys(filterData).length > 0) {
-        res = await filterUsers(filterData)
+        res = await filterUsers(filterData);
       } else {
         // Nếu không có filter nào, lấy tất cả users
-        res = await getUsers()
+        res = await getUsers();
       }
     }
     // Nếu không có filter, lấy tất cả users
     else {
-      console.log('Using getAllUsers API')
-      res = await getUsers()
+      console.log("Using getAllUsers API");
+      res = await getUsers();
     }
-    
-    console.log('API Response:', res) // Debug log
-    
+
+    console.log("API Response:", res); // Debug log
+
     // BE trả về format: { status: "Success", message: "...", data: [...] }
-    let items = []
+    let items = [];
     if (res?.data?.data && Array.isArray(res.data.data)) {
-      items = res.data.data
-      console.log('Found data in res.data.data:', items.length, 'users')
+      items = res.data.data;
+      console.log("Found data in res.data.data:", items.length, "users");
     } else if (res?.data && Array.isArray(res.data)) {
-      items = res.data
-      console.log('Found data in res.data:', items.length, 'users')
+      items = res.data;
+      console.log("Found data in res.data:", items.length, "users");
     } else if (Array.isArray(res)) {
-      items = res
-      console.log('Found data in res:', items.length, 'users')
+      items = res;
+      console.log("Found data in res:", items.length, "users");
     } else {
-      console.warn('No data found in response:', res)
+      console.warn("No data found in response:", res);
     }
-    
-    console.log('Parsed items:', items) // Debug log
-    
+
+    console.log("Parsed items:", items); // Debug log
+
     // Chuẩn hóa field theo BE: system_role/status -> role/active
-    users.value = items.map(u => ({
+    users.value = items.map((u) => ({
       id: u.id || u._id || u.user_id,
-      name: u.name || u.full_name || u.username || '',
-      email: u.email || '',
-      role: u.system_role || u.role || 'PARTICIPANT',
-      active: u.status === 'ACTIVE' || u.active === true,
+      name: u.name || u.full_name || u.username || "",
+      email: u.email || "",
+      role: u.system_role || u.role || "PARTICIPANT",
+      active: u.status === "ACTIVE" || u.active === true,
       createdAt: u.created_at || u.createdAt,
       lastActive: u.updated_at || u.lastActive,
       projectCount: u.projectCount || 0,
-    }))
-    
-    console.log('Mapped users:', users.value.length, 'users loaded')
+    }));
+
+    console.log("Mapped users:", users.value.length, "users loaded");
   } catch (e) {
-    console.error('Error loading users:', e)
-    console.error('Error details:', e.response?.data || e.message)
-    
+    console.error("Error loading users:", e);
+    console.error("Error details:", e.response?.data || e.message);
+
     // Hiển thị thông báo lỗi chi tiết
     if (e.response?.status === 401) {
-      console.error('Authentication failed - Please login again')
+      console.error("Authentication failed - Please login again");
     } else if (e.response?.status === 403) {
-      console.error('Access denied - Admin role required')
+      console.error("Access denied - Admin role required");
     } else if (e.response?.status === 500) {
-      console.error('Server error - Check backend logs')
+      console.error("Server error - Check backend logs");
     }
-    
-    users.value = []
-  }
-}
 
-onMounted(() => { loadUsers() })
+    users.value = [];
+  }
+};
+
+onMounted(() => {
+  loadUsers();
+});
 </script>
 
 <style scoped>
@@ -734,7 +826,7 @@ onMounted(() => { loadUsers() })
 }
 
 .data-table th {
-  padding: 12px 10px;
+  padding: 12px 3px;
   text-align: left;
   font-size: 11px;
   font-weight: 600;
@@ -747,15 +839,33 @@ onMounted(() => { loadUsers() })
   text-overflow: ellipsis;
 }
 
-.data-table th:nth-child(1) { width: 25px; }
-.data-table th:nth-child(2) { width: 150px; }
-.data-table th:nth-child(3) { width: 100px; }
-.data-table th:nth-child(4) { width: 70px; }
-.data-table th:nth-child(5) { width: 75px; }
-.data-table th:nth-child(6) { width: 65px; }
-.data-table th:nth-child(7) { width: 80px; }
-.data-table th:nth-child(8) { width: 100px; }
-.data-table th:nth-child(9) { width: 140px; }
+.data-table th:nth-child(1) {
+  width: 15px;
+}
+.data-table th:nth-child(2) {
+  width: 130px;
+}
+.data-table th:nth-child(3) {
+  width: 70px;
+}
+.data-table th:nth-child(4) {
+  width: 70px;
+}
+.data-table th:nth-child(5) {
+  width: 65px;
+}
+.data-table th:nth-child(6) {
+  width: 70px;
+}
+.data-table th:nth-child(7) {
+  width: 75px;
+}
+.data-table th:nth-child(8) {
+  width: 100px;
+}
+.data-table th:nth-child(9) {
+  width: 140px;
+}
 
 .data-table td {
   padding: 12px 3px;
@@ -875,8 +985,8 @@ onMounted(() => { loadUsers() })
 }
 
 .action-btn {
-  width: 28px;
-  height: 28px;
+  width: 25px;
+  height: 25px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -1163,19 +1273,19 @@ onMounted(() => { loadUsers() })
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .filter-group {
     min-width: auto;
   }
-  
+
   .search-input {
     min-width: auto;
   }
-  
+
   .user-detail-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .bulk-actions {
     flex-direction: column;
     gap: 12px;
