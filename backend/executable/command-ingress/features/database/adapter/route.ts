@@ -2,72 +2,45 @@ import { Router } from 'express';
 import { DatabaseController } from './controller';
 import requireAuthorizedUser from '../../../middlewares/auth';
 
-// route.ts - Sửa logic
 export default function initDatabaseRoute(): Router {
     const router = Router();
-    const databaseController = new DatabaseController(); // Khởi tạo controller
+    const databaseController = new DatabaseController();
 
+    // === ROUTES CHÍNH CHO DATABASE ===
+
+    // [C] Tạo database từ version
     router.post(
         "/versions/:versionId/generate-database",
         requireAuthorizedUser,
         databaseController.generateDatabaseSchema
     );
-    // [R] - READ: Lấy danh sách DB schemas (lọc theo versionId)
-    // Ví dụ: GET /api/databases?versionId=60d...
+
+    // [R] Lấy danh sách databases (có query filter versionId)
     router.get(
         "/",
         requireAuthorizedUser,
         databaseController.getDatabasesByVersion
     );
 
-    // [R] - READ: Lấy một DB schema theo ID
+    // [R] Lấy database theo ID
     router.get(
         "/:databaseId",
         requireAuthorizedUser,
         databaseController.getDatabaseById
     );
 
-    // [U] Cập nhật vị trí nhiều bảng: PUT /api/databases/:databaseId/tables/positions
-    router.put(
-        "/:databaseId/tables/positions",
-        requireAuthorizedUser,
-        databaseController.updateMultipleTablePositions
-    );
-
-    // [U] - UPDATE: Cập nhật một DB schema
+    // [U] Cập nhật database
     router.put(
         "/:databaseId",
         requireAuthorizedUser,
         databaseController.updateDatabase
     );
 
-    // [D] - DELETE: Xóa một DB schema
+    // [D] Xóa database
     router.delete(
         "/:databaseId",
         requireAuthorizedUser,
         databaseController.deleteDatabase
-    );
-    // === CÁC ROUTE CRUD CHO TỪNG BẢNG (THÊM MỚI) ===
-
-    // [C] Thêm bảng: POST /api/databases/:databaseId/tables
-    router.post(
-        "/:databaseId/tables",
-        requireAuthorizedUser,
-        databaseController.addTable
-    );
-
-    // [U] Sửa bảng: PUT /api/databases/:databaseId/tables/:tableName
-    router.put(
-        "/:databaseId/tables/:tableName",
-        requireAuthorizedUser,
-        databaseController.updateTable
-    );
-
-    // [D] Xóa bảng: DELETE /api/databases/:databaseId/tables/:tableName
-    router.delete(
-        "/:databaseId/tables/:tableName",
-        requireAuthorizedUser,
-        databaseController.deleteTable
     );
 
     // [R] Lấy database với references đầy đủ
@@ -77,12 +50,51 @@ export default function initDatabaseRoute(): Router {
         databaseController.getDatabaseWithReferences
     );
 
+    // === ROUTES CHO TABLES ===
+
+    // [C] Thêm bảng mới
+    router.post(
+        "/:databaseId/tables",
+        requireAuthorizedUser,
+        databaseController.addTable
+    );
+
+    // [U] Cập nhật vị trí nhiều bảng (nên đặt trước route có :tableName để tránh conflict)
+    router.put(
+        "/:databaseId/tables/positions",
+        requireAuthorizedUser,
+        databaseController.updateMultipleTablePositions
+    );
+
+    // [U] Cập nhật bảng theo tên
+    router.put(
+        "/:databaseId/tables/:tableName",
+        requireAuthorizedUser,
+        databaseController.updateTable
+    );
+
+    // [U] Cập nhật vị trí một bảng
+    router.put(
+        "/:databaseId/tables/:tableName/position",
+        requireAuthorizedUser,
+        databaseController.updateTablePosition
+    );
+
+    // [D] Xóa bảng
+    router.delete(
+        "/:databaseId/tables/:tableName",
+        requireAuthorizedUser,
+        databaseController.deleteTable
+    );
+
     // [R] Lấy relationships của một bảng
     router.get(
         "/:databaseId/tables/:tableName/relationships",
         requireAuthorizedUser,
         databaseController.getTableRelationships
     );
+
+    // === ROUTES CHO VALIDATION & UTILITIES ===
 
     // [U] Validate foreign key
     router.post(
@@ -97,21 +109,6 @@ export default function initDatabaseRoute(): Router {
         requireAuthorizedUser,
         databaseController.getAvailableTablesForReferences
     );
-    // [U] Cập nhật vị trí một bảng: PUT /api/databases/:databaseId/tables/:tableName/position
-    router.put(
-        "/:databaseId/tables/:tableName/position",
-        requireAuthorizedUser,
-        databaseController.updateTablePosition
-    );
-
-
 
     return router;
 }
-
-
-
-
-
-
-

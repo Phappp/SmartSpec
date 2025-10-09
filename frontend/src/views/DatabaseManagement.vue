@@ -432,17 +432,14 @@ export default {
     },
 
     async editTable(table) {
+      console.log('✏️ Editing table:', table.name)
       this.editingTable = { ...table }
       this.loadingAvailableTables = true
 
       try {
-        // Lấy danh sách available tables từ API
         const response = await getAvailableTablesForReferences(this.database._id, table.name)
-
-        // Xử lý Proxy object để lấy array thực
         let availableTablesData = response.data
 
-        // Nếu là Proxy object, truy cập property data
         if (
           availableTablesData &&
           availableTablesData.data &&
@@ -451,15 +448,11 @@ export default {
           availableTablesData = availableTablesData.data
         }
 
-        // Đảm bảo luôn là array
         this.availableTables = Array.isArray(availableTablesData) ? availableTablesData : []
-
-        console.log('📋 Available tables for references:', this.availableTables)
-        console.log('📋 Type of availableTables:', typeof this.availableTables)
-        console.log('📋 Is array:', Array.isArray(this.availableTables))
+        console.log('📋 Available tables for edit:', this.availableTables)
       } catch (error) {
         console.error('Failed to load available tables:', error)
-        this.availableTables = [] // Luôn là mảng rỗng nếu có lỗi
+        this.availableTables = []
         this.toast.error('Failed to load available tables')
       } finally {
         this.loadingAvailableTables = false
@@ -523,44 +516,140 @@ export default {
         return
       }
 
-      console.error('⛔️⛔️⛔️ HÀM SAVE_TABLE ĐÃ BỊ GỌI ⛔️⛔️⛔️', tableData.name)
-      console.trace('Lần theo dấu vết xem ai đã gọi saveTable:') // Dòng quan trọng nhất
+      console.log('💾 Saving table:', tableData.name, 'Editing mode:', !!this.editingTable)
+
       try {
         if (!this.database?._id) {
           this.toast.error('No database selected')
           return
         }
 
-        if (tableData._id) {
-          // Update existing table
-          await updateTableInDatabase(this.database._id, tableData.name, tableData)
-          const index = this.databaseTables.findIndex((t) => t._id === tableData._id)
+        // TẠO BẢN SAO CỦA DATABASE TABLES ĐỂ THỰC HIỆN SYNC
+        let updatedTables = [...this.databaseTables]
+
+        // PHÂN BIỆT RÕ RÀNG GIỮA CREATE VÀ UPDATE
+        if (this.editingTable) {
+          // UPDATE EXISTING TABLE - sử dụng tên gốc để xác định bảng cần update
+          const originalTableName = this.editingTable.name
+          console.log('🔄 Updating table:', originalTableName, '→', tableData.name)
+
+          await updateTableInDatabase(this.database._id, originalTableName, tableData)
+
+          // Cập nhật local state
+          const index = updatedTables.findIndex((t) => t.name === originalTableName)
           if (index !== -1) {
-            this.databaseTables[index] = tableData
+            // Giữ nguyên position khi update
+            const updatedTable = {
+              ...tableData,
+              position: updatedTables[index].position,
+            }
+            updatedTables[index] = updatedTable
+
+            // 🔥 REAL-TIME SYNC: PHÁT HIỆN VÀ CẬP NHẬT FK KHI PK THAY ĐỔI
+            const pkChanges = this.detectPKTypeChanges(this.editingTable, tableData)
+            if (Object.keys(pkChanges).length > 0) {
+              console.log('🎯 PK type changes detected:', pkChanges)
+              updatedTables = this.syncForeignKeyTypes(updatedTables, pkChanges)
+            }
           }
+
+          this.toast.success('Table updated successfully!')
         } else {
-          // Create new table
+          // CREATE NEW TABLE
+          console.log('🆕 Creating new table:', tableData.name)
+
           const newTable = {
             ...tableData,
             position: { x: Math.random() * 500, y: Math.random() * 400 },
           }
           const { data } = await addTableToDatabase(this.database._id, newTable)
-          this.databaseTables.push(data.data || data)
+          const createdTable = data.data || data
+          updatedTables.push(createdTable)
+
+          this.toast.success('Table created successfully!')
         }
 
+        // 🔄 CẬP NHẬT STATE VỚI DỮ LIỆU ĐÃ SYNC
+        this.databaseTables = updatedTables
         this.updateStats()
         this.generateSQL()
+
+        // Force diagram re-render với data mới
+        this.$nextTick(() => {
+          console.log('🔄 Database tables updated, diagram should re-render')
+        })
+
         this.closeModal()
-        this.toast.success(tableData._id ? 'Table updated!' : 'Table created!')
       } catch (err) {
         console.error('Error saving table:', err)
-        this.toast.error('Failed to save table')
+        this.toast.error(err.response?.data?.message || 'Failed to save table')
       }
+    },
+
+    // THÊM 2 METHODS MỚI ĐỂ SYNC FK
+    methods: {
+      detectPKTypeChanges(oldTable, newTable) {
+        const changes = {}
+
+        const oldPK = oldTable.columns?.find((col) => col.is_primary_key)
+        const newPK = newTable.columns?.find((col) => col.is_primary_key)
+
+        if (oldPK && newPK && oldPK.type !== newPK.type) {
+          changes[newTable.name] = newPK.type
+          console.log(`🎯 PK type changed: ${oldTable.name} ${oldPK.type} → ${newPK.type}`)
+        }
+
+        return changes
+      },
+
+      syncForeignKeyTypes(tables, pkChanges) {
+        return tables.map((table) => {
+          // Clone table để tránh mutation
+          const updatedTable = { ...table }
+
+          if (updatedTable.columns) {
+            updatedTable.columns = updatedTable.columns.map((column) => {
+              // Nếu column là FK và reference đến table có PK thay đổi
+              if (column.is_foreign_key && column.references && pkChanges[column.references]) {
+                const newType = pkChanges[column.references]
+                console.log(
+                  `🔄 Syncing FK: ${table.name}.${column.name} ${column.type} → ${newType}`
+                )
+
+                return {
+                  ...column,
+                  type: newType,
+                  // Reset length nếu type mới không hỗ trợ length
+                  length: this.shouldResetLength(newType) ? null : column.length,
+                }
+              }
+              return column
+            })
+          }
+
+          return updatedTable
+        })
+      },
+
+      shouldResetLength(type) {
+        const typesWithoutLength = [
+          'TEXT',
+          'LONGTEXT',
+          'BLOB',
+          'LONGBLOB',
+          'BOOLEAN',
+          'DATE',
+          'DATETIME',
+          'TIMESTAMP',
+          'TIME',
+        ]
+        return typesWithoutLength.includes(type?.toUpperCase())
+      },
     },
 
     closeModal() {
       this.showCreateTableModal = false
-      this.editingTable = null
+      this.editingTable = null // QUAN TRỌNG: Reset editing state
       this.availableTables = []
     },
 
@@ -752,6 +841,60 @@ export default {
         console.error('Individual updates also failed:', individualError)
         this.toast.error('Failed to save positions after retry')
       }
+    },
+    detectPKTypeChanges(oldTable, newTable) {
+      const changes = {}
+
+      const oldPK = oldTable.columns?.find((col) => col.is_primary_key)
+      const newPK = newTable.columns?.find((col) => col.is_primary_key)
+
+      if (oldPK && newPK && oldPK.type !== newPK.type) {
+        changes[newTable.name] = newPK.type
+        console.log(`🎯 PK type changed: ${oldTable.name} ${oldPK.type} → ${newPK.type}`)
+      }
+
+      return changes
+    },
+
+    syncForeignKeyTypes(tables, pkChanges) {
+      return tables.map((table) => {
+        // Clone table để tránh mutation
+        const updatedTable = { ...table }
+
+        if (updatedTable.columns) {
+          updatedTable.columns = updatedTable.columns.map((column) => {
+            // Nếu column là FK và reference đến table có PK thay đổi
+            if (column.is_foreign_key && column.references && pkChanges[column.references]) {
+              const newType = pkChanges[column.references]
+              console.log(`🔄 Syncing FK: ${table.name}.${column.name} → ${newType}`)
+
+              return {
+                ...column,
+                type: newType,
+                // Reset length nếu cần
+                length: this.shouldResetLength(newType) ? null : column.length,
+              }
+            }
+            return column
+          })
+        }
+
+        return updatedTable
+      })
+    },
+
+    shouldResetLength(type) {
+      const typesWithoutLength = [
+        'TEXT',
+        'LONGTEXT',
+        'BLOB',
+        'LONGBLOB',
+        'BOOLEAN',
+        'DATE',
+        'DATETIME',
+        'TIMESTAMP',
+      ]
+      return typesWithoutLength.includes(type)
     },
   },
 }

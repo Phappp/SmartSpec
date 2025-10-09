@@ -16,8 +16,6 @@ export class DatabaseController {
      */
     public generateDatabaseSchema = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            // --- THAY ĐỔI TẠI ĐÂY ---
-            // Lấy versionId từ URL params thay vì body
             const { versionId } = req.params;
 
             if (!versionId) {
@@ -27,14 +25,10 @@ export class DatabaseController {
 
             const version = await VersionModel.findById(versionId);
             if (!version) {
-                // throw new NotFoundError(`Không tìm thấy version với id: ${versionId}`);
-                console.log(`Không tìm thấy version với id: ${versionId}`)
-                // Cần return hoặc throw lỗi ở đây để dừng thực thi
                 res.status(404).json({ message: `Không tìm thấy version với id: ${versionId}` });
                 return;
             }
 
-            // ... logic còn lại giữ nguyên ...
             const payload = {
                 versionId: version._id.toString(),
                 projectId: version.project_id.toString(),
@@ -50,9 +44,9 @@ export class DatabaseController {
 
         } catch (error) {
             next(error);
-
         }
     }
+
     // [R] - READ: Lấy danh sách DB theo versionId
     public getDatabasesByVersion = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
@@ -93,7 +87,13 @@ export class DatabaseController {
                 return;
             }
             res.status(200).json({ message: "Cập nhật thành công!", data: updatedDatabase });
-        } catch (error) {
+        } catch (error: any) {
+            // Xử lý lỗi validation từ service
+            if (error.message.includes('foreign key') || error.message.includes('primary key') ||
+                error.message.includes('duplicate') || error.message.includes('invalid')) {
+                res.status(400).json({ message: error.message });
+                return;
+            }
             next(error);
         }
     }
@@ -112,20 +112,46 @@ export class DatabaseController {
             next(error);
         }
     }
+
     // --- CÁC HÀM CRUD CHO TỪNG BẢNG (THÊM MỚI) ---
 
     // [C] - CREATE: Thêm một bảng mới vào DB schema
     public addTable = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { databaseId } = req.params;
-            const tableData = req.body; // Dữ liệu của bảng mới nằm trong body
-            const updatedDatabase = await this.databaseService.addTableToDatabase(databaseId, tableData);
-            if (!updatedDatabase) {
-                res.status(404).json({ message: "Không tìm thấy database schema để thêm bảng." });
+            const tableData = req.body;
+
+            // Validation cơ bản trên controller level
+            if (!tableData.name || !tableData.columns || !Array.isArray(tableData.columns)) {
+                res.status(400).json({
+                    message: "Table data phải có name và columns (array)"
+                });
                 return;
             }
-            res.status(201).json({ message: "Thêm bảng thành công!", data: updatedDatabase });
-        } catch (error) {
+
+            const updatedDatabase = await this.databaseService.addTableToDatabase(databaseId, tableData);
+
+            res.status(201).json({
+                message: "Thêm bảng thành công!",
+                data: updatedDatabase
+            });
+
+        } catch (error: any) {
+            // Xử lý các lỗi validation từ service
+            if (error.message.includes('already exists') ||
+                error.message.includes('invalid') ||
+                error.message.includes('duplicate') ||
+                error.message.includes('primary key') ||
+                error.message.includes('foreign key')) {
+                res.status(400).json({ message: error.message });
+                return;
+            }
+
+            if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+
             next(error);
         }
     }
@@ -135,13 +161,49 @@ export class DatabaseController {
         try {
             const { databaseId, tableName } = req.params;
             const tableData = req.body;
-            const updatedDatabase = await this.databaseService.updateTableInDatabase(databaseId, tableName, tableData);
-            if (!updatedDatabase) {
-                res.status(404).json({ message: `Không tìm thấy bảng '${tableName}' để cập nhật.` });
+
+            // Validation cơ bản
+            if (!tableData.name || !tableData.columns || !Array.isArray(tableData.columns)) {
+                res.status(400).json({
+                    message: "Table data phải có name và columns (array)"
+                });
                 return;
             }
-            res.status(200).json({ message: "Cập nhật bảng thành công!", data: updatedDatabase });
-        } catch (error) {
+
+            const updatedDatabase = await this.databaseService.updateTableInDatabase(
+                databaseId,
+                tableName,
+                tableData
+            );
+
+            if (!updatedDatabase) {
+                res.status(404).json({ message: `Không tìm thấy database hoặc bảng '${tableName}' để cập nhật.` });
+                return;
+            }
+
+            res.status(200).json({
+                message: "Cập nhật bảng thành công!",
+                data: updatedDatabase
+            });
+
+        } catch (error: any) {
+            // Xử lý các lỗi validation từ service
+            if (error.message.includes('already exists') ||
+                error.message.includes('invalid') ||
+                error.message.includes('duplicate') ||
+                error.message.includes('primary key') ||
+                error.message.includes('foreign key') ||
+                error.message.includes('referenced by') ||
+                error.message.includes('circular reference')) {
+                res.status(400).json({ message: error.message });
+                return;
+            }
+
+            if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+
             next(error);
         }
     }
@@ -150,13 +212,36 @@ export class DatabaseController {
     public deleteTable = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { databaseId, tableName } = req.params;
+
             const updatedDatabase = await this.databaseService.deleteTableFromDatabase(databaseId, tableName);
+
             if (!updatedDatabase) {
                 res.status(404).json({ message: `Không tìm thấy bảng '${tableName}' để xóa.` });
                 return;
             }
-            res.status(200).json({ message: "Xóa bảng thành công!", data: updatedDatabase });
-        } catch (error) {
+
+            res.status(200).json({
+                message: "Xóa bảng thành công!",
+                data: updatedDatabase
+            });
+
+        } catch (error: any) {
+            // Xử lý lỗi foreign key constraint
+            if (error.message.includes('referenced by') ||
+                error.message.includes('foreign key') ||
+                error.message.includes('constraint')) {
+                res.status(409).json({ // 409 Conflict - có ràng buộc không cho xóa
+                    message: error.message,
+                    code: 'FOREIGN_KEY_CONSTRAINT'
+                });
+                return;
+            }
+
+            if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+
             next(error);
         }
     }
@@ -182,7 +267,11 @@ export class DatabaseController {
             const { databaseId, tableName } = req.params;
             const relationships = await this.databaseService.getTableRelationships(databaseId, tableName);
             res.status(200).json({ data: relationships });
-        } catch (error) {
+        } catch (error: any) {
+            if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
             next(error);
         }
     }
@@ -191,16 +280,43 @@ export class DatabaseController {
     public validateForeignKey = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { databaseId } = req.params;
-            const { tableName, columnName, referencedTable } = req.body;
+            const { tableName, columnName, referencedTable, columnType } = req.body;
 
-            if (!tableName || !columnName || !referencedTable) {
-                res.status(400).json({ message: "tableName, columnName và referencedTable là bắt buộc." });
+            if (!tableName || !columnName || !referencedTable || !columnType) {
+                res.status(400).json({
+                    message: "tableName, columnName, referencedTable và columnType là bắt buộc."
+                });
                 return;
             }
 
-            const validation = await this.databaseService.validateForeignKey(databaseId, tableName, columnName, referencedTable);
-            res.status(200).json({ data: validation });
-        } catch (error) {
+            // Gọi service validation mới với columnType
+            const validation = await this.databaseService.validateForeignKeyConstraint(
+                databaseId,
+                tableName,
+                columnName,
+                referencedTable,
+                columnType
+            );
+
+            res.status(200).json({
+                valid: true,
+                message: "Foreign key validation passed",
+                data: validation
+            });
+
+        } catch (error: any) {
+            // Trả về validation failed nhưng không phải lỗi server
+            if (error.message.includes('does not exist') ||
+                error.message.includes('no primary key') ||
+                error.message.includes('type mismatch') ||
+                error.message.includes('circular reference')) {
+                res.status(200).json({
+                    valid: false,
+                    message: error.message,
+                    data: null
+                });
+                return;
+            }
             next(error);
         }
     }
@@ -216,10 +332,15 @@ export class DatabaseController {
                 excludeTable as string
             );
             res.status(200).json({ data: tables });
-        } catch (error) {
+        } catch (error: any) {
+            if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
             next(error);
         }
     }
+
     // [U] - UPDATE: Cập nhật vị trí một bảng
     public updateTablePosition = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
@@ -241,27 +362,29 @@ export class DatabaseController {
                 message: "Cập nhật vị trí bảng thành công!",
                 data: updatedDatabase
             });
-        } catch (error) {
+        } catch (error: any) {
+            if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
             next(error);
         }
     }
 
     // [U] - UPDATE: Cập nhật vị trí nhiều bảng
-    // controller.ts
-
-    // [U] - UPDATE: Cập nhật vị trí nhiều bảng - FIXED VERSION
     public updateMultipleTablePositions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { databaseId } = req.params;
-            // SỬA LẠI DÒNG NÀY
             const positionUpdates = req.body;
 
             if (!positionUpdates || !Array.isArray(positionUpdates) || positionUpdates.length === 0) {
-                res.status(400).json({ message: "Body của request phải là một mảng positionUpdates và không được rỗng." });
+                res.status(400).json({
+                    message: "Body của request phải là một mảng positionUpdates và không được rỗng."
+                });
                 return;
             }
 
-            // Validation cơ bản (giữ nguyên)
+            // Validation cơ bản
             for (const update of positionUpdates) {
                 if (!update.tableName || !update.position ||
                     typeof update.position.x === 'undefined' ||
@@ -273,9 +396,11 @@ export class DatabaseController {
                 }
             }
 
-            const updatedDatabase = await this.databaseService.updateMultipleTablePositions(databaseId, positionUpdates);
+            const updatedDatabase = await this.databaseService.updateMultipleTablePositions(
+                databaseId,
+                positionUpdates
+            );
 
-            // Logic trả về response giữ nguyên
             if (!updatedDatabase) {
                 res.status(200).json({
                     message: "Positions updated with some warnings",
@@ -290,10 +415,15 @@ export class DatabaseController {
                 data: updatedDatabase
             });
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error in updateMultipleTablePositions controller:', error);
-            next(error); // Chuyển lỗi cho middleware xử lý
+
+            if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+
+            next(error);
         }
     }
-
 }

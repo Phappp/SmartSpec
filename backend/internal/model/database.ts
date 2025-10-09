@@ -4,7 +4,7 @@ import { Schema, model, InferSchemaType } from "mongoose";
 const columnSchema = new Schema({
     name: { type: String, required: true },
     type: { type: String, required: true },
-    length: { type: Number }, // hỗ trợ VARCHAR(255)
+    length: { type: Schema.Types.Mixed },
     is_primary_key: { type: Boolean, default: false },
     is_foreign_key: { type: Boolean, default: false },
     nullable: { type: Boolean, default: true },
