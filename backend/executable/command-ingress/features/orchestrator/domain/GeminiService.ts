@@ -100,12 +100,18 @@ Nhiệm vụ của bạn là phân tích danh sách các use case của phần m
 DANH SÁCH USE CASE:
 ${requirementsJson}
 
+**QUAN TRỌNG:**
+- Giữ response CÀNG NGẮN GỌN CÀNG TỐT, chỉ bao gồm các bảng và cột thực sự cần thiết.
+- KHÔNG thêm ví dụ, giải thích, hoặc nội dung thừa.
+- Ưu tiên thiết kế đơn giản, hiệu quả.
+
 Phản hồi của bạn BẮT BUỘC CHỈ LÀ một đối tượng JSON hợp lệ. KHÔNG bao gồm bất kỳ lời giải thích, bình luận, hay định dạng markdown nào như \`\`\`json. Đầu ra phải sẵn sàng để được một chương trình phân tích ngay lập tức.
 
 Đối tượng JSON BẮT BUỘC phải tuân thủ nghiêm ngặt cấu trúc chi tiết sau. Bao gồm TẤT CẢ các trường cho mỗi cột.
 {
   "name": "TenDatabase",
   "description": "Mô tả ngắn gọn nhưng rõ ràng về mục đích của CSDL.",
+
   "tables": [
     {
       "name": "users",
@@ -136,7 +142,8 @@ Phản hồi của bạn BẮT BUỘC CHỈ LÀ một đối tượng JSON hợp
 
 QUY TẮC VÀ LOGIC THIẾT KẾ:
 - Tên bảng và tên cột BẮT BUỘC phải ở dạng chữ thường và dùng dấu gạch dưới (snake_case).
-- Mỗi bảng BẮT BUỘC phải có một cột 'id' duy nhất làm khóa chính.
+- Mỗi bảng BẮT BUỘC phải có MỘT VÀ CHỈ MỘT cột 'id' duy nhất làm khóa chính.
+- KHÔNG ĐƯỢC sử dụng composite primary keys (nhiều cột cùng là primary key).
 - Bất kỳ cột nào có 'is_primary_key' là true thì BẮT BUỘC phải có 'nullable' là false. Đây là một quy tắc nghiêm ngặt.
 - Xác định chính xác tất cả các mối quan hệ (one-to-one, one-to-many,...) và định nghĩa CẢ cột khóa ngoại (với 'is_foreign_key: true' và 'references') VÀ mục tương ứng trong mảng 'relationships' chính.
 - Sử dụng các kiểu dữ liệu phù hợp từ danh sách sau: INT, VARCHAR(n), TEXT, BOOLEAN, DATETIME, DATE, DECIMAL(p, s).
@@ -240,6 +247,11 @@ Your task is to analyze the following list of software use cases and design a co
 LIST OF USE CASES:
 ${requirementsJson}
 
+**IMPORTANT:**
+- Keep the response AS CONCISE AS POSSIBLE, include only essential tables and columns.
+- DO NOT add examples, explanations, or extra content.
+- Prioritize simple, efficient design.
+
 Your response MUST be ONLY a single, valid JSON object. DO NOT include any explanations, comments, or markdown formatting like \`\`\`json. The output must be ready for immediate parsing by a program.
 
 The JSON object MUST strictly follow this detailed structure. Include ALL fields for every column.
@@ -276,7 +288,8 @@ The JSON object MUST strictly follow this detailed structure. Include ALL fields
 
 DESIGN RULES AND LOGIC:
 - Table and column names MUST be in lowercase snake_case.
-- Every table MUST have a single 'id' column as its primary key.
+- Every table MUST have a SINGLE 'id' column as its primary key.
+- DO NOT use composite primary keys (multiple columns as primary key).
 - Any column where 'is_primary_key' is true MUST also have 'nullable' set to false. This is a strict rule.
 - Correctly identify all relationships (one-to-one, one-to-many, etc.) and define BOTH the foreign key column (with 'is_foreign_key: true' and 'references') AND the corresponding entry in the main 'relationships' array.
 - Use appropriate data types from this list: INT, VARCHAR(n), TEXT, BOOLEAN, DATETIME, DATE, DECIMAL(p, s).
@@ -295,6 +308,7 @@ export class GeminiService {
     private readonly BATCH_SIZE = 20;
     private readonly MAX_BATCHES = 100;
     private readonly MAX_ATTEMPTS_PER_OFFSET = 3;
+    private readonly DB_GEN_BATCH_SIZE = 10;
 
     private cleanJsonString(text: string): string {
         const pattern = /```(?:json)?\s*([\s\S]*?)\s*```/g;
@@ -307,19 +321,115 @@ export class GeminiService {
 
         let cleanedText = text.trim();
 
-        // Tìm vị trí của ```json và ```
-        const startIndex = cleanedText.indexOf('```json');
-        const endIndex = cleanedText.lastIndexOf('```');
-
-        // Nếu cả hai đều tồn tại và hợp lệ, trích xuất nội dung ở giữa
-        if (startIndex !== -1 && endIndex > startIndex) {
-            cleanedText = cleanedText.substring(startIndex + 7, endIndex).trim();
-        } else {
-            // Fallback: Xóa các dòng chỉ chứa ``` một cách đơn giản hơn
-            cleanedText = cleanedText.replace(/^```(json)?\s*/, '').replace(/```\s*$/, '');
+        // Trường hợp 1: Nếu text đã là JSON hợp lệ, trả về luôn
+        try {
+            JSON.parse(cleanedText);
+            return cleanedText;
+        } catch {
+            // Không phải JSON hợp lệ, tiếp tục xử lý
         }
 
-        return cleanedText.trim();
+        // Trường hợp 2: Tìm các khối code có thể chứa JSON
+        const codeBlockPatterns = [
+            /```(?:json)?\s*([\s\S]*?)\s*```/g,  // ```json ... ```
+            /`{3,}\s*([\s\S]*?)\s*`{3,}/g,       // ``` ... ``` (không có json)
+            /`([^`]+)`/g                          // `inline code`
+        ];
+
+        for (const pattern of codeBlockPatterns) {
+            const matches = cleanedText.match(pattern);
+            if (matches) {
+                for (const match of matches) {
+                    // Lấy nội dung bên trong code block
+                    let content = match.replace(/```(?:json)?\s*/g, '').replace(/```\s*$/g, '').replace(/`/g, '').trim();
+
+                    // Thử parse JSON
+                    try {
+                        JSON.parse(content);
+                        cleanedText = content;
+                        break;
+                    } catch {
+                        // Không phải JSON hợp lệ, tiếp tục
+                    }
+                }
+                if (cleanedText !== text) break;
+            }
+        }
+
+        // Trường hợp 3: Tìm JSON object/array trong text
+        const jsonPatterns = [
+            /\{[\s\S]*\}/,  // Tìm object
+            /\[[\s\S]*\]/   // Tìm array
+        ];
+
+        for (const pattern of jsonPatterns) {
+            const match = cleanedText.match(pattern);
+            if (match) {
+                try {
+                    JSON.parse(match[0]);
+                    cleanedText = match[0];
+                    break;
+                } catch {
+                    // Không phải JSON hợp lệ
+                }
+            }
+        }
+
+        // Trường hợp 4: Loại bỏ các phần thừa phía trước và sau JSON
+        // Tìm vị trí bắt đầu của { hoặc [
+        const jsonStart = Math.max(
+            cleanedText.indexOf('{'),
+            cleanedText.indexOf('[')
+        );
+
+        if (jsonStart > 0) {
+            cleanedText = cleanedText.substring(jsonStart);
+        }
+
+        // Tìm vị trí kết thúc của } hoặc ] cân bằng
+        let balance = 0;
+        let endPosition = -1;
+
+        for (let i = 0; i < cleanedText.length; i++) {
+            const char = cleanedText[i];
+            if (char === '{' || char === '[') balance++;
+            if (char === '}' || char === ']') balance--;
+
+            if (balance === 0 && i > 0) {
+                endPosition = i;
+                break;
+            }
+        }
+
+        if (endPosition !== -1) {
+            cleanedText = cleanedText.substring(0, endPosition + 1);
+        }
+
+        // Trường hợp 5: Loại bỏ các chú thích, giải thích thừa
+        const lines = cleanedText.split('\n').filter(line => {
+            // Loại bỏ các dòng chỉ chứa từ khóa giải thích
+            const cleanLine = line.trim();
+            return !cleanLine.match(/^(Đây là|Here is|Output:|Kết quả:|JSON:|===|---)/i) &&
+                !cleanLine.match(/^[#*-]{3,}/) && // Headers, separators
+                !cleanLine.match(/^(Ví dụ|Example):/i);
+        });
+
+        cleanedText = lines.join('\n').trim();
+
+        // Cuối cùng, thử parse lại để đảm bảo tính hợp lệ
+        try {
+            JSON.parse(cleanedText);
+            return cleanedText;
+        } catch (error) {
+            console.warn("⚠️ Could not extract valid JSON from response:", {
+                originalLength: text?.length,
+                cleanedLength: cleanedText?.length,
+                preview: cleanedText.substring(0, 200)
+            });
+
+            // Fallback: trả về text gốc đã được làm sạch cơ bản
+            return text.replace(/```(?:json)?\s*|```/g, '').trim();
+        }
     }
 
     private tryParseWhole(text: string): any[] | null {
@@ -519,45 +629,38 @@ export class GeminiService {
     }
 
     /**
-     * [MỚI] Duyệt qua schema từ Gemini và tách các loại dữ liệu có độ dài (vd: VARCHAR(255))
-     * thành hai trường riêng biệt: `type` và `length`.
-     * @param databaseSchema Đối tượng schema thô từ Gemini.
-     * @returns Đối tượng schema đã được xử lý.
-     */
-    private _parseColumnTypesAndLengths(databaseSchema: any): any {
-        // Regex để tìm các loại dữ liệu có dạng: NAME(NUMBER), ví dụ: VARCHAR(255)
-        const typeRegex = /(\w+)\s*\((\d+)\)/;
-
-        if (databaseSchema?.tables && Array.isArray(databaseSchema.tables)) {
-            for (const table of databaseSchema.tables) {
-                if (table?.columns && Array.isArray(table.columns)) {
-                    for (const column of table.columns) {
-                        if (typeof column.type === 'string') {
-                            const match = column.type.match(typeRegex);
-                            if (match) {
-                                // match[1] là tên (vd: "VARCHAR")
-                                // match[2] là số (vd: "255")
-                                column.type = match[1].toUpperCase();
-                                column.length = parseInt(match[2], 10);
-                            }
-                        }
-                        // Tự động đặt nullable: false cho khóa chính
-                        if (column.is_primary_key === true) {
-                            column.nullable = false;
-                        }
-                    }
-                }
-            }
-        }
-        return databaseSchema;
-    }
-
-    /**
-     * Tạo database schema từ requirements
+     * Generate database schema với chunking để tránh response quá dài
      */
     async generateDatabaseSchema(requirements: any[], language: string): Promise<any> {
-        // Chỉ lấy các trường cần thiết để prompt ngắn gọn, hiệu quả
+        try {
+            if (requirements.length <= this.DB_GEN_BATCH_SIZE) {
+                // Nếu ít requirements, xử lý một lần
+                return await this.generateDatabaseSchemaBatch(requirements, language);
+            } else {
+                // Nhiều requirements, chia thành các batch và merge
+                return await this.generateDatabaseSchemaWithChunking(requirements, language);
+            }
+        } catch (error) {
+            console.error("❌ Error in generateDatabaseSchema:", error);
+
+            // Fallback: trả về schema cơ bản nếu không generate được
+            return {
+                name: "fallback_database",
+                description: "Fallback database schema due to generation failure",
+                tables: [],
+                relationships: []
+            };
+        }
+    }
+    /**
+     * Generate schema cho một batch requirements
+     */
+    /**
+ * Generate schema cho một batch requirements
+ */
+    private async generateDatabaseSchemaBatch(requirements: any[], language: string): Promise<any> {
         const simplifiedRequirements = requirements.map(r => ({
+            id: r.id,
             name: r.name,
             role: r.role,
             goal: r.goal,
@@ -570,17 +673,379 @@ export class GeminiService {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const prompt = prompts[lang].databaseDesign(requirementsJson);
 
+        console.log(`📊 Generating database schema batch for ${requirements.length} use cases`);
+
         const generatedJsonString = await this.generateJsonContent(prompt);
 
-        // Parse đối tượng JSON thô từ Gemini
-        let parsedSchema = JSON.parse(generatedJsonString);
+        if (!generatedJsonString) {
+            throw new Error("Empty response from Gemini");
+        }
 
-        // === THÊM DÒNG XỬ LÝ NÀY VÀO ===
-        // Tách các trường type/length trước khi trả về
-        parsedSchema = this._parseColumnTypesAndLengths(parsedSchema);
+        console.log(`📄 Raw response length: ${generatedJsonString.length}`);
 
-        return parsedSchema;
+        let parsedResponse;
+        try {
+            parsedResponse = JSON.parse(generatedJsonString);
+        } catch (parseError) {
+            console.error("❌ JSON parse error in batch, attempting repair...", parseError);
+            const repairedJson = this.repairTruncatedJson(generatedJsonString);
+            parsedResponse = JSON.parse(repairedJson);
+        }
+
+        // Xử lý cả hai định dạng response từ Gemini
+        let finalSchema: any;
+
+        // Định dạng 1: Mảng các bảng (Gemini đang trả về)
+        if (Array.isArray(parsedResponse)) {
+            console.log(`🔍 Detected array format with ${parsedResponse.length} tables`);
+            finalSchema = {
+                name: "generated_database",
+                description: "Database schema generated from use cases",
+                tables: parsedResponse,
+                relationships: this.inferRelationships(parsedResponse)
+            };
+        }
+        // Định dạng 2: Object schema đầy đủ
+        else if (parsedResponse && typeof parsedResponse === 'object') {
+            console.log(`🔍 Detected object format`);
+            finalSchema = parsedResponse;
+
+            // Đảm bảo có đầy đủ các trường cần thiết
+            if (!finalSchema.tables || !Array.isArray(finalSchema.tables)) {
+                finalSchema.tables = [];
+            }
+            if (!finalSchema.relationships || !Array.isArray(finalSchema.relationships)) {
+                finalSchema.relationships = this.inferRelationships(finalSchema.tables);
+            }
+            if (!finalSchema.name) {
+                finalSchema.name = "generated_database";
+            }
+            if (!finalSchema.description) {
+                finalSchema.description = "Database schema generated from use cases";
+            }
+        }
+        else {
+            throw new Error("Invalid response format from Gemini");
+        }
+
+        console.log(`✅ Successfully processed schema with ${finalSchema.tables.length} tables`);
+
+        // Xử lý type/length và đảm bảo single primary key
+        finalSchema = this._parseColumnTypesAndLengths(finalSchema);
+
+        return finalSchema;
     }
+
+    /**
+     * Tự động suy luận relationships từ các bảng
+     */
+    private inferRelationships(tables: any[]): any[] {
+        const relationships: any[] = [];
+        const tableNames = tables.map(t => t.name);
+
+        for (const table of tables) {
+            if (!table.columns || !Array.isArray(table.columns)) continue;
+
+            for (const column of table.columns) {
+                // Nếu là foreign key và có references
+                if (column.is_foreign_key && column.references) {
+                    const referencedTable = column.references;
+                    if (tableNames.includes(referencedTable)) {
+                        relationships.push({
+                            from_table: table.name,
+                            to_table: referencedTable,
+                            type: "many-to-one"
+                        });
+                    }
+                }
+                // Tự động phát hiện foreign key bằng naming convention
+                else if (column.name.endsWith('_id') && column.name !== 'id') {
+                    const potentialTable = column.name.replace(/_id$/, '');
+                    if (tableNames.includes(potentialTable)) {
+                        relationships.push({
+                            from_table: table.name,
+                            to_table: potentialTable,
+                            type: "many-to-one"
+                        });
+
+                        // Cập nhật column information
+                        column.is_foreign_key = true;
+                        column.references = potentialTable;
+                    }
+                }
+            }
+        }
+
+        console.log(`🔗 Inferred ${relationships.length} relationships`);
+        return relationships;
+    }
+    /**
+ * Hàm tạm thời để debug response từ Gemini
+ */
+    private async debugGeminiResponse(prompt: string): Promise<void> {
+        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
+        if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
+
+        for (const k of keys) {
+            try {
+                const { GoogleGenerativeAI } = await import("@google/generative-ai");
+                const client = new GoogleGenerativeAI(k.key_value);
+                const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
+
+                console.log("🚀 Sending prompt to Gemini...");
+                console.log("📝 Prompt preview:", prompt.substring(0, 300) + "...");
+
+                const resp: any = await model.generateContent({
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                });
+
+                const text: string = resp?.response?.text?.() || "";
+                console.log("📨 Raw Gemini response:");
+                console.log("=========================================");
+                console.log(text);
+                console.log("=========================================");
+
+                return;
+
+            } catch (err: any) {
+                console.error("❌ Debug request failed:", err);
+                continue;
+            }
+        }
+    }
+    /**
+     * Generate schema với chunking - chia requirements thành nhiều batch
+     */
+    private async generateDatabaseSchemaWithChunking(requirements: any[], language: string): Promise<any> {
+        console.log(`🔀 Splitting ${requirements.length} requirements into chunks for database generation`);
+
+        const chunks: any[][] = [];
+        for (let i = 0; i < requirements.length; i += this.DB_GEN_BATCH_SIZE) {
+            chunks.push(requirements.slice(i, i + this.DB_GEN_BATCH_SIZE));
+        }
+
+        console.log(`📦 Created ${chunks.length} chunks for processing`);
+
+        const allSchemas: any[] = [];
+
+        // Xử lý từng batch tuần tự để tránh rate limit
+        for (let i = 0; i < chunks.length; i++) {
+            try {
+                console.log(`🔄 Processing chunk ${i + 1}/${chunks.length}`);
+                const schema = await this.generateDatabaseSchemaBatch(chunks[i], language);
+                allSchemas.push(schema);
+                console.log(`✅ Completed chunk ${i + 1}/${chunks.length}`);
+
+                // Thêm delay nhỏ giữa các batch để tránh rate limit
+                if (i < chunks.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            } catch (error) {
+                console.error(`❌ Failed chunk ${i + 1}:`, error);
+                // Tiếp tục với các chunk khác thay vì dừng hoàn toàn
+            }
+        }
+
+        if (allSchemas.length === 0) {
+            throw new Error("All database schema generation chunks failed");
+        }
+
+        console.log(`🔄 Merging ${allSchemas.length} schemas...`);
+
+        // Merge tất cả schemas lại
+        return this.mergeDatabaseSchemas(allSchemas);
+    }
+
+    /**
+     * Merge nhiều database schemas thành một schema thống nhất
+     */
+    private mergeDatabaseSchemas(schemas: any[]): any {
+        if (schemas.length === 1) return schemas[0];
+
+        console.log(`🔄 Merging ${schemas.length} database schemas`);
+
+        const mergedSchema = {
+            name: "merged_database",
+            description: "Merged database schema from multiple chunks",
+            tables: [] as any[],
+            relationships: [] as any[]
+        };
+
+        const tableMap = new Map<string, any>();
+        const relationshipSet = new Set<string>();
+
+        // Merge tables từ tất cả schemas
+        for (const schema of schemas) {
+            if (schema.tables && Array.isArray(schema.tables)) {
+                for (const table of schema.tables) {
+                    if (tableMap.has(table.name)) {
+                        // Merge columns của table trùng tên
+                        const existingTable = tableMap.get(table.name);
+                        const existingColumns = new Map(existingTable.columns.map((col: any) => [col.name, col]));
+
+                        for (const column of table.columns) {
+                            if (!existingColumns.has(column.name)) {
+                                existingTable.columns.push(column);
+                                existingColumns.set(column.name, column);
+                            } else {
+                                // Merge related_usecase_ids nếu column đã tồn tại
+                                const existingColumn = existingColumns.get(column.name) as any;
+                                if (column.related_usecase_ids && Array.isArray(column.related_usecase_ids)) {
+                                    const existingIds = new Set(existingColumn.related_usecase_ids || []);
+                                    column.related_usecase_ids.forEach((id: string) => existingIds.add(id));
+                                    existingColumn.related_usecase_ids = Array.from(existingIds);
+                                }
+                            }
+                        }
+                    } else {
+                        tableMap.set(table.name, { ...table });
+                    }
+                }
+            }
+
+            // Merge relationships
+            if (schema.relationships && Array.isArray(schema.relationships)) {
+                for (const rel of schema.relationships) {
+                    const relKey = `${rel.from_table}-${rel.to_table}-${rel.type}`;
+                    if (!relationshipSet.has(relKey)) {
+                        mergedSchema.relationships.push(rel);
+                        relationshipSet.add(relKey);
+                    }
+                }
+            }
+        }
+
+        mergedSchema.tables = Array.from(tableMap.values());
+
+        console.log(`✅ Merged result: ${mergedSchema.tables.length} tables, ${mergedSchema.relationships.length} relationships`);
+
+        return mergedSchema;
+    }
+    /**
+     * Sửa chữa JSON bị cắt ngắn
+     */
+    private repairTruncatedJson(jsonStr: string): string {
+        let balance = 0;
+        let inString = false;
+        let escapeNext = false;
+
+        // Đếm balance hiện tại
+        for (let i = 0; i < jsonStr.length; i++) {
+            const char = jsonStr[i];
+
+            if (escapeNext) {
+                escapeNext = false;
+                continue;
+            }
+
+            if (char === '\\') {
+                escapeNext = true;
+                continue;
+            }
+
+            if (char === '"' && !escapeNext) {
+                inString = !inString;
+                continue;
+            }
+
+            if (!inString) {
+                if (char === '{' || char === '[') balance++;
+                if (char === '}' || char === ']') balance--;
+            }
+        }
+
+        // Đóng tất cả các mở ngoặc còn thiếu
+        let repaired = jsonStr;
+        while (balance > 0) {
+            if (repaired.trim().endsWith(',')) {
+                repaired = repaired.slice(0, -1); // Remove trailing comma
+            }
+            repaired += '}';
+            balance--;
+        }
+
+        // Đảm bảo kết thúc đúng
+        if (repaired.startsWith('[') && !repaired.endsWith(']')) {
+            repaired += ']';
+        } else if (repaired.startsWith('{') && !repaired.endsWith('}')) {
+            repaired += '}';
+        }
+
+        return repaired;
+    }
+    /**
+    * [MỚI] Duyệt qua schema từ Gemini và tách các loại dữ liệu có độ dài (vd: VARCHAR(255))
+    * thành hai trường riêng biệt: `type` và `length`.
+    * ĐỒNG THỜI đảm bảo mỗi bảng chỉ có một primary key duy nhất.
+    */
+    private _parseColumnTypesAndLengths(databaseSchema: any): any {
+        const typeRegex = /(\w+)\s*\(([\d,\s]+)\)/;
+
+        if (databaseSchema?.tables && Array.isArray(databaseSchema.tables)) {
+            for (const table of databaseSchema.tables) {
+                if (table?.columns && Array.isArray(table.columns)) {
+                    let primaryKeyCount = 0;
+                    let hasIdColumn = false;
+
+                    // Đếm số primary key hiện có và kiểm tra cột id
+                    for (const column of table.columns) {
+                        if (column.is_primary_key === true) {
+                            primaryKeyCount++;
+                        }
+                        if (column.name === 'id') {
+                            hasIdColumn = true;
+                        }
+                    }
+
+                    // Nếu có nhiều hơn 1 primary key, chỉ giữ lại cột 'id' làm primary key
+                    if (primaryKeyCount > 1) {
+                        console.warn(`⚠️ Table ${table.name} has ${primaryKeyCount} primary keys. Only keeping 'id' as primary key.`);
+
+                        for (const column of table.columns) {
+                            // Chỉ giữ 'id' làm primary key, các cột khác chuyển thành không phải primary key
+                            if (column.name === 'id') {
+                                column.is_primary_key = true;
+                                column.nullable = false;
+                            } else {
+                                column.is_primary_key = false;
+                            }
+                        }
+                    }
+                    // Nếu không có primary key nào, tạo cột id mới
+                    else if (primaryKeyCount === 0 && !hasIdColumn) {
+                        console.warn(`⚠️ Table ${table.name} has no primary key. Adding 'id' column.`);
+                        table.columns.unshift({
+                            name: "id",
+                            type: "INT",
+                            is_primary_key: true,
+                            is_foreign_key: false,
+                            nullable: false,
+                            unique: true,
+                            related_usecase_ids: []
+                        });
+                    }
+
+                    // Xử lý type và length
+                    for (const column of table.columns) {
+                        if (typeof column.type === 'string') {
+                            const match = column.type.match(typeRegex);
+                            if (match) {
+                                column.type = match[1].toUpperCase();
+                                column.length = match[2].replace(/\s/g, '');
+                            }
+                        }
+
+                        // Đảm bảo primary key không thể nullable
+                        if (column.is_primary_key === true) {
+                            column.nullable = false;
+                        }
+                    }
+                }
+            }
+        }
+        return databaseSchema;
+    }
+
 
     async addRelatedUseCases(
         useCases: any[],

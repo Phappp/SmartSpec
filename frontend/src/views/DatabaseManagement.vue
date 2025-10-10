@@ -459,32 +459,34 @@ export default {
       }
     },
 
-    async deleteTable(tableId) {
-      if (!confirm('Are you sure you want to delete this table? This action cannot be undone.')) {
+    async deleteTable(deleteData) {
+      console.log('🗑️ Delete table called with:', deleteData)
+
+      // Xử lý cả 2 trường hợp data
+      const tableName =
+        typeof deleteData === 'string' ? deleteData : deleteData.tableName || deleteData.name
+
+      if (!tableName) {
+        console.error('Invalid delete data:', deleteData)
         return
       }
 
+      if (!confirm(`Xóa bảng "${tableName}"?`)) return
+
       try {
-        if (this.database?._id) {
-          await deleteTableFromDatabase(this.database._id, tableId)
-        }
+        await deleteTableFromDatabase(this.database._id, tableName)
 
-        const tableToDelete = this.databaseTables.find((t) => t._id === tableId)
-        this.databaseTables = this.databaseTables.filter((table) => table._id !== tableId)
-
-        // Remove relationships involving this table
-        if (tableToDelete) {
-          this.relationships = this.relationships.filter(
-            (rel) => rel.from_table !== tableToDelete.name && rel.to_table !== tableToDelete.name
-          )
-        }
+        // Cập nhật UI ngay lập tức
+        this.databaseTables = this.databaseTables.filter((table) => table.name !== tableName)
+        this.relationships = this.relationships.filter(
+          (rel) => rel.from_table !== tableName && rel.to_table !== tableName
+        )
 
         this.updateStats()
-        this.generateSQL()
-        this.toast.success('Table deleted successfully')
+        this.toast.success(`Đã xóa bảng "${tableName}"`)
       } catch (err) {
-        console.error('Error deleting table:', err)
-        this.toast.error('Failed to delete table')
+        console.error('❌ Delete error:', err)
+        this.toast.error('Xóa thất bại: ' + (err.response?.data?.message || err.message))
       }
     },
 
