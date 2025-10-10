@@ -83,6 +83,16 @@
         <button class="btn-icon" @click="resetZoom" title="Reset Zoom">
           <span class="material-symbols-outlined">refresh</span>
         </button>
+        <!-- Thêm nút fullscreen -->
+        <button
+          class="btn-icon"
+          @click="toggleFullscreen"
+          :title="isFullscreen ? 'Exit Fullscreen (F11)' : 'Enter Fullscreen (F11)'"
+        >
+          <span class="material-symbols-outlined">
+            {{ isFullscreen ? 'fullscreen_exit' : 'fullscreen' }}
+          </span>
+        </button>
       </div>
 
       <div class="control-group">
@@ -643,6 +653,7 @@ export default {
       lastPanPoint: { x: 0, y: 0 },
       diagramOffset: { x: 0, y: 0 },
       showRelationshipColors: true,
+      isFullscreen: false,
       // New features
       showRelationships: true,
       showGrid: true,
@@ -877,6 +888,75 @@ export default {
     },
   },
   methods: {
+    handleClickOutside(event) {
+      // Đóng dropdown sort nếu đang mở
+      if (this.showSortOptions && !this.$el.contains(event.target)) {
+        this.showSortOptions = false
+      }
+
+      // Bỏ focus table khi click bên ngoài
+      if (this.selectedTable || this.selectedRelationship) {
+        // Kiểm tra xem click có phải trên table hoặc relationship không
+        const isClickOnTable = event.target.closest('.table-card')
+        const isClickOnRelationship = event.target.closest('.relationship-path')
+        const isClickOnControls = event.target.closest('.diagram-controls')
+        const isClickOnModal = event.target.closest('.modal-content')
+        const isClickOnContextMenu = event.target.closest('.context-menu')
+
+        if (
+          !isClickOnTable &&
+          !isClickOnRelationship &&
+          !isClickOnControls &&
+          !isClickOnModal &&
+          !isClickOnContextMenu
+        ) {
+          this.clearSelection()
+        }
+      }
+    },
+    // ========== FULLSCREEN METHODS ==========
+    toggleFullscreen() {
+      if (!this.isFullscreen) {
+        this.enterFullscreen()
+      } else {
+        this.exitFullscreen()
+      }
+    },
+
+    enterFullscreen() {
+      const element = this.$refs.diagramContainer
+
+      if (element.requestFullscreen) {
+        element.requestFullscreen()
+      } else if (element.webkitRequestFullscreen) {
+        element.webkitRequestFullscreen() // Safari
+      } else if (element.msRequestFullscreen) {
+        element.msRequestFullscreen() // IE/Edge
+      }
+    },
+
+    exitFullscreen() {
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen() // Safari
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen() // IE/Edge
+      }
+    },
+
+    handleFullscreenChange() {
+      this.isFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.msFullscreenElement
+      )
+
+      // Điều chỉnh layout khi vào/ra fullscreen
+      if (this.isFullscreen) {
+        this.fitToScreen()
+      }
+    },
     // ========== RELATIONSHIP MANAGEMENT ==========
     showRelationshipManager() {
       this.showRelationshipModal = true
@@ -1235,15 +1315,23 @@ export default {
       }
 
       switch (event.key) {
+        case 'F11':
+          event.preventDefault()
+          this.toggleFullscreen()
+          break
+        case 'Escape':
+          if (this.isFullscreen) {
+            this.exitFullscreen()
+          } else {
+            this.clearSelection()
+          }
+          break
         case 'Delete':
         case 'Backspace':
           if (this.selectedTable) {
             this.$emit('table-delete', this.selectedTable)
             this.selectedTable = null
           }
-          break
-        case 'Escape':
-          this.clearSelection()
           break
       }
     },
@@ -1344,6 +1432,13 @@ export default {
       this.selectedRelationship = null
       this.clearRelationshipHighlight()
       this.clearColumnHighlights()
+      this.focusedTable = null
+      this.showOnlyRelatedRelationships = false
+
+      // Reset tất cả trạng thái related
+      this.localTables.forEach((table) => {
+        table.isRelated = true
+      })
     },
 
     highlightTables() {
@@ -2026,11 +2121,7 @@ export default {
       }
       return sortNames[sortType] || 'Custom'
     },
-    handleClickOutside(event) {
-      if (this.showSortOptions && !this.$el.contains(event.target)) {
-        this.showSortOptions = false
-      }
-    },
+
     startPan(event) {
       this.panning = true
       this.lastPanPoint = { x: event.clientX, y: event.clientY }
@@ -2064,6 +2155,11 @@ export default {
     console.log('Local tables:', this.localTables)
     document.addEventListener('keydown', this.handleKeydown)
     document.addEventListener('click', this.handleClickOutside)
+    document.addEventListener('click', this.handleClickOutside)
+    // Thêm event listeners cho fullscreen
+    document.addEventListener('fullscreenchange', this.handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange)
+    document.addEventListener('msfullscreenchange', this.handleFullscreenChange)
 
     // Initialize positions if not set
     this.localTables.forEach((table, index) => {
@@ -2094,6 +2190,11 @@ export default {
     document.removeEventListener('mouseup', this.stopDrag)
     document.removeEventListener('click', this.hideContextMenu)
     document.removeEventListener('click', this.handleClickOutside)
+    document.removeEventListener('click', this.handleClickOutside)
+    // Remove fullscreen event listeners
+    document.removeEventListener('fullscreenchange', this.handleFullscreenChange)
+    document.removeEventListener('webkitfullscreenchange', this.handleFullscreenChange)
+    document.removeEventListener('msfullscreenchange', this.handleFullscreenChange)
   },
 }
 </script>
@@ -3241,5 +3342,58 @@ export default {
 .table-column:not(.column-hoverable):hover {
   background: #f8fafc;
   cursor: default;
+}
+/* Fullscreen styles */
+.schema-diagram:fullscreen {
+  background: white;
+  padding: 20px;
+}
+
+.schema-diagram:-webkit-full-screen {
+  background: white;
+  padding: 20px;
+}
+
+.schema-diagram:-ms-fullscreen {
+  background: white;
+  padding: 20px;
+}
+
+/* Điều chỉnh controls trong fullscreen */
+.schema-diagram:fullscreen .diagram-controls {
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 2px solid #e5e7eb;
+}
+
+.schema-diagram:-webkit-full-screen .diagram-controls {
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 2px solid #e5e7eb;
+}
+
+.schema-diagram:-ms-fullscreen .diagram-controls {
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 2px solid #e5e7eb;
+}
+
+/* Điều chỉnh diagram container trong fullscreen */
+.schema-diagram:fullscreen .diagram-container {
+  background: white;
+}
+
+.schema-diagram:-webkit-full-screen .diagram-container {
+  background: white;
+}
+
+.schema-diagram:-ms-fullscreen .diagram-container {
+  background: white;
 }
 </style>
