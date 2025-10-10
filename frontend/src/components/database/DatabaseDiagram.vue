@@ -237,7 +237,7 @@
           class="table-card"
           :class="[
             {
-              'table-highlighted': isTableHighlighted(table),
+              'table-highlighted': isTableHighlighted(table) || table.isHighlighted,
               'table-selected': selectedTable === table.name,
               'table-dragging': dragData?.table?.name === table.name,
               'table-dimmed': table.isDimmed,
@@ -286,7 +286,7 @@
                 foreign: column.is_foreign_key,
                 'column-highlighted': isColumnHighlighted(column, table),
               }"
-              @mouseenter="highlightColumnRelationships(column, table)"
+              @mouseenter="handleColumnHover(column, table)"
               @mouseleave="clearColumnHighlights"
             >
               <span class="column-name">{{ column.name }}</span>
@@ -1363,8 +1363,50 @@ export default {
       this.highlightedTable = table || null
     },
 
+    // Trong methods, sửa lại phương thức highlightColumnRelationships
     highlightColumnRelationships(column, table) {
+      // Chỉ highlight nếu là PK hoặc FK
+      if (!column.is_primary_key && !column.is_foreign_key) {
+        return
+      }
+
       this.highlightedColumn = { column, table }
+
+      // Tìm tất cả các table có liên quan qua relationship với column này
+      this.highlightRelatedTables(column, table)
+    },
+
+    // Đảm bảo phương thức này hoạt động đúng
+    highlightRelatedTables(column, table) {
+      console.log('Highlighting related tables for column:', table.name, column.name)
+
+      // Reset trạng thái highlight của tất cả table
+      this.localTables.forEach((t) => {
+        t.isHighlighted = false
+      })
+
+      // Highlight table hiện tại
+      table.isHighlighted = true
+      console.log('Highlighted current table:', table.name)
+
+      // Tìm các table có relationship với column này
+      this.allRelationships.forEach((relationship) => {
+        const isFromColumn =
+          relationship.from_table === table.name && relationship.from_column === column.name
+        const isToColumn =
+          relationship.to_table === table.name && relationship.to_column === column.name
+
+        if (isFromColumn || isToColumn) {
+          // Tìm và highlight table đích
+          const targetTableName = isFromColumn ? relationship.to_table : relationship.from_table
+          const targetTable = this.localTables.find((t) => t.name === targetTableName)
+
+          if (targetTable) {
+            console.log('Highlighting related table:', targetTable.name)
+            targetTable.isHighlighted = true
+          }
+        }
+      })
     },
 
     highlightRelationship(relationship) {
@@ -1375,8 +1417,27 @@ export default {
       this.highlightedRelationship = null
     },
 
+    // Và sửa lại clearColumnHighlights
     clearColumnHighlights() {
       this.highlightedColumn = null
+      // Reset tất cả highlight
+      this.localTables.forEach((table) => {
+        table.isHighlighted = false
+      })
+      console.log('Cleared all highlights')
+
+      // Nếu đang hover table, giữ lại trạng thái hover table
+      if (this.focusedTable) {
+        this.localTables.forEach((t) => {
+          const isRelated = this.isTableRelatedToFocused(t)
+          t.isRelated = isRelated
+        })
+      } else {
+        // Reset hoàn toàn nếu không có hover nào
+        this.localTables.forEach((t) => {
+          t.isRelated = true
+        })
+      }
     },
 
     isTableHighlighted(table) {
@@ -1416,32 +1477,148 @@ export default {
       const fromPos = fromTable.position || { x: 0, y: 0 }
       const toPos = toTable.position || { x: 0, y: 0 }
 
-      const fromCenter = {
-        x: fromPos.x + 120,
-        y: fromPos.y + 100,
+      // Tính toán điểm bắt đầu và kết thúc dựa trên vị trí tương đối
+      const startPoint = this.calculateConnectionPoint(fromPos, toPos, true)
+      const endPoint = this.calculateConnectionPoint(toPos, fromPos, false)
+
+      // Vẽ đường orthogonal
+      return this.drawOrthogonalPath(startPoint, endPoint)
+    },
+
+    calculateConnectionPoint(tablePos, targetPos, isStart) {
+      const tableCenter = {
+        x: tablePos.x + 150, // 300px width / 2
+        y: tablePos.y + 100, // 200px height / 2
       }
 
-      const toCenter = {
-        x: toPos.x + 120,
-        y: toPos.y + 100,
+      const targetCenter = {
+        x: targetPos.x + 150,
+        y: targetPos.y + 100,
       }
 
-      const dx = toCenter.x - fromCenter.x
-      const dy = toCenter.y - fromCenter.y
+      // Xác định hướng kết nối dựa trên vị trí tương đối
+      const dx = targetCenter.x - tableCenter.x
+      const dy = targetCenter.y - tableCenter.y
 
-      const angle = Math.atan2(dy, dx)
-      const distance = Math.sqrt(dx * dx + dy * dy)
+      let side = 'right' // Mặc định
 
-      const startX = fromCenter.x + Math.cos(angle) * 100
-      const startY = fromCenter.y + Math.sin(angle) * 100
-      const endX = toCenter.x - Math.cos(angle) * 100
-      const endY = toCenter.y - Math.sin(angle) * 100
+      if (Math.abs(dx) > Math.abs(dy)) {
+        // Chênh lệch ngang nhiều hơn
+        side = dx > 0 ? 'right' : 'left'
+      } else {
+        // Chênh lệch dọc nhiều hơn
+        side = dy > 0 ? 'bottom' : 'top'
+      }
 
-      const controlDistance = Math.min(distance * 0.5, 200)
-      const controlX = (startX + endX) / 2 + Math.cos(angle + Math.PI / 2) * controlDistance
-      const controlY = (startY + endY) / 2 + Math.sin(angle + Math.PI / 2) * controlDistance
+      // Tính toán tọa độ điểm kết nối dựa trên side
+      let x, y
 
-      return `M ${startX} ${startY} Q ${controlX} ${controlY} ${endX} ${endY}`
+      switch (side) {
+        case 'top':
+          x = tableCenter.x
+          y = tablePos.y
+          break
+        case 'right':
+          x = tablePos.x + 300 // Chiều rộng table
+          y = tableCenter.y
+          break
+        case 'bottom':
+          x = tableCenter.x
+          y = tablePos.y + 200 // Chiều cao table
+          break
+        case 'left':
+          x = tablePos.x
+          y = tableCenter.y
+          break
+      }
+
+      return { x, y, side }
+    },
+
+    drawOrthogonalPath(startPoint, endPoint) {
+      const start = startPoint
+      const end = endPoint
+
+      // Nếu hai điểm trên cùng một trục, vẽ đường thẳng
+      if (start.side === 'right' && end.side === 'left' && Math.abs(start.y - end.y) < 50) {
+        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+      }
+
+      if (start.side === 'left' && end.side === 'right' && Math.abs(start.y - end.y) < 50) {
+        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+      }
+
+      if (start.side === 'top' && end.side === 'bottom' && Math.abs(start.x - end.x) < 50) {
+        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+      }
+
+      if (start.side === 'bottom' && end.side === 'top' && Math.abs(start.x - end.x) < 50) {
+        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+      }
+
+      // Vẽ đường orthogonal với các điểm trung gian
+      let path = `M ${start.x} ${start.y}`
+
+      // Điểm trung gian đầu tiên - di chuyển ra khỏi bảng
+      const firstMid = this.getFirstIntermediatePoint(start, end)
+      path += ` L ${firstMid.x} ${firstMid.y}`
+
+      // Điểm trung gian thứ hai - chuẩn bị tiếp cận bảng đích
+      const secondMid = this.getSecondIntermediatePoint(firstMid, end, start)
+      path += ` L ${secondMid.x} ${secondMid.y}`
+
+      // Đến điểm kết thúc
+      path += ` L ${end.x} ${end.y}`
+
+      return path
+    },
+
+    getFirstIntermediatePoint(start, end) {
+      const offset = 50 // Khoảng cách offset từ bảng
+
+      switch (start.side) {
+        case 'top':
+          return { x: start.x, y: start.y - offset }
+        case 'right':
+          return { x: start.x + offset, y: start.y }
+        case 'bottom':
+          return { x: start.x, y: start.y + offset }
+        case 'left':
+          return { x: start.x - offset, y: start.y }
+        default:
+          return { x: start.x, y: start.y }
+      }
+    },
+
+    getSecondIntermediatePoint(firstMid, end, start) {
+      const offset = 50 // Khoảng cách offset từ bảng đích
+
+      // Tính toán điểm tiếp cận bảng đích
+      let approachPoint = { ...end }
+
+      switch (end.side) {
+        case 'top':
+          approachPoint.y = end.y - offset
+          break
+        case 'right':
+          approachPoint.x = end.x + offset
+          break
+        case 'bottom':
+          approachPoint.y = end.y + offset
+          break
+        case 'left':
+          approachPoint.x = end.x - offset
+          break
+      }
+
+      // Điều chỉnh để tạo đường orthogonal đẹp
+      if (start.side === 'top' || start.side === 'bottom') {
+        // Bắt đầu từ top/bottom, ưu tiên giữ x cố định trước
+        return { x: approachPoint.x, y: firstMid.y }
+      } else {
+        // Bắt đầu từ left/right, ưu tiên giữ y cố định trước
+        return { x: firstMid.x, y: approachPoint.y }
+      }
     },
 
     // ========== UTILITY METHODS ==========
@@ -1694,19 +1871,20 @@ export default {
         this.focusedTable = table
         this.showOnlyRelatedRelationships = true
 
-        // Làm mờ các table không liên quan
+        // Làm mờ các table không liên quan (giữ nguyên cho hover table)
         this.localTables.forEach((t) => {
           const isRelated = this.isTableRelatedToFocused(t)
-          this.$set(t, 'isRelated', isRelated)
+          t.isRelated = isRelated
         })
       } else {
-        this.focusedTable = null
-        this.showOnlyRelatedRelationships = false
-
-        // Reset trạng thái
-        this.localTables.forEach((t) => {
-          this.$set(t, 'isRelated', true)
-        })
+        // Chỉ reset khi không có column nào đang được hover
+        if (!this.highlightedColumn) {
+          this.focusedTable = null
+          this.showOnlyRelatedRelationships = false
+          this.localTables.forEach((t) => {
+            t.isRelated = true
+          })
+        }
       }
     },
 
@@ -1739,6 +1917,9 @@ export default {
     sortTables(sortType) {
       this.currentSort = sortType
       this.showSortOptions = false
+
+      // Lưu tùy chọn sắp xếp vào localStorage
+      this.saveSortPreference(sortType)
 
       switch (sortType) {
         case 'name-asc':
@@ -1773,12 +1954,28 @@ export default {
       this.applySortLayout()
       this.saveToHistory(`Sorted tables by ${this.getSortDisplayName(sortType)}`)
     },
+    // Lưu tùy chọn sắp xếp vào localStorage
+    saveSortPreference(sortType) {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('db-diagram-sort-preference', sortType)
+      }
+    },
+
+    // Lấy tùy chọn sắp xếp từ localStorage
+    loadSortPreference() {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const savedSort = localStorage.getItem('db-diagram-sort-preference')
+        if (savedSort) {
+          this.currentSort = savedSort
+        }
+      }
+    },
     applySortLayout() {
       const LAYOUT_CONFIG = {
         TABLE_WIDTH: 240,
         TABLE_HEIGHT: 200,
         MARGIN_X: 100,
-        MARGIN_Y: 80,
+        MARGIN_Y: 120,
         PADDING: 200,
         COLUMNS: 7,
       }
@@ -1807,6 +2004,14 @@ export default {
 
       this.updateContainerSize()
       this.scheduleAutoSave()
+    },
+
+    // Thêm method mới
+    handleColumnHover(column, table) {
+      // Chỉ xử lý hover cho PK và FK
+      if (column.is_primary_key || column.is_foreign_key) {
+        this.highlightColumnRelationships(column, table)
+      }
     },
 
     getSortDisplayName(sortType) {
@@ -1855,6 +2060,8 @@ export default {
     },
   },
   mounted() {
+    console.log('All relationships:', this.allRelationships)
+    console.log('Local tables:', this.localTables)
     document.addEventListener('keydown', this.handleKeydown)
     document.addEventListener('click', this.handleClickOutside)
 
@@ -1873,6 +2080,9 @@ export default {
 
     // Khởi tạo transform
     this.updateDiagramTransform()
+
+    // Load sort preference từ localStorage
+    this.loadSortPreference()
 
     if (this.historyEnabled) {
       this.saveToHistory('Initial state')
@@ -2331,11 +2541,13 @@ export default {
   cursor: pointer;
   transition: all 0.3s ease;
   pointer-events: none;
+  opacity: 0.6;
 }
 
 .relationship-path:hover,
 .relationship-path.relationship-highlighted {
   stroke-width: 3.2;
+  opacity: 1;
 }
 
 .relationship-path.relationship-highlighted.one-to-one {
@@ -2986,5 +3198,48 @@ export default {
   .grid-background {
     opacity: 0.2;
   }
+}
+/* Thêm style cho table được highlight */
+.table-card.table-highlighted {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 12px rgba(244, 11, 3, 0.4), 0 8px 25px -8px rgba(64, 102, 163, 0.3) !important;
+  z-index: 80;
+  transform: scale(1.08);
+  transition: all 0.3s ease;
+}
+
+/* Đảm bảo relationship highlight hoạt động */
+.relationship-path.relationship-highlighted {
+  stroke-width: 4 !important;
+  opacity: 1 !important;
+  filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.5));
+}
+
+/* Column highlight */
+.table-column.column-highlighted {
+  background: #dbeafe !important;
+  border-left: 3px solid #3b82f6;
+}
+/* Chỉ PK/FK mới có hover effect */
+.table-column.column-hoverable:hover {
+  background: #f0f9ff;
+  cursor: pointer;
+}
+
+/* Column PK/FK khi được highlight */
+.table-column.primary.column-highlighted {
+  background: #fef2f2;
+  border-left: 3px solid #ef4444;
+}
+
+.table-column.foreign.column-highlighted {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+}
+
+/* Column bình thường không có hover effect */
+.table-column:not(.column-hoverable):hover {
+  background: #f8fafc;
+  cursor: default;
 }
 </style>
