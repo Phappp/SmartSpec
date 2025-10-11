@@ -386,7 +386,7 @@
               </button>
             </div>
             <div class="sql-preview">
-              <pre><code>{{ generateTableSQL() }}</code></pre>
+              <!-- <pre><code>{{ generateTableSQL() }}</code></pre> -->
             </div>
           </div>
 

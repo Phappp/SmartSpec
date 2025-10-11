@@ -1,4 +1,4 @@
-// 🔥 CẬP NHẬT project.js HOÀN CHỈNH
+// 🔥 CẬP NHẬT project.js HOÀN CHỈNH - WITH COMPOSITE KEY SUPPORT
 import axiosClient from "./../utils/axiosClient";
 
 // Projects
@@ -100,6 +100,44 @@ export const updateMultipleTablePositions = (databaseId, positionUpdates) => {
   return axiosClient.put(`/api/databases/${databaseId}/tables/positions`, positionUpdates);
 };
 
+// === 🔥 COMPOSITE KEY MANAGEMENT APIs ===
+
+// [R] Lấy thông tin composite key của một bảng
+export const getCompositeKeyInfo = (databaseId, tableName) => {
+  return axiosClient.get(`/api/databases/${databaseId}/tables/${tableName}/composite-key`);
+};
+
+// [U] Tạo composite key mới
+export const createCompositeKey = (databaseId, tableName, columnNames) => {
+  return axiosClient.post(`/api/databases/${databaseId}/tables/${tableName}/composite-key`, {
+    columnNames
+  });
+};
+
+// [U] Chuyển từ composite key sang single key
+export const convertToSingleKey = (databaseId, tableName, primaryKeyColumnName) => {
+  return axiosClient.post(`/api/databases/${databaseId}/tables/${tableName}/convert-to-single-key`, {
+    primaryKeyColumnName
+  });
+};
+
+// === 🔥 UTILITY APIs ===
+
+// [R] Lấy thống kê database
+export const getDatabaseStats = (databaseId) => {
+  return axiosClient.get(`/api/databases/${databaseId}/stats`);
+};
+
+// [R] Export database schema thành SQL
+export const exportDatabaseSQL = (databaseId) => {
+  return axiosClient.get(`/api/databases/${databaseId}/export-sql`);
+};
+
+// [U] Validate table structure
+export const validateTableStructure = (databaseId, tableData) => {
+  return axiosClient.post(`/api/databases/${databaseId}/validate-table`, tableData);
+};
+
 // 🔥 THÊM API CHO BỎ QUA CONFLICT
 export const skipConflict = (versionId, conflictId) => {
   return axiosClient.delete(`/api/usecaseManagement/versions/${versionId}/conflicts/${conflictId}`);
@@ -175,4 +213,13 @@ export default {
   updateTablePosition,
   updateMultipleTablePositions,
 
+  // 🔥 COMPOSITE KEY APIs
+  getCompositeKeyInfo,
+  createCompositeKey,
+  convertToSingleKey,
+
+  // 🔥 UTILITY APIs
+  getDatabaseStats,
+  exportDatabaseSQL,
+  validateTableStructure,
 };

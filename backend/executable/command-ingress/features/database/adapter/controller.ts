@@ -1,4 +1,4 @@
-// src/features/database/adapter/controller.ts
+// src/features/database/adapter/controller.ts - UPDATED FOR COMPOSITE KEY
 
 import { Request, Response, NextFunction } from "express";
 import { DatabaseService } from "../domain/service";
@@ -90,7 +90,8 @@ export class DatabaseController {
         } catch (error: any) {
             // Xử lý lỗi validation từ service
             if (error.message.includes('foreign key') || error.message.includes('primary key') ||
-                error.message.includes('duplicate') || error.message.includes('invalid')) {
+                error.message.includes('duplicate') || error.message.includes('invalid') ||
+                error.message.includes('composite') || error.message.includes('nullable')) {
                 res.status(400).json({ message: error.message });
                 return;
             }
@@ -129,6 +130,21 @@ export class DatabaseController {
                 return;
             }
 
+            // Validate composite key structure nếu có
+            const primaryKeyColumns = tableData.columns.filter((col: any) => col.is_primary_key);
+            if (primaryKeyColumns.length > 1) {
+                // Kiểm tra primary_key_order cho composite key
+                const columnsWithoutOrder = primaryKeyColumns.filter((col: any) =>
+                    col.primary_key_order === null || col.primary_key_order === undefined
+                );
+                if (columnsWithoutOrder.length > 0) {
+                    res.status(400).json({
+                        message: `Composite primary key columns must have primary_key_order: ${columnsWithoutOrder.map((col: any) => col.name).join(', ')}`
+                    });
+                    return;
+                }
+            }
+
             const updatedDatabase = await this.databaseService.addTableToDatabase(databaseId, tableData);
 
             res.status(201).json({
@@ -142,7 +158,10 @@ export class DatabaseController {
                 error.message.includes('invalid') ||
                 error.message.includes('duplicate') ||
                 error.message.includes('primary key') ||
-                error.message.includes('foreign key')) {
+                error.message.includes('foreign key') ||
+                error.message.includes('composite') ||
+                error.message.includes('nullable') ||
+                error.message.includes('primary_key_order')) {
                 res.status(400).json({ message: error.message });
                 return;
             }
@@ -170,6 +189,20 @@ export class DatabaseController {
                 return;
             }
 
+            // Validate composite key structure nếu có
+            const primaryKeyColumns = tableData.columns.filter((col: any) => col.is_primary_key);
+            if (primaryKeyColumns.length > 1) {
+                const columnsWithoutOrder = primaryKeyColumns.filter((col: any) =>
+                    col.primary_key_order === null || col.primary_key_order === undefined
+                );
+                if (columnsWithoutOrder.length > 0) {
+                    res.status(400).json({
+                        message: `Composite primary key columns must have primary_key_order: ${columnsWithoutOrder.map((col: any) => col.name).join(', ')}`
+                    });
+                    return;
+                }
+            }
+
             const updatedDatabase = await this.databaseService.updateTableInDatabase(
                 databaseId,
                 tableName,
@@ -194,7 +227,10 @@ export class DatabaseController {
                 error.message.includes('primary key') ||
                 error.message.includes('foreign key') ||
                 error.message.includes('referenced by') ||
-                error.message.includes('circular reference')) {
+                error.message.includes('circular reference') ||
+                error.message.includes('composite') ||
+                error.message.includes('nullable') ||
+                error.message.includes('primary_key_order')) {
                 res.status(400).json({ message: error.message });
                 return;
             }
@@ -309,7 +345,8 @@ export class DatabaseController {
             if (error.message.includes('does not exist') ||
                 error.message.includes('no primary key') ||
                 error.message.includes('type mismatch') ||
-                error.message.includes('circular reference')) {
+                error.message.includes('circular reference') ||
+                error.message.includes('composite')) {
                 res.status(200).json({
                     valid: false,
                     message: error.message,
@@ -423,6 +460,218 @@ export class DatabaseController {
                 return;
             }
 
+            next(error);
+        }
+    }
+
+    // --- COMPOSITE KEY MANAGEMENT ENDPOINTS ---
+
+    // [R] - READ: Lấy thông tin composite key của một bảng
+    public getCompositeKeyInfo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { databaseId, tableName } = req.params;
+
+            const compositeKeyInfo = await this.databaseService.getCompositeKeyInfo(databaseId, tableName);
+
+            res.status(200).json({
+                message: "Lấy thông tin composite key thành công!",
+                data: compositeKeyInfo
+            });
+
+        } catch (error: any) {
+            if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+            next(error);
+        }
+    }
+
+    // [U] - UPDATE: Tạo composite key mới
+    public createCompositeKey = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { databaseId, tableName } = req.params;
+            const { columnNames } = req.body;
+
+            if (!columnNames || !Array.isArray(columnNames) || columnNames.length < 2) {
+                res.status(400).json({
+                    message: "columnNames phải là một mảng chứa ít nhất 2 tên cột."
+                });
+                return;
+            }
+
+            // Validation: kiểm tra columnNames không rỗng
+            if (columnNames.some(name => !name || typeof name !== 'string')) {
+                res.status(400).json({
+                    message: "Tất cả columnNames phải là chuỗi không rỗng."
+                });
+                return;
+            }
+
+            const compositeKeyInfo = await this.databaseService.createCompositeKey(
+                databaseId,
+                tableName,
+                columnNames
+            );
+
+            res.status(200).json({
+                message: `Tạo composite key thành công với ${columnNames.length} cột!`,
+                data: compositeKeyInfo
+            });
+
+        } catch (error: any) {
+            if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+
+            if (error.message.includes('cannot be nullable') ||
+                error.message.includes('not found in table') ||
+                error.message.includes('requires at least')) {
+                res.status(400).json({ message: error.message });
+                return;
+            }
+
+            next(error);
+        }
+    }
+
+    // [U] - UPDATE: Chuyển từ composite key sang single key
+    public convertToSingleKey = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { databaseId, tableName } = req.params;
+            const { primaryKeyColumnName } = req.body;
+
+            if (!primaryKeyColumnName || typeof primaryKeyColumnName !== 'string') {
+                res.status(400).json({
+                    message: "primaryKeyColumnName là bắt buộc và phải là chuỗi."
+                });
+                return;
+            }
+
+            const compositeKeyInfo = await this.databaseService.convertToSingleKey(
+                databaseId,
+                tableName,
+                primaryKeyColumnName
+            );
+
+            res.status(200).json({
+                message: `Chuyển sang single key thành công với cột '${primaryKeyColumnName}'!`,
+                data: compositeKeyInfo
+            });
+
+        } catch (error: any) {
+            if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+
+            if (error.message.includes('cannot be nullable') ||
+                error.message.includes('not found in table')) {
+                res.status(400).json({ message: error.message });
+                return;
+            }
+
+            next(error);
+        }
+    }
+
+    // [R] - READ: Lấy thống kê database
+    public getDatabaseStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { databaseId } = req.params;
+
+            const stats = await this.databaseService.getDatabaseStats(databaseId);
+
+            res.status(200).json({
+                message: "Lấy thống kê database thành công!",
+                data: stats
+            });
+
+        } catch (error: any) {
+            if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+            next(error);
+        }
+    }
+
+    // [R] - READ: Export database schema thành SQL
+    public exportDatabaseSQL = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { databaseId } = req.params;
+
+            const sqlStatements = await this.databaseService.exportDatabaseSQL(databaseId);
+
+            res.status(200).json({
+                message: "Export SQL thành công!",
+                data: {
+                    sql: sqlStatements,
+                    tablesCount: sqlStatements.split('CREATE TABLE').length - 1
+                }
+            });
+
+        } catch (error: any) {
+            if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+            next(error);
+        }
+    }
+
+    // [U] - VALIDATE: Validate table structure
+    public validateTableStructure = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { databaseId } = req.params;
+            const tableData = req.body;
+
+            if (!tableData.name || !tableData.columns || !Array.isArray(tableData.columns)) {
+                res.status(400).json({
+                    message: "Table data phải có name và columns (array)"
+                });
+                return;
+            }
+
+            // Validate composite key structure nếu có
+            const primaryKeyColumns = tableData.columns.filter((col: any) => col.is_primary_key);
+            if (primaryKeyColumns.length > 1) {
+                const columnsWithoutOrder = primaryKeyColumns.filter((col: any) =>
+                    col.primary_key_order === null || col.primary_key_order === undefined
+                );
+                if (columnsWithoutOrder.length > 0) {
+                    res.status(400).json({
+                        valid: false,
+                        message: `Composite primary key columns must have primary_key_order: ${columnsWithoutOrder.map((col: any) => col.name).join(', ')}`
+                    });
+                    return;
+                }
+            }
+
+            // Gọi service validation
+            this.databaseService['validateTableStructure'](tableData);
+
+            res.status(200).json({
+                valid: true,
+                message: "Table structure validation passed"
+            });
+
+        } catch (error: any) {
+            // Trả về validation failed nhưng không phải lỗi server
+            if (error.message.includes('invalid') ||
+                error.message.includes('duplicate') ||
+                error.message.includes('primary key') ||
+                error.message.includes('foreign key') ||
+                error.message.includes('nullable') ||
+                error.message.includes('composite') ||
+                error.message.includes('primary_key_order')) {
+                res.status(200).json({
+                    valid: false,
+                    message: error.message
+                });
+                return;
+            }
             next(error);
         }
     }

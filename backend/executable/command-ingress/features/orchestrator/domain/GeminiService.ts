@@ -108,47 +108,224 @@ ${requirementsJson}
 Phản hồi của bạn BẮT BUỘC CHỈ LÀ một đối tượng JSON hợp lệ. KHÔNG bao gồm bất kỳ lời giải thích, bình luận, hay định dạng markdown nào như \`\`\`json. Đầu ra phải sẵn sàng để được một chương trình phân tích ngay lập tức.
 
 Đối tượng JSON BẮT BUỘC phải tuân thủ nghiêm ngặt cấu trúc chi tiết sau. Bao gồm TẤT CẢ các trường cho mỗi cột.
+
 {
   "name": "TenDatabase",
   "description": "Mô tả ngắn gọn nhưng rõ ràng về mục đích của CSDL.",
-
   "tables": [
     {
       "name": "users",
       "description": "Lưu trữ thông tin tài khoản và thông tin xác thực của người dùng.",
       "columns": [
-        { "name": "id", "type": "INT", "is_primary_key": true, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": [] },
-        { "name": "username", "type": "VARCHAR(50)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": ["UC1", "UC2"] },
-        { "name": "email", "type": "VARCHAR(100)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": ["UC2", "UC15"] },
-        { "name": "password_hash", "type": "VARCHAR(255)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": false, "related_usecase_ids": ["UC1", "UC2"] },
-        { "name": "full_name", "type": "VARCHAR(255)", "is_primary_key": false, "is_foreign_key": false, "nullable": true, "unique": false, "related_usecase_ids": ["UC15"] }
+        { 
+          "name": "id", 
+          "type": "INT", 
+          "is_primary_key": true, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": true, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": [] 
+        },
+        { 
+          "name": "username", 
+          "type": "VARCHAR(50)", 
+          "is_primary_key": false, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": true, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": ["UC1", "UC2"] 
+        },
+        { 
+          "name": "email", 
+          "type": "VARCHAR(100)", 
+          "is_primary_key": false, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": true, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": ["UC2", "UC15"] 
+        },
+        { 
+          "name": "password_hash", 
+          "type": "VARCHAR(255)", 
+          "is_primary_key": false, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": false, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": ["UC1", "UC2"] 
+        }
       ]
     },
     {
-        "name": "projects",
-        "description": "Lưu trữ thông tin về các dự án của người dùng.",
-        "columns": [
-            { "name": "id", "type": "INT", "is_primary_key": true, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": [] },
-            { "name": "project_name", "type": "VARCHAR(255)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": false, "related_usecase_ids": ["UC5"] },
-            { "name": "owner_id", "type": "INT", "is_primary_key": false, "is_foreign_key": true, "nullable": false, "unique": false, "references": "users", "related_usecase_ids": ["UC5"] },
-            { "name": "created_at", "type": "DATETIME", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": false, "related_usecase_ids": ["UC5"] }
-        ]
+      "name": "user_roles",
+      "description": "Bảng trung gian quản lý phân quyền người dùng với khóa chính tổ hợp.",
+      "columns": [
+        { 
+          "name": "user_id", 
+          "type": "INT", 
+          "is_primary_key": true, 
+          "is_foreign_key": true, 
+          "nullable": false, 
+          "unique": false, 
+          "references": "users",
+          "primary_key_order": 1,
+          "related_usecase_ids": ["UC7"] 
+        },
+        { 
+          "name": "role_id", 
+          "type": "INT", 
+          "is_primary_key": true, 
+          "is_foreign_key": true, 
+          "nullable": false, 
+          "unique": false, 
+          "references": "roles",
+          "primary_key_order": 2,
+          "related_usecase_ids": ["UC7"] 
+        },
+        { 
+          "name": "assigned_at", 
+          "type": "DATETIME", 
+          "is_primary_key": false, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": false, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": ["UC7"] 
+        }
+      ]
+    },
+    {
+      "name": "order_items",
+      "description": "Bảng trung gian quản lý chi tiết đơn hàng với khóa chính tổ hợp.",
+      "columns": [
+        { 
+          "name": "order_id", 
+          "type": "INT", 
+          "is_primary_key": true, 
+          "is_foreign_key": true, 
+          "nullable": false, 
+          "unique": false, 
+          "references": "orders",
+          "primary_key_order": 1,
+          "related_usecase_ids": ["UC8"] 
+        },
+        { 
+          "name": "product_id", 
+          "type": "INT", 
+          "is_primary_key": true, 
+          "is_foreign_key": true, 
+          "nullable": false, 
+          "unique": false, 
+          "references": "products",
+          "primary_key_order": 2,
+          "related_usecase_ids": ["UC8"] 
+        },
+        { 
+          "name": "quantity", 
+          "type": "INT", 
+          "is_primary_key": false, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": false, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": ["UC8"] 
+        },
+        { 
+          "name": "unit_price", 
+          "type": "DECIMAL(10,2)", 
+          "is_primary_key": false, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": false, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": ["UC8"] 
+        }
+      ]
     }
   ],
   "relationships": [
-    { "from_table": "projects", "to_table": "users", "type": "many-to-one" }
+    { 
+      "from_table": "user_roles", 
+      "to_table": "users", 
+      "type": "many-to-one" 
+    },
+    { 
+      "from_table": "user_roles", 
+      "to_table": "roles", 
+      "type": "many-to-one" 
+    },
+    { 
+      "from_table": "order_items", 
+      "to_table": "orders", 
+      "type": "many-to-one" 
+    },
+    { 
+      "from_table": "order_items", 
+      "to_table": "products", 
+      "type": "many-to-one" 
+    }
   ]
 }
 
-QUY TẮC VÀ LOGIC THIẾT KẾ:
-- Tên bảng và tên cột BẮT BUỘC phải ở dạng chữ thường và dùng dấu gạch dưới (snake_case).
-- Mỗi bảng BẮT BUỘC phải có MỘT VÀ CHỈ MỘT cột 'id' duy nhất làm khóa chính.
-- KHÔNG ĐƯỢC sử dụng composite primary keys (nhiều cột cùng là primary key).
-- Bất kỳ cột nào có 'is_primary_key' là true thì BẮT BUỘC phải có 'nullable' là false. Đây là một quy tắc nghiêm ngặt.
-- Xác định chính xác tất cả các mối quan hệ (one-to-one, one-to-many,...) và định nghĩa CẢ cột khóa ngoại (với 'is_foreign_key: true' và 'references') VÀ mục tương ứng trong mảng 'relationships' chính.
-- Sử dụng các kiểu dữ liệu phù hợp từ danh sách sau: INT, VARCHAR(n), TEXT, BOOLEAN, DATETIME, DATE, DECIMAL(p, s).
-- Suy luận các bảng cần thiết từ các use case được cung cấp. Ví dụ: "Đăng nhập người dùng" ngụ ý cần có bảng 'users'.
-- **YÊU CẦU TRUY VẾT QUAN TRỌNG**: Đối với mỗi cột riêng lẻ, bạn BẮT BUỘC phải xác định những use case nào yêu cầu sự tồn tại của nó. Điền vào mảng 'related_usecase_ids' ID của mọi use case có liên quan. Nếu một cột được yêu cầu bởi nhiều use case (ví dụ: 'username' cho cả đăng nhập và đăng ký), hãy bao gồm tất cả các ID đó. Nếu không thể xác định nguồn gốc, hãy trả về một mảng rỗng [].
+**QUY TẮC VÀ LOGIC THIẾT KẾ CHUẨN SQL:**
+
+1. **KHÓA CHÍNH (PRIMARY KEYS):**
+   - Khóa chính đơn (Single PK): dùng cột 'id' kiểu 'INT AUTO_INCREMENT', không cần cột 'primary_key_order'.
+   - Khóa chính tổng hợp (Composite PK): bắt buộc có cột 'primary_key_order' (1,2,3...), tất cả các cột trong khóa chính đều phải 'NOT NULL'.
+
+2. **QUAN HỆ NHIỀU - NHIỀU (MANY-TO-MANY):**
+   - Phải tạo bảng trung gian (junction table) để thể hiện mối quan hệ.
+   - Tên bảng trung gian theo mẫu: 'table1_table2' (xếp theo thứ tự bảng chữ cái).
+   - Tất cả khóa ngoại trong bảng trung gian đều phải 'NOT NULL'.
+   - Bảng trung gian phải có khóa chính tổng hợp gồm hai khóa ngoại.
+
+3. **KIỂU DỮ LIỆU (DATA TYPES):**
+   - Chuỗi ngắn: dùng 'VARCHAR(255)'
+   - Chuỗi dài: dùng 'TEXT'
+   - Số nguyên: dùng 'INT'
+   - Số thập phân (tiền tệ): dùng 'DECIMAL(10,2)'
+   - Boolean: dùng 'TINYINT(1)'
+   - Ngày giờ: dùng 'DATETIME' cho timestamp, 'DATE' cho ngày.
+
+4. **RÀNG BUỘC (CONSTRAINTS):**
+   - Khóa ngoại: mặc định phải 'NOT NULL'
+   - Khóa chính: luôn 'NOT NULL'
+   - Cột 'UNIQUE': cẩn thận khi cho phép 'NULL', vì 'NULL' không bị kiểm tra trùng lặp.
+
+5. **CỘT HỆ THỐNG (SYSTEM COLUMNS):**
+   - Tất cả bảng đều phải có 'created_at', 'updated_at'
+   - Thêm 'deleted_at' cho các bảng hỗ trợ xóa mềm (soft delete), trừ bảng trung gian.
+
+6. **QUY TẮC ĐẶT TÊN (NAMING):**
+   - Dùng chữ thường và gạch dưới: 'snake_case'
+   - Khóa ngoại đặt tên theo mẫu: 'referenced_table_id'
+   - Khóa chính đơn là 'id', khóa chính tổng hợp chỉ dùng trong bảng trung gian.
+   - Luôn sử dụng tên tiếng Anh cho tất cả các bảng, cột và mối quan hệ (tránh sử dụng các định danh bằng ngôn ngữ địa phương).
+
+
+7. **XÁC ĐỊNH USE CASE:**
+   - Đối với mỗi cột riêng lẻ, bạn BẮT BUỘC phải xác định những use case nào yêu cầu sự tồn tại của nó
+   - Điền vào mảng 'related_usecase_ids' ID của mọi use case có liên quan
+   - Nếu một cột được yêu cầu bởi nhiều use case, bao gồm tất cả các ID đó
+   - Nếu không thể xác định nguồn gốc, trả về một mảng rỗng []
+
+**PHÁT HIỆN QUAN HỆ MANY-TO-MANY TỪ USE CASE:**
+- Khi use case đề cập "nhiều A liên quan đến nhiều B" → tạo bảng trung gian A_B
+- Khi use case đề cập "danh sách", "nhiều mục", "chi tiết" → có thể cần bảng trung gian
+- Ví dụ: "Quản lý sản phẩm trong đơn hàng" → order_items
+- Ví dụ: "Gán nhiều vai trò cho người dùng" → user_roles
+
+Hãy suy luận các bảng cần thiết từ các use case được cung cấp và áp dụng nghiêm ngặt tất cả các quy tắc thiết kế trên.
 `
 
 
@@ -255,46 +432,220 @@ ${requirementsJson}
 Your response MUST be ONLY a single, valid JSON object. DO NOT include any explanations, comments, or markdown formatting like \`\`\`json. The output must be ready for immediate parsing by a program.
 
 The JSON object MUST strictly follow this detailed structure. Include ALL fields for every column.
+
 {
   "name": "DatabaseName",
   "description": "A brief but clear description of the database's purpose.",
   "tables": [
     {
       "name": "users",
-      "description": "Stores user account information and credentials.",
+      "description": "Stores user account information and authentication credentials.",
       "columns": [
-        { "name": "id", "type": "INT", "is_primary_key": true, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": [] },
-        { "name": "username", "type": "VARCHAR(50)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": ["UC1", "UC2"] },
-        { "name": "email", "type": "VARCHAR(100)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": ["UC2", "UC15"] },
-        { "name": "password_hash", "type": "VARCHAR(255)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": false, "related_usecase_ids": ["UC1", "UC2"] },
-        { "name": "full_name", "type": "VARCHAR(255)", "is_primary_key": false, "is_foreign_key": false, "nullable": true, "unique": false, "related_usecase_ids": ["UC15"] }
+        { 
+          "name": "id", 
+          "type": "INT", 
+          "is_primary_key": true, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": true, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": [] 
+        },
+        { 
+          "name": "username", 
+          "type": "VARCHAR(50)", 
+          "is_primary_key": false, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": true, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": ["UC1", "UC2"] 
+        },
+        { 
+          "name": "email", 
+          "type": "VARCHAR(100)", 
+          "is_primary_key": false, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": true, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": ["UC2", "UC15"] 
+        },
+        { 
+          "name": "password_hash", 
+          "type": "VARCHAR(255)", 
+          "is_primary_key": false, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": false, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": ["UC1", "UC2"] 
+        }
       ]
     },
     {
-        "name": "projects",
-        "description": "Stores information about user projects.",
-        "columns": [
-            { "name": "id", "type": "INT", "is_primary_key": true, "is_foreign_key": false, "nullable": false, "unique": true, "related_usecase_ids": [] },
-            { "name": "project_name", "type": "VARCHAR(255)", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": false, "related_usecase_ids": ["UC5"] },
-            { "name": "owner_id", "type": "INT", "is_primary_key": false, "is_foreign_key": true, "nullable": false, "unique": false, "references": "users", "related_usecase_ids": ["UC5"] },
-            { "name": "created_at", "type": "DATETIME", "is_primary_key": false, "is_foreign_key": false, "nullable": false, "unique": false, "related_usecase_ids": ["UC5"] }
-        ]
+      "name": "user_roles",
+      "description": "Junction table for user role assignments with composite primary key.",
+      "columns": [
+        { 
+          "name": "user_id", 
+          "type": "INT", 
+          "is_primary_key": true, 
+          "is_foreign_key": true, 
+          "nullable": false, 
+          "unique": false, 
+          "references": "users",
+          "primary_key_order": 1,
+          "related_usecase_ids": ["UC7"] 
+        },
+        { 
+          "name": "role_id", 
+          "type": "INT", 
+          "is_primary_key": true, 
+          "is_foreign_key": true, 
+          "nullable": false, 
+          "unique": false, 
+          "references": "roles",
+          "primary_key_order": 2,
+          "related_usecase_ids": ["UC7"] 
+        },
+        { 
+          "name": "assigned_at", 
+          "type": "DATETIME", 
+          "is_primary_key": false, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": false, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": ["UC7"] 
+        }
+      ]
+    },
+    {
+      "name": "order_items",
+      "description": "Junction table for order details with composite primary key.",
+      "columns": [
+        { 
+          "name": "order_id", 
+          "type": "INT", 
+          "is_primary_key": true, 
+          "is_foreign_key": true, 
+          "nullable": false, 
+          "unique": false, 
+          "references": "orders",
+          "primary_key_order": 1,
+          "related_usecase_ids": ["UC8"] 
+        },
+        { 
+          "name": "product_id", 
+          "type": "INT", 
+          "is_primary_key": true, 
+          "is_foreign_key": true, 
+          "nullable": false, 
+          "unique": false, 
+          "references": "products",
+          "primary_key_order": 2,
+          "related_usecase_ids": ["UC8"] 
+        },
+        { 
+          "name": "quantity", 
+          "type": "INT", 
+          "is_primary_key": false, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": false, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": ["UC8"] 
+        },
+        { 
+          "name": "unit_price", 
+          "type": "DECIMAL(10,2)", 
+          "is_primary_key": false, 
+          "is_foreign_key": false, 
+          "nullable": false, 
+          "unique": false, 
+          "references": null,
+          "primary_key_order": null,
+          "related_usecase_ids": ["UC8"] 
+        }
+      ]
     }
   ],
   "relationships": [
-    { "from_table": "projects", "to_table": "users", "type": "many-to-one" }
+    { 
+      "from_table": "user_roles", 
+      "to_table": "users", 
+      "type": "many-to-one" 
+    },
+    { 
+      "from_table": "user_roles", 
+      "to_table": "roles", 
+      "type": "many-to-one" 
+    },
+    { 
+      "from_table": "order_items", 
+      "to_table": "orders", 
+      "type": "many-to-one" 
+    },
+    { 
+      "from_table": "order_items", 
+      "to_table": "products", 
+      "type": "many-to-one" 
+    }
   ]
 }
 
-DESIGN RULES AND LOGIC:
-- Table and column names MUST be in lowercase snake_case.
-- Every table MUST have a SINGLE 'id' column as its primary key.
-- DO NOT use composite primary keys (multiple columns as primary key).
-- Any column where 'is_primary_key' is true MUST also have 'nullable' set to false. This is a strict rule.
-- Correctly identify all relationships (one-to-one, one-to-many, etc.) and define BOTH the foreign key column (with 'is_foreign_key: true' and 'references') AND the corresponding entry in the main 'relationships' array.
-- Use appropriate data types from this list: INT, VARCHAR(n), TEXT, BOOLEAN, DATETIME, DATE, DECIMAL(p, s).
-- Infer necessary tables from the provided use cases. For example, "User Login" implies a 'users' table.
-- **CRITICAL TRACEABILITY REQUIREMENT**: For each individual column, you MUST determine which use cases require its existence. Populate the 'related_usecase_ids' array with the 'id' of every relevant use case. If a column is required by multiple use cases (e.g., 'username' for login and registration), include all their IDs. If the origin is unclear, return an empty array [].
+**DESIGN RULES AND LOGIC:**
+
+1. **PRIMARY KEYS:**
+   - Single PK: Use 'id' INT AUTO_INCREMENT, NO primary_key_order field
+   - Composite PK: Must have primary_key_order (1,2,3...), all columns NOT NULL
+
+2. **MANY-TO-MANY:**
+   - MUST create junction tables with composite primary keys
+   - Name pattern: table1_table2 (alphabetical order)
+   - All foreign keys in junction tables MUST be NOT NULL
+
+3. **DATA TYPES:**
+   - Strings: VARCHAR(255) for short text, TEXT for long content
+   - Numbers: INT for integers, DECIMAL(10,2) for money
+   - Boolean: TINYINT(1)
+   - Dates: DATETIME for timestamps, DATE for dates only
+
+4. **CONSTRAINTS:**
+   - Foreign keys: NOT NULL by default
+   - Primary keys: ALWAYS NOT NULL
+   - Unique constraints: Be careful with nullable columns
+
+5. **SYSTEM COLUMNS:**
+   - Add created_at, updated_at to all tables
+   - Add deleted_at for soft delete (except junction tables)
+
+6. **NAMING:**
+   - lowercase snake_case only
+   - Foreign keys: referenced_table_id
+   - Primary keys: 'id' for single, composite for junction tables
+   - Always use English names for all tables, columns, and relationships (avoid local-language identifiers).
+
+7. **USE CASE TRACEABILITY:**
+   - For each individual column, you MUST determine which use cases require its existence
+   - Populate 'related_usecase_ids' array with the ID of every relevant use case
+   - If a column is required by multiple use cases, include all their IDs
+   - If the origin is unclear, return an empty array []
+
+**DETECTING MANY-TO-MANY FROM USE CASES:**
+- When use case mentions "many A related to many B" → create junction table A_B
+- When use case mentions "list", "multiple items", "details" → may need junction table
+- Example: "Manage products in orders" → order_items
+- Example: "Assign multiple roles to users" → user_roles
+
+Infer necessary tables from the provided use cases and strictly apply all design rules above.
 `
 
     }
@@ -309,6 +660,24 @@ export class GeminiService {
     private readonly MAX_BATCHES = 100;
     private readonly MAX_ATTEMPTS_PER_OFFSET = 3;
     private readonly DB_GEN_BATCH_SIZE = 10;
+
+    /**
+ * STANDARDIZE: Chuẩn hóa toàn bộ database schema theo SQL standards
+ */
+    private standardizeDatabaseSchema(databaseSchema: any): any {
+        console.log("🔄 Standardizing database schema for SQL compliance...");
+
+        // Thực hiện tuần tự các bước chuẩn hóa
+        databaseSchema = this.standardizeDataTypes(databaseSchema);
+        databaseSchema = this.normalizePrimaryKeys(databaseSchema);
+        databaseSchema = this.enhanceConstraints(databaseSchema);
+        databaseSchema = this.validateAndFixJunctionTables(databaseSchema);
+        databaseSchema = this.addMissingSystemColumns(databaseSchema);
+        databaseSchema = this.validateNamingConventions(databaseSchema);
+
+        console.log("✅ Database schema standardization completed");
+        return databaseSchema;
+    }
 
     private cleanJsonString(text: string): string {
         const pattern = /```(?:json)?\s*([\s\S]*?)\s*```/g;
@@ -461,6 +830,347 @@ export class GeminiService {
         const partial = text.slice(start);
         return { jsonText: partial, complete: false };
     }
+
+    /**
+ * FIX 1: Data Type Mapping chuẩn hóa
+ */
+    private standardizeDataTypes(databaseSchema: any): any {
+        const typeMapping: { [key: string]: string } = {
+            'STRING': 'VARCHAR(255)',
+            'TEXT': 'TEXT',
+            'INTEGER': 'INT',
+            'INT': 'INT',
+            'BIGINT': 'BIGINT',
+            'SMALLINT': 'SMALLINT',
+            'TINYINT': 'TINYINT',
+            'BOOLEAN': 'TINYINT(1)',
+            'BOOL': 'TINYINT(1)',
+            'FLOAT': 'DECIMAL(10,2)',
+            'DOUBLE': 'DECIMAL(15,4)',
+            'DECIMAL': 'DECIMAL(10,2)',
+            'NUMERIC': 'DECIMAL(10,2)',
+            'DATE': 'DATE',
+            'DATETIME': 'DATETIME',
+            'TIMESTAMP': 'TIMESTAMP',
+            'TIME': 'TIME',
+            'BLOB': 'BLOB',
+            'LONGBLOB': 'LONGBLOB',
+            'LONGTEXT': 'LONGTEXT'
+        };
+
+        databaseSchema.tables.forEach((table: any) => {
+            table.columns.forEach((column: any) => {
+                const originalType = column.type?.toUpperCase();
+
+                if (originalType && typeMapping[originalType]) {
+                    const newType = typeMapping[originalType];
+                    if (originalType !== newType) {
+                        console.log(`↪️ Standardizing type: ${table.name}.${column.name} ${originalType} → ${newType}`);
+                        column.type = newType;
+                    }
+                }
+
+                // Xử lý các type có length specification
+                if (column.type && column.type.includes('(') && !column.type.includes(')')) {
+                    console.warn(`⚠️ Fixing malformed type: ${column.type}`);
+                    column.type = column.type.replace('(', '').trim();
+                }
+            });
+        });
+
+        return databaseSchema;
+    }
+
+    /**
+ * FIX 2: Chuẩn hóa Primary Key Logic
+ */
+    private normalizePrimaryKeys(databaseSchema: any): any {
+        databaseSchema.tables.forEach((table: any) => {
+            const primaryKeys = table.columns.filter((col: any) => col.is_primary_key);
+
+            if (primaryKeys.length === 0) {
+                // Tự động thêm primary key nếu thiếu
+                console.log(`🔑 Adding auto primary key to table: ${table.name}`);
+                table.columns.unshift({
+                    name: "id",
+                    type: "INT",
+                    is_primary_key: true,
+                    is_foreign_key: false,
+                    nullable: false,
+                    unique: true,
+                    references: null,
+                    // KHÔNG CÓ primary_key_order cho single PK
+                    related_usecase_ids: []
+                });
+            }
+            else if (primaryKeys.length === 1) {
+                // SINGLE PK: Xóa primary_key_order
+                const singlePK = primaryKeys[0];
+                if (singlePK.primary_key_order !== undefined) {
+                    console.log(`🔧 Removing primary_key_order from single PK: ${table.name}.${singlePK.name}`);
+                    delete singlePK.primary_key_order;
+                }
+                // Đảm bảo NOT NULL
+                singlePK.nullable = false;
+            }
+            else {
+                // COMPOSITE PK: Đảm bảo orders hợp lệ
+                console.log(`🔑 Normalizing composite key for table: ${table.name}`);
+
+                // Sắp xếp columns theo thứ tự xuất hiện
+                const tableColumnNames = table.columns.map((col: any) => col.name);
+                primaryKeys.sort((a: any, b: any) =>
+                    tableColumnNames.indexOf(a.name) - tableColumnNames.indexOf(b.name)
+                );
+
+                // Gán orders tuần tự
+                primaryKeys.forEach((pk: any, index: number) => {
+                    pk.primary_key_order = index + 1;
+                    pk.nullable = false; // Bắt buộc NOT NULL
+
+                    // Đảm bảo type consistency trong composite key
+                    if (pk.type === 'VARCHAR' && !pk.length) {
+                        pk.length = '255'; // Default length
+                    }
+                });
+
+                // Validate orders
+                const orders = primaryKeys.map((pk: any) => pk.primary_key_order).sort();
+                const expectedOrders = Array.from({ length: primaryKeys.length }, (_, i) => i + 1);
+
+                if (JSON.stringify(orders) !== JSON.stringify(expectedOrders)) {
+                    console.warn(`🔄 Reordering composite key for table ${table.name}`);
+                    primaryKeys.forEach((pk: any, index: number) => {
+                        pk.primary_key_order = index + 1;
+                    });
+                }
+            }
+        });
+
+        return databaseSchema;
+    }
+
+    /**
+ * FIX 3: Enhanced Constraints
+ */
+    private enhanceConstraints(databaseSchema: any): any {
+        databaseSchema.tables.forEach((table: any) => {
+            table.columns.forEach((column: any) => {
+                // PRIMARY KEY luôn NOT NULL
+                if (column.is_primary_key) {
+                    column.nullable = false;
+                }
+
+                // FOREIGN KEY mặc định NOT NULL (trừ khi có lý do đặc biệt)
+                if (column.is_foreign_key && column.nullable === undefined) {
+                    column.nullable = false;
+                }
+
+                // UNIQUE constraint warning cho nullable columns
+                if (column.unique && column.nullable) {
+                    console.warn(`💡 UNIQUE constraint on nullable column: ${table.name}.${column.name}`);
+                }
+
+                // Đảm bảo DEFAULT values hợp lệ
+                if (column.default) {
+                    column.default = this.validateDefaultValue(column.default, column.type);
+                }
+
+                // Auto-increment logic cho single PK
+                if (column.is_primary_key &&
+                    !column.is_foreign_key &&
+                    ['INT', 'BIGINT'].includes(column.type) &&
+                    !column.default) {
+                    // Thêm hint cho auto-increment (sẽ được xử lý ở SQL generation)
+                    column.auto_increment = true;
+                }
+            });
+        });
+
+        return databaseSchema;
+    }
+
+    /**
+     * FIX 4: Many-to-Many Junction Tables Validation
+     */
+    private validateAndFixJunctionTables(databaseSchema: any): any {
+        databaseSchema.tables.forEach((table: any) => {
+            // Phát hiện junction table (naming pattern: table1_table2)
+            const isJunctionTable = table.name.includes('_') &&
+                table.columns.some(col => col.is_foreign_key);
+
+            if (isJunctionTable) {
+                console.log(`🔗 Validating junction table: ${table.name}`);
+
+                const foreignKeys = table.columns.filter(col => col.is_foreign_key);
+                const primaryKeys = table.columns.filter(col => col.is_primary_key);
+
+                // Đảm bảo có ít nhất 2 foreign keys
+                if (foreignKeys.length < 2) {
+                    console.warn(`⚠️ Junction table ${table.name} should have at least 2 foreign keys`);
+                }
+
+                // Đảm bảo foreign keys là NOT NULL
+                foreignKeys.forEach(fk => {
+                    if (fk.nullable !== false) {
+                        console.log(`🔧 Fixing nullable foreign key: ${table.name}.${fk.name}`);
+                        fk.nullable = false;
+                    }
+                });
+
+                // Đảm bảo có composite primary key
+                if (primaryKeys.length < 2 && foreignKeys.length >= 2) {
+                    console.log(`🔧 Adding composite primary key to junction table: ${table.name}`);
+
+                    // Đánh dấu tất cả foreign keys là primary keys
+                    foreignKeys.forEach((fk, index) => {
+                        fk.is_primary_key = true;
+                        fk.primary_key_order = index + 1;
+                        fk.nullable = false;
+                    });
+                }
+
+                // Validate composite key structure
+                if (primaryKeys.length >= 2) {
+                    const invalidPKs = primaryKeys.filter(pk => pk.nullable);
+                    if (invalidPKs.length > 0) {
+                        console.warn(`⚠️ Fixing nullable composite key columns in ${table.name}`);
+                        invalidPKs.forEach(pk => pk.nullable = false);
+                    }
+                }
+            }
+        });
+
+        return databaseSchema;
+    }
+
+    /**
+     * FIX 5: Thêm system columns missing
+     */
+    private addMissingSystemColumns(databaseSchema: any): any {
+        const systemColumns = [
+            {
+                name: "created_at",
+                type: "DATETIME",
+                is_primary_key: false,
+                is_foreign_key: false,
+                nullable: false,
+                unique: false,
+                references: null,
+                related_usecase_ids: [],
+                default: "CURRENT_TIMESTAMP"
+            },
+            {
+                name: "updated_at",
+                type: "DATETIME",
+                is_primary_key: false,
+                is_foreign_key: false,
+                nullable: true,
+                unique: false,
+                references: null,
+                related_usecase_ids: [],
+                default: "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+            }
+        ];
+
+        databaseSchema.tables.forEach((table: any) => {
+            // Bỏ qua junction tables cho deleted_at
+            const isJunctionTable = table.name.includes('_') &&
+                table.columns.some(col => col.is_foreign_key);
+
+            const existingColumns = new Set(table.columns.map(col => col.name.toLowerCase()));
+
+            // Thêm system columns nếu chưa có
+            systemColumns.forEach(sysCol => {
+                if (!existingColumns.has(sysCol.name)) {
+                    table.columns.push({ ...sysCol });
+                    console.log(`⚙️ Added system column: ${table.name}.${sysCol.name}`);
+                }
+            });
+
+            // Thêm deleted_at cho non-junction tables
+            if (!isJunctionTable && !existingColumns.has('deleted_at')) {
+                table.columns.push({
+                    name: "deleted_at",
+                    type: "DATETIME",
+                    is_primary_key: false,
+                    is_foreign_key: false,
+                    nullable: true,
+                    unique: false,
+                    references: null,
+                    related_usecase_ids: []
+                });
+                console.log(`⚙️ Added soft delete column: ${table.name}.deleted_at`);
+            }
+        });
+
+        return databaseSchema;
+    }
+
+    /**
+     * FIX 6: Validate naming conventions
+     */
+    private validateNamingConventions(databaseSchema: any): any {
+        databaseSchema.tables.forEach((table: any) => {
+            // Table naming convention
+            if (!/^[a-z][a-z0-9_]*$/.test(table.name)) {
+                console.warn(`💡 Table name should be lowercase snake_case: ${table.name}`);
+            }
+
+            table.columns.forEach((column: any) => {
+                // Column naming convention
+                if (!/^[a-z][a-z0-9_]*$/.test(column.name)) {
+                    console.warn(`💡 Column name should be lowercase snake_case: ${table.name}.${column.name}`);
+                }
+
+                // Foreign key naming convention
+                if (column.is_foreign_key && !column.name.endsWith('_id')) {
+                    console.warn(`💡 Foreign key should end with '_id': ${table.name}.${column.name}`);
+                }
+
+                // Primary key naming convention (single PK)
+                const primaryKeys = table.columns.filter(col => col.is_primary_key);
+                if (primaryKeys.length === 1 && primaryKeys[0].name === column.name) {
+                    if (column.name !== 'id' && !column.name.endsWith('_id')) {
+                        console.warn(`💡 Single primary key should be named 'id' or end with '_id': ${table.name}.${column.name}`);
+                    }
+                }
+            });
+        });
+
+        return databaseSchema;
+    }
+    /**
+     * Utility: Validate default values
+     */
+    private validateDefaultValue(defaultValue: string, columnType: string): string {
+        if (!defaultValue) return defaultValue;
+
+        const lowerValue = defaultValue.toLowerCase();
+
+        // MySQL keywords
+        if (['current_timestamp', 'now()', 'null', 'true', 'false'].includes(lowerValue)) {
+            return lowerValue.toUpperCase();
+        }
+
+        // String types cần quotes
+        if (['VARCHAR', 'CHAR', 'TEXT', 'LONGTEXT'].includes(columnType)) {
+            if (!defaultValue.startsWith("'") && !defaultValue.endsWith("'")) {
+                return `'${defaultValue}'`;
+            }
+        }
+
+        // Numeric types - validate format
+        if (['INT', 'BIGINT', 'DECIMAL', 'FLOAT', 'DOUBLE'].includes(columnType)) {
+            if (isNaN(Number(defaultValue)) && !['null', 'true', 'false'].includes(lowerValue)) {
+                console.warn(`⚠️ Invalid numeric default: ${defaultValue} for type ${columnType}`);
+                return 'NULL';
+            }
+        }
+
+        return defaultValue;
+    }
+
 
     private tryParseNdjson(text: string): any[] | null {
         const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -671,6 +1381,8 @@ export class GeminiService {
 
         const requirementsJson = JSON.stringify(simplifiedRequirements, null, 2);
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+
+        // Sử dụng prompt enhanced (cần thêm vào prompts object)
         const prompt = prompts[lang].databaseDesign(requirementsJson);
 
         console.log(`📊 Generating database schema batch for ${requirements.length} use cases`);
@@ -692,10 +1404,8 @@ export class GeminiService {
             parsedResponse = JSON.parse(repairedJson);
         }
 
-        // Xử lý cả hai định dạng response từ Gemini
+        // Xử lý response format
         let finalSchema: any;
-
-        // Định dạng 1: Mảng các bảng (Gemini đang trả về)
         if (Array.isArray(parsedResponse)) {
             console.log(`🔍 Detected array format with ${parsedResponse.length} tables`);
             finalSchema = {
@@ -704,36 +1414,176 @@ export class GeminiService {
                 tables: parsedResponse,
                 relationships: this.inferRelationships(parsedResponse)
             };
-        }
-        // Định dạng 2: Object schema đầy đủ
-        else if (parsedResponse && typeof parsedResponse === 'object') {
+        } else if (parsedResponse && typeof parsedResponse === 'object') {
             console.log(`🔍 Detected object format`);
             finalSchema = parsedResponse;
 
-            // Đảm bảo có đầy đủ các trường cần thiết
+            // Đảm bảo có đầy đủ các trường
             if (!finalSchema.tables || !Array.isArray(finalSchema.tables)) {
                 finalSchema.tables = [];
             }
             if (!finalSchema.relationships || !Array.isArray(finalSchema.relationships)) {
                 finalSchema.relationships = this.inferRelationships(finalSchema.tables);
             }
-            if (!finalSchema.name) {
-                finalSchema.name = "generated_database";
-            }
-            if (!finalSchema.description) {
-                finalSchema.description = "Database schema generated from use cases";
-            }
-        }
-        else {
+            if (!finalSchema.name) finalSchema.name = "generated_database";
+            if (!finalSchema.description) finalSchema.description = "Database schema generated from use cases";
+        } else {
             throw new Error("Invalid response format from Gemini");
         }
 
-        console.log(`✅ Successfully processed schema with ${finalSchema.tables.length} tables`);
+        console.log(`✅ Raw schema processed with ${finalSchema.tables.length} tables`);
 
-        // Xử lý type/length và đảm bảo single primary key
+        // 🔴 ÁP DỤNG TẤT CẢ FIXES CHUẨN SQL
+        console.log("🔄 Applying SQL standardization fixes...");
+        finalSchema = this.standardizeDatabaseSchema(finalSchema);
+
+        // Xử lý type/length và composite key logic
         finalSchema = this._parseColumnTypesAndLengths(finalSchema);
 
+        // Ultimate composite key fix
+        console.log("🔒 Running ultimate composite key validation...");
+        finalSchema = this.ultimateCompositeKeyFix(finalSchema);
+
+        // Final validation
+        this.validateAllCompositeKeys(finalSchema.tables);
+
+        console.log(`🎉 Final schema: ${finalSchema.tables.length} tables, ${finalSchema.relationships.length} relationships`);
+
         return finalSchema;
+    }
+
+    /**
+     * ULTIMATE FIX - Đảm bảo 100% không còn lỗi composite key
+     */
+    private ultimateCompositeKeyFix(databaseSchema: any): any {
+        if (!databaseSchema?.tables) return databaseSchema;
+
+        console.log("🛠️ Applying ULTIMATE composite key fix...");
+
+        for (const table of databaseSchema.tables) {
+            if (!table?.columns) continue;
+
+            const primaryKeys = table.columns.filter(col => col.is_primary_key === true);
+
+            if (primaryKeys.length > 1) {
+                console.log(`🔑 Table ${table.name}: Found ${primaryKeys.length} primary keys (COMPOSITE KEY)`);
+
+                // 🔴 FIX TRIỆT ĐỂ: Đảm bảo mọi composite key đều có primary_key_order
+                let order = 1;
+                for (const pk of primaryKeys) {
+                    if (pk.primary_key_order == null) {
+                        console.log(`   🛠️ FIXING: ${pk.name} - setting primary_key_order = ${order}`);
+                        pk.primary_key_order = order;
+                    } else if (pk.primary_key_order !== order) {
+                        console.log(`   🛠️ FIXING: ${pk.name} - correcting primary_key_order ${pk.primary_key_order} → ${order}`);
+                        pk.primary_key_order = order;
+                    }
+                    order++;
+
+                    // Đảm bảo primary key không thể null
+                    pk.nullable = false;
+                }
+
+                console.log(`✅ Table ${table.name}: Composite key FIXED`);
+            } else if (primaryKeys.length === 1) {
+                // Single primary key - đảm bảo primary_key_order là null
+                const singlePK = primaryKeys[0];
+                if (singlePK.primary_key_order != null) {
+                    console.log(`🛠️ Table ${table.name}: Converting to single primary key, setting primary_key_order = null`);
+                    singlePK.primary_key_order = null;
+                }
+            }
+        }
+
+        console.log("✅ ULTIMATE composite key fix completed");
+        return databaseSchema;
+    }
+
+    /**
+     * VALIDATION FINAL - Kiểm tra lần cuối trước khi trả về
+     */
+    private validateAllCompositeKeys(tables: any[]): void {
+        console.log("🔍 FINAL VALIDATION: Checking all composite keys...");
+
+        let errorCount = 0;
+
+        for (const table of tables) {
+            if (!table?.columns) continue;
+
+            const compositeKeys = table.columns.filter(col =>
+                col.is_primary_key && col.primary_key_order != null
+            );
+
+            if (compositeKeys.length > 1) {
+                // Kiểm tra orders có hợp lệ không
+                const orders = compositeKeys.map(pk => pk.primary_key_order).sort();
+                const expectedOrders = Array.from({ length: compositeKeys.length }, (_, i) => i + 1);
+
+                if (JSON.stringify(orders) !== JSON.stringify(expectedOrders)) {
+                    console.error(`❌ CRITICAL: Table ${table.name} still has invalid composite key order after all fixes!`);
+                    console.error(`   Current orders: [${orders.join(', ')}]`);
+                    console.error(`   Expected orders: [${expectedOrders.join(', ')}]`);
+                    errorCount++;
+
+                    // EMERGENCY FIX - Reset hoàn toàn
+                    console.log(`   🚨 EMERGENCY FIX: Resetting all orders for table ${table.name}`);
+                    compositeKeys.forEach((pk, index) => {
+                        pk.primary_key_order = index + 1;
+                    });
+                } else {
+                    console.log(`   ✅ Table ${table.name}: Composite key VALID - [${compositeKeys.map(pk => `${pk.name}(${pk.primary_key_order})`).join(', ')}]`);
+                }
+            }
+        }
+
+        if (errorCount > 0) {
+            console.error(`🚨 FINAL VALIDATION: Found ${errorCount} tables with composite key errors (EMERGENCY FIXED)`);
+        } else {
+            console.log("🎉 FINAL VALIDATION: All composite keys are VALID!");
+        }
+    }
+    /**
+    * Log trạng thái final của composite keys để debug
+    */
+    private logFinalCompositeKeyStatus(tables: any[]): void {
+        console.log("📊 FINAL COMPOSITE KEY STATUS:");
+
+        for (const table of tables) {
+            if (!table?.columns) continue;
+
+            const compositeKeys = table.columns.filter(col =>
+                col.is_primary_key && col.primary_key_order != null
+            );
+
+            if (compositeKeys.length > 0) {
+                const keyInfo = compositeKeys.map(pk =>
+                    `${pk.name}(${pk.primary_key_order})`
+                ).join(', ');
+                console.log(`   📋 ${table.name}: ${keyInfo}`);
+            }
+        }
+    }
+    private validateCompositeKeys(tables: any[]): void {
+        for (const table of tables) {
+            const primaryKeys = table.columns.filter(col => col.is_primary_key);
+            const compositeKeys = primaryKeys.filter(pk => pk.primary_key_order != null);
+
+            if (compositeKeys.length > 0) {
+                // Kiểm tra composite key hợp lệ
+                const orders = compositeKeys.map(pk => pk.primary_key_order).sort();
+                const expectedOrders = Array.from({ length: compositeKeys.length }, (_, i) => i + 1);
+
+                if (JSON.stringify(orders) !== JSON.stringify(expectedOrders)) {
+                    console.error(`❌ Invalid composite key order in table ${table.name}`);
+                    // Tự động sửa order
+                    compositeKeys.forEach((pk, index) => {
+                        pk.primary_key_order = index + 1;
+                    });
+                }
+
+                console.log(`✅ Table ${table.name} has valid composite key with ${compositeKeys.length} columns`);
+            }
+        }
     }
 
     /**
@@ -741,7 +1591,7 @@ export class GeminiService {
      */
     private inferRelationships(tables: any[]): any[] {
         const relationships: any[] = [];
-        const tableNames = tables.map(t => t.name);
+        const tableMap = new Map(tables.map(t => [t.name, t]));
 
         for (const table of tables) {
             if (!table.columns || !Array.isArray(table.columns)) continue;
@@ -749,11 +1599,11 @@ export class GeminiService {
             for (const column of table.columns) {
                 // Nếu là foreign key và có references
                 if (column.is_foreign_key && column.references) {
-                    const referencedTable = column.references;
-                    if (tableNames.includes(referencedTable)) {
+                    const referencedTable = tableMap.get(column.references);
+                    if (referencedTable) {
                         relationships.push({
                             from_table: table.name,
-                            to_table: referencedTable,
+                            to_table: column.references,
                             type: "many-to-one"
                         });
                     }
@@ -761,7 +1611,7 @@ export class GeminiService {
                 // Tự động phát hiện foreign key bằng naming convention
                 else if (column.name.endsWith('_id') && column.name !== 'id') {
                     const potentialTable = column.name.replace(/_id$/, '');
-                    if (tableNames.includes(potentialTable)) {
+                    if (tableMap.has(potentialTable)) {
                         relationships.push({
                             from_table: table.name,
                             to_table: potentialTable,
@@ -981,68 +1831,241 @@ export class GeminiService {
     private _parseColumnTypesAndLengths(databaseSchema: any): any {
         const typeRegex = /(\w+)\s*\(([\d,\s]+)\)/;
 
-        if (databaseSchema?.tables && Array.isArray(databaseSchema.tables)) {
-            for (const table of databaseSchema.tables) {
-                if (table?.columns && Array.isArray(table.columns)) {
-                    let primaryKeyCount = 0;
-                    let hasIdColumn = false;
+        if (!databaseSchema?.tables || !Array.isArray(databaseSchema.tables)) {
+            return databaseSchema;
+        }
 
-                    // Đếm số primary key hiện có và kiểm tra cột id
-                    for (const column of table.columns) {
-                        if (column.is_primary_key === true) {
-                            primaryKeyCount++;
-                        }
-                        if (column.name === 'id') {
-                            hasIdColumn = true;
-                        }
+        console.log(`🔧 Processing ${databaseSchema.tables.length} tables for type parsing and key validation`);
+
+        for (const table of databaseSchema.tables) {
+            if (!table?.columns || !Array.isArray(table.columns)) {
+                console.warn(`⚠️ Table ${table.name} has no columns array, skipping`);
+                continue;
+            }
+
+            console.log(`📋 Processing table: ${table.name} with ${table.columns.length} columns`);
+
+            // === XỬ LÝ TYPE VÀ LENGTH TRƯỚC ===
+            for (const column of table.columns) {
+                // 1. Xử lý type và length
+                if (typeof column.type === 'string') {
+                    const match = column.type.match(typeRegex);
+                    if (match) {
+                        column.type = match[1].toUpperCase();
+                        column.length = match[2].replace(/\s/g, '');
+                    } else {
+                        column.length = null;
                     }
+                }
 
-                    // Nếu có nhiều hơn 1 primary key, chỉ giữ lại cột 'id' làm primary key
-                    if (primaryKeyCount > 1) {
-                        console.warn(`⚠️ Table ${table.name} has ${primaryKeyCount} primary keys. Only keeping 'id' as primary key.`);
+                // 2. Đảm bảo các trường bắt buộc có giá trị mặc định
+                if (column.nullable === undefined) column.nullable = true;
+                if (column.unique === undefined) column.unique = false;
+                if (column.is_primary_key === undefined) column.is_primary_key = false;
+                if (column.is_foreign_key === undefined) column.is_foreign_key = false;
+                if (!column.related_usecase_ids || !Array.isArray(column.related_usecase_ids)) {
+                    column.related_usecase_ids = [];
+                }
+            }
 
-                        for (const column of table.columns) {
-                            // Chỉ giữ 'id' làm primary key, các cột khác chuyển thành không phải primary key
-                            if (column.name === 'id') {
-                                column.is_primary_key = true;
-                                column.nullable = false;
-                            } else {
-                                column.is_primary_key = false;
-                            }
-                        }
+            // === XỬ LÝ PRIMARY KEYS - FIX TRIỆT ĐỂ LỖI COMPOSITE KEY ===
+            const primaryKeys = table.columns.filter(col => col.is_primary_key === true);
+
+            if (primaryKeys.length === 0) {
+                // TRƯỜNG HỢP 1: Không có primary key
+                console.warn(`⚠️ Table ${table.name} has no primary key. Adding auto-increment 'id' column.`);
+                table.columns.unshift({
+                    name: "id",
+                    type: "INT",
+                    length: null,
+                    is_primary_key: true,
+                    is_foreign_key: false,
+                    nullable: false,
+                    unique: true,
+                    references: null,
+                    primary_key_order: null, // SINGLE KEY = null
+                    related_usecase_ids: []
+                });
+
+            } else if (primaryKeys.length === 1) {
+                // TRƯỜNG HỢP 2: Single primary key
+                const singlePK = primaryKeys[0];
+                // ĐẢM BẢO: Single key phải có primary_key_order = null
+                singlePK.primary_key_order = null;
+                singlePK.nullable = false; // Primary key không thể null
+                console.log(`✅ Table ${table.name} has single primary key: ${singlePK.name}`);
+
+            } else {
+                // TRƯỜNG HỢP 3: Composite primary key - FIX LỖI CHÍNH
+                console.log(`🔑 Table ${table.name} uses COMPOSITE KEY with ${primaryKeys.length} columns`);
+
+                // 🔴 FIX TRIỆT ĐỂ: ĐẢM BẢO MỌI COMPOSITE KEY ĐỀU CÓ primary_key_order
+                let needsOrderFix = false;
+
+                // Kiểm tra và gán primary_key_order cho tất cả composite keys
+                primaryKeys.forEach((pk, index) => {
+                    if (pk.primary_key_order == null) {
+                        console.warn(`   ↳ Missing primary_key_order for: ${pk.name}, assigning: ${index + 1}`);
+                        pk.primary_key_order = index + 1;
+                        needsOrderFix = true;
                     }
-                    // Nếu không có primary key nào, tạo cột id mới
-                    else if (primaryKeyCount === 0 && !hasIdColumn) {
-                        console.warn(`⚠️ Table ${table.name} has no primary key. Adding 'id' column.`);
-                        table.columns.unshift({
-                            name: "id",
-                            type: "INT",
-                            is_primary_key: true,
-                            is_foreign_key: false,
-                            nullable: false,
-                            unique: true,
-                            related_usecase_ids: []
-                        });
-                    }
+                    // Đảm bảo primary key không thể null
+                    pk.nullable = false;
+                });
 
-                    // Xử lý type và length
-                    for (const column of table.columns) {
-                        if (typeof column.type === 'string') {
-                            const match = column.type.match(typeRegex);
-                            if (match) {
-                                column.type = match[1].toUpperCase();
-                                column.length = match[2].replace(/\s/g, '');
-                            }
-                        }
+                if (needsOrderFix) {
+                    console.log(`✅ Fixed missing primary_key_order for table ${table.name}`);
+                }
 
-                        // Đảm bảo primary key không thể nullable
-                        if (column.is_primary_key === true) {
-                            column.nullable = false;
-                        }
+                // VALIDATE: Đảm bảo orders là duy nhất và liên tục từ 1->N
+                const orders = primaryKeys.map(pk => pk.primary_key_order).sort((a, b) => a - b);
+                const expectedOrders = Array.from({ length: primaryKeys.length }, (_, i) => i + 1);
+
+                if (JSON.stringify(orders) !== JSON.stringify(expectedOrders)) {
+                    console.warn(`🔄 Table ${table.name}: Reordering non-sequential primary_key_order`);
+
+                    // Sắp xếp primary keys và gán order mới
+                    primaryKeys.sort((a, b) => {
+                        // Sắp xếp theo thứ tự xuất hiện trong bảng hoặc theo name
+                        const indexA = table.columns.indexOf(a);
+                        const indexB = table.columns.indexOf(b);
+                        return indexA - indexB;
+                    });
+
+                    // Gán order tuần tự
+                    primaryKeys.forEach((pk, index) => {
+                        pk.primary_key_order = index + 1;
+                    });
+                }
+
+                console.log(`✅ Table ${table.name} composite key: ${primaryKeys.map(pk => `${pk.name}(${pk.primary_key_order})`).join(', ')}`);
+            }
+
+            // === VALIDATION FINAL - ĐẢM BẢO KHÔNG CÓ LỖI ===
+            const finalPrimaryKeys = table.columns.filter(col => col.is_primary_key);
+            const compositeKeys = finalPrimaryKeys.filter(pk => pk.primary_key_order != null);
+
+            if (compositeKeys.length > 1) {
+                // FINAL CHECK: Đảm bảo tất cả composite keys có order hợp lệ
+                const invalidKeys = compositeKeys.filter(pk =>
+                    pk.primary_key_order == null ||
+                    pk.primary_key_order < 1 ||
+                    pk.primary_key_order > compositeKeys.length
+                );
+
+                if (invalidKeys.length > 0) {
+                    console.error(`❌ CRITICAL: Table ${table.name} has invalid composite keys after processing. Emergency fix!`);
+
+                    // EMERGENCY FIX: Reset hoàn toàn
+                    compositeKeys.forEach((pk, index) => {
+                        pk.primary_key_order = index + 1;
+                    });
+                }
+
+                console.log(`🎯 Final validation: Table ${table.name} composite keys OK`);
+            }
+
+            // === THÊM CÁC CỘT SYSTEM MẶC ĐỊNH ===
+            this.addSystemColumns(table);
+        }
+
+        console.log(`✅ Completed processing all tables for type parsing and key validation`);
+        return databaseSchema;
+    }
+
+    /**
+     * Thêm các cột system mặc định cho mỗi bảng
+     */
+    private addSystemColumns(table: any): void {
+        const systemColumns = [];
+        const existingColumns = new Set(table.columns.map(col => col.name));
+
+        // 1. created_at và updated_at cho audit trail
+        if (!existingColumns.has('created_at')) {
+            systemColumns.push({
+                name: "created_at",
+                type: "DATETIME",
+                length: null,
+                is_primary_key: false,
+                is_foreign_key: false,
+                nullable: false,
+                unique: false,
+                references: null,
+                primary_key_order: null,
+                related_usecase_ids: [],
+                default: "CURRENT_TIMESTAMP"
+            });
+        }
+
+        if (!existingColumns.has('updated_at')) {
+            systemColumns.push({
+                name: "updated_at",
+                type: "DATETIME",
+                length: null,
+                is_primary_key: false,
+                is_foreign_key: false,
+                nullable: true,
+                unique: false,
+                references: null,
+                primary_key_order: null,
+                related_usecase_ids: [],
+                default: "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+            });
+        }
+
+        // 2. deleted_at cho soft delete (chỉ thêm nếu phù hợp)
+        const isJunctionTable = table.name.includes('_') && table.columns.some(col =>
+            col.is_foreign_key && col.references
+        );
+
+        if (!isJunctionTable && !existingColumns.has('deleted_at')) {
+            systemColumns.push({
+                name: "deleted_at",
+                type: "DATETIME",
+                length: null,
+                is_primary_key: false,
+                is_foreign_key: false,
+                nullable: true,
+                unique: false,
+                references: null,
+                primary_key_order: null,
+                related_usecase_ids: []
+            });
+        }
+
+        // Thêm system columns vào bảng
+        if (systemColumns.length > 0) {
+            table.columns.push(...systemColumns);
+            console.log(`⚙️ Added ${systemColumns.length} system columns to table ${table.name}`);
+        }
+    }
+
+    /**
+     * Hàm utility để validate và fix nhanh trước khi trả về
+     */
+    private ensureCompositeKeyOrderFinalCheck(databaseSchema: any): any {
+        if (!databaseSchema?.tables) return databaseSchema;
+
+        for (const table of databaseSchema.tables) {
+            if (!table?.columns) continue;
+
+            const compositeKeys = table.columns.filter(col =>
+                col.is_primary_key && col.primary_key_order != null
+            );
+
+            if (compositeKeys.length > 1) {
+                // FINAL GUARANTEE: Đảm bảo order hợp lệ
+                let order = 1;
+                for (const pk of compositeKeys) {
+                    if (pk.primary_key_order !== order) {
+                        console.log(`🔧 FINAL FIX: Setting primary_key_order for ${table.name}.${pk.name} to ${order}`);
+                        pk.primary_key_order = order;
                     }
+                    order++;
                 }
             }
         }
+
         return databaseSchema;
     }
 

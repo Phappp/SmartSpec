@@ -94,6 +94,29 @@ export default function initDatabaseRoute(): Router {
         databaseController.getTableRelationships
     );
 
+    // === ROUTES CHO COMPOSITE KEY MANAGEMENT ===
+
+    // [R] Lấy thông tin composite key của bảng
+    router.get(
+        "/:databaseId/tables/:tableName/composite-key",
+        requireAuthorizedUser,
+        databaseController.getCompositeKeyInfo
+    );
+
+    // [U] Tạo composite key mới
+    router.post(
+        "/:databaseId/tables/:tableName/composite-key",
+        requireAuthorizedUser,
+        databaseController.createCompositeKey
+    );
+
+    // [U] Chuyển từ composite key sang single key
+    router.post(
+        "/:databaseId/tables/:tableName/convert-to-single-key",
+        requireAuthorizedUser,
+        databaseController.convertToSingleKey
+    );
+
     // === ROUTES CHO VALIDATION & UTILITIES ===
 
     // [U] Validate foreign key
@@ -103,11 +126,32 @@ export default function initDatabaseRoute(): Router {
         databaseController.validateForeignKey
     );
 
+    // [U] Validate table structure
+    router.post(
+        "/:databaseId/validate-table",
+        requireAuthorizedUser,
+        databaseController.validateTableStructure
+    );
+
     // [R] Lấy danh sách tables cho references
     router.get(
         "/:databaseId/available-tables",
         requireAuthorizedUser,
         databaseController.getAvailableTablesForReferences
+    );
+
+    // [R] Lấy thống kê database
+    router.get(
+        "/:databaseId/stats",
+        requireAuthorizedUser,
+        databaseController.getDatabaseStats
+    );
+
+    // [R] Export database schema thành SQL
+    router.get(
+        "/:databaseId/export-sql",
+        requireAuthorizedUser,
+        databaseController.exportDatabaseSQL
     );
 
     return router;

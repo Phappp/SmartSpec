@@ -1,6 +1,7 @@
 import { Schema, model, InferSchemaType } from "mongoose";
 
 // Cấu trúc cột trong bảng
+// database.ts - Cập nhật columnSchema
 const columnSchema = new Schema({
     name: { type: String, required: true },
     type: { type: String, required: true },
@@ -9,10 +10,11 @@ const columnSchema = new Schema({
     is_foreign_key: { type: Boolean, default: false },
     nullable: { type: Boolean, default: true },
     unique: { type: Boolean, default: false },
-    references: { type: String }, // tên bảng được tham chiếu
-    related_usecase_ids: { type: [String], default: [] } // Mảng các ID của use case
+    references: { type: String },
+    related_usecase_ids: { type: [String], default: [] },
+    // Thêm field để xác định thứ tự trong composite key
+    primary_key_order: { type: Number, default: null } // 1, 2, 3... cho composite key
 }, { _id: false });
-
 // Cấu trúc bảng
 const tableSchema = new Schema({
     name: { type: String, required: true },

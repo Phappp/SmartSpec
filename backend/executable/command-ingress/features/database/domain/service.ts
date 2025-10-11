@@ -50,7 +50,7 @@ export class DatabaseService {
         }
 
         if (action === 'update') {
-            // Ngăn đổi tên cột PK nếu có FK đang reference
+            // Kiểm tra nếu có FK đang reference đến bảng này
             const referencingTables = database.tables.filter(t =>
                 t.columns.some(col =>
                     col.is_foreign_key && col.references === tableName
@@ -58,22 +58,37 @@ export class DatabaseService {
             );
 
             if (referencingTables.length > 0) {
-                console.warn(`⚠️ Table '${tableName}' is referenced by ${referencingTables.length} tables. PK changes will auto-sync.`);
+                console.warn(`⚠️ Table '${tableName}' is referenced by ${referencingTables.length} tables. PK changes may require FK updates.`);
             }
         }
 
-        // Kiểm tra PRIMARY KEY constraints
+        // Kiểm tra PRIMARY KEY constraints - UPDATED FOR COMPOSITE KEY
         const primaryKeys = table.columns.filter(col => col.is_primary_key);
-        if (primaryKeys.length === 0 && action === 'update') {
+        if (primaryKeys.length === 0) {
             throw new Error(`Table '${tableName}' must have at least one primary key`);
         }
 
+        // Kiểm tra composite key constraints
         if (primaryKeys.length > 1) {
-            throw new Error(`Table '${tableName}' has multiple primary keys (composite key). This feature may require special handling.`);
+            const invalidPrimaryKeys = primaryKeys.filter(pk => pk.nullable);
+            if (invalidPrimaryKeys.length > 0) {
+                throw new Error(
+                    `Composite primary key columns cannot be nullable: ` +
+                    `${invalidPrimaryKeys.map(pk => pk.name).join(', ')}`
+                );
+            }
+
+            // Kiểm tra primary_key_order
+            const orders = primaryKeys.map(pk => pk.primary_key_order).filter(order => order !== null && order !== undefined);
+            const uniqueOrders = Array.from(new Set(orders));
+            if (uniqueOrders.length !== primaryKeys.length) {
+                throw new Error(`Composite primary key must have unique primary_key_order values`);
+            }
         }
 
         return { database, table, primaryKeys };
     }
+
 
     /**
      * VALIDATION: Kiểm tra tính hợp lệ của FOREIGN KEY
@@ -94,40 +109,50 @@ export class DatabaseService {
             throw new Error(`Referenced table '${referencedTable}' does not exist`);
         }
 
-        // 2. Kiểm tra referenced table có PRIMARY KEY
+        // 2. Kiểm tra referenced table có PRIMARY KEY (single hoặc composite)
         const targetPrimaryKeys = targetTable.columns.filter(col => col.is_primary_key);
         if (targetPrimaryKeys.length === 0) {
             throw new Error(`Referenced table '${referencedTable}' has no primary key`);
         }
 
         // 3. Kiểm tra kiểu dữ liệu phải khớp với PRIMARY KEY của bảng được reference
-        const targetPrimaryKey = targetPrimaryKeys[0];
-        if (columnType !== targetPrimaryKey.type) {
+        const matchingPrimaryKey = targetPrimaryKeys.find(pk =>
+            columnType === pk.type
+        );
+
+        if (!matchingPrimaryKey) {
             throw new Error(
                 `Foreign key type mismatch: Column '${columnName}' (${columnType}) must match ` +
-                `primary key type of '${referencedTable}' (${targetPrimaryKey.type})`
+                `one of the primary key types in '${referencedTable}' ` +
+                `[${targetPrimaryKeys.map(pk => pk.type).join(', ')}]`
             );
         }
 
         // 4. Kiểm tra length/precision nếu có
-        if (columnType === 'DECIMAL' || targetPrimaryKey.type === 'DECIMAL') {
-            // Đảm bảo cả hai đều có length và khớp nhau
+        if (columnType === 'DECIMAL' || matchingPrimaryKey.type === 'DECIMAL') {
             const column = database.tables
                 .find(t => t.name === tableName)
                 ?.columns.find(c => c.name === columnName);
 
-            if (column?.length !== targetPrimaryKey.length) {
+            if (column?.length !== matchingPrimaryKey.length) {
                 console.warn(`DECIMAL precision/scale mismatch between foreign key and referenced primary key`);
             }
         }
 
-        // 5. Kiểm tra circular reference (bảng không thể reference chính nó)
+        // 5. Kiểm tra circular reference
         if (tableName === referencedTable) {
             throw new Error(`Circular reference detected: Table '${tableName}' cannot reference itself`);
         }
 
-        return { targetTable, targetPrimaryKey };
+        // 6. Cảnh báo đặc biệt cho composite key references
+        if (targetPrimaryKeys.length > 1) {
+            console.warn(`⚠️ Referenced table '${referencedTable}' has composite primary key. ` +
+                `Ensure foreign key relationships are properly defined for all key columns.`);
+        }
+
+        return { targetTable, targetPrimaryKeys, matchingPrimaryKey };
     }
+
 
     /**
      * VALIDATION: Kiểm tra tính duy nhất của tên bảng và cột
@@ -158,16 +183,27 @@ export class DatabaseService {
             throw new Error("Table must have at least one column");
         }
 
-        // Kiểm tra chỉ có một PRIMARY KEY
-        const primaryKeyCount = tableData.columns.filter((col: any) => col.is_primary_key).length;
-        if (primaryKeyCount > 1) {
-            throw new Error("Table can only have one primary key (composite keys not supported)");
+        // VALIDATION PRIMARY KEY - UPDATED FOR COMPOSITE KEY
+        const primaryKeyColumns = tableData.columns.filter((col: any) => col.is_primary_key);
+
+        // Kiểm tra có ít nhất một primary key
+        if (primaryKeyColumns.length === 0) {
+            throw new Error("Table must have at least one primary key column");
         }
 
-        // Kiểm tra PRIMARY KEY không thể nullable
-        const primaryKey = tableData.columns.find((col: any) => col.is_primary_key);
-        if (primaryKey && primaryKey.nullable) {
-            throw new Error("Primary key cannot be nullable");
+        // Kiểm tra single primary key
+        if (primaryKeyColumns.length === 1) {
+            const primaryKey = primaryKeyColumns[0];
+            if (primaryKey.nullable) {
+                throw new Error("Primary key cannot be nullable");
+            }
+            // Đảm bảo primary_key_order = null cho single key
+            primaryKey.primary_key_order = null;
+        }
+
+        // Kiểm tra composite primary key
+        if (primaryKeyColumns.length > 1) {
+            this.validateCompositePrimaryKey(tableData);
         }
 
         // VALIDATION: Kiểm tra DEFAULT values hợp lệ
@@ -252,7 +288,7 @@ export class DatabaseService {
 
             // Khuyến nghị naming convention
             if (column.is_primary_key && !column.name.toLowerCase().endsWith('_id') &&
-                column.name.toLowerCase() !== 'id') {
+                column.name.toLowerCase() !== 'id' && primaryKeyColumns.length === 1) {
                 console.warn(`💡 Consider naming primary key as 'id' or ending with '_id': ${column.name}`);
             }
 
@@ -298,6 +334,67 @@ export class DatabaseService {
         }
     }
 
+    /**
+    * VALIDATION: Kiểm tra composite primary key - NEW METHOD
+    */
+    private validateCompositePrimaryKey(tableData: any) {
+        const primaryKeyColumns = tableData.columns.filter((col: any) => col.is_primary_key);
+
+        console.log(`🔑 Composite primary key detected with ${primaryKeyColumns.length} columns`);
+
+        // 1. Kiểm tra tất cả primary key columns phải có primary_key_order
+        const columnsWithoutOrder = primaryKeyColumns.filter((col: any) =>
+            col.primary_key_order === null || col.primary_key_order === undefined
+        );
+
+        if (columnsWithoutOrder.length > 0) {
+            throw new Error(
+                `Composite primary key columns must have primary_key_order: ` +
+                `${columnsWithoutOrder.map((col: any) => col.name).join(', ')}`
+            );
+        }
+
+        // 2. Kiểm tra primary_key_order là duy nhất và liên tục
+        const orders = primaryKeyColumns
+            .map((col: any) => col.primary_key_order)
+            .sort((a: number, b: number) => a - b);
+
+        const uniqueOrders = Array.from(new Set(orders));
+        if (uniqueOrders.length !== orders.length) {
+            throw new Error("Duplicate primary_key_order values in composite key");
+        }
+
+        // 3. Kiểm tra orders bắt đầu từ 1 và liên tục
+        for (let i = 0; i < orders.length; i++) {
+            if (orders[i] !== i + 1) {
+                throw new Error(
+                    `Composite key orders must start from 1 and be consecutive. ` +
+                    `Found: ${orders.join(', ')}`
+                );
+            }
+        }
+
+        // 4. Kiểm tra không có primary key nào là nullable
+        const nullablePrimaryKeys = primaryKeyColumns.filter((col: any) => col.nullable);
+        if (nullablePrimaryKeys.length > 0) {
+            throw new Error(
+                `Primary key columns cannot be nullable: ` +
+                `${nullablePrimaryKeys.map((col: any) => col.name).join(', ')}`
+            );
+        }
+
+        // 5. Cảnh báo về performance
+        console.warn(`⚠️ Composite primary key may impact performance. Consider using surrogate key.`);
+
+        // 6. Kiểm tra tên cột không trùng
+        const columnNames = primaryKeyColumns.map(col => col.name.toLowerCase());
+        const duplicateNames = columnNames.filter((name, index) => columnNames.indexOf(name) !== index);
+        if (duplicateNames.length > 0) {
+            throw new Error(`Duplicate column names in composite key: ${duplicateNames.join(', ')}`);
+        }
+    }
+
+
     private isValidNumericDefault(value: string): boolean {
         if (value.toLowerCase() === 'null') return true;
         return !isNaN(Number(value)) ||
@@ -316,16 +413,13 @@ export class DatabaseService {
         const database = await DatabaseModel.findById(databaseId);
         if (!database) return;
 
-        // Tìm PK cũ và PK mới
-        const oldPK = oldTable.columns.find((col: any) => col.is_primary_key);
-        const newPK = newTable.columns.find((col: any) => col.is_primary_key);
+        // Lấy tất cả primary keys (có thể là single hoặc composite)
+        const oldPKs = oldTable.columns.filter((col: any) => col.is_primary_key);
+        const newPKs = newTable.columns.filter((col: any) => col.is_primary_key);
 
-        // Nếu không có PK hoặc không thay đổi type → không làm gì
-        if (!oldPK || !newPK || oldPK.type === newPK.type) {
-            return;
-        }
-
-        console.log(`🔄 PK type changed from ${oldPK.type} to ${newPK.type}. Updating related FKs...`);
+        console.log(`🔄 Primary key structure changed. Updating related FKs...`);
+        console.log(`   Old PKs: ${oldPKs.map(pk => `${pk.name}(${pk.type})`).join(', ')}`);
+        console.log(`   New PKs: ${newPKs.map(pk => `${pk.name}(${pk.type})`).join(', ')}`);
 
         // Tìm tất cả các bảng có FK reference đến bảng này
         const tablesWithReferences = database.tables.filter(table =>
@@ -340,32 +434,47 @@ export class DatabaseService {
         for (const referencingTable of tablesWithReferences) {
             for (const column of referencingTable.columns) {
                 if (column.is_foreign_key && column.references === tableName) {
-                    console.log(`↪️ Updating FK: ${referencingTable.name}.${column.name} from ${column.type} to ${newPK.type}`);
+                    // Tìm primary key tương ứng dựa trên tên cột hoặc type matching
+                    let correspondingNewPK = newPKs.find(pk =>
+                        pk.name.toLowerCase() === column.name.toLowerCase()
+                    );
 
-                    try {
-                        // Cập nhật trong database
-                        const updateResult = await DatabaseModel.updateOne(
-                            {
-                                _id: databaseId,
-                                "tables.name": referencingTable.name,
-                                "tables.columns.name": column.name
-                            },
-                            {
-                                $set: {
-                                    "tables.$.columns.$[col].type": newPK.type,
-                                    "tables.$.columns.$[col].length": newPK.length
-                                }
-                            },
-                            {
-                                arrayFilters: [{ "col.name": column.name }]
-                            }
-                        );
-
-                        if (updateResult.modifiedCount > 0) {
-                            updatedCount++;
+                    // Nếu không tìm thấy bằng tên, tìm bằng type matching với old PK
+                    if (!correspondingNewPK) {
+                        const oldPK = oldPKs.find(pk => pk.type === column.type);
+                        if (oldPK) {
+                            const oldPKIndex = oldPKs.indexOf(oldPK);
+                            correspondingNewPK = newPKs[oldPKIndex];
                         }
-                    } catch (error) {
-                        console.error(`❌ Failed to update FK ${referencingTable.name}.${column.name}:`, error);
+                    }
+
+                    if (correspondingNewPK && correspondingNewPK.type !== column.type) {
+                        console.log(`↪️ Updating FK: ${referencingTable.name}.${column.name} from ${column.type} to ${correspondingNewPK.type}`);
+
+                        try {
+                            const updateResult = await DatabaseModel.updateOne(
+                                {
+                                    _id: databaseId,
+                                    "tables.name": referencingTable.name,
+                                    "tables.columns.name": column.name
+                                },
+                                {
+                                    $set: {
+                                        "tables.$.columns.$[col].type": correspondingNewPK.type,
+                                        "tables.$.columns.$[col].length": correspondingNewPK.length
+                                    }
+                                },
+                                {
+                                    arrayFilters: [{ "col.name": column.name }]
+                                }
+                            );
+
+                            if (updateResult.modifiedCount > 0) {
+                                updatedCount++;
+                            }
+                        } catch (error) {
+                            console.error(`❌ Failed to update FK ${referencingTable.name}.${column.name}:`, error);
+                        }
                     }
                 }
             }
@@ -437,7 +546,7 @@ export class DatabaseService {
      * [C] Thêm một bảng mới với validation đầy đủ
      */
     public async addTableToDatabase(databaseId: string, tableData: any) {
-        // Validate table structure
+        // Validate table structure (includes composite key validation)
         this.validateTableStructure(tableData);
 
         const database = await DatabaseModel.findById(databaseId);
@@ -541,6 +650,7 @@ export class DatabaseService {
         return await DatabaseModel.findById(databaseId);
     }
 
+
     /**
      * [D] Xóa một bảng với validation constraints
      */
@@ -565,8 +675,13 @@ export class DatabaseService {
         // Enrich tables với thông tin references chi tiết
         const enrichedTables = database.tables.map(table => {
             const tableObj = table.toObject();
+            const primaryKeys = tableObj.columns.filter(col => col.is_primary_key)
+                .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0));
+
             return {
                 ...tableObj,
+                primaryKeys: primaryKeys,
+                isCompositeKey: primaryKeys.length > 1,
                 foreignKeys: tableObj.columns
                     .filter(col => col.is_foreign_key && col.references)
                     .map(fkCol => {
@@ -597,6 +712,7 @@ export class DatabaseService {
         };
     }
 
+
     /**
      * [R] - Lấy thông tin relationships của một bảng cụ thể
      */
@@ -606,6 +722,11 @@ export class DatabaseService {
 
         const table = database.tables.find(t => t.name === tableName);
         if (!table) throw new Error("Table not found");
+
+        // Lấy thông tin primary key (có thể là composite)
+        const primaryKeys = table.columns
+            .filter(col => col.is_primary_key)
+            .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0));
 
         // Lấy foreign keys của bảng này
         const foreignKeys = table.columns
@@ -623,6 +744,8 @@ export class DatabaseService {
                         name: referencedTable.name,
                         description: referencedTable.description,
                         primaryKeys: referencedTable.columns.filter(col => col.is_primary_key)
+                            .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0)),
+                        isCompositeKey: referencedTable.columns.filter(col => col.is_primary_key).length > 1
                     } : null,
                     relationship: relationship,
                     relationshipType: relationship?.type || 'foreign_key'
@@ -646,6 +769,8 @@ export class DatabaseService {
 
         return {
             table: tableName,
+            primaryKeys: primaryKeys,
+            isCompositeKey: primaryKeys.length > 1,
             foreignKeys,
             referencedBy,
             allRelationships: database.relationships.filter(rel =>
@@ -671,7 +796,8 @@ export class DatabaseService {
         }
 
         // Kiểm tra referenced table có primary key không
-        const primaryKeys = targetTable.columns.filter(col => col.is_primary_key);
+        const primaryKeys = targetTable.columns.filter(col => col.is_primary_key)
+            .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0));
         if (primaryKeys.length === 0) {
             return {
                 valid: false,
@@ -688,9 +814,11 @@ export class DatabaseService {
             valid: true,
             referencedTable: targetTable,
             primaryKeys,
+            isCompositeKey: primaryKeys.length > 1,
             existingRelationship
         };
     }
+
 
     public async getAvailableTablesForReferences(databaseId: string, excludeTable?: string) {
         const database = await DatabaseModel.findById(databaseId);
@@ -704,6 +832,130 @@ export class DatabaseService {
                 primaryKeys: table.columns.filter(col => col.is_primary_key),
                 columnCount: table.columns.length
             }));
+    }
+
+    /**
+     * UTILITY: Lấy thông tin composite key của một bảng - NEW METHOD
+     */
+    public async getCompositeKeyInfo(databaseId: string, tableName: string) {
+        const database = await DatabaseModel.findById(databaseId);
+        if (!database) throw new Error("Database not found");
+
+        const table = database.tables.find(t => t.name === tableName);
+        if (!table) throw new Error("Table not found");
+
+        const primaryKeyColumns = table.columns
+            .filter(col => col.is_primary_key)
+            .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0));
+
+        return {
+            isComposite: primaryKeyColumns.length > 1,
+            columns: primaryKeyColumns.map(col => ({
+                name: col.name,
+                type: col.type,
+                length: col.length,
+                primary_key_order: col.primary_key_order,
+                is_foreign_key: col.is_foreign_key,
+                references: col.references
+            })),
+            totalColumns: primaryKeyColumns.length
+        };
+    }
+
+    /**
+     * UTILITY: Tạo composite key mới - NEW METHOD
+     */
+    public async createCompositeKey(
+        databaseId: string,
+        tableName: string,
+        columnNames: string[]
+    ) {
+        const database = await DatabaseModel.findById(databaseId);
+        if (!database) throw new Error("Database not found");
+
+        const table = database.tables.find(t => t.name === tableName);
+        if (!table) throw new Error("Table not found");
+
+        if (columnNames.length < 2) {
+            throw new Error("Composite key requires at least 2 columns");
+        }
+
+        // Kiểm tra các column tồn tại
+        const columnsToUpdate = columnNames.map(columnName => {
+            const column = table.columns.find(col => col.name === columnName);
+            if (!column) {
+                throw new Error(`Column '${columnName}' not found in table '${tableName}'`);
+            }
+            if (column.nullable) {
+                throw new Error(`Column '${columnName}' cannot be nullable for primary key`);
+            }
+            return column;
+        });
+
+        // Tạo updated columns với primary key flags
+        const updateOperations = table.columns.map((col) => {
+            const isPrimaryKey = columnNames.includes(col.name);
+            return {
+                ...col.toObject(),
+                is_primary_key: isPrimaryKey,
+                primary_key_order: isPrimaryKey ? columnNames.indexOf(col.name) + 1 : null
+            };
+        });
+
+        // Cập nhật database
+        const result = await DatabaseModel.updateOne(
+            { _id: databaseId, "tables.name": tableName },
+            { $set: { "tables.$.columns": updateOperations } }
+        );
+
+        if (result.modifiedCount === 0) {
+            throw new Error("Failed to create composite key");
+        }
+
+        return await this.getCompositeKeyInfo(databaseId, tableName);
+    }
+
+    /**
+     * UTILITY: Chuyển từ composite key sang single key - NEW METHOD
+     */
+    public async convertToSingleKey(
+        databaseId: string,
+        tableName: string,
+        primaryKeyColumnName: string
+    ) {
+        const database = await DatabaseModel.findById(databaseId);
+        if (!database) throw new Error("Database not found");
+
+        const table = database.tables.find(t => t.name === tableName);
+        if (!table) throw new Error("Table not found");
+
+        const targetColumn = table.columns.find(col => col.name === primaryKeyColumnName);
+        if (!targetColumn) {
+            throw new Error(`Column '${primaryKeyColumnName}' not found in table '${tableName}'`);
+        }
+
+        if (targetColumn.nullable) {
+            throw new Error(`Primary key column '${primaryKeyColumnName}' cannot be nullable`);
+        }
+
+        // Tạo updated columns với single primary key
+        const updateOperations = table.columns.map((col) => ({
+            ...col.toObject(),
+            is_primary_key: col.name === primaryKeyColumnName,
+            primary_key_order: col.name === primaryKeyColumnName ? null : null
+        }));
+
+        // Cập nhật database
+        const result = await DatabaseModel.updateOne(
+            { _id: databaseId, "tables.name": tableName },
+            { $set: { "tables.$.columns": updateOperations } }
+        );
+
+        if (result.modifiedCount === 0) {
+            throw new Error("Failed to convert to single key");
+        }
+
+        return await this.getCompositeKeyInfo(databaseId, tableName);
     }
 
     public async updateTablePosition(databaseId: string, tableName: string, position: { x: number; y: number }) {
@@ -777,11 +1029,11 @@ export class DatabaseService {
             tables: database.tables.length,
             relationships: database.relationships.length,
             columns: database.tables.reduce((sum, table) => sum + (table.columns?.length || 0), 0),
-            primaryKeys: database.tables.reduce((sum, table) => 
+            primaryKeys: database.tables.reduce((sum, table) =>
                 sum + (table.columns?.filter(col => col.is_primary_key).length || 0), 0),
-            foreignKeys: database.tables.reduce((sum, table) => 
+            foreignKeys: database.tables.reduce((sum, table) =>
                 sum + (table.columns?.filter(col => col.is_foreign_key).length || 0), 0),
-            indexedColumns: database.tables.reduce((sum, table) => 
+            indexedColumns: database.tables.reduce((sum, table) =>
                 sum + (table.columns?.filter(col => col.unique).length || 0), 0),
         };
 
@@ -803,7 +1055,14 @@ export class DatabaseService {
                         if (col.length) columnDef += `(${col.length})`;
                         if (!col.nullable) columnDef += ' NOT NULL';
                         if (col.unique) columnDef += ' UNIQUE';
-                        if (col.is_primary_key) columnDef += ' PRIMARY KEY AUTO_INCREMENT';
+
+                        // Xử lý primary key (không thêm AUTO_INCREMENT cho composite key)
+                        if (col.is_primary_key) {
+                            const isSinglePK = table.columns.filter(c => c.is_primary_key).length === 1;
+                            columnDef += ' PRIMARY KEY';
+                            if (isSinglePK) columnDef += ' AUTO_INCREMENT';
+                        }
+
                         if (col.default) {
                             if (['VARCHAR', 'CHAR', 'TEXT', 'LONGTEXT'].includes(col.type)) {
                                 const formattedDefault =
@@ -819,16 +1078,36 @@ export class DatabaseService {
                     })
                     .join(',\n  ');
 
+                // Xử lý composite primary key constraint
+                const primaryKeyColumns = table.columns.filter(col => col.is_primary_key);
+                let compositeKeyConstraint = '';
+
+                if (primaryKeyColumns.length > 1) {
+                    const pkColumnNames = primaryKeyColumns
+                        .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0))
+                        .map(col => col.name)
+                        .join(', ');
+
+                    compositeKeyConstraint = `,\n  PRIMARY KEY (${pkColumnNames})`;
+                }
+
                 const foreignKeys = (table.columns || [])
                     .filter((col) => col.is_foreign_key && col.references)
                     .map((col) => {
-                        return `FOREIGN KEY (${col.name}) REFERENCES ${col.references}(id)`;
+                        // Tìm primary key của bảng được reference
+                        const referencedTable = database.tables.find(t => t.name === col.references);
+                        const referencedPK = referencedTable?.columns.find(c => c.is_primary_key);
+                        const pkColumnName = referencedPK?.name || 'id';
+
+                        return `FOREIGN KEY (${col.name}) REFERENCES ${col.references}(${pkColumnName})`;
                     })
                     .join(',\n  ');
 
-                const constraints = foreignKeys ? `,\n  ${foreignKeys}` : '';
+                const constraints = [compositeKeyConstraint, foreignKeys]
+                    .filter(Boolean)
+                    .join(',\n  ');
 
-                return `CREATE TABLE ${table.name} (\n  ${columns}${constraints}\n);`;
+                return `CREATE TABLE ${table.name} (\n  ${columns}${constraints ? ',\n  ' + constraints : ''}\n);`;
             })
             .join('\n\n');
 
