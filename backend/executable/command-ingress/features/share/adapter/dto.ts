@@ -1,9 +1,9 @@
-import { IsNotEmpty, IsMongoId, IsIn } from 'class-validator';
+import { IsNotEmpty, IsEmail, IsIn } from 'class-validator';
 
-export class InviteMemberDto {
+export class InviteMemberByEmailDto {
   @IsNotEmpty()
-  @IsMongoId()
-  user_id!: string;
+  @IsEmail()
+  email!: string;
 
   @IsNotEmpty()
   @IsIn(['editor', 'viewer'])

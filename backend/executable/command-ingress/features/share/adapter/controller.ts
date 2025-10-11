@@ -5,7 +5,7 @@ import { ServiceResponse, ResponseStatus } from '../../../services/serviceRespon
 import { validate } from 'class-validator';
 import { plainToClass } from 'class-transformer';
 import { HttpRequest } from "../../../types";
-import { InviteMemberDto } from '../adapter/dto';
+import { InviteMemberByEmailDto } from '../adapter/dto';
 import { ShareProjectService } from '../domain/service';
 
 export class ShareProjectController extends BaseController {
@@ -24,7 +24,8 @@ export class ShareProjectController extends BaseController {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
         return;
       }
-      const dto = plainToClass(InviteMemberDto, req.body);
+    const dto = plainToClass(InviteMemberByEmailDto, req.body);
+
       const errors = await validate(dto);
       if (errors.length > 0) {
         const errorMessages = errors.map(e => Object.values(e.constraints || {})).flat().join('; ');
@@ -34,10 +35,12 @@ export class ShareProjectController extends BaseController {
 
       const { projectId } = req.params;
 
-      const result = await this.service.inviteMember(projectId, inviterId, dto.user_id, dto.role);
+      // Gọi service mới với email
+      const result = await this.service.inviteMemberByEmail(projectId, inviterId, dto.email, dto.role);
       handleServiceResponse(result, res);
     });
   };
+
   /**
    * Lấy tất cả invites của project
    * GET /api/projects/:projectId/members/invites

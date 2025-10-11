@@ -6,85 +6,93 @@ import mailService from "../../../services/sendMail.service";
 import jwt from "jsonwebtoken";
 
 export class ShareProjectService {
-    async inviteMember(projectId: string, inviterId: string, userId: string, role: 'editor' | 'viewer'): Promise<ServiceResponse> {
-        const project = await Project.findById(projectId);
-        if (!project) return new ServiceResponse(ResponseStatus.Failed, 'Project not found', null, 404);
+   async inviteMemberByEmail(
+    projectId: string,
+    inviterId: string,
+    email: string,
+    role: 'editor' | 'viewer'
+): Promise<ServiceResponse> {
+    const project = await Project.findById(projectId);
+    if (!project) return new ServiceResponse(ResponseStatus.Failed, 'Project not found', null, 404);
 
-        // chỉ owner mới có quyền mời
-        if (!project.members.some(m => m.user_id.equals(inviterId) && m.role === 'owner')) {
-            return new ServiceResponse(ResponseStatus.Failed, 'You do not have permission to invite', null, 403);
+    // chỉ owner mới có quyền mời
+    if (!project.members.some(m => m.user_id.equals(inviterId) && m.role === 'owner')) {
+        return new ServiceResponse(ResponseStatus.Failed, 'You do not have permission to invite', null, 403);
+    }
+
+    // tìm user theo email
+    const user = await User.findOne({ email });
+    if (!user) return new ServiceResponse(ResponseStatus.Failed, 'User not found', null, 404);
+
+    const userId = user._id;
+
+    // tìm xem user đã có record member chưa
+    const existingMember = project.members.find(m => m.user_id.equals(userId));
+
+    if (existingMember) {
+        if (existingMember.status === 'accepted') {
+            return new ServiceResponse(ResponseStatus.Failed, 'User is already a member', null, 400);
+        }
+        if (existingMember.status === 'pending') {
+            existingMember.role = role;
+            existingMember.invited_by = new Types.ObjectId(inviterId);
+            existingMember.invited_at = new Date();
+            existingMember.history.push({ action: 'invited', by: new Types.ObjectId(inviterId), at: new Date() });
+
+            await project.save();
+            
+            const mailIsSent = await this.sendInviteEmail(
+                user.email, user.name, project.name, role, projectId, userId.toString()
+            );
+            if (!mailIsSent) {
+                return new ServiceResponse<any>(ResponseStatus.Failed, "Invitation already exists but email not sent again", { status: "pending" }, 500);
+            }
+            return new ServiceResponse<any>(ResponseStatus.Success, 'Invitation already pending, email resent', { status: 'pending' }, 200);
         }
 
-        const user = await User.findById(userId);
-        if (!user) return new ServiceResponse(ResponseStatus.Failed, 'User not found', null, 404);
-
-        // tìm xem user đã có record member chưa
-        const existingMember = project.members.find(m => m.user_id.equals(userId));
-
-        if (existingMember) {
-            if (existingMember.status === 'accepted') {
-                return new ServiceResponse(ResponseStatus.Failed, 'User is already a member', null, 400);
-            }
-            if (existingMember.status === 'pending') {
-                existingMember.role = role;
-                existingMember.invited_by = new Types.ObjectId(inviterId);
-                existingMember.invited_at = new Date();
-                existingMember.history.push({action: 'invited',by: new Types.ObjectId(inviterId),at: new Date()});
-
-                await project.save();
-                
-                const mailIsSent = await this.sendInviteEmail(
-                    user.email, user.name, project.name, role, projectId, user._id.toString()
-                );
-                if (!mailIsSent) {
-                    return new ServiceResponse<any>(ResponseStatus.Failed,"Invitation already exists but email not sent again",{ status: "pending" },500);
-                }
-                return new ServiceResponse<any>(ResponseStatus.Success,'Invitation already pending, email resent',{ status: 'pending' },200);
-            }
-
-            // nếu đã cancel, reject, left → reset về pending
-            if (['canceled', 'rejected', 'left'].includes(existingMember.status)) {
-                existingMember.role = role;
-                existingMember.status = 'pending';
-                existingMember.invited_by = new Types.ObjectId(inviterId);
-                existingMember.invited_at = new Date();
-                existingMember.responded_at = null;
-                existingMember.history.push({action: 'invited',by: new Types.ObjectId(inviterId),at: new Date()});
-
-                await project.save();
-
-                const mailIsSent = await this.sendInviteEmail(
-                    user.email, user.name, project.name, role, projectId, user._id.toString()
-                );
-                if (!mailIsSent) {
-                    return new ServiceResponse<any>(ResponseStatus.Failed,"Re-invitation created but email not sent",{ status: "pending" },500);
-                }
-
-                return new ServiceResponse<any>(ResponseStatus.Success,'User re-invited successfully',{ status: 'pending' },200);
-            }
-        } else {
-            // chưa có record → push mới
-            project.members.push({
-                user_id: new Types.ObjectId(userId),
-                role,
-                status: 'pending',
-                invited_by: new Types.ObjectId(inviterId),
-                invited_at: new Date(),
-                history: [{ action: 'invited', by: new Types.ObjectId(inviterId), at: new Date() }]
-            });
+        if (['canceled', 'rejected', 'left'].includes(existingMember.status)) {
+            existingMember.role = role;
+            existingMember.status = 'pending';
+            existingMember.invited_by = new Types.ObjectId(inviterId);
+            existingMember.invited_at = new Date();
+            existingMember.responded_at = null;
+            existingMember.history.push({ action: 'invited', by: new Types.ObjectId(inviterId), at: new Date() });
 
             await project.save();
 
             const mailIsSent = await this.sendInviteEmail(
-                user.email, user.name, project.name, role, projectId, user._id.toString()
+                user.email, user.name, project.name, role, projectId, userId.toString()
             );
             if (!mailIsSent) {
-                return new ServiceResponse<any>(ResponseStatus.Failed,"Invitation created but email not sent",{ status: "pending" },500);
+                return new ServiceResponse<any>(ResponseStatus.Failed, "Re-invitation created but email not sent", { status: "pending" }, 500);
             }
 
-            return new ServiceResponse<any>(ResponseStatus.Success,'Invite sent successfully',{ status: 'pending' },200);
+            return new ServiceResponse<any>(ResponseStatus.Success, 'User re-invited successfully', { status: 'pending' }, 200);
         }
+    } else {
+        // chưa có record → push mới
+        project.members.push({
+            user_id: new Types.ObjectId(userId),
+            role,
+            status: 'pending',
+            invited_by: new Types.ObjectId(inviterId),
+            invited_at: new Date(),
+            history: [{ action: 'invited', by: new Types.ObjectId(inviterId), at: new Date() }]
+        });
+
+        await project.save();
+
+        const mailIsSent = await this.sendInviteEmail(
+            user.email, user.name, project.name, role, projectId, userId.toString()
+        );
+        if (!mailIsSent) {
+            return new ServiceResponse<any>(ResponseStatus.Failed, "Invitation created but email not sent", { status: "pending" }, 500);
+        }
+
+        return new ServiceResponse<any>(ResponseStatus.Success, 'Invite sent successfully', { status: 'pending' }, 200);
     }
+}
+
 
     private async sendInviteEmail(
         email: string,
