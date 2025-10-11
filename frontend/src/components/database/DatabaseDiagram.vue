@@ -1399,7 +1399,7 @@ export default {
     },
 
     resetZoom() {
-      this.zoomLevel = 1
+      this.zoomLevel = 0.5
     },
 
     fitToScreen() {

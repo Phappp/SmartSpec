@@ -826,23 +826,30 @@ export default {
 
       const sqlStatements = this.databaseTables
         .map((table) => {
+          // Lấy danh sách primary keys
+          const primaryKeys = table.columns?.filter((col) => col.is_primary_key) || []
+          const hasPK = primaryKeys.length > 0
+
+          // Tạo column definitions (KHÔNG thêm PRIMARY KEY ở đây)
           const columns = (table.columns || [])
             .map((col) => {
               let columnDef = `${col.name} ${col.type}`
+
+              // Thêm length nếu có
               if (col.length) columnDef += `(${col.length})`
+
+              // Thêm NOT NULL
               if (!col.nullable) columnDef += ' NOT NULL'
-              if (col.unique) columnDef += ' UNIQUE'
 
-              const primaryKeys = table.columns?.filter((col) => col.is_primary_key) || []
-              const isSinglePK = primaryKeys.length === 1
+              // Thêm UNIQUE (chỉ nếu không phải PK)
+              if (col.unique && !col.is_primary_key) columnDef += ' UNIQUE'
 
-              if (col.is_primary_key && isSinglePK) {
-                columnDef += ' PRIMARY KEY'
-                if (col.type.includes('INT')) {
-                  columnDef += ' AUTO_INCREMENT'
-                }
+              // THÊM AUTO_INCREMENT cho INT primary keys
+              if (col.is_primary_key && col.type.includes('INT')) {
+                columnDef += ' AUTO_INCREMENT'
               }
 
+              // Thêm DEFAULT value
               if (col.default) {
                 if (['VARCHAR', 'CHAR', 'TEXT', 'LONGTEXT'].includes(col.type)) {
                   const formattedDefault =
@@ -854,15 +861,16 @@ export default {
                   columnDef += ` DEFAULT ${col.default}`
                 }
               }
+
               return `  ${columnDef}`
             })
             .join(',\n')
 
-          // Xử lý composite primary key
-          const primaryKeys = table.columns?.filter((col) => col.is_primary_key) || []
+          // Xử lý constraints
           let constraints = []
 
-          if (primaryKeys.length > 1) {
+          // LUÔN thêm PRIMARY KEY constraint ở cuối (cả single và composite)
+          if (hasPK) {
             const pkColumnNames = primaryKeys
               .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0))
               .map((col) => col.name)
@@ -894,10 +902,7 @@ export default {
         })
         .join('\n\n')
 
-      // Clean up any potential duplicate commas
       this.generatedSQL = sqlStatements
-        .replace(/,\s*,/g, ',') // Remove double commas
-        .replace(/,\s*\n\);$/gm, '\n);') // Remove comma before closing parenthesis
     },
 
     async copySQL() {

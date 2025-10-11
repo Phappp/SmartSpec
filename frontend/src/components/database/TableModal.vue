@@ -386,7 +386,7 @@
               </button>
             </div>
             <div class="sql-preview">
-              <!-- <pre><code>{{ generateTableSQL() }}</code></pre> -->
+              <pre><code>{{ generateTableSQL() }}</code></pre>
             </div>
           </div>
 
@@ -481,6 +481,7 @@ export default {
           this.isValidLength(column.length, column.type) &&
           this.isValidDefault(column.default, column.type)
       )
+      // BỎ KIỂM TRA SỐ LƯỢNG PRIMARY KEY
     },
 
     hasFormErrors() {
@@ -536,14 +537,14 @@ export default {
         )
       }
 
-      // Check primary key constraints
-      const primaryKeyCount = this.tableForm.columns.filter((col) => col.is_primary_key).length
-      if (primaryKeyCount === 0) {
-        errors.push('Table must have at least one primary key')
-      }
-      if (primaryKeyCount > 1) {
-        errors.push('Table can only have one primary key')
-      }
+      // BỎ KIỂM TRA SỐ LƯỢNG PRIMARY KEY
+      // const primaryKeyCount = this.tableForm.columns.filter((col) => col.is_primary_key).length
+      // if (primaryKeyCount === 0) {
+      //   errors.push('Table must have at least one primary key')
+      // }
+      // if (primaryKeyCount > 1) {
+      //   errors.push('Table can only have one primary key')
+      // }
 
       return errors
     },
@@ -716,15 +717,15 @@ export default {
       const column = this.tableForm.columns[changedIndex]
 
       if (column.is_primary_key) {
-        // Unset other primary keys
-        this.tableForm.columns.forEach((col, index) => {
-          if (index !== changedIndex) {
-            col.is_primary_key = false
-            // Reset auto-set properties for non-primary keys
-            col.nullable = true
-            col.unique = false
-          }
-        })
+        // BỎ LOGIC UNSET CÁC PRIMARY KEY KHÁC
+        // this.tableForm.columns.forEach((col, index) => {
+        //   if (index !== changedIndex) {
+        //     col.is_primary_key = false
+        //     // Reset auto-set properties for non-primary keys
+        //     col.nullable = true
+        //     col.unique = false
+        //   }
+        // })
 
         // Set primary key properties
         column.nullable = false
@@ -743,6 +744,10 @@ export default {
             `💡 Consider naming primary key as 'id' or ending with '_id': ${column.name}`
           )
         }
+      } else {
+        // Khi bỏ chọn PK, reset các thuộc tính đặc biệt
+        column.nullable = true
+        column.unique = false
       }
 
       this.checkForChanges()
@@ -1024,8 +1029,9 @@ export default {
           }
 
           if (!col.nullable) columnDef += ' NOT NULL'
-          if (col.unique) columnDef += ' UNIQUE'
-          if (col.is_primary_key) columnDef += ' PRIMARY KEY AUTO_INCREMENT'
+          if (col.unique && !col.is_primary_key) columnDef += ' UNIQUE'
+          // BỎ "PRIMARY KEY" ở đây để tránh trùng lặp
+          // if (col.is_primary_key) columnDef += ' PRIMARY KEY'
 
           if (col.default) {
             if (['VARCHAR', 'CHAR', 'TEXT', 'LONGTEXT'].includes(col.type)) {
@@ -1044,14 +1050,36 @@ export default {
         .filter(Boolean)
         .join(',\n')
 
+      // Xử lý composite primary key
+      const primaryKeys = this.tableForm.columns
+        .filter((col) => col.is_primary_key)
+        .map((col) => col.name)
+
+      let primaryKeyConstraint = ''
+      if (primaryKeys.length > 0) {
+        if (primaryKeys.length === 1) {
+          // Nếu chỉ có 1 PK, thêm vào column definition
+          const pkColumn = this.tableForm.columns.find((col) => col.is_primary_key)
+          const columnIndex = this.tableForm.columns.indexOf(pkColumn)
+          // Cần xử lý phức tạp hơn để thêm PRIMARY KEY vào đúng column
+          // Tạm thời dùng composite style cho đơn giản
+          primaryKeyConstraint = `,\n  PRIMARY KEY (${primaryKeys.join(', ')})`
+        } else {
+          // Nếu có nhiều PK, dùng composite primary key
+          primaryKeyConstraint = `,\n  PRIMARY KEY (${primaryKeys.join(', ')})`
+        }
+      }
+
       const foreignKeys = this.tableForm.columns
         .filter((col) => col.is_foreign_key && col.references)
         .map((col) => `  FOREIGN KEY (${col.name}) REFERENCES ${col.references}(id)`)
         .join(',\n')
 
-      const constraints = foreignKeys ? `,\n${foreignKeys}` : ''
+      const constraints = [primaryKeyConstraint, foreignKeys].filter(Boolean).join(',\n')
 
-      return `CREATE TABLE ${this.tableForm.name} (\n${columns}${constraints}\n);`
+      return `CREATE TABLE ${this.tableForm.name} (\n${columns}${
+        constraints ? constraints : ''
+      }\n);`
     },
 
     async copySQL() {
@@ -1075,6 +1103,7 @@ export default {
           columns: this.tableForm.columns.map((col) => {
             const cleanedColumn = {
               ...col,
+              // CHỈ set nullable=false và unique=true nếu là PK
               nullable: col.is_primary_key ? false : col.nullable,
               unique: col.is_primary_key ? true : col.unique,
             }

@@ -220,26 +220,46 @@ export default {
     },
 
     generateTableSQL() {
+      // Lấy danh sách primary keys
+      const primaryKeys = (this.table.columns || []).filter((col) => col.is_primary_key)
+      const hasPK = primaryKeys.length > 0
+
       const columns = (this.table.columns || [])
         .map((col) => {
           let columnDef = `  ${col.name} ${col.type}`
           if (col.length) columnDef += `(${col.length})`
           if (!col.nullable) columnDef += ' NOT NULL'
-          if (col.unique) columnDef += ' UNIQUE'
-          if (col.is_primary_key) columnDef += ' PRIMARY KEY AUTO_INCREMENT'
+          if (col.unique && !col.is_primary_key) columnDef += ' UNIQUE' // Bỏ unique nếu là PK
+
+          // THÊM AUTO_INCREMENT cho INT primary keys (nhưng không thêm PRIMARY KEY ở đây)
+          if (col.is_primary_key && col.type.includes('INT')) {
+            columnDef += ' AUTO_INCREMENT'
+          }
+
           if (col.default) columnDef += ` DEFAULT ${col.default}`
           return columnDef
         })
         .join(',\n')
 
+      // Xử lý constraints
+      let constraints = []
+
+      // LUÔN thêm PRIMARY KEY constraint ở cuối (cả single và composite)
+      if (hasPK) {
+        const pkColumnNames = primaryKeys.map((col) => col.name).join(', ')
+        constraints.push(`  PRIMARY KEY (${pkColumnNames})`)
+      }
+
+      // Thêm foreign keys
       const foreignKeys = (this.table.columns || [])
         .filter((col) => col.is_foreign_key && col.references)
         .map((col) => `  FOREIGN KEY (${col.name}) REFERENCES ${col.references}(id)`)
-        .join(',\n')
 
-      const constraints = foreignKeys ? `,\n${foreignKeys}` : ''
+      constraints = [...constraints, ...foreignKeys]
 
-      return `CREATE TABLE ${this.table.name} (\n${columns}${constraints}\n);`
+      const constraintsSQL = constraints.length > 0 ? `,\n${constraints.join(',\n')}` : ''
+
+      return `CREATE TABLE ${this.table.name} (\n${columns}${constraintsSQL}\n);`
     },
 
     async copySQL() {
