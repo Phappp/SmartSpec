@@ -1,0 +1,26 @@
+interface NotificationResponse {
+  id: string;
+  recipient_id: string;
+  sender_id: string;
+  type: string;
+  title: string;
+  message: string;
+  is_read: boolean;
+  link: string;
+  created_at: Date;
+}
+interface NotificationService {
+  createNotification(
+    recipient_id: string,
+    sender_id: string,
+    type: string,
+    title: string,
+    message: string,
+    link: string
+  ): Promise<any>;
+  getNotificationById(id: string): Promise<NotificationResponse>;
+  getNotificationsByUserId(userId: string): Promise<NotificationResponse[]>;
+  deleteNotification(id: string): Promise<string>;
+}
+
+export { NotificationService, NotificationResponse };

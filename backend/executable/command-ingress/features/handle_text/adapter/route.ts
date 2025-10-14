@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { TextController } from './controller';
-import requireAuthorizedUser from '../../../middlewares/auth';
+import {requireAuthorizedUser} from '../../../middlewares/auth';
 
 export default function initTextRoute(controller: TextController): Router {
     const router = Router();

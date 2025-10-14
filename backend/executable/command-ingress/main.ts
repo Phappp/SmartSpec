@@ -1,30 +1,33 @@
-import 'reflect-metadata';
-import { config } from 'dotenv';
-import path from 'path';
-config({ path: path.join(process.cwd(), '.env') });
-import { createHttpServer } from './app';
-import mongoose from 'mongoose';
-import env from './utils/env';
+import "reflect-metadata";
+import { config } from "dotenv";
+import { initSocket } from "./socket";
+import path from "path";
+config({ path: path.join(process.cwd(), ".env") });
+import { createHttpServer } from "./app";
+import mongoose from "mongoose";
+import env from "./utils/env";
 
 async function start() {
-    await mongoose.connect(env.MONGO_URI);
-    const redisClient = undefined;
-    const server = createHttpServer(redisClient);
+  await mongoose.connect(env.MONGO_URI);
+  const redisClient = undefined;
+  const server = createHttpServer(redisClient);
 
-    server.listen(env.PORT, () => {
-        console.log(`Server running on port http://localhost:${env.PORT}`);
-    });
+const io = initSocket(server);
 
-    process.on('SIGINT', () => {
-        // redisClient.quit();
+  server.listen(env.PORT, () => {
+    console.log(`Server running on port http://localhost:${env.PORT}`);
+  });
 
-        // Avoid connection leak.
-        mongoose.connection.close();
-        process.exit(0);
-    });
+  process.on("SIGINT", () => {
+    // redisClient.quit();
+
+    // Avoid connection leak.
+    mongoose.connection.close();
+    process.exit(0);
+  });
 }
 
 start().catch((err) => {
-    console.error(err);
-    process.exit(1);
+  console.error(err);
+  process.exit(1);
 });

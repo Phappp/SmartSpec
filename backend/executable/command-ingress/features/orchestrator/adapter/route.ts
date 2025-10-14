@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import requireAuthorizedUser from '../../../middlewares/auth';
+import {requireAuthorizedUser} from '../../../middlewares/auth';
 import { OrchestratorController } from './controller';
 
 export default function initOrchestratorRoute(controller: OrchestratorController): Router {

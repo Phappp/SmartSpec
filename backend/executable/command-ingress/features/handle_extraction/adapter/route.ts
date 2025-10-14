@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { ExtractorController } from "../adapter/controller";
 import { ExtractorService } from "../domain/ExtractorService"; // <-- 1. Import Service
-import requireAuthorizedUser from "../../../middlewares/auth";
+import {requireAuthorizedUser} from "../../../middlewares/auth";
 
 // --- 2. Khởi tạo Service và Controller ---
 const extractorService = new ExtractorService();

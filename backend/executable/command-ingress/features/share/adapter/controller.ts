@@ -19,8 +19,8 @@ export class ShareProjectController extends BaseController {
    */
   public inviteMember = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async () => {
-      const inviterId = req.getSubject();
-      if (!inviterId) {
+      const subId = req.getSubject();
+      if (!subId) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
         return;
       }
@@ -36,7 +36,8 @@ export class ShareProjectController extends BaseController {
       const { projectId } = req.params;
 
       // Gọi service mới với email
-      const result = await this.service.inviteMemberByEmail(projectId, inviterId, dto.email, dto.role);
+      const result = await this.service.inviteMemberByEmail(projectId, subId, dto.email, dto.role);
+      console.log(result);
       handleServiceResponse(result, res);
     });
   };
