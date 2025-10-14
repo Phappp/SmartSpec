@@ -95,7 +95,7 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        
       }
     );
   }
