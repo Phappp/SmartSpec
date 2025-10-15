@@ -46,7 +46,13 @@ export default function initProjectRoute(controller: ProjectController) {
     requireAuthorizedUser,
     (req: Request, res: Response, next: NextFunction) => controller.getDeleteProjects(req as any, res, next)
   );
-
+  // GET /admin/all -> Lấy tất cả dự án (dành cho admin)
+  router.get(
+    '/admin/all',
+    requireAuthorizedUser,
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.getAllProjectsForAdmin(req as any, res, next)
+  );
   // GET /:projectId -> lấy chi tiết project với version hiện tại 
   router.get('/:projectId',
     requireAuthorizedUser,

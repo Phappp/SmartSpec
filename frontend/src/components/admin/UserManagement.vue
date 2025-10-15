@@ -9,12 +9,12 @@
         <h1>Quản lý người dùng</h1>
         <p>Tổng cộng {{ totalUsers }} người dùng</p>
       </div>
-      <div class="header-right">
+      <!-- <div class="header-right">
         <button class="btn btn-primary" @click="showAddUserModal = true">
           <i class="fas fa-plus"></i>
           Thêm người dùng
         </button>
-      </div>
+      </div> -->
     </div>
 
     <!-- Filters -->
@@ -47,7 +47,7 @@
           />
         </div>
         <button class="btn btn-secondary" @click="resetFilters">
-          <i class="fas fa-times"></i>
+          <span class="material-symbols-outlined"> filter_list_off </span>
           Xóa bộ lọc
         </button>
       </div>
@@ -106,8 +106,8 @@
                   <span>{{ user.active ? "Hoạt động" : "Không hoạt động" }}</span>
                 </div>
               </td>
-              <td>{{ formatDate(user.createdAt) }}</td>
-              <td>{{ formatDate(user.lastActive) }}</td>
+              <td>{{ formatDate(user.createdAt) || 'Chưa cập nhật' }}</td>
+              <td>{{ formatDate(user.lastActive) || 'Chưa cập nhật' }}</td>
               <td>
                 <div class="action-buttons">
                   <button
@@ -154,7 +154,7 @@
             @click="previousPage"
             :disabled="currentPage === 1"
           >
-            <i class="fas fa-chevron-left"></i>
+            <span class="material-symbols-outlined"> arrow_back_ios </span>
           </button>
           <span class="page-info">{{ currentPage }} / {{ totalPages }}</span>
           <button
@@ -162,7 +162,7 @@
             @click="nextPage"
             :disabled="currentPage === totalPages"
           >
-            <i class="fas fa-chevron-right"></i>
+            <span class="material-symbols-outlined"> arrow_forward_ios </span>
           </button>
         </div>
       </div>
@@ -239,7 +239,59 @@
             >
               Hủy
             </button>
-            <button type="submit" class="btn btn-primary">Thêm người dùng</button>
+            <!-- <button type="submit" class="btn btn-primary">Thêm người dùng</button> -->
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- Edit User Modal -->
+    <div
+      v-if="showEditUserModal"
+      class="modal-overlay"
+      @click.self="showEditUserModal = false"
+    >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Chỉnh sửa người dùng</h2>
+          <button class="close-btn" @click="showEditUserModal = false">&times;</button>
+        </div>
+        <form @submit.prevent="submitEditUser" class="modal-body">
+          <div class="form-group">
+            <label>Họ tên *</label>
+            <input type="text" v-model="editUserForm.name" required class="form-input" />
+          </div>
+          <div class="form-group">
+            <label>Email *</label>
+            <input
+              type="email"
+              v-model="editUserForm.email"
+              required
+              class="form-input"
+            />
+          </div>
+          <div class="form-group">
+            <label>Vai trò *</label>
+            <select v-model="editUserForm.role" required class="form-input">
+              <option value="ADMIN">Admin</option>
+              <option value="PARTICIPANT">Participant</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Trạng thái</label>
+            <select v-model="editUserForm.active" class="form-input">
+              <option :value="true">Hoạt động</option>
+              <option :value="false">Không hoạt động</option>
+            </select>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              @click="showEditUserModal = false"
+            >
+              Hủy
+            </button>
+            <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
           </div>
         </form>
       </div>
@@ -291,11 +343,11 @@
               </div>
               <div class="detail-item">
                 <label>Ngày tạo:</label>
-                <span>{{ formatDate(selectedUser.createdAt) }}</span>
+                <span>{{ formatDate(selectedUser.createdAt) || 'Chưa cập nhật' }}</span>
               </div>
               <div class="detail-item">
                 <label>Hoạt động cuối:</label>
-                <span>{{ formatDate(selectedUser.lastActive) }}</span>
+                <span>{{ formatDate(selectedUser.lastActive) || 'Chưa cập nhật' }}</span>
               </div>
               <div class="detail-item">
                 <label>Số dự án:</label>
@@ -435,6 +487,14 @@ const resetPasswordForm = ref({
   newPassword: "",
   confirmPassword: "",
 });
+const showEditUserModal = ref(false);
+const editUserForm = ref({
+  id: "",
+  name: "",
+  email: "",
+  role: "",
+  active: true,
+});
 
 const users = ref([]);
 const searchTimeout = ref(null);
@@ -476,6 +536,17 @@ const resetFilters = async () => {
   await loadUsers();
 };
 
+const editUser = (user) => {
+  editUserForm.value = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role, // Giữ nguyên để hiển thị trong form
+    active: user.active, // Giữ nguyên để hiển thị trong form
+  };
+  showEditUserModal.value = true;
+};
+
 const toggleSelectAll = () => {
   if (selectAll.value) {
     selectedUsers.value = filteredUsers.value.map((user) => user.id);
@@ -501,7 +572,22 @@ const getRoleClass = (role) => {
 };
 
 const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString("vi-VN");
+  // Xử lý trường hợp dateString là null, undefined, hoặc rỗng
+  if (dateString === null || dateString === undefined || dateString === '') {
+    return '';
+  }
+
+  try {
+    const date = new Date(dateString);
+    // Kiểm tra xem date có hợp lệ không
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    return date.toLocaleDateString("vi-VN");
+  } catch (error) {
+    console.error('Error formatting date:', error, 'dateString:', dateString);
+    return '';
+  }
 };
 
 const viewUser = (user) => {
@@ -509,18 +595,18 @@ const viewUser = (user) => {
   showUserDetailModal.value = true;
 };
 
-const editUser = async (user) => {
-  // NOTE: PUT /api/admin/users/:id
-  try {
-    await updateUser(user.id, {
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      active: user.active,
-    });
-    await loadUsers();
-  } catch (e) {}
-};
+// const editUser = async (user) => {
+//   // NOTE: PUT /api/admin/users/:id
+//   try {
+//     await updateUser(user.id, {
+//       name: user.name,
+//       email: user.email,
+//       role: user.role,
+//       active: user.active,
+//     });
+//     await loadUsers();
+//   } catch (e) {}
+// };
 
 const resetPassword = async (user) => {
   // Mở modal để nhập mật khẩu cũ và mới
@@ -590,6 +676,59 @@ const addUser = async () => {
     newUser.value = { name: "", email: "", password: "", role: "", active: true };
     await loadUsers();
   } catch (e) {}
+};
+
+const submitEditUser = async () => {
+  try {
+    // Chuẩn hóa dữ liệu theo định dạng Backend mong đợi
+    // Chỉ gửi các field cần thiết và loại bỏ gender để tránh lỗi validation
+    const updateData = {
+      name: editUserForm.value.name,
+      email: editUserForm.value.email,
+      system_role: editUserForm.value.role, // Backend mong đợi system_role thay vì role
+      status: editUserForm.value.active ? "ACTIVE" : "INACTIVE", // Backend mong đợi string thay vì boolean
+      dob: {
+        day: 1,
+        month: 1,
+        year: 2000
+      }, // Thêm dob mặc định để tránh lỗi Backend parsing
+      // Không gửi gender để tránh lỗi validation
+      avatar_url: "" // Thêm avatar_url mặc định
+    };
+
+    // Đảm bảo không có field dob hoặc các field date khác gây lỗi
+    console.log("Sending update data:", updateData);
+    console.log("User ID:", editUserForm.value.id);
+    console.log("Edit form data:", editUserForm.value);
+
+    // Validate dữ liệu trước khi gửi
+    if (!updateData.name || !updateData.email || !updateData.system_role) {
+      alert("Vui lòng điền đầy đủ thông tin bắt buộc!");
+      return;
+    }
+
+    await updateUser(editUserForm.value.id, updateData);
+    alert("Cập nhật người dùng thành công!");
+    showEditUserModal.value = false;
+    await loadUsers();
+  } catch (e) {
+    console.error("Error updating user:", e);
+    console.error("Error response:", e.response?.data);
+    console.error("Error status:", e.response?.status);
+
+    let errorMessage = "Cập nhật thất bại: ";
+    if (e.response?.data?.message) {
+      errorMessage += e.response.data.message;
+    } else if (e.response?.status === 400) {
+      errorMessage += "Dữ liệu gửi lên không đúng định dạng. Vui lòng thử lại.";
+    } else if (e.response?.status === 500) {
+      errorMessage += "Lỗi máy chủ. Vui lòng thử lại sau.";
+    } else {
+      errorMessage += e.message || "Lỗi không xác định";
+    }
+
+    alert(errorMessage);
+  }
 };
 
 const bulkActivate = async () => {
@@ -688,14 +827,15 @@ const loadUsers = async () => {
     console.log("Parsed items:", items); // Debug log
 
     // Chuẩn hóa field theo BE: system_role/status -> role/active
+    // Xử lý trường hợp Backend không trả về created_at và updated_at
     users.value = items.map((u) => ({
       id: u.id || u._id || u.user_id,
       name: u.name || u.full_name || u.username || "",
       email: u.email || "",
       role: u.system_role || u.role || "PARTICIPANT",
-      active: u.status === "ACTIVE" || u.active === true,
-      createdAt: u.created_at || u.createdAt,
-      lastActive: u.updated_at || u.lastActive,
+      active: u.status === "ACTIVE" || u.active === true || false, // Đảm bảo là boolean
+      createdAt: u.created_at || u.createdAt || null,
+      lastActive: u.updated_at || u.lastActive || null,
       projectCount: u.projectCount || 0,
     }));
 

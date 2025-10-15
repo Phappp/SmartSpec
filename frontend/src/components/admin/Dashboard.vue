@@ -188,7 +188,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getUsers, getProjects, getApiKeys } from '@/api/admin'
+import { getUsers, getAllProjectsForAdmin as getProjects, getApiKeys } from '@/api/admin'
+
 
 // State
 const stats = ref({ totalUsers: 0, activeUsers: 0, totalProjects: 0, activeApiKeys: 0 })

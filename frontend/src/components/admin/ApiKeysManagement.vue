@@ -36,16 +36,16 @@
         </div>
         <div class="filter-group">
           <label>Tìm kiếm</label>
-          <input 
-            type="text" 
-            v-model="filters.search" 
+          <input
+            type="text"
+            v-model="filters.search"
             @input="applyFilters"
             placeholder="Tìm theo tên, key..."
             class="search-input"
-          >
+          />
         </div>
         <button class="btn btn-secondary" @click="resetFilters">
-          <i class="fas fa-times"></i>
+          <span class="material-symbols-outlined"> filter_list_off </span>
           Xóa bộ lọc
         </button>
       </div>
@@ -58,7 +58,7 @@
           <thead>
             <tr>
               <th>
-                <input type="checkbox" v-model="selectAll" @change="toggleSelectAll">
+                <input type="checkbox" v-model="selectAll" @change="toggleSelectAll" />
               </th>
               <th>API Key</th>
               <th>Nhà cung cấp</th>
@@ -70,14 +70,22 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="apiKey in filteredApiKeys" :key="apiKey.id" :class="{ selected: selectedApiKeys.includes(apiKey.id) }">
+            <tr
+              v-for="apiKey in filteredApiKeys"
+              :key="apiKey.id"
+              :class="{ selected: selectedApiKeys.includes(apiKey.id) }"
+            >
               <td>
-                <input type="checkbox" v-model="selectedApiKeys" :value="apiKey.id">
+                <input type="checkbox" v-model="selectedApiKeys" :value="apiKey.id" />
               </td>
               <td>
                 <div class="key-cell">
                   <code class="api-key">{{ maskApiKey(apiKey.key) }}</code>
-                  <button class="copy-btn" @click="copyApiKey(apiKey.key)" title="Copy key">
+                  <button
+                    class="copy-btn"
+                    @click="copyApiKey(apiKey.key)"
+                    title="Copy key"
+                  >
                     <i class="fas fa-copy"></i>
                   </button>
                 </div>
@@ -99,30 +107,48 @@
               <td>
                 <div class="status-cell">
                   <label class="toggle-switch">
-                    <input 
-                      type="checkbox" 
-                      :checked="apiKey.active" 
+                    <input
+                      type="checkbox"
+                      :checked="apiKey.active"
                       @change="toggleApiKey(apiKey)"
-                    >
+                    />
                     <span class="toggle-slider"></span>
                   </label>
-                  <span class="status-text">{{ apiKey.active ? 'Hoạt động' : 'Không hoạt động' }}</span>
+                  <span class="status-text">{{
+                    apiKey.active ? "Hoạt động" : "Không hoạt động"
+                  }}</span>
                 </div>
               </td>
               <td>{{ formatDate(apiKey.createdAt) }}</td>
               <td>{{ formatDate(apiKey.lastUsed) }}</td>
               <td>
                 <div class="action-buttons">
-                  <button class="action-btn blue" @click="viewApiKey(apiKey)" title="Xem chi tiết">
+                  <button
+                    class="action-btn blue"
+                    @click="viewApiKey(apiKey)"
+                    title="Xem chi tiết"
+                  >
                     <i class="fas fa-eye"></i>
                   </button>
-                  <button class="action-btn green" @click="editApiKey(apiKey)" title="Chỉnh sửa">
+                  <button
+                    class="action-btn green"
+                    @click="editApiKey(apiKey)"
+                    title="Chỉnh sửa"
+                  >
                     <i class="fas fa-edit"></i>
                   </button>
-                  <button class="action-btn orange" @click="testApiKey(apiKey)" title="Test key">
+                  <button
+                    class="action-btn orange"
+                    @click="testApiKey(apiKey)"
+                    title="Test key"
+                  >
                     <i class="fas fa-vial"></i>
                   </button>
-                  <button class="action-btn red" @click="deleteApiKey(apiKey)" title="Xóa">
+                  <button
+                    class="action-btn red"
+                    @click="deleteApiKey(apiKey)"
+                    title="Xóa"
+                  >
                     <i class="fas fa-trash"></i>
                   </button>
                 </div>
@@ -135,24 +161,25 @@
       <!-- Pagination -->
       <div class="pagination">
         <div class="pagination-info">
-          Hiển thị {{ (currentPage - 1) * itemsPerPage + 1 }} - {{ Math.min(currentPage * itemsPerPage, totalApiKeys) }} 
-          trong tổng số {{ totalApiKeys }} API keys
+          Hiển thị {{ (currentPage - 1) * itemsPerPage + 1 }} -
+          {{ Math.min(currentPage * itemsPerPage, totalApiKeys) }} trong tổng số
+          {{ totalApiKeys }} API keys
         </div>
         <div class="pagination-controls">
-          <button 
-            class="btn btn-secondary" 
-            @click="previousPage" 
+          <button
+            class="btn btn-secondary"
+            @click="previousPage"
             :disabled="currentPage === 1"
           >
-            <i class="fas fa-chevron-left"></i>
+            <span class="material-symbols-outlined"> arrow_back_ios </span>
           </button>
           <span class="page-info">{{ currentPage }} / {{ totalPages }}</span>
-          <button 
-            class="btn btn-secondary" 
-            @click="nextPage" 
+          <button
+            class="btn btn-secondary"
+            @click="nextPage"
             :disabled="currentPage === totalPages"
           >
-            <i class="fas fa-chevron-right"></i>
+            <span class="material-symbols-outlined"> arrow_forward_ios </span>
           </button>
         </div>
       </div>
@@ -160,9 +187,7 @@
 
     <!-- Bulk Actions -->
     <div v-if="selectedApiKeys.length > 0" class="bulk-actions">
-      <div class="bulk-info">
-        Đã chọn {{ selectedApiKeys.length }} API keys
-      </div>
+      <div class="bulk-info">Đã chọn {{ selectedApiKeys.length }} API keys</div>
       <div class="bulk-buttons">
         <button class="btn btn-secondary" @click="bulkActivate">
           <i class="fas fa-check"></i>
@@ -180,7 +205,11 @@
     </div>
 
     <!-- Add API Key Modal -->
-    <div v-if="showAddApiKeyModal" class="modal-overlay" @click.self="showAddApiKeyModal = false">
+    <div
+      v-if="showAddApiKeyModal"
+      class="modal-overlay"
+      @click.self="showAddApiKeyModal = false"
+    >
       <div class="modal-content">
         <div class="modal-header">
           <h2>Thêm API Key mới</h2>
@@ -189,7 +218,13 @@
         <form @submit.prevent="addApiKey" class="modal-body">
           <div class="form-group">
             <label>API Key *</label>
-            <input type="text" v-model="newApiKey.key" required class="form-input" placeholder="Nhập API key...">
+            <input
+              type="text"
+              v-model="newApiKey.key"
+              required
+              class="form-input"
+              placeholder="Nhập API key..."
+            />
             <small class="form-help">API key sẽ được mã hóa và lưu trữ an toàn</small>
           </div>
           <div class="form-group">
@@ -203,11 +238,21 @@
           </div>
           <div class="form-group">
             <label>Tên hiển thị</label>
-            <input type="text" v-model="newApiKey.name" class="form-input" placeholder="Tên dễ nhớ cho API key...">
+            <input
+              type="text"
+              v-model="newApiKey.name"
+              class="form-input"
+              placeholder="Tên dễ nhớ cho API key..."
+            />
           </div>
           <div class="form-group">
             <label>Mô tả</label>
-            <textarea v-model="newApiKey.description" class="form-input" rows="3" placeholder="Mô tả về API key này..."></textarea>
+            <textarea
+              v-model="newApiKey.description"
+              class="form-input"
+              rows="3"
+              placeholder="Mô tả về API key này..."
+            ></textarea>
           </div>
           <div class="form-group">
             <label>Trạng thái</label>
@@ -217,7 +262,13 @@
             </select>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="showAddApiKeyModal = false">Hủy</button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              @click="showAddApiKeyModal = false"
+            >
+              Hủy
+            </button>
             <button type="submit" class="btn btn-primary">Thêm API Key</button>
           </div>
         </form>
@@ -225,11 +276,17 @@
     </div>
 
     <!-- API Key Detail Modal -->
-    <div v-if="showApiKeyDetailModal" class="modal-overlay" @click.self="showApiKeyDetailModal = false">
+    <div
+      v-if="showApiKeyDetailModal"
+      class="modal-overlay"
+      @click.self="showApiKeyDetailModal = false"
+    >
       <div class="modal-content large">
         <div class="modal-header">
           <h2>Chi tiết API Key</h2>
-          <button class="close-btn" @click="showApiKeyDetailModal = false">&times;</button>
+          <button class="close-btn" @click="showApiKeyDetailModal = false">
+            &times;
+          </button>
         </div>
         <div class="modal-body" v-if="selectedApiKey">
           <div class="api-key-detail-grid">
@@ -247,7 +304,10 @@
               <div class="detail-item">
                 <label>Nhà cung cấp:</label>
                 <div class="provider-info">
-                  <span class="provider-icon" :class="getProviderClass(selectedApiKey.provider)">
+                  <span
+                    class="provider-icon"
+                    :class="getProviderClass(selectedApiKey.provider)"
+                  >
                     <i :class="getProviderIcon(selectedApiKey.provider)"></i>
                   </span>
                   <span>{{ selectedApiKey.provider }}</span>
@@ -257,14 +317,16 @@
                 <label>Trạng thái:</label>
                 <div class="status-info">
                   <label class="toggle-switch">
-                    <input 
-                      type="checkbox" 
-                      :checked="selectedApiKey.active" 
+                    <input
+                      type="checkbox"
+                      :checked="selectedApiKey.active"
                       @change="toggleApiKey(selectedApiKey)"
-                    >
+                    />
                     <span class="toggle-slider"></span>
                   </label>
-                  <span>{{ selectedApiKey.active ? 'Hoạt động' : 'Không hoạt động' }}</span>
+                  <span>{{
+                    selectedApiKey.active ? "Hoạt động" : "Không hoạt động"
+                  }}</span>
                 </div>
               </div>
             </div>
@@ -289,8 +351,12 @@
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showApiKeyDetailModal = false">Đóng</button>
-            <button class="btn btn-primary" @click="editApiKey(selectedApiKey)">Chỉnh sửa</button>
+            <button class="btn btn-secondary" @click="showApiKeyDetailModal = false">
+              Đóng
+            </button>
+            <button class="btn btn-primary" @click="editApiKey(selectedApiKey)">
+              Chỉnh sửa
+            </button>
           </div>
         </div>
       </div>
@@ -299,192 +365,247 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from "vue";
 // NOTE: API Keys APIs cần từ BE:
 // GET /api/admin/api-keys, GET /api/admin/api-keys/:id, POST /api/admin/api-keys,
 // PUT /api/admin/api-keys/:id, DELETE /api/admin/api-keys/:id,
 // PATCH /api/admin/api-keys/:id/status, POST /api/admin/api-keys/:id/test,
 // POST /api/admin/api-keys/bulk-action
-import { getApiKeys, createApiKey, updateApiKey, deleteApiKey as apiDeleteApiKey, toggleApiKeyStatus, testApiKey as apiTestApiKey, bulkApiKeyAction } from '@/api/admin'
+import {
+  getApiKeys,
+  createApiKey,
+  updateApiKey,
+  deleteApiKey as apiDeleteApiKey,
+  toggleApiKeyStatus,
+  testApiKey as apiTestApiKey,
+  bulkApiKeyAction,
+} from "@/api/admin";
 
 // State
-const showAddApiKeyModal = ref(false)
-const showApiKeyDetailModal = ref(false)
-const selectedApiKey = ref(null)
-const selectedApiKeys = ref([])
-const selectAll = ref(false)
-const currentPage = ref(1)
-const itemsPerPage = ref(10)
+const showAddApiKeyModal = ref(false);
+const showApiKeyDetailModal = ref(false);
+const selectedApiKey = ref(null);
+const selectedApiKeys = ref([]);
+const selectAll = ref(false);
+const currentPage = ref(1);
+const itemsPerPage = ref(10);
 
 const filters = ref({
-  provider: '',
-  status: '',
-  search: ''
-})
+  provider: "",
+  status: "",
+  search: "",
+});
 
 const newApiKey = ref({
-  key: '',
-  provider: '',
-  name: '',
-  description: '',
-  active: true
-})
+  key: "",
+  provider: "",
+  name: "",
+  description: "",
+  active: true,
+});
 
-const apiKeys = ref([])
+const apiKeys = ref([]);
 
 // Computed
-const totalApiKeys = computed(() => apiKeys.value.length)
+const totalApiKeys = computed(() => apiKeys.value.length);
 
 const filteredApiKeys = computed(() => {
-  let result = apiKeys.value
+  let result = apiKeys.value;
 
   if (filters.value.provider) {
-    result = result.filter(apiKey => 
-      apiKey.provider.toLowerCase() === filters.value.provider
-    )
+    result = result.filter(
+      (apiKey) => apiKey.provider.toLowerCase() === filters.value.provider
+    );
   }
 
   if (filters.value.status) {
-    const isActive = filters.value.status === 'active'
-    result = result.filter(apiKey => apiKey.active === isActive)
+    const isActive = filters.value.status === "active";
+    result = result.filter((apiKey) => apiKey.active === isActive);
   }
 
   if (filters.value.search) {
-    const search = filters.value.search.toLowerCase()
-    result = result.filter(apiKey => 
-      apiKey.name?.toLowerCase().includes(search) ||
-      apiKey.key.toLowerCase().includes(search) ||
-      apiKey.creator.toLowerCase().includes(search)
-    )
+    const search = filters.value.search.toLowerCase();
+    result = result.filter(
+      (apiKey) =>
+        apiKey.name?.toLowerCase().includes(search) ||
+        apiKey.key.toLowerCase().includes(search) ||
+        apiKey.creator.toLowerCase().includes(search)
+    );
   }
 
-  return result
-})
+  return result;
+});
 
-const totalPages = computed(() => Math.ceil(filteredApiKeys.value.length / itemsPerPage.value))
+const totalPages = computed(() =>
+  Math.ceil(filteredApiKeys.value.length / itemsPerPage.value)
+);
 
 // Methods
 const applyFilters = () => {
-  currentPage.value = 1
-}
+  currentPage.value = 1;
+};
 
 const resetFilters = () => {
   filters.value = {
-    provider: '',
-    status: '',
-    search: ''
-  }
-  currentPage.value = 1
-}
+    provider: "",
+    status: "",
+    search: "",
+  };
+  currentPage.value = 1;
+};
 
 const toggleSelectAll = () => {
   if (selectAll.value) {
-    selectedApiKeys.value = filteredApiKeys.value.map(apiKey => apiKey.id)
+    selectedApiKeys.value = filteredApiKeys.value.map((apiKey) => apiKey.id);
   } else {
-    selectedApiKeys.value = []
+    selectedApiKeys.value = [];
   }
-}
+};
 
 const previousPage = () => {
   if (currentPage.value > 1) {
-    currentPage.value--
+    currentPage.value--;
   }
-}
+};
 
 const nextPage = () => {
   if (currentPage.value < totalPages.value) {
-    currentPage.value++
+    currentPage.value++;
   }
-}
+};
 
 const maskApiKey = (key) => {
-  if (!key) return ''
-  if (key.length <= 8) return key
-  return key.substring(0, 8) + '***' + key.substring(key.length - 4)
-}
+  if (!key) return "";
+  if (key.length <= 8) return key;
+  return key.substring(0, 8) + "***" + key.substring(key.length - 4);
+};
 
 const copyApiKey = async (key) => {
   try {
-    await navigator.clipboard.writeText(key)
+    await navigator.clipboard.writeText(key);
     // TODO: Show success notification
-    console.log('API key copied to clipboard')
+    console.log("API key copied to clipboard");
   } catch (err) {
-    console.error('Failed to copy API key:', err)
+    console.error("Failed to copy API key:", err);
   }
-}
+};
 
 const getProviderClass = (provider) => {
   const classes = {
-    'OpenAI': 'provider-openai',
-    'Claude': 'provider-claude',
-    'Gemini': 'provider-gemini'
-  }
-  return classes[provider] || 'provider-default'
-}
+    OpenAI: "provider-openai",
+    Claude: "provider-claude",
+    Gemini: "provider-gemini",
+  };
+  return classes[provider] || "provider-default";
+};
 
 const getProviderIcon = (provider) => {
   const icons = {
-    'OpenAI': 'fas fa-robot',
-    'Claude': 'fas fa-brain',
-    'Gemini': 'fas fa-gem'
-  }
-  return icons[provider] || 'fas fa-key'
-}
+    OpenAI: "fas fa-robot",
+    Claude: "fas fa-brain",
+    Gemini: "fas fa-gem",
+  };
+  return icons[provider] || "fas fa-key";
+};
 
 const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('vi-VN')
-}
+  if (!dateString) {
+    return '';
+  }
+
+  try {
+    const date = new Date(dateString);
+    // Kiểm tra xem date có hợp lệ không
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    return date.toLocaleDateString("vi-VN");
+  } catch (error) {
+    console.error('Error formatting date:', error, 'dateString:', dateString);
+    return '';
+  }
+};
 
 const viewApiKey = (apiKey) => {
-  selectedApiKey.value = apiKey
-  showApiKeyDetailModal.value = true
-}
+  selectedApiKey.value = apiKey;
+  showApiKeyDetailModal.value = true;
+};
 
 const editApiKey = async (apiKey) => {
   // NOTE: PUT /api/admin/api-keys/:id
-  try { await updateApiKey(apiKey.id, apiKey); await loadApiKeys() } catch (e) {}
-}
+  try {
+    await updateApiKey(apiKey.id, apiKey);
+    await loadApiKeys();
+  } catch (e) {}
+};
 
 const testApiKey = async (apiKey) => {
   // NOTE: POST /api/admin/api-keys/:id/test
-  try { await apiTestApiKey(apiKey.id) } catch (e) {}
-}
+  try {
+    await apiTestApiKey(apiKey.id);
+  } catch (e) {}
+};
 
 const deleteApiKey = async (apiKey) => {
-  if (!confirm(`Bạn có chắc chắn muốn xóa API key ${apiKey.name || apiKey.key.substring(0, 8)}?`)) return
-  try { await apiDeleteApiKey(apiKey.id); await loadApiKeys() } catch (e) {}
-}
+  if (
+    !confirm(
+      `Bạn có chắc chắn muốn xóa API key ${apiKey.name || apiKey.key.substring(0, 8)}?`
+    )
+  )
+    return;
+  try {
+    await apiDeleteApiKey(apiKey.id);
+    await loadApiKeys();
+  } catch (e) {}
+};
 
 const toggleApiKey = async (apiKey) => {
   // NOTE: PATCH /api/admin/api-keys/:id/status
-  try { await toggleApiKeyStatus(apiKey.id, !apiKey.active); await loadApiKeys() } catch (e) {}
-}
+  try {
+    await toggleApiKeyStatus(apiKey.id, !apiKey.active);
+    await loadApiKeys();
+  } catch (e) {}
+};
 
 const addApiKey = async () => {
   // NOTE: POST /api/admin/api-keys
   try {
-    await createApiKey(newApiKey.value)
-    showAddApiKeyModal.value = false
-    newApiKey.value = { key: '', provider: '', name: '', description: '', active: true }
-    await loadApiKeys()
+    await createApiKey(newApiKey.value);
+    showAddApiKeyModal.value = false;
+    newApiKey.value = { key: "", provider: "", name: "", description: "", active: true };
+    await loadApiKeys();
   } catch (e) {}
-}
+};
 
 const bulkActivate = async () => {
   // NOTE: POST /api/admin/api-keys/bulk-action { action: 'activate' }
-  try { await bulkApiKeyAction(selectedApiKeys.value, 'activate'); await loadApiKeys() } catch (e) {}
-}
+  try {
+    await bulkApiKeyAction(selectedApiKeys.value, "activate");
+    await loadApiKeys();
+  } catch (e) {}
+};
 
 const bulkDeactivate = async () => {
   // NOTE: POST /api/admin/api-keys/bulk-action { action: 'deactivate' }
-  try { await bulkApiKeyAction(selectedApiKeys.value, 'deactivate'); await loadApiKeys() } catch (e) {}
-}
+  try {
+    await bulkApiKeyAction(selectedApiKeys.value, "deactivate");
+    await loadApiKeys();
+  } catch (e) {}
+};
 
 const bulkDelete = async () => {
-  if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedApiKeys.value.length} API keys đã chọn?`)) return
+  if (
+    !confirm(
+      `Bạn có chắc chắn muốn xóa ${selectedApiKeys.value.length} API keys đã chọn?`
+    )
+  )
+    return;
   // NOTE: POST /api/admin/api-keys/bulk-action { action: 'delete' }
-  try { await bulkApiKeyAction(selectedApiKeys.value, 'delete'); await loadApiKeys() } catch (e) {}
-}
+  try {
+    await bulkApiKeyAction(selectedApiKeys.value, "delete");
+    await loadApiKeys();
+  } catch (e) {}
+};
 
 const loadApiKeys = async () => {
   // NOTE: GET /api/admin/api-keys?provider=&status=&q=&page=&size=
@@ -495,15 +616,17 @@ const loadApiKeys = async () => {
       q: filters.value.search || undefined,
       page: currentPage.value,
       size: itemsPerPage.value,
-    })
+    });
     // Kỳ vọng schema: { items: [], total: number }
-    apiKeys.value = Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : [])
+    apiKeys.value = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
   } catch (e) {
-    apiKeys.value = []
+    apiKeys.value = [];
   }
-}
+};
 
-onMounted(() => { loadApiKeys() })
+onMounted(() => {
+  loadApiKeys();
+});
 </script>
 
 <style scoped>
@@ -642,7 +765,7 @@ onMounted(() => { loadApiKeys() })
 }
 
 .api-key {
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   font-size: 13px;
   background: #f1f5f9;
   padding: 4px 8px;
@@ -1115,19 +1238,19 @@ input:checked + .toggle-slider:before {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .filter-group {
     min-width: auto;
   }
-  
+
   .search-input {
     min-width: auto;
   }
-  
+
   .api-key-detail-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .bulk-actions {
     flex-direction: column;
     gap: 12px;

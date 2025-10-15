@@ -22,8 +22,7 @@
           <select v-model="filters.status" @change="applyFilters">
             <option value="">Tất cả trạng thái</option>
             <option value="active">Hoạt động</option>
-            <option value="completed">Hoàn thành</option>
-            <option value="archived">Lưu trữ</option>
+            <option value="trashed">Đã xóa</option>
           </select>
         </div>
         <div class="filter-group">
@@ -77,22 +76,22 @@
               </td>
               <td>
                 <div class="project-cell">
-                  <div class="project-info">
-                    <h3 class="project-name">{{ project.name }}</h3>
-                    <p class="project-description">{{ project.description }}</p>
-                    <div class="project-meta">
-                      <span class="project-language">{{ project.language }}</span>
-                      <span class="project-version">v{{ project.version }}</span>
-                    </div>
+                <div class="project-info">
+                  <h3 class="project-name">{{ project.name }}</h3>
+                  <p class="project-description">{{ project.description }}</p>
+                  <div class="project-meta">
+                    <span class="project-language">{{ project.language }}</span>
+                    <span class="project-status">{{ project.isTrashed ? 'Đã xóa' : 'Hoạt động' }}</span>
                   </div>
+                </div>
                 </div>
               </td>
               <td>
                 <div class="owner-cell">
-                  <div class="owner-avatar">{{ project.owner.name.charAt(0) }}</div>
+                  <div class="owner-avatar">{{ project.owner?.name?.charAt(0) || 'N' }}</div>
                   <div class="owner-info">
-                    <span class="owner-name">{{ project.owner.name }}</span>
-                    <span class="owner-email">{{ project.owner.email }}</span>
+                    <span class="owner-name">{{ project.owner?.name || 'Không xác định' }}</span>
+                    <span class="owner-email">{{ project.owner?.email || '' }}</span>
                   </div>
                 </div>
               </td>
@@ -100,26 +99,21 @@
                 <div class="members-cell">
                   <div class="members-count">
                     <i class="fas fa-users"></i>
-                    {{ project.members.length }} thành viên
+                    {{ project.memberCount }} thành viên
                   </div>
                   <div class="members-preview">
-                    <div 
-                      v-for="member in project.members.slice(0, 3)" 
-                      :key="member.id"
-                      class="member-avatar"
-                      :title="member.name"
-                    >
-                      {{ member.name.charAt(0) }}
+                    <div class="member-avatar">
+                      {{ project.owner?.name?.charAt(0) || 'N' }}
                     </div>
-                    <div v-if="project.members.length > 3" class="more-members">
-                      +{{ project.members.length - 3 }}
+                    <div v-if="project.acceptedMembers > 1" class="more-members">
+                      +{{ project.acceptedMembers - 1 }}
                     </div>
                   </div>
                 </div>
               </td>
               <td>
-                <span class="status-badge" :class="getStatusClass(project.status)">
-                  {{ getStatusText(project.status) }}
+                <span class="status-badge" :class="getStatusClass(project.isTrashed)">
+                  {{ getStatusText(project.isTrashed) }}
                 </span>
               </td>
               <td>{{ formatDate(project.createdAt) }}</td>
@@ -209,14 +203,12 @@
                 <span>{{ selectedProject.language }}</span>
               </div>
               <div class="detail-item">
-                <label>Phiên bản:</label>
-                <span>v{{ selectedProject.version }}</span>
+                <label>Trạng thái:</label>
+                <span>{{ selectedProject.isTrashed ? 'Đã xóa' : 'Hoạt động' }}</span>
               </div>
               <div class="detail-item">
-                <label>Trạng thái:</label>
-                <span class="status-badge" :class="getStatusClass(selectedProject.status)">
-                  {{ getStatusText(selectedProject.status) }}
-                </span>
+                <label>Thành viên:</label>
+                <span>{{ selectedProject.memberCount }} người</span>
               </div>
             </div>
             <div class="detail-section">
@@ -227,7 +219,7 @@
               </div>
               <div class="detail-item">
                 <label>Chủ sở hữu:</label>
-                <span>{{ selectedProject.owner.name }} ({{ selectedProject.owner.email }})</span>
+                <span>{{ selectedProject.owner?.name || 'Không xác định' }} ({{ selectedProject.owner?.email || '' }})</span>
               </div>
               <div class="detail-item">
                 <label>Ngày tạo:</label>
@@ -239,26 +231,27 @@
               </div>
               <div class="detail-item">
                 <label>Số thành viên:</label>
-                <span>{{ selectedProject.members.length }}</span>
+                <span>{{ selectedProject.memberCount }}</span>
               </div>
             </div>
           </div>
           
-          <!-- Members List -->
+          <!-- Members List - Simplified version since we don't have detailed member info -->
           <div class="members-section">
-            <h3>Danh sách thành viên</h3>
-            <div class="members-list">
-              <div 
-                v-for="member in selectedProject.members" 
-                :key="member.id"
-                class="member-item"
-              >
-                <div class="member-avatar">{{ member.name.charAt(0) }}</div>
+            <h3>Thông tin thành viên</h3>
+            <div class="members-summary">
+              <div class="member-card">
+                <div class="member-avatar">{{ selectedProject.owner?.name?.charAt(0) || 'N' }}</div>
                 <div class="member-info">
-                  <span class="member-name">{{ member.name }}</span>
-                  <span class="member-email">{{ member.email }}</span>
+                  <div class="member-name">{{ selectedProject.owner?.name || 'Không xác định' }}</div>
+                  <div class="member-email">{{ selectedProject.owner?.email || '' }}</div>
+                  <div class="member-role">Chủ sở hữu</div>
                 </div>
-                <span class="member-role">{{ member.role }}</span>
+              </div>
+              <div class="members-count">
+                <p>Tổng số thành viên: {{ selectedProject.memberCount }}</p>
+                <p>Thành viên đã xác nhận: {{ selectedProject.acceptedMembers }}</p>
+                <p>Thành viên chờ xác nhận: {{ selectedProject.pendingMembers }}</p>
               </div>
             </div>
           </div>
@@ -278,7 +271,7 @@ import { ref, computed, onMounted } from 'vue'
 // NOTE: Projects APIs cần từ BE:
 // GET /api/admin/projects, GET /api/admin/projects/:id, DELETE /api/admin/projects/:id
 // (có thể thêm bulk-action nếu cần)
-import { getProjects, deleteProject as apiDeleteProject } from '@/api/admin'
+import { getAllProjectsForAdmin, deleteProjectPermanently as apiDeleteProject } from '@/api/admin'
 
 // State
 const showProjectDetailModal = ref(false)
@@ -296,20 +289,40 @@ const filters = ref({
 
 const projects = ref([])
 
-const owners = ref([]) // sẽ fill từ API nếu có endpoint owners
-
 // Computed
 const totalProjects = computed(() => projects.value.length)
 
+const owners = computed(() => {
+  if (!projects.value || projects.value.length === 0) {
+    return []
+  }
+  const ownerMap = new Map()
+  projects.value.forEach(project => {
+    if (project.owner && project.owner.id) {
+      ownerMap.set(project.owner.id, project.owner)
+    }
+  })
+  return Array.from(ownerMap.values())
+})
+
 const filteredProjects = computed(() => {
+  if (!projects.value || projects.value.length === 0) {
+    return []
+  }
+
   let result = projects.value
 
   if (filters.value.status) {
-    result = result.filter(project => project.status === filters.value.status)
+    // status có thể là 'active', 'trashed' hoặc rỗng
+    if (filters.value.status === 'active') {
+      result = result.filter(project => !project.isTrashed)
+    } else if (filters.value.status === 'trashed') {
+      result = result.filter(project => project.isTrashed)
+    }
   }
 
   if (filters.value.owner) {
-    result = result.filter(project => project.owner.id === parseInt(filters.value.owner))
+    result = result.filter(project => project.owner?.id?.toString() === filters.value.owner)
   }
 
   if (filters.value.search) {
@@ -359,26 +372,30 @@ const nextPage = () => {
   }
 }
 
-const getStatusClass = (status) => {
-  const classes = {
-    'active': 'status-active',
-    'completed': 'status-completed',
-    'archived': 'status-archived'
-  }
-  return classes[status] || 'status-default'
+const getStatusClass = (isTrashed) => {
+  return isTrashed ? 'status-archived' : 'status-active'
 }
 
-const getStatusText = (status) => {
-  const texts = {
-    'active': 'Hoạt động',
-    'completed': 'Hoàn thành',
-    'archived': 'Lưu trữ'
-  }
-  return texts[status] || status
+const getStatusText = (isTrashed) => {
+  return isTrashed ? 'Đã xóa' : 'Hoạt động'
 }
 
 const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('vi-VN')
+  if (!dateString) {
+    return '';
+  }
+
+  try {
+    const date = new Date(dateString);
+    // Kiểm tra xem date có hợp lệ không
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    return date.toLocaleDateString('vi-VN');
+  } catch (error) {
+    console.error('Error formatting date:', error, 'dateString:', dateString);
+    return '';
+  }
 }
 
 const viewProject = (project) => {
@@ -407,19 +424,61 @@ const bulkDelete = async () => {
 }
 
 const loadProjects = async () => {
-  // NOTE: GET /api/admin/projects?status=&owner=&q=&page=&size=
+  // NOTE: GET /api/projects/admin/all - trả về tất cả projects cho admin
   try {
-    const res = await getProjects({
-      status: filters.value.status || undefined,
-      owner: filters.value.owner || undefined,
-      q: filters.value.search || undefined,
-      page: currentPage.value,
-      size: itemsPerPage.value,
-    })
-    // Kỳ vọng schema: { items: [], total: number }
-    projects.value = Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : [])
+    console.log("Loading projects for admin...");
+    const res = await getAllProjectsForAdmin();
+
+    console.log("API Response:", res); // Debug log
+
+    // Backend trả về format: { status: "Success", message: "...", data: [...] }
+    let items = [];
+    if (res?.data?.data && Array.isArray(res.data.data)) {
+      items = res.data.data;
+      console.log("Found data in res.data.data:", items.length, "projects");
+    } else if (res?.data && Array.isArray(res.data)) {
+      items = res.data;
+      console.log("Found data in res.data:", items.length, "projects");
+    } else if (Array.isArray(res)) {
+      items = res;
+      console.log("Found data in res:", items.length, "projects");
+    } else {
+      console.warn("No data found in response:", res);
+    }
+
+    console.log("Parsed items:", items); // Debug log
+
+    // Backend đã format dữ liệu sẵn, chỉ cần sử dụng trực tiếp
+    projects.value = items.map((p) => ({
+      id: p.id, // Backend trả về id
+      name: p.name || "",
+      description: p.description || "",
+      language: p.language || "vi-VN",
+      owner: p.owner, // Backend đã format owner object
+      memberCount: p.memberCount || 0,
+      acceptedMembers: p.acceptedMembers || 0,
+      pendingMembers: p.pendingMembers || 0,
+      isTrashed: p.isTrashed || false,
+      createdAt: p.createdAt, // Backend trả về createdAt
+      updatedAt: p.updatedAt,
+      lastAccessedAt: p.lastAccessedAt,
+    }));
+
+    console.log("Mapped projects:", projects.value.length, "projects loaded");
   } catch (e) {
-    projects.value = []
+    console.error("Error loading projects:", e);
+    console.error("Error details:", e.response?.data || e.message);
+
+    // Hiển thị thông báo lỗi chi tiết
+    if (e.response?.status === 401) {
+      console.error("Authentication failed - Please login again");
+    } else if (e.response?.status === 403) {
+      console.error("Access denied - Admin role required");
+    } else if (e.response?.status === 500) {
+      console.error("Server error - Check backend logs");
+    }
+
+    projects.value = [];
   }
 }
 
@@ -570,13 +629,22 @@ onMounted(() => { loadProjects() })
   font-weight: 600;
   color: #1e293b;
   margin: 0 0 4px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }
 
 .project-description {
   font-size: 14px;
   color: #64748b;
   margin: 0 0 8px 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   line-height: 1.4;
+  max-height: 2.8em;
 }
 
 .project-meta {

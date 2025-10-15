@@ -34,9 +34,9 @@
     </div>
   </div>
   
-  <button v-else @click="showDebug = true" class="debug-toggle">
+  <!-- <button v-else @click="showDebug = true" class="debug-toggle">
     🐛 Debug
-  </button>
+  </button> -->
 </template>
 
 <script setup>

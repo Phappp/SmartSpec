@@ -2,6 +2,7 @@
 import axiosClient from "@/utils/axiosClient";
 import { isAuthenticated, isAdmin, isTokenExpired, logout } from "@/utils/authGuard";
 
+
 /**
  * Interceptor phụ — nếu token hết hạn hoặc không phải admin thì logout
  */
@@ -149,11 +150,25 @@ export const bulkApiKeyAction = (ids, action) =>
   axiosClient.post(`/api/api-keys/bulk-action`, { apiKeyIds: ids, action });
 
 // ==================== PROJECTS ====================
-export const getProjects = (params = {}) =>
-  axiosClient.get(`/api/projects/myproject`, { params });
-export const getProjectById = (id) => axiosClient.get(`/api/projects/${id}`);
-export const deleteProject = (id) => axiosClient.delete(`/api/projects/${id}`);
+export const getAllProjectsForAdmin = () => {
+  console.log("Fetching all projects for admin...");
+  return axiosClient.get(`/api/projects/admin/all`);
+};
 
+export const deleteProjectPermanently = (projectId) => {
+  console.log("Deleting project permanently:", projectId);
+  return axiosClient.delete(`/api/projects/${projectId}`);
+};
+
+export const restoreProject = (projectId) => {
+  console.log("Restoring project:", projectId);
+  return axiosClient.post(`/api/projects/${projectId}/restore`);
+};
+
+export const getProjectDetail = (projectId) => {
+  console.log("Fetching project detail:", projectId);
+  return axiosClient.get(`/api/projects/${projectId}`);
+};
 // ==================== SYSTEM ====================
 export const getSystemInfo = () => axiosClient.get(`/api/admin/system/info`);
 export const getSystemLogs = (params = {}) => axiosClient.get(`/api/admin/system/logs`, { params });
@@ -185,9 +200,12 @@ export default {
   toggleApiKeyStatus,
   testApiKey,
   bulkApiKeyAction,
-  getProjects,
-  getProjectById,
-  deleteProject,
+  // Admin Projects
+  getAllProjectsForAdmin,
+  getProjectDetail,
+  deleteProjectPermanently,
+  restoreProject,
+  // System
   getSystemInfo,
   getSystemLogs,
 };
