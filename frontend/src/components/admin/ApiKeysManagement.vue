@@ -100,8 +100,8 @@
               </td>
               <td>
                 <div class="creator-cell">
-                  <div class="creator-avatar">{{ apiKey.creator.charAt(0) }}</div>
-                  <span>{{ apiKey.creator }}</span>
+                  <div class="creator-avatar">{{ apiKey.createdBy?.charAt(0) || 'N' }}</div>
+                  <span>{{ apiKey.createdBy || 'Không xác định' }}</span>
                 </div>
               </td>
               <td>
@@ -120,7 +120,7 @@
                 </div>
               </td>
               <td>{{ formatDate(apiKey.createdAt) }}</td>
-              <td>{{ formatDate(apiKey.lastUsed) }}</td>
+              <td>{{ formatDate(apiKey.updatedAt) || 'Chưa cập nhật' }}</td>
               <td>
                 <div class="action-buttons">
                   <button
@@ -136,13 +136,6 @@
                     title="Chỉnh sửa"
                   >
                     <i class="fas fa-edit"></i>
-                  </button>
-                  <button
-                    class="action-btn orange"
-                    @click="testApiKey(apiKey)"
-                    title="Test key"
-                  >
-                    <i class="fas fa-vial"></i>
                   </button>
                   <button
                     class="action-btn red"
@@ -185,24 +178,6 @@
       </div>
     </div>
 
-    <!-- Bulk Actions -->
-    <div v-if="selectedApiKeys.length > 0" class="bulk-actions">
-      <div class="bulk-info">Đã chọn {{ selectedApiKeys.length }} API keys</div>
-      <div class="bulk-buttons">
-        <button class="btn btn-secondary" @click="bulkActivate">
-          <i class="fas fa-check"></i>
-          Kích hoạt
-        </button>
-        <button class="btn btn-secondary" @click="bulkDeactivate">
-          <i class="fas fa-times"></i>
-          Vô hiệu hóa
-        </button>
-        <button class="btn btn-danger" @click="bulkDelete">
-          <i class="fas fa-trash"></i>
-          Xóa
-        </button>
-      </div>
-    </div>
 
     <!-- Add API Key Modal -->
     <div
@@ -315,38 +290,24 @@
               </div>
               <div class="detail-item">
                 <label>Trạng thái:</label>
-                <div class="status-info">
-                  <label class="toggle-switch">
-                    <input
-                      type="checkbox"
-                      :checked="selectedApiKey.active"
-                      @change="toggleApiKey(selectedApiKey)"
-                    />
-                    <span class="toggle-slider"></span>
-                  </label>
-                  <span>{{
-                    selectedApiKey.active ? "Hoạt động" : "Không hoạt động"
-                  }}</span>
-                </div>
+                <span class="status-badge" :class="selectedApiKey.active ? 'status-active' : 'status-inactive'">
+                  {{ selectedApiKey.active ? "Hoạt động" : "Không hoạt động" }}
+                </span>
               </div>
             </div>
             <div class="detail-section">
               <h3>Thông tin hệ thống</h3>
               <div class="detail-item">
                 <label>Người tạo:</label>
-                <span>{{ selectedApiKey.creator }}</span>
+                <span>{{ selectedApiKey.createdBy || 'Không xác định' }}</span>
               </div>
               <div class="detail-item">
                 <label>Ngày tạo:</label>
                 <span>{{ formatDate(selectedApiKey.createdAt) }}</span>
               </div>
               <div class="detail-item">
-                <label>Lần sử dụng cuối:</label>
-                <span>{{ formatDate(selectedApiKey.lastUsed) }}</span>
-              </div>
-              <div class="detail-item">
-                <label>Số lần sử dụng:</label>
-                <span>{{ selectedApiKey.usageCount || 0 }}</span>
+                <label>Cập nhật cuối:</label>
+                <span>{{ formatDate(selectedApiKey.updatedAt) || 'Chưa cập nhật' }}</span>
               </div>
             </div>
           </div>
@@ -376,9 +337,7 @@ import {
   createApiKey,
   updateApiKey,
   deleteApiKey as apiDeleteApiKey,
-  toggleApiKeyStatus,
-  testApiKey as apiTestApiKey,
-  bulkApiKeyAction,
+  searchApiKeys,
 } from "@/api/admin";
 
 // State
@@ -414,7 +373,7 @@ const filteredApiKeys = computed(() => {
 
   if (filters.value.provider) {
     result = result.filter(
-      (apiKey) => apiKey.provider.toLowerCase() === filters.value.provider
+      (apiKey) => apiKey.provider?.toLowerCase() === filters.value.provider.toLowerCase()
     );
   }
 
@@ -423,15 +382,7 @@ const filteredApiKeys = computed(() => {
     result = result.filter((apiKey) => apiKey.active === isActive);
   }
 
-  if (filters.value.search) {
-    const search = filters.value.search.toLowerCase();
-    result = result.filter(
-      (apiKey) =>
-        apiKey.name?.toLowerCase().includes(search) ||
-        apiKey.key.toLowerCase().includes(search) ||
-        apiKey.creator.toLowerCase().includes(search)
-    );
-  }
+  // Search đã được xử lý trong loadApiKeys bằng API search
 
   return result;
 });
@@ -441,17 +392,23 @@ const totalPages = computed(() =>
 );
 
 // Methods
-const applyFilters = () => {
+const applyFilters = async () => {
   currentPage.value = 1;
+
+  // Nếu có tìm kiếm, sử dụng API search
+  if (filters.value.search && filters.value.search.trim()) {
+    await loadApiKeys();
+  }
 };
 
-const resetFilters = () => {
+const resetFilters = async () => {
   filters.value = {
     provider: "",
     status: "",
     search: "",
   };
   currentPage.value = 1;
+  await loadApiKeys(); // Reload dữ liệu khi reset filter
 };
 
 const toggleSelectAll = () => {
@@ -532,19 +489,20 @@ const viewApiKey = (apiKey) => {
 };
 
 const editApiKey = async (apiKey) => {
-  // NOTE: PUT /api/admin/api-keys/:id
+  // NOTE: PATCH /api/keys/:id
   try {
-    await updateApiKey(apiKey.id, apiKey);
+    await updateApiKey(apiKey.id, {
+      key_value: apiKey.key,
+      provider: apiKey.provider,
+      is_active: apiKey.active,
+    });
     await loadApiKeys();
-  } catch (e) {}
+  } catch (e) {
+    console.error("Error updating api key:", e);
+  }
 };
 
-const testApiKey = async (apiKey) => {
-  // NOTE: POST /api/admin/api-keys/:id/test
-  try {
-    await apiTestApiKey(apiKey.id);
-  } catch (e) {}
-};
+// Test API key functionality removed - not available in current backend
 
 const deleteApiKey = async (apiKey) => {
   if (
@@ -559,67 +517,86 @@ const deleteApiKey = async (apiKey) => {
   } catch (e) {}
 };
 
-const toggleApiKey = async (apiKey) => {
-  // NOTE: PATCH /api/admin/api-keys/:id/status
-  try {
-    await toggleApiKeyStatus(apiKey.id, !apiKey.active);
-    await loadApiKeys();
-  } catch (e) {}
-};
+// Toggle API key status functionality removed - not available in current backend
 
 const addApiKey = async () => {
-  // NOTE: POST /api/admin/api-keys
+  // NOTE: POST /api/keys
   try {
-    await createApiKey(newApiKey.value);
+    await createApiKey({
+      key_value: newApiKey.value.key,
+      provider: newApiKey.value.provider,
+      is_active: newApiKey.value.active || true,
+    });
     showAddApiKeyModal.value = false;
-    newApiKey.value = { key: "", provider: "", name: "", description: "", active: true };
+    newApiKey.value = { key: "", provider: "", active: true };
     await loadApiKeys();
-  } catch (e) {}
+  } catch (e) {
+    console.error("Error creating api key:", e);
+  }
 };
 
-const bulkActivate = async () => {
-  // NOTE: POST /api/admin/api-keys/bulk-action { action: 'activate' }
-  try {
-    await bulkApiKeyAction(selectedApiKeys.value, "activate");
-    await loadApiKeys();
-  } catch (e) {}
-};
-
-const bulkDeactivate = async () => {
-  // NOTE: POST /api/admin/api-keys/bulk-action { action: 'deactivate' }
-  try {
-    await bulkApiKeyAction(selectedApiKeys.value, "deactivate");
-    await loadApiKeys();
-  } catch (e) {}
-};
-
-const bulkDelete = async () => {
-  if (
-    !confirm(
-      `Bạn có chắc chắn muốn xóa ${selectedApiKeys.value.length} API keys đã chọn?`
-    )
-  )
-    return;
-  // NOTE: POST /api/admin/api-keys/bulk-action { action: 'delete' }
-  try {
-    await bulkApiKeyAction(selectedApiKeys.value, "delete");
-    await loadApiKeys();
-  } catch (e) {}
-};
+// Bulk actions functionality removed - not available in current backend
 
 const loadApiKeys = async () => {
-  // NOTE: GET /api/admin/api-keys?provider=&status=&q=&page=&size=
+  // NOTE: GET /api/keys hoặc POST /api/keys/search
   try {
-    const res = await getApiKeys({
-      provider: filters.value.provider || undefined,
-      status: filters.value.status || undefined,
-      q: filters.value.search || undefined,
-      page: currentPage.value,
-      size: itemsPerPage.value,
-    });
-    // Kỳ vọng schema: { items: [], total: number }
-    apiKeys.value = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+    console.log("Loading API keys...");
+    let res;
+
+    // Nếu có tìm kiếm, sử dụng API search
+    if (filters.value.search && filters.value.search.trim()) {
+      console.log("Using search API for:", filters.value.search);
+      res = await searchApiKeys(filters.value.search);
+    } else {
+      // Nếu không có tìm kiếm, lấy tất cả
+      res = await getApiKeys();
+    }
+
+    console.log("API Response:", res); // Debug log
+
+    // Backend trả về format: { status: "Success", message: "...", data: [...] }
+    let items = [];
+    if (res?.data?.data && Array.isArray(res.data.data)) {
+      items = res.data.data;
+      console.log("Found data in res.data.data:", items.length, "api keys");
+    } else if (res?.data && Array.isArray(res.data)) {
+      items = res.data;
+      console.log("Found data in res.data:", items.length, "api keys");
+    } else if (Array.isArray(res)) {
+      items = res;
+      console.log("Found data in res:", items.length, "api keys");
+    } else {
+      console.warn("No data found in response:", res);
+      items = [];
+    }
+
+    console.log("Parsed items:", items); // Debug log
+
+    // Chuẩn hóa dữ liệu từ Backend - phù hợp với cấu trúc thực tế từ Backend service
+    apiKeys.value = items.map((k) => ({
+      id: k.id || k._id, // Backend trả về id
+      key: k.key_value || "", // Backend trả về key_value
+      provider: k.provider || "",
+      active: k.is_active !== undefined ? k.is_active : true, // Backend trả về is_active
+      createdBy: k.created_by || "",
+      createdAt: k.createAt || k.created_at, // Backend trả về createAt
+      updatedAt: k.updatedAt || k.updated_at,
+    }));
+
+    console.log("Mapped api keys:", apiKeys.value.length, "api keys loaded");
   } catch (e) {
+    console.error("Error loading api keys:", e);
+    console.error("Error details:", e.response?.data || e.message);
+
+    // Hiển thị thông báo lỗi chi tiết
+    if (e.response?.status === 401) {
+      console.error("Authentication failed - Please login again");
+    } else if (e.response?.status === 403) {
+      console.error("Access denied - Admin role required");
+    } else if (e.response?.status === 500) {
+      console.error("Server error - Check backend logs");
+    }
+
     apiKeys.value = [];
   }
 };

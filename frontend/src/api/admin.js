@@ -138,16 +138,18 @@ export const bulkUserAction = (userIds, action) =>
   axiosClient.post(`/api/users/bulk-action`, { userIds, action });
 
 // ==================== API KEYS ====================
-export const getApiKeys = (params = {}) => axiosClient.get(`/api/keys`, { params });
+// Lấy tất cả API keys (không có filter/search params như Frontend hiện tại)
+export const getApiKeys = () => axiosClient.get(`/api/keys`);
+// Lấy API key theo ID
 export const getApiKeyById = (id) => axiosClient.get(`/api/keys/${id}`);
+// Tạo API key mới
 export const createApiKey = (data) => axiosClient.post(`/api/keys`, data);
+// Cập nhật API key
 export const updateApiKey = (id, data) => axiosClient.patch(`/api/keys/${id}`, data);
+// Xóa API key
 export const deleteApiKey = (id) => axiosClient.delete(`/api/keys/${id}`);
-export const toggleApiKeyStatus = (id, active) =>
-  axiosClient.patch(`/api/api-keys/${id}/status`, { active });
-export const testApiKey = (id) => axiosClient.post(`/api/api-keys/${id}/test`);
-export const bulkApiKeyAction = (ids, action) =>
-  axiosClient.post(`/api/api-keys/bulk-action`, { apiKeyIds: ids, action });
+// Tìm kiếm API keys (POST /api/keys/search)
+export const searchApiKeys = (content) => axiosClient.post(`/api/keys/search`, { content });
 
 // ==================== PROJECTS ====================
 export const getAllProjectsForAdmin = () => {
@@ -197,9 +199,7 @@ export default {
   createApiKey,
   updateApiKey,
   deleteApiKey,
-  toggleApiKeyStatus,
-  testApiKey,
-  bulkApiKeyAction,
+  searchApiKeys,
   // Admin Projects
   getAllProjectsForAdmin,
   getProjectDetail,
