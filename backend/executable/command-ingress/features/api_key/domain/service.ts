@@ -8,8 +8,30 @@ import { generateJwt, generateJwtOTP } from "../../../services/jwtService";
 import mailService from "../../../services/sendMail.service";
 
 export class ApiKeyServiceImpl implements ApiKeyService {
-  searchAPIKeys(content: string): Promise<APIKeysResponse[]> {
-    throw new Error("Method not implemented.");
+  async searchAPIKeys(content: string): Promise<APIKeysResponse[]> {
+    console.log("Searching for content:", content); // Debug log
+    const regex = new RegExp(content, "i");
+    const keys = await Key.find({
+      $or: [
+        {
+          key_value: { $regex: regex },
+        },
+        {
+          provider: { $regex: regex },
+        },
+      ],
+    });
+    console.log("Keys found:", keys); // Debug log
+
+    return keys.map((key) => ({
+      id: key.id,
+      key_value: key.key_value,
+      provider: key.provider,
+      is_active: key.is_active,
+      created_by: key.created_by?.toString(),
+      createAt: key.createdAt,
+      updatedAt: key.updatedAt,
+    }));
   }
   filterAPIKeys(
     provider?: string,

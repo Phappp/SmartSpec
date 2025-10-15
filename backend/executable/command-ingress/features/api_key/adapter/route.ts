@@ -7,10 +7,12 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
 ) => {
   const router = express.Router();
 
+  //
   router
     .route("/search")
     .get(requireAuthorizedUser, controller.searchAPIKeys.bind(controller));
 
+    //
   router.route("/filter")
   .get(requireAuthorizedUser, controller.filterAPIKeys.bind(controller));
 
