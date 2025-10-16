@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { LogController } from "../adapter/controller";
-import requireAuthorizedUser from "../../../middlewares/auth";
+import {requireAuthorizedUser} from "../../../middlewares/auth";
 
 export default function initLogRoute(controller: LogController) {
   const router = Router();

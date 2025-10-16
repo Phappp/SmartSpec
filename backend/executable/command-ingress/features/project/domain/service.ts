@@ -19,8 +19,7 @@ export class ProjectService {
   constructor(
     private orchestratorService: OrchestratorService,
     private inputService: InputService
-  ) { }
-  constructor(private orchestratorService: OrchestratorService) {this.logService = new LogService() }
+  ) { this.logService = new LogService()}
 
   async createProject(
     data: CreateProjectDto,
