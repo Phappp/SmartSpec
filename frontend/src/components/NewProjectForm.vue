@@ -15,30 +15,49 @@
             <!-- Step 1 -->
             <div v-if="currentStep === 1">
               <div class="form-group">
-                <label for="projectName">Project Name</label>
+                <label for="projectName"
+                  >Project Name <span class="required-asterisk">*</span></label
+                >
                 <input
                   id="projectName"
                   v-model="projectData.name"
                   placeholder="e.g., E-commerce Platform"
                   required
+                  @input="validateStep1"
                 />
+                <div v-if="step1Error.name" class="error-message">
+                  <!-- {{ step1Error.name }} -->
+                </div>
               </div>
               <div class="form-group">
-                <label for="projectDescription">Project Description</label>
+                <label for="projectDescription"
+                  >Project Description <span class="required-asterisk">*</span></label
+                >
                 <textarea
                   id="projectDescription"
                   v-model="projectData.description"
                   placeholder="A platform to sell goods online"
                   rows="5"
                   required
+                  @input="validateStep1"
                 ></textarea>
+                <div v-if="step1Error.description" class="error-message">
+                  <!-- {{ step1Error.description }} -->
+                </div>
               </div>
             </div>
 
             <!-- Step 2 -->
             <div v-if="currentStep === 2">
+              <!-- Thông báo yêu cầu đầu vào -->
+              <div class="input-requirement" v-if="!isStep2Valid">
+                <span class="material-symbols-outlined" style="font-size: 16px; color: #ef4444"
+                  >info</span
+                >
+                Please provide either Decribe Features or at least one attachment to continue.
+              </div>
               <div class="form-group">
-                <label for="rawText">Raw Text (Optional)</label>
+                <label for="rawText">Decribe Features (Optional)</label>
                 <textarea
                   id="rawText"
                   v-model="projectData.rawText"
@@ -122,7 +141,7 @@
                 class="create-btn"
                 v-if="currentStep < 3"
                 @click="nextStep"
-                :disabled="currentStep === 2 && sizeLimitExceeded"
+                :disabled="isNextButtonDisabled"
               >
                 Next
               </button>
@@ -166,17 +185,16 @@
       </template>
     </div>
 
-    <!-- FULLSCREEN LOADING OVERLAY -->
     <div v-if="overlayLoading" class="fullscreen-overlay">
+      <!-- NÚT THOÁT KHI ĐANG LOADING -->
+      <button class="close-loading-btn" @click="handleCloseDuringCreation">
+        <span class="material-symbols-outlined">close</span>
+        Exit Creation
+      </button>
       <div class="loading-box">
         <div class="spinner-flashlight"></div>
-        <!-- <p class="loading-text">{{ loadingMessage }}</p> -->
-
         <!-- PROCESSING PROGRESS -->
         <div v-if="creationStatus === 'polling'" class="processing-status">
-          <!-- <h3 class="status-title">Processing Project</h3> -->
-
-          <!-- Progress Bar -->
           <div class="progress-container">
             <div class="progress-info">
               <span class="stage-text">{{ currentStage }}</span>
@@ -199,7 +217,10 @@ import { createProject, getVersionStatus, retryProjectAnalysis } from '@/api/pro
 
 export default {
   name: 'NewProjectModal',
-  props: { show: { type: Boolean, default: false } },
+  props: {
+    show: { type: Boolean, default: false },
+    creatingProjects: { type: Array, default: () => [] }, // Thêm prop mới
+  },
   setup(props, { emit }) {
     const router = useRouter()
 
@@ -210,6 +231,7 @@ export default {
     const currentStep = ref(1)
     const projectData = ref({ name: '', description: '', rawText: '', language: 'vi-VN' })
     const selectedFiles = ref([])
+    const step1Error = ref({ name: '', description: '' })
 
     // Status state
     const creationStatus = ref('idle') // idle, creating, polling, completed, failed
@@ -218,7 +240,7 @@ export default {
     const processingError = ref('')
     const pollingInterval = ref(null)
     const isRetrying = ref(false)
-
+    const currentVersionId = ref(null)
     // Processing progress state
     const processingProgress = ref(0)
     const currentStage = ref('Initializing...')
@@ -244,6 +266,35 @@ export default {
     const sizeLimitExceeded = computed(() => {
       return totalFileSize.value > MAX_TOTAL_SIZE
     })
+
+    // Thêm computed property để kiểm tra điều kiện bước 2
+    const isStep2Valid = computed(() => {
+      return projectData.value.rawText.trim() !== '' || selectedFiles.value.length > 0
+    })
+
+    // Computed property để kiểm tra nút Next có bị disable không
+    const isNextButtonDisabled = computed(() => {
+      if (currentStep.value === 1) {
+        return !projectData.value.name.trim() || !projectData.value.description.trim()
+      } else if (currentStep.value === 2) {
+        return sizeLimitExceeded.value || !isStep2Valid.value
+      }
+      return false
+    })
+
+    const validateStep1 = () => {
+      const errors = { name: '', description: '' }
+
+      if (!projectData.value.name.trim()) {
+        errors.name = 'Project name is required'
+      }
+
+      if (!projectData.value.description.trim()) {
+        errors.description = 'Project description is required'
+      }
+
+      step1Error.value = errors
+    }
 
     const startLoadingMessages = () => {
       overlayLoading.value = true
@@ -306,6 +357,8 @@ export default {
       projectData.value = { name: '', description: '', rawText: '', language: 'vi-VN' }
       processingProgress.value = 0
       currentStage.value = 'Initializing...'
+      currentVersionId.value = null // Thêm dòng này
+      step1Error.value = { name: '', description: '' }
 
       selectedFiles.value.forEach((file) => {
         if (file.previewUrl) {
@@ -325,8 +378,38 @@ export default {
       emit('close')
     }
 
+    // Thoát khi đang loading
+    const handleCloseDuringCreation = () => {
+      if (creationStatus.value === 'creating' || creationStatus.value === 'polling') {
+        // Tạo một polling data fallback
+        const pollingData = {
+          projectId: finalProjectData.value?._id,
+          versionId: currentVersionId.value || finalProjectData.value?.current_version,
+        }
+
+        // Nếu vẫn không có versionId, thử lấy từ polling interval data
+        if (!pollingData.versionId && pollingInterval.value?.versionId) {
+          pollingData.versionId = pollingInterval.value.versionId
+        }
+
+        console.log('📤 Emitting polling data:', pollingData)
+
+        emit('close-during-creation', {
+          projectData: { ...projectData.value },
+          selectedFiles: [...selectedFiles.value],
+          processingProgress: processingProgress.value,
+          currentStage: currentStage.value,
+          creationStatus: creationStatus.value,
+          pollingData: pollingData,
+        })
+      }
+      stopLoadingMessages()
+      resetForm()
+      emit('close')
+    }
+
     const handleCancelInStatus = () => {
-      window.location.reload()
+      handleClose()
     }
 
     watch(
@@ -337,14 +420,40 @@ export default {
     )
 
     const nextStep = () => {
-      if (currentStep.value === 1 && (!projectData.value.name || !projectData.value.description)) {
-        alert('Please fill in both Project Name and Description!')
-        return
+      if (currentStep.value === 1) {
+        // Validate cả tên và mô tả
+        const errors = { name: '', description: '' }
+        let hasError = false
+
+        if (!projectData.value.name.trim()) {
+          errors.name = 'Project name is required'
+          hasError = true
+        }
+
+        if (!projectData.value.description.trim()) {
+          errors.description = 'Project description is required'
+          hasError = true
+        }
+
+        step1Error.value = errors
+
+        if (hasError) {
+          return
+        }
       }
-      if (currentStep.value === 2 && sizeLimitExceeded.value) {
-        alert('Please reduce total file size below 150KB before proceeding.')
-        return
+
+      // Thêm validation cho bước 2
+      if (currentStep.value === 2) {
+        if (sizeLimitExceeded.value) {
+          alert('Please reduce total file size below 150KB before proceeding.')
+          return
+        }
+        if (!isStep2Valid.value) {
+          alert('Please provide either Raw Text or attach at least one file.')
+          return
+        }
       }
+
       if (currentStep.value < 3) currentStep.value++
     }
 
@@ -407,9 +516,10 @@ export default {
     // Update progress based on stage
     const updateProgressFromStage = (stage) => {
       const stageProgressMap = {
-        initializing: 5,
+        initializing: 15,
         input: 25,
-        analyzing: 60,
+        analyzing: 40,
+        normalization: 70,
         finalizing: 90,
         completed: 100,
       }
@@ -424,38 +534,44 @@ export default {
           const response = await getVersionStatus(versionId)
           const { status, version, project } = response.data.data
 
-          // Update progress and stage from backend
-          if (version) {
+          // 🚀 Update progress/stage khi còn processing
+          if (status === 'processing' && version) {
             updateProgressFromStage(version.stage || 'initializing')
-            if (version.progress) {
-              processingProgress.value = version.progress
-            }
+            processingProgress.value = version.progress || processingProgress.value
+            return // chưa kết thúc → tiếp tục polling
           }
 
-          if (status !== 'processing') {
-            clearInterval(pollingInterval.value)
-            finalProjectData.value = { _id: projectId, current_version: { _id: versionId } }
+          // ⛔ Nếu không còn processing → dừng polling
+          clearInterval(pollingInterval.value)
 
-            if (status === 'completed' || status === 'has_conflicts') {
-              // Đảm bảo progress là 100% trước khi delay
-              processingProgress.value = 100
-              currentStage.value = 'Completed'
+          if (status === 'failed') {
+            // ❌ Trường hợp thất bại
+            currentStage.value = 'Failed'
+            failedVersionId.value = versionId
+            creationStatus.value = 'failed'
+            processingError.value =
+              version?.processing_errors?.join('\n') || 'Analysis failed without specific errors!!'
+            stopLoadingMessages()
+          } else if (status === 'completed' || status === 'has_conflicts') {
+            // ✅ Hoàn tất (có thể có conflict)
+            processingProgress.value = 100
+            currentStage.value = 'Completed'
 
-              // Delay 1s trước khi chuyển sang trạng thái completed
-              setTimeout(() => {
-                creationStatus.value = 'completed'
-                stopLoadingMessages()
-                emit('processing-finished')
-              }, 1000)
-            } else {
-              failedVersionId.value = versionId
-              creationStatus.value = 'failed'
-              processingError.value =
-                version.processing_errors?.join('\n') || 'Analysis failed without specific errors!!'
+            setTimeout(() => {
+              creationStatus.value = status // 'completed' hoặc 'has_conflicts'
               stopLoadingMessages()
-            }
+              emit('project-created', { _id: projectId, current_version: { _id: versionId } })
+            }, 1000)
+          } else {
+            // 🚨 Fallback nếu BE trả status lạ
+            currentStage.value = 'Unknown'
+            failedVersionId.value = versionId
+            creationStatus.value = 'failed'
+            processingError.value = `Unexpected status: ${status}`
+            stopLoadingMessages()
           }
         } catch (error) {
+          // 🔥 Lỗi gọi API
           clearInterval(pollingInterval.value)
           failedVersionId.value = versionId
           creationStatus.value = 'failed'
@@ -468,7 +584,7 @@ export default {
 
     const handleCreateProject = async () => {
       if (sizeLimitExceeded.value) {
-        alert('Please reduce total file size below 150KB before creating project.')
+        alert('Please reduce total file size below 20000KB before creating project.')
         return
       }
 
@@ -490,6 +606,11 @@ export default {
       try {
         const response = await createProject(formData)
         const createdProject = response.data.data
+        // QUAN TRỌNG: Lưu lại toàn bộ object dự án vừa tạo
+        finalProjectData.value = createdProject
+        // QUAN TRỌNG: Lưu versionId ngay lập tức
+        currentVersionId.value = createdProject.current_version
+
         creationStatus.value = 'polling'
         startPolling(createdProject._id, createdProject.current_version)
       } catch (error) {
@@ -549,11 +670,16 @@ export default {
       overlayLoading,
       loadingMessage,
       isRetrying,
+      currentVersionId,
       totalFileSize,
       sizeLimitExceeded,
+      isStep2Valid,
+      isNextButtonDisabled,
+      step1Error,
       processingProgress,
       currentStage,
       handleClose,
+      handleCloseDuringCreation,
       handleCancelInStatus,
       nextStep,
       prevStep,
@@ -564,11 +690,11 @@ export default {
       handleRetry,
       isImageFile,
       formatFileSize,
+      validateStep1,
     }
   },
 }
 </script>
-
 <style scoped>
 /* FULLSCREEN LOADING */
 .fullscreen-overlay {
@@ -742,6 +868,24 @@ export default {
   outline: none;
   border-color: #1a365d;
   box-shadow: 0 0 0 2px rgba(26, 54, 93, 0.2);
+}
+
+.required-asterisk {
+  color: #ef4444;
+}
+
+/* INPUT REQUIREMENT STYLES */
+.input-requirement {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #ef4444;
+  margin-bottom: 10px;
+  padding: 8px;
+  background-color: #fef2f2;
+  border-radius: 4px;
+  border-left: 3px solid #ef4444;
 }
 
 /* FILE INPUT */
@@ -1090,5 +1234,45 @@ export default {
 }
 .fail {
   color: #ef4444;
+}
+
+/* NÚT THOÁT KHI ĐANG LOADING */
+.close-loading-btn {
+  position: fixed;
+  min-width: 150px;
+  top: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.close-loading-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+.close-loading-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* Điều chỉnh loading box để có chỗ cho nút thoát */
+.loading-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  padding-top: 60px; /* Tạo khoảng trống cho nút thoát */
 }
 </style>

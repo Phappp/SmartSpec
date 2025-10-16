@@ -25,15 +25,33 @@ export class OrchestratorService {
         // Độ trễ ngẫu nhiên từ 2000ms (2 giây) đến 3000ms (3 giây)
         const randomDelay = Math.floor(Math.random() * (3000 - 2000 + 1)) + 2000;
 
-
         // 🟢 Bắt đầu: clear lỗi cũ
         console.log(`[SERVICE] Clearing previous errors for version ${versionId} before running...`);
         await Version.findByIdAndUpdate(versionId, {
-            $set: { processing_errors: [], stage: "initializing", progress: 5 }
+            $set: {
+                status: "processing", // QUAN TRỌNG: Set status thành processing
+                processing_errors: [],
+                stage: "initializing",
+                progress: 15,
+                is_processing: true // Nếu có field này
+            }
         });
 
         const version = await Version.findById(versionId).lean();
         if (!version) throw new Error("Version not found");
+
+        // 🧠 AUTO SWITCH MODE
+        if (opts.mode === "full") {
+            const hasUnprocessed = await Input.exists({
+                version_id: versionId,
+                is_processed: { $ne: true }
+            });
+
+            if (hasUnprocessed) {
+                console.log("⚙️ Detected unprocessed inputs → forcing incremental mode");
+                opts.mode = "incremental";
+            }
+        }
 
         // 1️⃣ Xử lý input (file + raw text)
         const { newFilesCount, newTextProvided } = await this.inputService.handleInputs(
@@ -42,7 +60,7 @@ export class OrchestratorService {
             projectId,
             versionId
         );
-        await delay(randomDelay); // Chờ độ trễ ngẫu nhiên
+        await delay(randomDelay);
 
         await Version.findByIdAndUpdate(versionId, { $set: { stage: "input", progress: 25 } });
 
@@ -65,13 +83,15 @@ export class OrchestratorService {
             }).lean();
         } else {
             if (targetIds.length > 0) {
-                // Có input mới -> chờ xử lý
+                // Có input mới -> chỉ lấy những input mới
                 inputs = await this.util.waitForInputsCompletionByIds(targetIds);
             } else {
-                // Retry -> lấy tất cả input đã hoàn tất
+                // Retry hoặc incremental không có input mới
+                // ❗ Chỉ lấy input chưa được processed
                 inputs = await Input.find({
                     version_id: versionId,
                     processing_status: "completed",
+                    is_processed: { $ne: true }
                 }).lean();
             }
         }
@@ -87,24 +107,21 @@ export class OrchestratorService {
         }
 
         // Debug log
-        console.log("Mode:", opts.mode || "full");
+        console.log(`[RUN MODE] Final mode resolved: ${opts.mode}`);
         console.log("Language:", language);
         console.log(
             "Inputs to process:",
-            inputs.map((i) => ({ id: i._id, status: i.processing_status }))
+            inputs.map((i) => ({ id: i._id, status: i.processing_status, is_processed: i.is_processed }))
         );
 
-
-
-        await delay(randomDelay); // Chờ độ trễ ngẫu nhiên
-
+        await delay(randomDelay);
 
         // 4️⃣ Phân tích requirement
-        await Version.findByIdAndUpdate(versionId, { $set: { stage: "analyzing", progress: 60 } });
+        await Version.findByIdAndUpdate(versionId, { $set: { stage: "analyzing", progress: 40 } });
+        await delay(randomDelay);
 
-
-
-        await delay(randomDelay); // Chờ độ trễ ngẫu nhiên
+        await Version.findByIdAndUpdate(versionId, { $set: { stage: "normalization", progress: 70 } });
+        await delay(randomDelay);
 
         // 5️⃣ Finalizing
         await Version.findByIdAndUpdate(versionId, { $set: { stage: "finalizing", progress: 90 } });
@@ -117,8 +134,6 @@ export class OrchestratorService {
             language
         );
 
-
-
         // 6️⃣ Hoàn tất
         await Version.findByIdAndUpdate(versionId, {
             $set: { stage: "completed", progress: 100 }
@@ -128,7 +143,21 @@ export class OrchestratorService {
     }
 
 
-    async resolveDuplicate(versionId: string, conflictId: string, keep: "old" | "new") {
-        return this.requirementService.resolveDuplicate(versionId, conflictId, keep);
+    // async resolveDuplicate(versionId: string, conflictId: string, keep: "old" | "new") {
+    //     return this.requirementService.resolveDuplicate(versionId, conflictId, keep);
+    // }
+
+    /**
+     * HÀM MỚI: Cung cấp tính năng tìm xung đột.
+     */
+    async findConflicts(versionId: string, language: string) {
+        return this.requirementService.findConflicts(versionId, this.gemini, language);
+    }
+
+    /**
+     * HÀM MỚI: Cung cấp tính năng giải quyết xung đột.
+     */
+    async resolveConflict(versionId: string, conflictId: string, keepUseCaseId: string) {
+        return this.requirementService.resolveConflict(versionId, conflictId, keepUseCaseId);
     }
 }

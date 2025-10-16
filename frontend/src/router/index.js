@@ -1,6 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Homepage from '../views/HomePage.vue'
 import UsecaseManagement from '../views/UsecaseManagement.vue'
+import OutputManagement from '../views/OutputManagement.vue'
+import TestcaseManagement from '../views/TestcaseManagement.vue'
+import DatabaseManagement from '../views/DatabaseManagement.vue'
+import UmlManagement from '../views/UmlManagement.vue'
 import Login from '../pages/login.vue'
 import OauthRedirect from '../pages/OauthRedirect.vue'
 import Register from '../pages/register.vue'
@@ -20,6 +24,38 @@ const routes = [
   { path: '/verify-otp', component: VerifyOtp },
   { path: '/forgot-password', component: ForgotPassword },
   { path: '/reset-password', component: ResetPassword },
+
+  { path: '/reset-password', component: ResetPassword },
+  {
+    path: '/project/:id/output',
+    name: 'OutputManagement',
+    component: OutputManagement,
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/project/:id/testcases',
+    name: 'TestcaseManagement',
+    component: TestcaseManagement,
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/project/:id/database',
+    name: 'DatabaseManagement',
+    component: DatabaseManagement,
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/project/:id/uml',
+    name: 'UmlManagement',
+    component: UmlManagement,
+    props: true,
+    meta: { requiresAuth: true }
+  }
+
+
   { 
     path: '/dashboard', 
     name: 'Home', 

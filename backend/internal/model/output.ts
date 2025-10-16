@@ -1,44 +1,24 @@
-import { InferSchemaType, model, Schema } from "mongoose";
+import { Schema, model, InferSchemaType } from "mongoose";
 
 const outputSchema = new Schema({
-  project_id: {
-    type: Schema.Types.ObjectId,
-    ref: "projects",
-    required: true
-  },
-  version_id: {
-    type: Schema.Types.ObjectId,
-    ref: "versions",
-    required: true
-  },
+  project_id: { type: Schema.Types.ObjectId, ref: "projects", required: true },
+  version_id: { type: Schema.Types.ObjectId, ref: "versions", required: true },
   type: {
     type: String,
-    enum: [
-      "db_schema",
-      "testcase",
-      "uml_usecase",
-      "uml_activity",
-      "uml_sequence",
-      "usecase_spec"
-    ],
-    required: true
+    enum: ["testcase", "database", "uml"],
+    required: true,
   },
-  content: {
-    type: Schema.Types.Mixed, // JSON, Markdown, text...
-    required: true
-  },
-  generated_by: {
+  // ✅ liên kết đến từng loại output con
+  testcase_id: { type: Schema.Types.ObjectId, ref: "testcases" },
+  database_id: { type: Schema.Types.ObjectId, ref: "databases" },
+  uml_id: { type: Schema.Types.ObjectId, ref: "umls" },
+  generated_by: { type: Schema.Types.ObjectId, ref: "users" },
+  created_at: { type: Date, default: Date.now },
+  updated_at: { type: Date, default: Date.now },
+  status: {
     type: String,
-    enum: ["LLM", "user"],
-    default: "LLM"
-  },
-  created_at: {
-    type: Date,
-    default: Date.now
-  },
-  updated_at: {
-    type: Date,
-    default: Date.now
+    enum: ["pending", "completed", "failed"],
+    default: "pending"
   }
 }, { timestamps: true });
 

@@ -66,10 +66,7 @@
 
     <div @click="toggleUserMenu" class="user-account">
       <div class="avatar">
-        <img
-          src="https://static.vecteezy.com/system/resources/previews/024/983/914/original/simple-user-default-icon-free-png.png"
-          alt=""
-        />
+        <img :src="user.avatar_url" alt="" />
       </div>
       <div v-if="user" class="user-info">
         <div class="user-name">{{ user.name }}</div>
@@ -298,7 +295,8 @@ export default {
   min-width: 40px;
   min-height: 40px;
   border-radius: 50%;
-  background-color: #1a365d;
+  border: 1px solid #5f5d5d;
+  background-color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;

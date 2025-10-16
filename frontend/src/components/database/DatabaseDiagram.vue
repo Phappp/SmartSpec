@@ -1,0 +1,3399 @@
+<template>
+  <div class="schema-diagram">
+    <!-- Enhanced Controls Panel -->
+    <div class="diagram-controls">
+      <!-- Thêm Control Group cho Sorting -->
+      <div class="control-group">
+        <button class="btn-icon" @click="showSortOptions = !showSortOptions" title="Sort Tables">
+          <span class="material-symbols-outlined">sort</span>
+        </button>
+        <div class="sort-dropdown" v-if="showSortOptions">
+          <div class="sort-option" @click="sortTables('name-asc')">
+            <span class="material-symbols-outlined">sort_by_alpha</span>
+            Name A-Z
+          </div>
+          <div class="sort-option" @click="sortTables('name-desc')">
+            <span class="material-symbols-outlined">sort_by_alpha</span>
+            Name Z-A
+          </div>
+          <div class="sort-option" @click="sortTables('columns-asc')">
+            <span class="material-symbols-outlined">expand_more</span>
+            Columns ↑
+          </div>
+          <div class="sort-option" @click="sortTables('columns-desc')">
+            <span class="material-symbols-outlined">expand_less</span>
+            Columns ↓
+          </div>
+          <div class="sort-option" @click="sortTables('fk-asc')">
+            <span class="material-symbols-outlined">expand_more</span>
+            FK Count ↑
+          </div>
+          <div class="sort-option" @click="sortTables('fk-desc')">
+            <span class="material-symbols-outlined">expand_less</span>
+            FK Count ↓
+          </div>
+          <div class="sort-option" @click="sortTables('original')">
+            <span class="material-symbols-outlined">restart_alt</span>
+            Original Order
+          </div>
+        </div>
+        <div class="current-sort" v-if="currentSort">
+          {{ getSortDisplayName(currentSort) }}
+        </div>
+      </div>
+      <div class="control-group">
+        <button class="btn-icon" @click="autoLayout" title="Auto Layout">
+          <span class="material-symbols-outlined">auto_awesome</span>
+        </button>
+        <button
+          class="btn-icon"
+          @click="toggleRelationships"
+          :title="showRelationships ? 'Hide Relationships' : 'Show Relationships'"
+        >
+          <span class="material-symbols-outlined">
+            {{ showRelationships ? 'link_off' : 'link' }}
+          </span>
+        </button>
+        <button class="btn-icon" @click="toggleGrid" :title="showGrid ? 'Hide Grid' : 'Show Grid'">
+          <span class="material-symbols-outlined">
+            {{ showGrid ? 'grid_off' : 'grid_on' }}
+          </span>
+        </button>
+      </div>
+      <div class="control-group">
+        <button
+          class="btn-icon"
+          @click="toggleRelationshipColors"
+          :title="showRelationshipColors ? 'Hide Relationship Colors' : 'Show Relationship Colors'"
+        >
+          <span class="material-symbols-outlined">
+            {{ showRelationshipColors ? 'palette' : 'format_color_reset' }}
+          </span>
+        </button>
+      </div>
+
+      <div class="control-group">
+        <button class="btn-icon" @click="zoomOut" title="Zoom Out">
+          <span class="material-symbols-outlined">zoom_out</span>
+        </button>
+        <div class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</div>
+        <button class="btn-icon" @click="zoomIn" title="Zoom In">
+          <span class="material-symbols-outlined">zoom_in</span>
+        </button>
+        <button class="btn-icon" @click="resetZoom" title="Reset Zoom">
+          <span class="material-symbols-outlined">refresh</span>
+        </button>
+        <!-- Thêm nút fullscreen -->
+        <button
+          class="btn-icon"
+          @click="toggleFullscreen"
+          :title="isFullscreen ? 'Exit Fullscreen (F11)' : 'Enter Fullscreen (F11)'"
+        >
+          <span class="material-symbols-outlined">
+            {{ isFullscreen ? 'fullscreen_exit' : 'fullscreen' }}
+          </span>
+        </button>
+      </div>
+
+      <div class="control-group">
+        <button class="btn-icon" @click="fitToScreen" title="Fit to Screen">
+          <span class="material-symbols-outlined">fit_screen</span>
+        </button>
+        <button class="btn-icon" @click="exportAsImage" title="Export as Image">
+          <span class="material-symbols-outlined">image</span>
+        </button>
+        <button
+          class="btn-icon"
+          @click="toggleMiniMap"
+          :title="showMiniMap ? 'Hide Mini Map' : 'Show Mini Map'"
+        >
+          <span class="material-symbols-outlined">
+            {{ showMiniMap ? 'map' : 'map' }}
+          </span>
+        </button>
+      </div>
+
+      <!-- Relationship Controls -->
+      <div class="control-group">
+        <button
+          class="btn-icon"
+          @click="toggleRelationshipLayer"
+          :title="relationshipOnTop ? 'Relationships on Top' : 'Relationships Under Tables'"
+        >
+          <span class="material-symbols-outlined">
+            {{ relationshipOnTop ? 'layers' : 'layers_clear' }}
+          </span>
+        </button>
+        <button class="btn-icon" @click="showRelationshipManager" title="Manage Relationships">
+          <span class="material-symbols-outlined">settings</span>
+        </button>
+      </div>
+
+      <!-- Undo/Redo Controls -->
+      <div class="control-group" v-if="historyEnabled">
+        <button class="btn-icon" @click="undo" :disabled="!canUndo" title="Undo (Ctrl+Z)">
+          <span class="material-symbols-outlined">undo</span>
+        </button>
+        <button class="btn-icon" @click="redo" :disabled="!canRedo" title="Redo (Ctrl+Y)">
+          <span class="material-symbols-outlined">redo</span>
+        </button>
+        <div class="history-info">{{ historyIndex + 1 }}/{{ history.length }}</div>
+      </div>
+
+      <!-- Auto-save Status -->
+      <div class="control-group" v-if="autoSaveEnabled">
+        <div class="auto-save-status" :class="{ saving: isSaving }">
+          <span class="material-symbols-outlined" v-if="isSaving">sync</span>
+          <span class="material-symbols-outlined" v-else>check_circle</span>
+          {{ isSaving ? 'Saving...' : 'Saved' }}
+        </div>
+      </div>
+
+      <!-- Search Box -->
+      <div class="search-box">
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search tables..."
+          class="search-input"
+          @input="highlightTables"
+        />
+        <span class="material-symbols-outlined search-icon">search</span>
+      </div>
+    </div>
+
+    <!-- Main Diagram Container -->
+    <div
+      class="diagram-container"
+      ref="diagramContainer"
+      :style="{ width: diagramWidth + 'px', height: diagramHeight + 'px' }"
+      @wheel="handleWheel"
+      @mousedown="handleContainerMouseDown"
+      @mousemove="handlePan"
+      @mouseup="stopPan"
+      @mouseleave="stopPan"
+    >
+      <!-- Grid Background -->
+      <div v-if="showGrid" class="grid-background" :style="gridStyle"></div>
+
+      <!-- Relationships Layer UNDER Tables -->
+      <svg
+        v-if="showRelationships && !relationshipOnTop"
+        class="relationships-layer relationships-under"
+        :style="[
+          diagramContainerStyle,
+          { width: diagramWidth + 'px', height: diagramHeight + 'px' },
+        ]"
+      >
+        <defs>
+          <marker
+            id="arrowhead-under"
+            markerWidth="10"
+            markerHeight="7"
+            refX="9"
+            refY="3.5"
+            orient="auto"
+          >
+            <polygon points="0 0, 10 3.5, 0 7" class="arrowhead" />
+          </marker>
+          <marker
+            id="arrowhead-highlighted-under"
+            markerWidth="12"
+            markerHeight="9"
+            refX="11"
+            refY="4.5"
+            orient="auto"
+          >
+            <polygon points="0 0, 12 4.5, 0 9" class="arrowhead-highlighted" />
+          </marker>
+        </defs>
+
+        <!-- Render relationships -->
+        <path
+          v-for="(relationship, index) in visibleRelationships"
+          :key="`rel-under-${index}`"
+          :d="calculateRelationshipPath(relationship)"
+          class="relationship-path"
+          :class="[
+            relationship.type,
+            {
+              'relationship-colored': relationship.isColored,
+              'relationship-highlighted': isRelationshipHighlighted(relationship),
+              'relationship-selected': selectedRelationship === relationship,
+              'relationship-related': isRelationshipRelated(relationship),
+            },
+          ]"
+          :marker-end="
+            isRelationshipHighlighted(relationship)
+              ? 'url(#arrowhead-highlighted-under)'
+              : 'url(#arrowhead-under)'
+          "
+          @click.stop="selectRelationship(relationship)"
+          @mouseenter="highlightRelationship(relationship)"
+          @mouseleave="clearRelationshipHighlight"
+        />
+      </svg>
+
+      <!-- Tables Container với zoom -->
+      <div
+        class="tables-container"
+        :style="diagramContainerStyle"
+        @contextmenu.prevent="showContextMenu"
+      >
+        <!-- Tables -->
+        <div
+          v-for="table in filteredTables"
+          :key="table._id || table.name"
+          class="table-card"
+          :class="[
+            {
+              'table-highlighted': isTableHighlighted(table) || table.isHighlighted,
+              'table-selected': selectedTable === table.name,
+              'table-dragging': dragData?.table?.name === table.name,
+              'table-dimmed': table.isDimmed,
+              'table-unrelated': showOnlyRelatedRelationships && !table.isRelated,
+              'table-hovered': hoveredTable === table.name,
+            },
+            tableClasses[table.name],
+          ]"
+          :style="{
+            top: (table.position?.y || 0) + 'px',
+            left: (table.position?.x || 0) + 'px',
+            zIndex: getTableZIndex(table),
+          }"
+          @mouseenter="handleTableHover(table, true)"
+          @mouseleave="handleTableHover(table, false)"
+          @mousedown="startDrag(table, $event)"
+          @click.stop="selectTable(table)"
+          @dblclick="$emit('table-view', table)"
+        >
+          <div class="table-header">
+            <h4>{{ table.name }}</h4>
+            <div class="table-actions">
+              <button class="btn-icon" @click="$emit('table-view', table)" title="View Details">
+                <span class="material-symbols-outlined">visibility</span>
+              </button>
+              <button class="btn-icon" @click="$emit('table-edit', table)" title="Edit">
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+              <button class="btn-icon danger" @click.stop="handleDeleteTable(table)" title="Delete">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="table-description" v-if="table.description">
+            {{ table.description }}
+          </div>
+
+          <div class="table-columns">
+            <div
+              v-for="column in table.columns || []"
+              :key="column.name"
+              class="table-column"
+              :class="{
+                primary: column.is_primary_key,
+                foreign: column.is_foreign_key,
+                'column-highlighted': isColumnHighlighted(column, table),
+              }"
+              @mouseenter="handleColumnHover(column, table)"
+              @mouseleave="clearColumnHighlights"
+            >
+              <span class="column-name">{{ column.name }}</span>
+              <span class="column-type">
+                {{ column.type }}
+                <span v-if="column.length">({{ column.length }})</span>
+              </span>
+              <div class="column-badges">
+                <span v-if="column.is_primary_key" class="column-badge pk">PK</span>
+                <span v-if="column.is_foreign_key" class="column-badge fk">FK</span>
+                <span v-if="!column.nullable" class="column-badge nn">NN</span>
+                <span v-if="column.unique" class="column-badge uq">UQ</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Table Connection Points -->
+          <div class="connection-points">
+            <div class="connection-point top" data-side="top"></div>
+            <div class="connection-point right" data-side="right"></div>
+            <div class="connection-point bottom" data-side="bottom"></div>
+            <div class="connection-point left" data-side="left"></div>
+          </div>
+        </div>
+
+        <!-- Selection Rectangle -->
+        <div
+          v-if="selectionRect"
+          class="selection-rectangle"
+          :style="{
+            left: selectionRect.x + 'px',
+            top: selectionRect.y + 'px',
+            width: selectionRect.width + 'px',
+            height: selectionRect.height + 'px',
+          }"
+        ></div>
+      </div>
+
+      <!-- Relationships Layer ON TOP of Tables -->
+      <svg
+        v-if="showRelationships && relationshipOnTop"
+        class="relationships-layer relationships-over"
+        :style="[
+          diagramContainerStyle,
+          { width: diagramWidth + 'px', height: diagramHeight + 'px' },
+        ]"
+      >
+        <defs>
+          <marker
+            id="arrowhead-over"
+            markerWidth="10"
+            markerHeight="7"
+            refX="9"
+            refY="3.5"
+            orient="auto"
+          >
+            <polygon points="0 0, 10 3.5, 0 7" class="arrowhead" />
+          </marker>
+          <marker
+            id="arrowhead-highlighted-over"
+            markerWidth="12"
+            markerHeight="9"
+            refX="11"
+            refY="4.5"
+            orient="auto"
+          >
+            <polygon points="0 0, 12 4.5, 0 9" class="arrowhead-highlighted" />
+          </marker>
+        </defs>
+
+        <!-- Render relationships -->
+        <path
+          v-for="(relationship, index) in visibleRelationships"
+          :key="`rel-over-${index}`"
+          :d="calculateRelationshipPath(relationship)"
+          class="relationship-path"
+          :class="[
+            relationship.type,
+            {
+              'relationship-colored': relationship.isColored,
+              'relationship-highlighted': isRelationshipHighlighted(relationship),
+              'relationship-selected': selectedRelationship === relationship,
+              'relationship-related': isRelationshipRelated(relationship),
+            },
+          ]"
+          :marker-end="
+            isRelationshipHighlighted(relationship)
+              ? 'url(#arrowhead-highlighted-over)'
+              : 'url(#arrowhead-over)'
+          "
+          @click.stop="selectRelationship(relationship)"
+          @mouseenter="highlightRelationship(relationship)"
+          @mouseleave="clearRelationshipHighlight"
+        />
+      </svg>
+
+      <!-- Connection Line khi đang kéo -->
+      <svg
+        v-if="isConnecting"
+        class="connection-line-layer"
+        :style="{ width: diagramWidth + 'px', height: diagramHeight + 'px' }"
+      >
+        <path :d="connectionLinePath" class="connection-line" marker-end="url(#arrowhead-over)" />
+      </svg>
+    </div>
+
+    <!-- Mini Map -->
+    <div v-if="showMiniMap" class="mini-map">
+      <div
+        class="mini-map-content"
+        :style="{
+          width: miniMapWidth + 'px',
+          height: miniMapHeight + 'px',
+          transform: `scale(${miniMapScale})`,
+        }"
+      >
+        <div
+          v-for="table in tables"
+          :key="table._id || table.name"
+          class="mini-table"
+          :style="{
+            left: (table.position?.x || 0) * miniMapScale + 'px',
+            top: (table.position?.y || 0) * miniMapScale + 'px',
+            width: '4px',
+            height: '3px',
+            backgroundColor: selectedTable === table.name ? '#3b82f6' : '#6b7280',
+          }"
+        ></div>
+        <div
+          class="mini-viewport"
+          :style="{
+            left: viewportPosition.x + 'px',
+            top: viewportPosition.y + 'px',
+            width: viewportPosition.width + 'px',
+            height: viewportPosition.height + 'px',
+          }"
+        ></div>
+      </div>
+    </div>
+
+    <!-- Relationship Manager Modal -->
+    <div v-if="showRelationshipModal" class="modal-overlay" @click="closeRelationshipManager">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>Manage Relationships</h3>
+          <button class="btn-icon" @click="closeRelationshipManager">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Add New Relationship Form -->
+          <div class="relationship-form">
+            <h4>{{ editingRelationship ? 'Edit Relationship' : 'Add New Relationship' }}</h4>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>From Table</label>
+                <select v-model="newRelationship.from_table" @change="updateFromColumns">
+                  <option value="">Select Table</option>
+                  <option v-for="table in localTables" :key="table.name" :value="table.name">
+                    {{ table.name }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>From Column</label>
+                <select
+                  v-model="newRelationship.from_column"
+                  :disabled="!newRelationship.from_table"
+                >
+                  <option value="">Select Column</option>
+                  <option
+                    v-for="column in fromTableColumns"
+                    :key="column.name"
+                    :value="column.name"
+                  >
+                    {{ column.name }} ({{ column.type }})
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>To Table</label>
+                <select v-model="newRelationship.to_table" @change="updateToColumns">
+                  <option value="">Select Table</option>
+                  <option v-for="table in localTables" :key="table.name" :value="table.name">
+                    {{ table.name }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>To Column</label>
+                <select v-model="newRelationship.to_column" :disabled="!newRelationship.to_table">
+                  <option value="">Select Column</option>
+                  <option v-for="column in toTableColumns" :key="column.name" :value="column.name">
+                    {{ column.name }} ({{ column.type }})
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Relationship Type</label>
+                <select v-model="newRelationship.type">
+                  <option value="one-to-one">One to One</option>
+                  <option value="one-to-many">One to Many</option>
+                  <option value="many-to-one">Many to One</option>
+                  <option value="many-to-many">Many to Many</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Display Layer</label>
+                <select v-model="newRelationship.layer">
+                  <option value="over">On Top of Tables</option>
+                  <option value="under">Under Tables</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button
+                class="btn btn-secondary"
+                @click="cancelEditRelationship"
+                v-if="editingRelationship"
+              >
+                Cancel
+              </button>
+              <button
+                class="btn btn-primary"
+                @click="saveRelationship"
+                :disabled="!isRelationshipValid"
+              >
+                {{ editingRelationship ? 'Update' : 'Add' }} Relationship
+              </button>
+            </div>
+          </div>
+
+          <!-- Existing Relationships List -->
+          <div class="relationships-list">
+            <h4>Existing Relationships</h4>
+            <div v-if="manualRelationships.length === 0" class="empty-state">
+              No manual relationships defined
+            </div>
+            <div v-else class="relationship-items">
+              <div
+                v-for="relationship in manualRelationships"
+                :key="relationship._id || `${relationship.from_table}-${relationship.from_column}`"
+                class="relationship-item"
+                :class="{ selected: selectedRelationship === relationship }"
+              >
+                <div class="relationship-info">
+                  <div class="relationship-type-badge" :class="relationship.type">
+                    {{ formatRelationshipType(relationship.type) }}
+                  </div>
+                  <div class="relationship-details">
+                    <strong>{{ relationship.from_table }}</strong
+                    >.{{ relationship.from_column }}
+                    <span class="relationship-arrow">→</span>
+                    <strong>{{ relationship.to_table }}</strong
+                    >.{{ relationship.to_column }}
+                  </div>
+                  <div class="relationship-layer">
+                    {{ relationship.layer === 'over' ? 'On Top' : 'Under' }}
+                  </div>
+                </div>
+                <div class="relationship-actions">
+                  <button class="btn-icon" @click="editRelationship(relationship)" title="Edit">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button
+                    class="btn-icon danger"
+                    @click="deleteRelationship(relationship)"
+                    title="Delete"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div
+      v-if="contextMenu.visible"
+      class="context-menu"
+      :style="{
+        left: contextMenu.x + 'px',
+        top: contextMenu.y + 'px',
+      }"
+    >
+      <div class="context-menu-item" @click="addNewTable">Add New Table</div>
+      <div class="context-menu-item" @click="autoLayout">Auto Layout</div>
+      <div class="context-menu-item" @click="clearSelection">Clear Selection</div>
+      <div class="context-menu-item" @click="exportAsImage">Export as Image</div>
+    </div>
+
+    <!-- Debug Info -->
+    <div v-if="showDebug" class="debug-info">
+      Tables: {{ tables.length }} | Relationships: {{ allRelationships.length }} | Zoom:
+      {{ Math.round(zoomLevel * 100) }}% | History: {{ historyIndex + 1 }}/{{ history.length }}
+    </div>
+  </div>
+</template>
+
+<script>
+import html2canvas from 'html2canvas'
+import { debounce } from 'lodash'
+
+export default {
+  name: 'DatabaseDiagram',
+  props: {
+    tables: {
+      type: Array,
+      default: () => [],
+    },
+    relationships: {
+      type: Array,
+      default: () => [],
+    },
+    databaseId: {
+      type: String,
+      default: null,
+    },
+    autoSaveEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    historyEnabled: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  data() {
+    return {
+      zoomLevel: 0.5,
+      diagramWidth: 2000,
+      diagramHeight: 2000,
+      dragData: null,
+      showDebug: false,
+      showSortOptions: false,
+      currentSort: null,
+      originalTableOrder: [], // Lưu thứ tự ban đầu của các bảng
+      panning: false,
+      lastPanPoint: { x: 0, y: 0 },
+      diagramOffset: { x: 0, y: 0 },
+      showRelationshipColors: true,
+      isFullscreen: false,
+      // New features
+      showRelationships: true,
+      showGrid: true,
+      showMiniMap: false,
+      relationshipOnTop: true, // Mặc định relationship nổi trên bảng
+      searchQuery: '',
+      selectedTable: null,
+      selectedRelationship: null,
+      highlightedColumn: null,
+      highlightedTable: null,
+      highlightedRelationship: null,
+
+      // Selection
+      selectionRect: null,
+      selectionStart: null,
+
+      // Connection
+      isConnecting: false,
+      connectionStart: null,
+
+      // Context Menu
+      contextMenu: {
+        visible: false,
+        x: 0,
+        y: 0,
+      },
+      localTables: [],
+
+      // Mini Map
+      miniMapWidth: 200,
+      miniMapHeight: 150,
+      miniMapScale: 0.05,
+
+      // Auto-save
+      isSaving: false,
+      lastSaveTime: null,
+      saveQueue: [],
+
+      // History (Undo/Redo)
+      history: [],
+      historyIndex: -1,
+      maxHistorySize: 50,
+
+      // Relationship Management
+      showRelationshipModal: false,
+      editingRelationship: null,
+      newRelationship: {
+        from_table: '',
+        from_column: '',
+        to_table: '',
+        to_column: '',
+        type: 'one-to-many',
+        layer: 'over',
+      },
+      manualRelationships: [],
+      focusedTable: null, // Table đang được focus
+      showOnlyRelatedRelationships: false, // Chỉ hiển thị relationships liên quan
+    }
+  },
+  computed: {
+    tableClasses() {
+      const classes = {}
+      this.filteredTables.forEach((table) => {
+        classes[table.name] = {
+          'column-highlighted':
+            this.highlightedColumn && this.highlightedColumn.table.name === table.name,
+        }
+      })
+      return classes
+    },
+    // Computed property để lấy số lượng FK của mỗi bảng
+    tableFkCounts() {
+      const counts = {}
+      this.localTables.forEach((table) => {
+        counts[table.name] = (table.columns || []).filter((col) => col.is_foreign_key).length
+      })
+      return counts
+    },
+    diagramContainerStyle() {
+      return {
+        transform: `scale(${this.zoomLevel})`,
+        transformOrigin: '0 0',
+      }
+    },
+    visibleRelationships() {
+      if (!this.showOnlyRelatedRelationships || !this.focusedTable) {
+        return this.allRelationships
+      }
+
+      return this.allRelationships.filter(
+        (relationship) =>
+          relationship.from_table === this.focusedTable.name ||
+          relationship.to_table === this.focusedTable.name
+      )
+    },
+
+    gridStyle() {
+      const size = 20 * this.zoomLevel
+      return {
+        backgroundSize: `${size}px ${size}px`,
+        backgroundImage: `linear-gradient(to right, #e5e7eb 1px, transparent 1px),
+                         linear-gradient(to bottom, #e5e7eb 1px, transparent 1px)`,
+      }
+    },
+
+    autoGeneratedRelationships() {
+      const relationships = []
+
+      this.localTables.forEach((table) => {
+        const foreignKeys = (table.columns || []).filter((col) => col.is_foreign_key)
+
+        foreignKeys.forEach((fkColumn) => {
+          const targetTable = this.findTargetTableForForeignKey(fkColumn, table.name)
+
+          if (targetTable) {
+            relationships.push({
+              from_table: table.name,
+              to_table: targetTable.name,
+              from_column: fkColumn.name,
+              to_column: this.findPrimaryKeyColumn(targetTable),
+              type: 'many-to-one',
+              auto_generated: true,
+              layer: 'under', // Auto-generated relationships mặc định nằm dưới
+            })
+          }
+        })
+      })
+
+      return relationships
+    },
+
+    allRelationships() {
+      // Tách relationships theo layer
+      const overRelationships = this.manualRelationships.filter((rel) => rel.layer === 'over')
+      const underRelationships = [
+        ...this.manualRelationships.filter((rel) => rel.layer === 'under'),
+        ...this.autoGeneratedRelationships,
+      ]
+
+      const relationships = this.relationshipOnTop
+        ? [...underRelationships, ...overRelationships]
+        : [...overRelationships, ...underRelationships]
+
+      // Thêm flag để biết relationship có được tô màu không
+      return relationships.map((rel) => ({
+        ...rel,
+        isColored: this.showRelationshipColors,
+      }))
+    },
+
+    filteredTables() {
+      if (!this.searchQuery) return this.localTables
+
+      const query = this.searchQuery.toLowerCase()
+      return this.localTables.filter(
+        (table) =>
+          table.name.toLowerCase().includes(query) ||
+          table.description?.toLowerCase().includes(query) ||
+          table.columns?.some((col) => col.name.toLowerCase().includes(query))
+      )
+    },
+
+    connectionLinePath() {
+      if (!this.connectionStart) return ''
+
+      const endX = this.connectionStart.endX
+      const endY = this.connectionStart.endY
+
+      return `M ${this.connectionStart.x} ${this.connectionStart.y} L ${endX} ${endY}`
+    },
+
+    viewportPosition() {
+      const container = this.$refs.diagramContainer
+      if (!container) return { x: 0, y: 0, width: 0, height: 0 }
+
+      const rect = container.getBoundingClientRect()
+      return {
+        x: (rect.left / this.zoomLevel) * this.miniMapScale,
+        y: (rect.top / this.zoomLevel) * this.miniMapScale,
+        width: (rect.width / this.zoomLevel) * this.miniMapScale,
+        height: (rect.height / this.zoomLevel) * this.miniMapScale,
+      }
+    },
+
+    canUndo() {
+      return this.historyIndex > 0
+    },
+
+    canRedo() {
+      return this.historyIndex < this.history.length - 1
+    },
+
+    fromTableColumns() {
+      if (!this.newRelationship.from_table) return []
+      const table = this.localTables.find((t) => t.name === this.newRelationship.from_table)
+      return table?.columns || []
+    },
+
+    toTableColumns() {
+      if (!this.newRelationship.to_table) return []
+      const table = this.localTables.find((t) => t.name === this.newRelationship.to_table)
+      return table?.columns || []
+    },
+
+    isRelationshipValid() {
+      return (
+        this.newRelationship.from_table &&
+        this.newRelationship.from_column &&
+        this.newRelationship.to_table &&
+        this.newRelationship.to_column &&
+        this.newRelationship.from_table !== this.newRelationship.to_table
+      )
+    },
+  },
+  watch: {
+    tables: {
+      handler(newTables) {
+        this.localTables = JSON.parse(JSON.stringify(newTables))
+        if (this.originalTableOrder.length === 0) {
+          this.originalTableOrder = [...this.localTables.map((t) => t.name)]
+        }
+      },
+      deep: true,
+      immediate: true,
+    },
+    relationships: {
+      handler(newRelationships) {
+        this.manualRelationships = newRelationships.filter((rel) => !rel.auto_generated)
+      },
+      deep: true,
+      immediate: true,
+    },
+  },
+  methods: {
+    handleClickOutside(event) {
+      // Đóng dropdown sort nếu đang mở
+      if (this.showSortOptions && !this.$el.contains(event.target)) {
+        this.showSortOptions = false
+      }
+
+      // Bỏ focus table khi click bên ngoài
+      if (this.selectedTable || this.selectedRelationship) {
+        // Kiểm tra xem click có phải trên table hoặc relationship không
+        const isClickOnTable = event.target.closest('.table-card')
+        const isClickOnRelationship = event.target.closest('.relationship-path')
+        const isClickOnControls = event.target.closest('.diagram-controls')
+        const isClickOnModal = event.target.closest('.modal-content')
+        const isClickOnContextMenu = event.target.closest('.context-menu')
+
+        if (
+          !isClickOnTable &&
+          !isClickOnRelationship &&
+          !isClickOnControls &&
+          !isClickOnModal &&
+          !isClickOnContextMenu
+        ) {
+          this.clearSelection()
+        }
+      }
+    },
+    // ========== FULLSCREEN METHODS ==========
+    toggleFullscreen() {
+      if (!this.isFullscreen) {
+        this.enterFullscreen()
+      } else {
+        this.exitFullscreen()
+      }
+    },
+
+    enterFullscreen() {
+      const element = this.$refs.diagramContainer
+
+      if (element.requestFullscreen) {
+        element.requestFullscreen()
+      } else if (element.webkitRequestFullscreen) {
+        element.webkitRequestFullscreen() // Safari
+      } else if (element.msRequestFullscreen) {
+        element.msRequestFullscreen() // IE/Edge
+      }
+    },
+
+    exitFullscreen() {
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen() // Safari
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen() // IE/Edge
+      }
+    },
+
+    handleFullscreenChange() {
+      this.isFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.msFullscreenElement
+      )
+
+      // Điều chỉnh layout khi vào/ra fullscreen
+      if (this.isFullscreen) {
+        this.fitToScreen()
+      }
+    },
+    // ========== RELATIONSHIP MANAGEMENT ==========
+    showRelationshipManager() {
+      this.showRelationshipModal = true
+      this.editingRelationship = null
+      this.resetNewRelationship()
+    },
+
+    closeRelationshipManager() {
+      this.showRelationshipModal = false
+      this.editingRelationship = null
+      this.resetNewRelationship()
+    },
+
+    resetNewRelationship() {
+      this.newRelationship = {
+        from_table: '',
+        from_column: '',
+        to_table: '',
+        to_column: '',
+        type: 'one-to-many',
+        layer: 'over',
+      }
+    },
+
+    updateFromColumns() {
+      this.newRelationship.from_column = ''
+    },
+
+    updateToColumns() {
+      this.newRelationship.to_column = ''
+    },
+
+    saveRelationship() {
+      if (!this.isRelationshipValid) return
+
+      const relationship = {
+        ...this.newRelationship,
+        _id: this.editingRelationship?._id || `rel_${Date.now()}`,
+      }
+
+      if (this.editingRelationship) {
+        // Update existing relationship
+        const index = this.manualRelationships.findIndex(
+          (rel) => rel._id === this.editingRelationship._id
+        )
+        if (index !== -1) {
+          this.manualRelationships.splice(index, 1, relationship)
+        }
+      } else {
+        // Add new relationship
+        this.manualRelationships.push(relationship)
+      }
+
+      // Emit changes to parent
+      this.$emit('relationships-updated', this.manualRelationships)
+
+      this.saveToHistory(this.editingRelationship ? 'Relationship updated' : 'Relationship added')
+
+      this.closeRelationshipManager()
+    },
+
+    editRelationship(relationship) {
+      this.editingRelationship = relationship
+      this.newRelationship = { ...relationship }
+    },
+
+    deleteRelationship(relationship) {
+      if (confirm('Are you sure you want to delete this relationship?')) {
+        this.manualRelationships = this.manualRelationships.filter(
+          (rel) => rel._id !== relationship._id
+        )
+
+        this.$emit('relationships-updated', this.manualRelationships)
+        this.saveToHistory('Relationship deleted')
+
+        if (this.selectedRelationship === relationship) {
+          this.selectedRelationship = null
+        }
+      }
+    },
+
+    cancelEditRelationship() {
+      this.editingRelationship = null
+      this.resetNewRelationship()
+    },
+
+    formatRelationshipType(type) {
+      const typeMap = {
+        'one-to-one': '1:1',
+        'one-to-many': '1:N',
+        'many-to-one': 'N:1',
+        'many-to-many': 'N:N',
+      }
+      return typeMap[type] || type
+    },
+
+    toggleRelationshipLayer() {
+      this.relationshipOnTop = !this.relationshipOnTop
+    },
+
+    // ========== HISTORY MANAGEMENT ==========
+    saveToHistory(description = 'Change') {
+      if (!this.historyEnabled) return
+
+      if (this.historyIndex < this.history.length - 1) {
+        this.history = this.history.slice(0, this.historyIndex + 1)
+      }
+
+      const snapshot = {
+        description,
+        timestamp: new Date(),
+        tables: JSON.parse(JSON.stringify(this.localTables)),
+        relationships: JSON.parse(JSON.stringify(this.manualRelationships)),
+        zoomLevel: this.zoomLevel,
+      }
+
+      this.history.push(snapshot)
+
+      if (this.history.length > this.maxHistorySize) {
+        this.history.shift()
+      }
+
+      this.historyIndex = this.history.length - 1
+    },
+
+    undo() {
+      if (!this.canUndo) return
+
+      this.historyIndex--
+      const snapshot = this.history[this.historyIndex]
+
+      this.applyHistorySnapshot(snapshot)
+    },
+
+    redo() {
+      if (!this.canRedo) return
+
+      this.historyIndex++
+      const snapshot = this.history[this.historyIndex]
+
+      this.applyHistorySnapshot(snapshot)
+    },
+
+    applyHistorySnapshot(snapshot) {
+      this.localTables.forEach((table, index) => {
+        if (snapshot.tables[index]) {
+          Object.assign(table, snapshot.tables[index])
+        }
+      })
+
+      this.manualRelationships = snapshot.relationships || []
+      this.zoomLevel = snapshot.zoomLevel
+
+      this.$emit('tables-updated', this.localTables)
+      this.$emit('relationships-updated', this.manualRelationships)
+    },
+
+    // ========== AUTO-SAVE ==========
+    scheduleAutoSave: debounce(function () {
+      if (!this.autoSaveEnabled || !this.databaseId) return
+      this.savePositionsToServer()
+    }, 1000),
+
+    async savePositionsToServer() {
+      if (!this.databaseId) return
+
+      this.isSaving = true
+      try {
+        const positionUpdates = this.localTables.map((table) => ({
+          tableName: table.name,
+          position: table.position || { x: 0, y: 0 },
+        }))
+
+        await new Promise((resolve, reject) => {
+          this.$emit(
+            'save-positions',
+            {
+              databaseId: this.databaseId,
+              positionUpdates,
+            },
+            (success) => {
+              if (success) {
+                resolve()
+              } else {
+                reject(new Error('Failed to save positions'))
+              }
+            }
+          )
+        })
+
+        this.lastSaveTime = new Date()
+      } catch (error) {
+        console.error('Failed to save positions:', error)
+      } finally {
+        this.isSaving = false
+      }
+    },
+
+    // ========== ENHANCED DRAG AND DROP ==========
+    startDrag(table, event) {
+      if (event.button !== 0) return
+
+      const rect = this.$refs.diagramContainer.getBoundingClientRect()
+      const scale = this.zoomLevel
+
+      this.dragData = {
+        table,
+        startX: table.position?.x || 0,
+        startY: table.position?.y || 0,
+        offsetX: (event.clientX - rect.left) / scale - (table.position?.x || 0),
+        offsetY: (event.clientY - rect.top) / scale - (table.position?.y || 0),
+        containerRect: rect,
+        scale: scale,
+      }
+
+      document.addEventListener('mousemove', this.handleDrag)
+      document.addEventListener('mouseup', this.stopDrag)
+
+      event.preventDefault()
+      event.stopPropagation()
+    },
+
+    handleDrag(event) {
+      if (this.dragData) {
+        if (!this.dragData.table.position) {
+          this.$set(this.dragData.table, 'position', { x: 0, y: 0 })
+        }
+
+        const scale = this.zoomLevel
+        const rect = this.dragData.containerRect
+
+        this.dragData.table.position.x = (event.clientX - rect.left) / scale - this.dragData.offsetX
+        this.dragData.table.position.y = (event.clientY - rect.top) / scale - this.dragData.offsetY
+
+        this.updateContainerSize()
+      }
+    },
+
+    stopDrag() {
+      if (this.dragData) {
+        const finalX = this.dragData.table.position?.x || 0
+        const finalY = this.dragData.table.position?.y || 0
+
+        if (finalX !== this.dragData.startX || finalY !== this.dragData.startY) {
+          this.saveToHistory(`Moved ${this.dragData.table.name}`)
+          this.scheduleAutoSave()
+        }
+
+        this.dragData = null
+      }
+
+      document.removeEventListener('mousemove', this.handleDrag)
+      document.removeEventListener('mouseup', this.stopDrag)
+    },
+
+    // ========== AUTO-LAYOUT ==========
+    autoLayout() {
+      this.saveToHistory('Auto layout applied')
+
+      const LAYOUT_CONFIG = {
+        TABLE_WIDTH: 240, // Chiều rộng của một table card
+        TABLE_HEIGHT: 200, // Chiều cao của một table card
+        MARGIN_X: 100, // Khoảng cách ngang giữa các bảng
+        MARGIN_Y: 120, // Khoảng cách dọc giữa các hàng
+        GROUP_MARGIN_Y: 200, // Khoảng cách dọc lớn hơn giữa các nhóm
+        PADDING: 200, // Khoảng đệm so với lề của diagram
+        COLUMNS: 7, // Số lượng bảng tối đa trên một hàng
+      }
+
+      let layoutGroups = this.groupTablesByRelationships()
+      if (layoutGroups.length === 0 && this.localTables.length > 0) {
+        layoutGroups = [this.localTables]
+      }
+
+      let nextGroupY = LAYOUT_CONFIG.PADDING
+
+      layoutGroups.forEach((group) => {
+        let currentX = LAYOUT_CONFIG.PADDING
+        let currentY = nextGroupY
+        let maxGroupHeight = 0
+
+        group.forEach((table, index) => {
+          if (index > 0 && index % LAYOUT_CONFIG.COLUMNS === 0) {
+            currentX = LAYOUT_CONFIG.PADDING
+            currentY += maxGroupHeight + LAYOUT_CONFIG.MARGIN_Y
+            maxGroupHeight = 0
+          }
+
+          if (!table.position) {
+            this.$set(table, 'position', { x: 0, y: 0 })
+          }
+
+          table.position.x = currentX
+          table.position.y = currentY
+
+          maxGroupHeight = Math.max(maxGroupHeight, LAYOUT_CONFIG.TABLE_HEIGHT)
+          currentX += LAYOUT_CONFIG.TABLE_WIDTH + LAYOUT_CONFIG.MARGIN_X
+        })
+
+        nextGroupY = currentY + maxGroupHeight + LAYOUT_CONFIG.GROUP_MARGIN_Y
+      })
+
+      this.updateContainerSize()
+      this.scheduleAutoSave()
+    },
+
+    // ========== KEYBOARD SHORTCUTS ==========
+    handleKeydown(event) {
+      if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return
+
+      const ctrlKey = event.ctrlKey || event.metaKey
+
+      if (ctrlKey) {
+        switch (event.key) {
+          case 'z':
+            event.preventDefault()
+            if (event.shiftKey) {
+              this.redo()
+            } else {
+              this.undo()
+            }
+            break
+          case 'y':
+            event.preventDefault()
+            this.redo()
+            break
+          case 'f':
+            event.preventDefault()
+            this.searchQuery = ''
+            setTimeout(() => {
+              const searchInput = this.$el.querySelector('.search-input')
+              if (searchInput) searchInput.focus()
+            }, 100)
+            break
+          case 'g':
+            event.preventDefault()
+            this.toggleGrid()
+            break
+          case 'r':
+            event.preventDefault()
+            this.toggleRelationships()
+            break
+          case 'm':
+            event.preventDefault()
+            this.toggleMiniMap()
+            break
+          case 'l':
+            event.preventDefault()
+            this.autoLayout()
+            break
+          case 'd':
+            event.preventDefault()
+            this.showDebug = !this.showDebug
+            break
+        }
+      }
+
+      switch (event.key) {
+        case 'F11':
+          event.preventDefault()
+          this.toggleFullscreen()
+          break
+        case 'Escape':
+          if (this.isFullscreen) {
+            this.exitFullscreen()
+          } else {
+            this.clearSelection()
+          }
+          break
+        case 'Delete':
+        case 'Backspace':
+          if (this.selectedTable) {
+            this.$emit('table-delete', this.selectedTable)
+            this.selectedTable = null
+          }
+          break
+      }
+    },
+
+    // ========== ZOOM AND PAN ==========
+    handleWheel(event) {
+      if (event.ctrlKey) {
+        event.preventDefault()
+
+        const rect = this.$refs.diagramContainer.getBoundingClientRect()
+        const mouseX = event.clientX - rect.left
+        const mouseY = event.clientY - rect.top
+
+        // Convert mouse position to diagram coordinates (before zoom)
+        const diagramX = (mouseX - this.diagramOffset.x) / this.zoomLevel
+        const diagramY = (mouseY - this.diagramOffset.y) / this.zoomLevel
+
+        const zoomFactor = 0.1
+        const oldZoom = this.zoomLevel
+
+        // Calculate new zoom level
+        this.zoomLevel = Math.max(
+          0.1,
+          Math.min(3, this.zoomLevel + (event.deltaY > 0 ? -zoomFactor : zoomFactor))
+        )
+
+        // Adjust offset to zoom toward mouse position
+        this.diagramOffset.x = mouseX - diagramX * this.zoomLevel
+        this.diagramOffset.y = mouseY - diagramY * this.zoomLevel
+
+        this.updateDiagramTransform()
+      }
+    },
+    updateDiagramTransform() {
+      const transform = `translate(${this.diagramOffset.x}px, ${this.diagramOffset.y}px) scale(${this.zoomLevel})`
+
+      // Áp dụng transform cho tables-container
+      const tablesContainer = this.$el.querySelector('.tables-container')
+      if (tablesContainer) {
+        tablesContainer.style.transform = transform
+        tablesContainer.style.transformOrigin = '0 0'
+      }
+
+      // Áp dụng transform cho relationships layers
+      const relationshipLayers = this.$el.querySelectorAll('.relationships-layer')
+      relationshipLayers.forEach((layer) => {
+        layer.style.transform = transform
+        layer.style.transformOrigin = '0 0'
+      })
+    },
+
+    handleContainerMouseDown(event) {
+      // Middle click or Ctrl+left click for panning
+      if (event.button === 1 || (event.button === 0 && event.ctrlKey)) {
+        this.startPan(event)
+      }
+    },
+
+    zoomIn() {
+      this.zoomLevel = Math.min(3, this.zoomLevel + 0.1)
+    },
+
+    zoomOut() {
+      this.zoomLevel = Math.max(0.1, this.zoomLevel - 0.1)
+    },
+
+    resetZoom() {
+      this.zoomLevel = 0.5
+    },
+
+    fitToScreen() {
+      const container = this.$refs.diagramContainer
+      if (!container) return
+
+      const rect = container.getBoundingClientRect()
+      const contentWidth = this.diagramWidth
+      const contentHeight = this.diagramHeight
+
+      const scaleX = rect.width / contentWidth
+      const scaleY = rect.height / contentHeight
+
+      this.zoomLevel = Math.min(scaleX, scaleY, 1)
+    },
+
+    // ========== SELECTION AND HIGHLIGHTING ==========
+    selectTable(table) {
+      this.selectedTable = table.name
+      this.selectedRelationship = null
+    },
+
+    selectRelationship(relationship) {
+      this.selectedRelationship = relationship
+      this.selectedTable = null
+    },
+
+    clearSelection() {
+      this.selectedTable = null
+      this.selectedRelationship = null
+      this.clearRelationshipHighlight()
+      this.clearColumnHighlights()
+      this.focusedTable = null
+      this.showOnlyRelatedRelationships = false
+
+      // Reset tất cả trạng thái related
+      this.localTables.forEach((table) => {
+        table.isRelated = true
+      })
+    },
+
+    highlightTables() {
+      if (!this.searchQuery) {
+        this.highlightedTable = null
+        return
+      }
+
+      const query = this.searchQuery.toLowerCase()
+      const table = this.localTables.find(
+        (t) =>
+          t.name.toLowerCase().includes(query) ||
+          t.description?.toLowerCase().includes(query) ||
+          t.columns?.some((col) => col.name.toLowerCase().includes(query))
+      )
+
+      this.highlightedTable = table || null
+    },
+
+    // Trong methods, sửa lại phương thức highlightColumnRelationships
+    highlightColumnRelationships(column, table) {
+      // Chỉ highlight nếu là PK hoặc FK
+      if (!column.is_primary_key && !column.is_foreign_key) {
+        return
+      }
+
+      this.highlightedColumn = { column, table }
+
+      // Tìm tất cả các table có liên quan qua relationship với column này
+      this.highlightRelatedTables(column, table)
+    },
+
+    // Đảm bảo phương thức này hoạt động đúng
+    highlightRelatedTables(column, table) {
+      console.log('Highlighting related tables for column:', table.name, column.name)
+
+      // Reset trạng thái highlight của tất cả table
+      this.localTables.forEach((t) => {
+        t.isHighlighted = false
+      })
+
+      // Highlight table hiện tại
+      table.isHighlighted = true
+      console.log('Highlighted current table:', table.name)
+
+      // Tìm các table có relationship với column này
+      this.allRelationships.forEach((relationship) => {
+        const isFromColumn =
+          relationship.from_table === table.name && relationship.from_column === column.name
+        const isToColumn =
+          relationship.to_table === table.name && relationship.to_column === column.name
+
+        if (isFromColumn || isToColumn) {
+          // Tìm và highlight table đích
+          const targetTableName = isFromColumn ? relationship.to_table : relationship.from_table
+          const targetTable = this.localTables.find((t) => t.name === targetTableName)
+
+          if (targetTable) {
+            console.log('Highlighting related table:', targetTable.name)
+            targetTable.isHighlighted = true
+          }
+        }
+      })
+    },
+
+    highlightRelationship(relationship) {
+      this.highlightedRelationship = relationship
+    },
+
+    clearRelationshipHighlight() {
+      this.highlightedRelationship = null
+    },
+
+    // Và sửa lại clearColumnHighlights
+    clearColumnHighlights() {
+      this.highlightedColumn = null
+      // Reset tất cả highlight
+      this.localTables.forEach((table) => {
+        table.isHighlighted = false
+      })
+      console.log('Cleared all highlights')
+
+      // Nếu đang hover table, giữ lại trạng thái hover table
+      if (this.focusedTable) {
+        this.localTables.forEach((t) => {
+          const isRelated = this.isTableRelatedToFocused(t)
+          t.isRelated = isRelated
+        })
+      } else {
+        // Reset hoàn toàn nếu không có hover nào
+        this.localTables.forEach((t) => {
+          t.isRelated = true
+        })
+      }
+    },
+
+    isTableHighlighted(table) {
+      return this.highlightedTable === table || table.name === this.selectedTable
+    },
+
+    isColumnHighlighted(column, table) {
+      if (!this.highlightedColumn) return false
+
+      return this.highlightedColumn.column === column && this.highlightedColumn.table === table
+    },
+
+    isRelationshipHighlighted(relationship) {
+      if (!this.highlightedRelationship && !this.highlightedColumn) return false
+
+      if (this.highlightedRelationship === relationship) return true
+
+      if (this.highlightedColumn) {
+        const { column, table } = this.highlightedColumn
+
+        return (
+          (relationship.from_table === table.name && relationship.from_column === column.name) ||
+          (relationship.to_table === table.name && relationship.to_column === column.name)
+        )
+      }
+
+      return false
+    },
+
+    // ========== RELATIONSHIP PATH CALCULATION ==========
+    calculateRelationshipPath(relationship) {
+      const fromTable = this.localTables.find((t) => t.name === relationship.from_table)
+      const toTable = this.localTables.find((t) => t.name === relationship.to_table)
+
+      if (!fromTable || !toTable) return ''
+
+      const fromPos = fromTable.position || { x: 0, y: 0 }
+      const toPos = toTable.position || { x: 0, y: 0 }
+
+      // Tính toán điểm bắt đầu và kết thúc dựa trên vị trí tương đối
+      const startPoint = this.calculateConnectionPoint(fromPos, toPos, true)
+      const endPoint = this.calculateConnectionPoint(toPos, fromPos, false)
+
+      // Vẽ đường orthogonal
+      return this.drawOrthogonalPath(startPoint, endPoint)
+    },
+
+    calculateConnectionPoint(tablePos, targetPos, isStart) {
+      const tableCenter = {
+        x: tablePos.x + 150, // 300px width / 2
+        y: tablePos.y + 100, // 200px height / 2
+      }
+
+      const targetCenter = {
+        x: targetPos.x + 150,
+        y: targetPos.y + 100,
+      }
+
+      // Xác định hướng kết nối dựa trên vị trí tương đối
+      const dx = targetCenter.x - tableCenter.x
+      const dy = targetCenter.y - tableCenter.y
+
+      let side = 'right' // Mặc định
+
+      if (Math.abs(dx) > Math.abs(dy)) {
+        // Chênh lệch ngang nhiều hơn
+        side = dx > 0 ? 'right' : 'left'
+      } else {
+        // Chênh lệch dọc nhiều hơn
+        side = dy > 0 ? 'bottom' : 'top'
+      }
+
+      // Tính toán tọa độ điểm kết nối dựa trên side
+      let x, y
+
+      switch (side) {
+        case 'top':
+          x = tableCenter.x
+          y = tablePos.y
+          break
+        case 'right':
+          x = tablePos.x + 300 // Chiều rộng table
+          y = tableCenter.y
+          break
+        case 'bottom':
+          x = tableCenter.x
+          y = tablePos.y + 200 // Chiều cao table
+          break
+        case 'left':
+          x = tablePos.x
+          y = tableCenter.y
+          break
+      }
+
+      return { x, y, side }
+    },
+
+    drawOrthogonalPath(startPoint, endPoint) {
+      const start = startPoint
+      const end = endPoint
+
+      // Nếu hai điểm trên cùng một trục, vẽ đường thẳng
+      if (start.side === 'right' && end.side === 'left' && Math.abs(start.y - end.y) < 50) {
+        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+      }
+
+      if (start.side === 'left' && end.side === 'right' && Math.abs(start.y - end.y) < 50) {
+        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+      }
+
+      if (start.side === 'top' && end.side === 'bottom' && Math.abs(start.x - end.x) < 50) {
+        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+      }
+
+      if (start.side === 'bottom' && end.side === 'top' && Math.abs(start.x - end.x) < 50) {
+        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+      }
+
+      // Vẽ đường orthogonal với các điểm trung gian
+      let path = `M ${start.x} ${start.y}`
+
+      // Điểm trung gian đầu tiên - di chuyển ra khỏi bảng
+      const firstMid = this.getFirstIntermediatePoint(start, end)
+      path += ` L ${firstMid.x} ${firstMid.y}`
+
+      // Điểm trung gian thứ hai - chuẩn bị tiếp cận bảng đích
+      const secondMid = this.getSecondIntermediatePoint(firstMid, end, start)
+      path += ` L ${secondMid.x} ${secondMid.y}`
+
+      // Đến điểm kết thúc
+      path += ` L ${end.x} ${end.y}`
+
+      return path
+    },
+
+    getFirstIntermediatePoint(start, end) {
+      const offset = 50 // Khoảng cách offset từ bảng
+
+      switch (start.side) {
+        case 'top':
+          return { x: start.x, y: start.y - offset }
+        case 'right':
+          return { x: start.x + offset, y: start.y }
+        case 'bottom':
+          return { x: start.x, y: start.y + offset }
+        case 'left':
+          return { x: start.x - offset, y: start.y }
+        default:
+          return { x: start.x, y: start.y }
+      }
+    },
+
+    getSecondIntermediatePoint(firstMid, end, start) {
+      const offset = 50 // Khoảng cách offset từ bảng đích
+
+      // Tính toán điểm tiếp cận bảng đích
+      let approachPoint = { ...end }
+
+      switch (end.side) {
+        case 'top':
+          approachPoint.y = end.y - offset
+          break
+        case 'right':
+          approachPoint.x = end.x + offset
+          break
+        case 'bottom':
+          approachPoint.y = end.y + offset
+          break
+        case 'left':
+          approachPoint.x = end.x - offset
+          break
+      }
+
+      // Điều chỉnh để tạo đường orthogonal đẹp
+      if (start.side === 'top' || start.side === 'bottom') {
+        // Bắt đầu từ top/bottom, ưu tiên giữ x cố định trước
+        return { x: approachPoint.x, y: firstMid.y }
+      } else {
+        // Bắt đầu từ left/right, ưu tiên giữ y cố định trước
+        return { x: firstMid.x, y: approachPoint.y }
+      }
+    },
+
+    // ========== UTILITY METHODS ==========
+    findTargetTableForForeignKey(fkColumn, sourceTableName) {
+      const columnName = fkColumn.name.toLowerCase()
+
+      // First, try to use the explicit references if available
+      if (fkColumn.references) {
+        const targetTable = this.localTables.find((t) => t.name === fkColumn.references)
+        if (targetTable) return targetTable
+      }
+
+      // Generate possible target table names using pluralization rules
+      const baseName = columnName.replace(/_id$/, '').replace(/_fk$/, '').replace(/id$/, '')
+      const possibleTargetNames = this.generatePossibleTableNames(baseName)
+
+      return this.localTables.find((table) => {
+        if (table.name === sourceTableName) return false
+
+        const tableName = table.name.toLowerCase()
+
+        // Exact match check
+        if (tableName === baseName) return true
+
+        // Check all possible plural/singular variations
+        return possibleTargetNames.some(
+          (targetName) =>
+            tableName === targetName ||
+            tableName.includes(targetName) ||
+            targetName.includes(tableName)
+        )
+      })
+    },
+
+    generatePossibleTableNames(baseName) {
+      const names = new Set()
+
+      // Add the base name
+      names.add(baseName)
+
+      // Common pluralization rules
+      if (baseName.endsWith('y')) {
+        // category -> categories, city -> cities
+        names.add(baseName.slice(0, -1) + 'ies')
+      } else if (
+        baseName.endsWith('s') ||
+        baseName.endsWith('x') ||
+        baseName.endsWith('z') ||
+        baseName.endsWith('ch') ||
+        baseName.endsWith('sh')
+      ) {
+        // bus -> buses, box -> boxes, buzz -> buzzes, church -> churches, dish -> dishes
+        names.add(baseName + 'es')
+      } else {
+        // Default: add 's'
+        names.add(baseName + 's')
+      }
+
+      // Handle special cases
+      if (baseName.endsWith('man')) {
+        // woman -> women
+        names.add(baseName.slice(0, -2) + 'en')
+      }
+
+      if (baseName.endsWith('us')) {
+        // cactus -> cacti
+        names.add(baseName.slice(0, -2) + 'i')
+      }
+
+      if (baseName.endsWith('is')) {
+        // analysis -> analyses
+        names.add(baseName.slice(0, -2) + 'es')
+      }
+
+      if (baseName.endsWith('on')) {
+        // criterion -> criteria
+        names.add(baseName.slice(0, -2) + 'a')
+      }
+
+      // Also try with common prefixes/suffixes
+      names.add('tbl_' + baseName)
+      names.add('tbl_' + Array.from(names)[1]) // plural version with prefix
+
+      return Array.from(names)
+    },
+
+    findPrimaryKeyColumn(table) {
+      const pkColumn = (table.columns || []).find((col) => col.is_primary_key)
+      return pkColumn ? pkColumn.name : 'id'
+    },
+
+    groupTablesByRelationships() {
+      const visited = new Set()
+      const groups = []
+
+      this.localTables.forEach((table) => {
+        if (!visited.has(table.name)) {
+          const group = this.getConnectedTables(table, visited)
+          groups.push(group)
+        }
+      })
+
+      return groups
+    },
+
+    getConnectedTables(table, visited) {
+      const queue = [table]
+      const connected = []
+
+      while (queue.length > 0) {
+        const current = queue.shift()
+
+        if (visited.has(current.name)) continue
+        visited.add(current.name)
+        connected.push(current)
+
+        const relatedTables = this.findRelatedTables(current)
+        relatedTables.forEach((relatedTable) => {
+          if (!visited.has(relatedTable.name)) {
+            queue.push(relatedTable)
+          }
+        })
+      }
+
+      return connected
+    },
+
+    findRelatedTables(table) {
+      const related = new Set()
+
+      this.allRelationships.forEach((relationship) => {
+        if (relationship.from_table === table.name) {
+          const targetTable = this.localTables.find((t) => t.name === relationship.to_table)
+          if (targetTable) related.add(targetTable)
+        } else if (relationship.to_table === table.name) {
+          const sourceTable = this.localTables.find((t) => t.name === relationship.from_table)
+          if (sourceTable) related.add(sourceTable)
+        }
+      })
+
+      return Array.from(related)
+    },
+
+    updateContainerSize() {
+      let maxX = 0
+      let maxY = 0
+
+      this.localTables.forEach((table) => {
+        const pos = table.position || { x: 0, y: 0 }
+        maxX = Math.max(maxX, pos.x + 240)
+        maxY = Math.max(maxY, pos.y + 200)
+      })
+
+      this.diagramWidth = Math.max(2000, maxX + 200)
+      this.diagramHeight = Math.max(2000, maxY + 200)
+    },
+
+    // ========== UI CONTROLS ==========
+    toggleRelationships() {
+      this.showRelationships = !this.showRelationships
+    },
+
+    toggleGrid() {
+      this.showGrid = !this.showGrid
+    },
+
+    toggleMiniMap() {
+      this.showMiniMap = !this.showMiniMap
+    },
+
+    // ========== EXPORT ==========
+    async exportAsImage() {
+      const container = this.$refs.diagramContainer
+      if (!container) return
+
+      try {
+        const canvas = await html2canvas(container, {
+          backgroundColor: '#ffffff',
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+        })
+
+        const link = document.createElement('a')
+        link.download = `database-diagram-${new Date().getTime()}.png`
+        link.href = canvas.toDataURL()
+        link.click()
+      } catch (error) {
+        console.error('Failed to export image:', error)
+        alert('Failed to export image. Please try again.')
+      }
+    },
+
+    // ========== CONTEXT MENU ==========
+    showContextMenu(event) {
+      event.preventDefault()
+
+      this.contextMenu = {
+        visible: true,
+        x: event.clientX,
+        y: event.clientY,
+      }
+
+      document.addEventListener('click', this.hideContextMenu)
+    },
+
+    hideContextMenu() {
+      this.contextMenu.visible = false
+      document.removeEventListener('click', this.hideContextMenu)
+    },
+
+    addNewTable() {
+      const newTable = {
+        name: `table_${Date.now()}`,
+        description: 'New table description',
+        columns: [
+          {
+            name: 'id',
+            type: 'int',
+            is_primary_key: true,
+            nullable: false,
+          },
+        ],
+        position: {
+          x: this.contextMenu.x / this.zoomLevel - 120,
+          y: this.contextMenu.y / this.zoomLevel - 100,
+        },
+      }
+
+      this.localTables.push(newTable)
+      this.$emit('table-add', newTable)
+      this.saveToHistory('Table added')
+      this.hideContextMenu()
+    },
+
+    // ========== EVENT HANDLERS ==========
+    handleContainerMouseMove(event) {
+      // Handle panning and other mouse interactions
+    },
+
+    handleContainerMouseUp() {
+      // Handle mouse up events
+    },
+    handleDeleteTable(table) {
+      // Chỉ truyền table.name thay vì table._id
+      this.$emit('table-delete', table.name)
+    },
+    handleTableHover(table, isHovering) {
+      if (isHovering) {
+        this.focusedTable = table
+        this.showOnlyRelatedRelationships = true
+
+        // Làm mờ các table không liên quan (giữ nguyên cho hover table)
+        this.localTables.forEach((t) => {
+          const isRelated = this.isTableRelatedToFocused(t)
+          t.isRelated = isRelated
+        })
+      } else {
+        // Chỉ reset khi không có column nào đang được hover
+        if (!this.highlightedColumn) {
+          this.focusedTable = null
+          this.showOnlyRelatedRelationships = false
+          this.localTables.forEach((t) => {
+            t.isRelated = true
+          })
+        }
+      }
+    },
+
+    isTableRelatedToFocused(table) {
+      if (!this.focusedTable) return true
+
+      return this.allRelationships.some(
+        (relationship) =>
+          (relationship.from_table === this.focusedTable.name &&
+            relationship.to_table === table.name) ||
+          (relationship.to_table === this.focusedTable.name &&
+            relationship.from_table === table.name)
+      )
+    },
+    isRelationshipRelated(relationship) {
+      if (!this.focusedTable) return true
+      return (
+        relationship.from_table === this.focusedTable.name ||
+        relationship.to_table === this.focusedTable.name
+      )
+    },
+    getTableZIndex(table) {
+      if (this.dragData?.table?.name === table.name) return 1000
+      if (this.focusedTable === table) return 999
+      if (this.selectedTable === table.name) return 998
+      if (this.showOnlyRelatedRelationships && !table.isRelated) return 1
+      return 10
+    },
+    // ========== SORTING METHODS ==========
+    sortTables(sortType) {
+      this.currentSort = sortType
+      this.showSortOptions = false
+
+      // Lưu tùy chọn sắp xếp vào localStorage
+      this.saveSortPreference(sortType)
+
+      switch (sortType) {
+        case 'name-asc':
+          this.localTables.sort((a, b) => a.name.localeCompare(b.name))
+          break
+        case 'name-desc':
+          this.localTables.sort((a, b) => b.name.localeCompare(a.name))
+          break
+        case 'columns-asc':
+          this.localTables.sort((a, b) => (a.columns?.length || 0) - (b.columns?.length || 0))
+          break
+        case 'columns-desc':
+          this.localTables.sort((a, b) => (b.columns?.length || 0) - (a.columns?.length || 0))
+          break
+        case 'fk-asc':
+          this.localTables.sort((a, b) => this.tableFkCounts[a.name] - this.tableFkCounts[b.name])
+          break
+        case 'fk-desc':
+          this.localTables.sort((a, b) => this.tableFkCounts[b.name] - this.tableFkCounts[a.name])
+          break
+        case 'original':
+          // Khôi phục thứ tự ban đầu
+          this.localTables.sort((a, b) => {
+            const indexA = this.originalTableOrder.indexOf(a.name)
+            const indexB = this.originalTableOrder.indexOf(b.name)
+            return indexA - indexB
+          })
+          break
+      }
+
+      // Áp dụng auto-layout sau khi sắp xếp
+      this.applySortLayout()
+      this.saveToHistory(`Sorted tables by ${this.getSortDisplayName(sortType)}`)
+    },
+    // Lưu tùy chọn sắp xếp vào localStorage
+    saveSortPreference(sortType) {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('db-diagram-sort-preference', sortType)
+      }
+    },
+
+    // Lấy tùy chọn sắp xếp từ localStorage
+    loadSortPreference() {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const savedSort = localStorage.getItem('db-diagram-sort-preference')
+        if (savedSort) {
+          this.currentSort = savedSort
+        }
+      }
+    },
+    applySortLayout() {
+      const LAYOUT_CONFIG = {
+        TABLE_WIDTH: 240,
+        TABLE_HEIGHT: 200,
+        MARGIN_X: 100,
+        MARGIN_Y: 120,
+        PADDING: 200,
+        COLUMNS: 7,
+      }
+
+      let currentX = LAYOUT_CONFIG.PADDING
+      let currentY = LAYOUT_CONFIG.PADDING
+      let maxHeightInRow = 0
+
+      this.localTables.forEach((table, index) => {
+        if (index > 0 && index % LAYOUT_CONFIG.COLUMNS === 0) {
+          currentX = LAYOUT_CONFIG.PADDING
+          currentY += maxHeightInRow + LAYOUT_CONFIG.MARGIN_Y
+          maxHeightInRow = 0
+        }
+
+        if (!table.position) {
+          this.$set(table, 'position', { x: 0, y: 0 })
+        }
+
+        table.position.x = currentX
+        table.position.y = currentY
+
+        maxHeightInRow = Math.max(maxHeightInRow, LAYOUT_CONFIG.TABLE_HEIGHT)
+        currentX += LAYOUT_CONFIG.TABLE_WIDTH + LAYOUT_CONFIG.MARGIN_X
+      })
+
+      this.updateContainerSize()
+      this.scheduleAutoSave()
+    },
+
+    // Thêm method mới
+    handleColumnHover(column, table) {
+      // Chỉ xử lý hover cho PK và FK
+      if (column.is_primary_key || column.is_foreign_key) {
+        this.highlightColumnRelationships(column, table)
+      }
+    },
+
+    getSortDisplayName(sortType) {
+      const sortNames = {
+        'name-asc': 'A-Z',
+        'name-desc': 'Z-A',
+        'columns-asc': 'Columns ↑',
+        'columns-desc': 'Columns ↓',
+        'fk-asc': 'FK ↑',
+        'fk-desc': 'FK ↓',
+        original: 'Original',
+      }
+      return sortNames[sortType] || 'Custom'
+    },
+
+    startPan(event) {
+      this.panning = true
+      this.lastPanPoint = { x: event.clientX, y: event.clientY }
+      this.$refs.diagramContainer.style.cursor = 'grabbing'
+      event.preventDefault()
+    },
+
+    handlePan(event) {
+      if (this.panning) {
+        const deltaX = event.clientX - this.lastPanPoint.x
+        const deltaY = event.clientY - this.lastPanPoint.y
+
+        this.diagramOffset.x += deltaX
+        this.diagramOffset.y += deltaY
+
+        this.lastPanPoint = { x: event.clientX, y: event.clientY }
+        this.updateDiagramTransform()
+      }
+    },
+
+    stopPan() {
+      this.panning = false
+      this.$refs.diagramContainer.style.cursor = 'grab'
+    },
+    toggleRelationshipColors() {
+      this.showRelationshipColors = !this.showRelationshipColors
+    },
+  },
+  mounted() {
+    console.log('All relationships:', this.allRelationships)
+    console.log('Local tables:', this.localTables)
+    document.addEventListener('keydown', this.handleKeydown)
+    document.addEventListener('click', this.handleClickOutside)
+    document.addEventListener('click', this.handleClickOutside)
+    // Thêm event listeners cho fullscreen
+    document.addEventListener('fullscreenchange', this.handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange)
+    document.addEventListener('msfullscreenchange', this.handleFullscreenChange)
+
+    // Initialize positions if not set
+    this.localTables.forEach((table, index) => {
+      if (!table.position) {
+        this.$set(table, 'position', {
+          x: (index % 5) * 300 + 100,
+          y: Math.floor(index / 5) * 250 + 100,
+        })
+      }
+    })
+
+    this.originalTableOrder = [...this.localTables.map((t) => t.name)]
+    this.updateContainerSize()
+
+    // Khởi tạo transform
+    this.updateDiagramTransform()
+
+    // Load sort preference từ localStorage
+    this.loadSortPreference()
+
+    if (this.historyEnabled) {
+      this.saveToHistory('Initial state')
+    }
+  },
+  beforeDestroy() {
+    document.removeEventListener('keydown', this.handleKeydown)
+    document.removeEventListener('mousemove', this.handleDrag)
+    document.removeEventListener('mouseup', this.stopDrag)
+    document.removeEventListener('click', this.hideContextMenu)
+    document.removeEventListener('click', this.handleClickOutside)
+    document.removeEventListener('click', this.handleClickOutside)
+    // Remove fullscreen event listeners
+    document.removeEventListener('fullscreenchange', this.handleFullscreenChange)
+    document.removeEventListener('webkitfullscreenchange', this.handleFullscreenChange)
+    document.removeEventListener('msfullscreenchange', this.handleFullscreenChange)
+  },
+}
+</script>
+
+<style scoped>
+.schema-diagram {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #f8fafc;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Enhanced Controls Panel */
+.diagram-controls {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.btn-icon:hover {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-icon.danger:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.zoom-level {
+  min-width: 48px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.history-info {
+  font-size: 12px;
+  color: #6b7280;
+  padding: 0 8px;
+}
+
+.auto-save-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  padding: 4px 8px;
+}
+
+.auto-save-status.saving {
+  color: #f59e0b;
+}
+
+.auto-save-status.saved {
+  color: #10b981;
+}
+
+.search-box {
+  position: relative;
+  margin-left: auto;
+}
+
+.search-input {
+  width: 200px;
+  padding: 8px 32px 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-icon {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: #9ca3af;
+}
+
+/* Diagram Container */
+.diagram-container {
+  position: relative;
+  overflow: auto;
+  background-color: #f8fafc;
+  cursor: grab;
+}
+.diagram-container.panning {
+  cursor: grabbing;
+}
+.diagram-container:active {
+  cursor: grabbing;
+}
+
+.grid-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.3;
+}
+
+.tables-container {
+  position: relative;
+  min-width: 2000px;
+  min-height: 2000px;
+}
+
+/* Enhanced Table Card */
+.table-card {
+  position: absolute;
+  width: 300px;
+  min-height: 300px;
+  max-height: 300px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: grab;
+  overflow: hidden;
+  user-select: none;
+  z-index: 10;
+}
+.table-card.column-highlighted {
+  background: transparent !important;
+  backdrop-filter: blur(30px);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.table-card:hover {
+  min-height: 300px;
+  max-height: unset;
+}
+.table-card:hover {
+  min-height: unset;
+  max-height: unset;
+}
+/* Tùy chỉnh thanh cuộn */
+.table-card::-webkit-scrollbar {
+  width: 1px; /* Chiều rộng của thanh cuộn */
+}
+
+.table-card::-webkit-scrollbar-thumb {
+  background-color: #a0aec0; /* Màu cho thanh cuộn */
+  border-radius: 10px; /* Bo tròn góc */
+}
+
+.table-card::-webkit-scrollbar-thumb:hover {
+  background-color: #718096; /* Màu khi hover */
+}
+
+.table-card::-webkit-scrollbar-track {
+  background: #edf2f7; /* Màu nền cho track */
+  border-radius: 10px; /* Bo tròn góc */
+}
+
+.table-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 8px 25px -8px rgba(59, 130, 246, 0.15), 0 4px 12px -4px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px) scale(1.02);
+  z-index: 100;
+}
+
+.table-card.table-unrelated {
+  opacity: 0.4;
+  filter: grayscale(70%) blur(0.5px);
+  transform: scale(0.92);
+  transition: all 0.4s ease;
+}
+
+.table-card.table-unrelated:hover {
+  opacity: 1;
+  filter: grayscale(0%) blur(0px);
+  transform: scale(0.95);
+  z-index: 90;
+}
+
+.relationship-path:not(.relationship-related) {
+  opacity: 0.15;
+  stroke-width: 1;
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.table-card:not(.table-unrelated) {
+  opacity: 1;
+  filter: none;
+}
+
+.relationship-path.relationship-related {
+  opacity: 1;
+  stroke-width: 2.5;
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.table-card.table-highlighted {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.8), 0 6px 20px -6px rgba(59, 130, 246, 0.3);
+  z-index: 80;
+}
+
+.table-card.table-selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4), 0 8px 25px -8px rgba(37, 99, 235, 0.2);
+  z-index: 85;
+}
+
+.table-card.table-dragging {
+  cursor: grabbing;
+  box-shadow: 0 15px 40px -12px rgba(0, 0, 0, 0.25), 0 0 0 2px rgba(59, 130, 246, 0.8);
+  transform: rotate(1deg) scale(1.03);
+  z-index: 1000;
+}
+
+.table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #1a365d;
+  border-bottom: 1px solid #e5e7eb;
+  border-radius: 10px 10px 0 0;
+}
+
+.table-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+}
+
+.table-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.table-card:hover .table-actions {
+  opacity: 1;
+}
+
+.table-description {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: #6b7280;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fafafa;
+}
+
+.table-columns {
+  /* max-height: 300px; */
+  min-height: 300px;
+  /* overflow-y: scroll; */
+}
+
+.table-column {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s ease;
+}
+
+.table-column:hover {
+  background: #f8fafc;
+}
+
+.table-column.column-highlighted {
+  background: #dbeafe;
+}
+
+.column-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2937;
+  flex: 1;
+}
+
+.column-type {
+  font-size: 12px;
+  color: #6b7280;
+  margin-right: 8px;
+}
+
+.column-badges {
+  display: flex;
+  gap: 4px;
+}
+
+.column-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: white;
+}
+
+.column-badge.pk {
+  background: #ef4444;
+}
+
+.column-badge.fk {
+  background: #3b82f6;
+}
+
+.column-badge.nn {
+  background: #f59e0b;
+}
+
+.column-badge.uq {
+  background: #10b981;
+}
+
+/* Connection Points */
+.connection-points {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.connection-point {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #3b82f6;
+  border: 2px solid white;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: all;
+  cursor: crosshair;
+}
+
+.connection-point.top {
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.connection-point.right {
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.connection-point.bottom {
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.connection-point.left {
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.table-card:hover .connection-point {
+  opacity: 1;
+}
+
+/* Relationships Layer */
+.relationships-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.relationships-under {
+  z-index: 5;
+}
+
+.relationships-over {
+  z-index: 15;
+}
+
+.relationship-path {
+  fill: none;
+  stroke: #9ca3af;
+  stroke-width: 2;
+  pointer-events: stroke;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.relationship-path:hover,
+.relationship-path.relationship-highlighted {
+  stroke-width: 3.2;
+  opacity: 1;
+}
+
+.relationship-path.relationship-highlighted.one-to-one {
+  stroke: #06eea5;
+}
+
+.relationship-path.relationship-highlighted.one-to-many {
+  stroke: #d6ff07;
+}
+
+.relationship-path.relationship-highlighted.many-to-one {
+  stroke: #02eaff;
+}
+
+.relationship-path.relationship-highlighted.many-to-many {
+  stroke: #d97706;
+}
+/* Arrowhead styles */
+.arrowhead {
+  fill: #9ca3af;
+}
+
+.arrowhead-highlighted {
+  fill: #5c6066;
+}
+
+.arrowhead-one-to-one {
+  fill: #06eea5;
+}
+
+.arrowhead-one-to-many {
+  fill: #d6ff07;
+}
+
+.arrowhead-many-to-one {
+  fill: #02eaff;
+}
+
+.arrowhead-many-to-many {
+  fill: #d97706;
+}
+.relationship-type-badge.one-to-one {
+  background: #06eea5;
+}
+
+.relationship-type-badge.one-to-many {
+  background: #d6ff07;
+}
+
+.relationship-type-badge.many-to-one {
+  background: #02eaff;
+}
+
+.relationship-type-badge.many-to-many {
+  background: #d97706;
+}
+/* Relationship coloring when enabled */
+.relationship-path.relationship-colored.one-to-one {
+  stroke: #06eea5;
+}
+
+.relationship-path.relationship-colored.one-to-many {
+  stroke: #d6ff07;
+}
+
+.relationship-path.relationship-colored.many-to-one {
+  stroke: #02eaff;
+}
+
+.relationship-path.relationship-colored.many-to-many {
+  stroke: #d97706;
+}
+.relationship-path.relationship-selected {
+  stroke-width: 3;
+  filter: drop-shadow(0 2px 4px rgba(29, 78, 216, 0.3));
+}
+
+/* Relationship type styles */
+.relationship-path.one-to-one {
+  stroke-dasharray: 5, 5;
+}
+
+.relationship-path.one-to-many {
+  stroke-dasharray: none;
+}
+
+.relationship-path.many-to-one {
+  stroke-dasharray: none;
+}
+
+.relationship-path.many-to-many {
+  stroke-dasharray: 10, 5;
+}
+
+.relationship-path:hover .arrowhead,
+.relationship-path.relationship-highlighted .arrowhead {
+  fill: #3b82f6;
+}
+
+/* Selection Rectangle */
+.selection-rectangle {
+  position: absolute;
+  background: rgba(59, 130, 246, 0.1);
+  border: 2px solid #3b82f6;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Mini Map */
+.mini-map {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.mini-map-content {
+  position: relative;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mini-table {
+  position: absolute;
+  background: #6b7280;
+  border-radius: 1px;
+  transition: background-color 0.2s ease;
+}
+
+.mini-viewport {
+  position: absolute;
+  border: 2px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+  pointer-events: none;
+}
+
+/* Relationship Manager Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Relationship Form */
+.relationship-form {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.relationship-form h4 {
+  margin: 0 0 16px 0;
+  color: #1f2937;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-group select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  transition: border-color 0.2s ease;
+}
+
+.form-group select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #4b5563;
+}
+
+/* Relationships List */
+.relationships-list h4 {
+  margin: 0 0 16px 0;
+  color: #1f2937;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.relationship-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.relationship-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.relationship-item:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.relationship-item.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.relationship-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.relationship-type-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  min-width: 32px;
+  text-align: center;
+}
+
+.relationship-details {
+  flex: 1;
+  font-size: 14px;
+  color: #374151;
+}
+
+.relationship-arrow {
+  margin: 0 8px;
+  color: #9ca3af;
+}
+
+.relationship-layer {
+  font-size: 12px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.relationship-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.relationship-item:hover .relationship-actions {
+  opacity: 1;
+}
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  z-index: 1000;
+  min-width: 160px;
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  transition: background-color 0.2s ease;
+}
+
+.context-menu-item:hover {
+  background: #f3f4f6;
+}
+
+.context-menu-item:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.context-menu-item:last-child {
+  border-radius: 0 0 8px 8px;
+}
+
+/* Debug Info */
+.debug-info {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: monospace;
+  z-index: 100;
+}
+
+/* Scrollbar Styling */
+.diagram-container::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.diagram-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 6px;
+}
+
+.diagram-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 6px;
+  border: 2px solid #f1f5f9;
+}
+
+.diagram-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.table-columns::-webkit-scrollbar {
+  width: 6px;
+}
+
+.table-columns::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.table-columns::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .diagram-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .control-group {
+    justify-content: center;
+  }
+
+  .search-box {
+    margin-left: 0;
+    margin-top: 8px;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-content {
+    width: 95%;
+    margin: 20px;
+  }
+}
+
+/* Animation for smooth transitions */
+.table-card,
+.relationship-path,
+.btn-icon {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Focus styles for accessibility */
+.btn-icon:focus-visible,
+.search-input:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+/* Sort Dropdown Styles */
+.sort-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  z-index: 1001;
+  min-width: 180px;
+  margin-top: 4px;
+}
+
+.sort-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.sort-option:last-child {
+  border-bottom: none;
+}
+
+.sort-option:hover {
+  background: #f3f4f6;
+}
+
+.sort-option .material-symbols-outlined {
+  font-size: 16px;
+  color: #6b7280;
+}
+
+.current-sort {
+  font-size: 12px;
+  color: #374151;
+  padding: 0 8px;
+  min-width: 60px;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Responsive cho sort dropdown */
+@media (max-width: 768px) {
+  .sort-dropdown {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 300px;
+  }
+}
+
+/* Dark mode support cho sorting */
+@media (prefers-color-scheme: dark) {
+  .sort-dropdown {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .sort-option {
+    color: #f9fafb;
+    border-bottom-color: #374151;
+  }
+
+  .sort-option:hover {
+    background: #374151;
+  }
+
+  .sort-option .material-symbols-outlined {
+    color: #d1d5db;
+  }
+
+  .current-sort {
+    color: #d1d5db;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .schema-diagram {
+    background-color: #111827;
+  }
+
+  .diagram-controls {
+    background: rgba(31, 41, 55, 0.95);
+    border-color: #374151;
+  }
+
+  .control-group {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .btn-icon {
+    color: #d1d5db;
+  }
+
+  .table-card {
+    background: #1f2937;
+    border-color: #374151;
+    color: #f9fafb;
+  }
+
+  .table-header {
+    background: #111827;
+    border-color: #374151;
+    color: #f9fafb;
+  }
+
+  .table-header h4 {
+    color: #f9fafb;
+  }
+
+  .table-description {
+    background: #111827;
+    border-color: #374151;
+    color: #d1d5db;
+  }
+
+  .table-column {
+    border-color: #374151;
+    color: #f9fafb;
+  }
+
+  .table-column:hover {
+    background: #374151;
+  }
+
+  .column-name {
+    color: #f9fafb;
+  }
+
+  .column-type {
+    color: #9ca3af;
+  }
+
+  .search-input {
+    background: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+
+  .search-input:focus {
+    border-color: #3b82f6;
+  }
+
+  .grid-background {
+    opacity: 0.2;
+  }
+}
+/* Thêm style cho table được highlight */
+.table-card.table-highlighted {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 12px rgba(244, 11, 3, 0.4), 0 8px 25px -8px rgba(64, 102, 163, 0.3) !important;
+  z-index: 80;
+  transform: scale(1.08);
+  transition: all 0.3s ease;
+}
+
+/* Đảm bảo relationship highlight hoạt động */
+.relationship-path.relationship-highlighted {
+  stroke-width: 4 !important;
+  opacity: 1 !important;
+  filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.5));
+}
+
+/* Column highlight */
+.table-column.column-highlighted {
+  background: #dbeafe !important;
+  border-left: 3px solid #3b82f6;
+}
+/* Chỉ PK/FK mới có hover effect */
+.table-column.column-hoverable:hover {
+  background: #f0f9ff;
+  cursor: pointer;
+}
+
+/* Column PK/FK khi được highlight */
+.table-column.primary.column-highlighted {
+  background: #fef2f2;
+  border-left: 3px solid #ef4444;
+}
+
+.table-column.foreign.column-highlighted {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+}
+
+/* Column bình thường không có hover effect */
+.table-column:not(.column-hoverable):hover {
+  background: #f8fafc;
+  cursor: default;
+}
+/* Fullscreen styles */
+.schema-diagram:fullscreen {
+  background: white;
+  padding: 20px;
+}
+
+.schema-diagram:-webkit-full-screen {
+  background: white;
+  padding: 20px;
+}
+
+.schema-diagram:-ms-fullscreen {
+  background: white;
+  padding: 20px;
+}
+
+/* Điều chỉnh controls trong fullscreen */
+.schema-diagram:fullscreen .diagram-controls {
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 2px solid #e5e7eb;
+}
+
+.schema-diagram:-webkit-full-screen .diagram-controls {
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 2px solid #e5e7eb;
+}
+
+.schema-diagram:-ms-fullscreen .diagram-controls {
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 2px solid #e5e7eb;
+}
+
+/* Điều chỉnh diagram container trong fullscreen */
+.schema-diagram:fullscreen .diagram-container {
+  background: white;
+}
+
+.schema-diagram:-webkit-full-screen .diagram-container {
+  background: white;
+}
+
+.schema-diagram:-ms-fullscreen .diagram-container {
+  background: white;
+}
+</style>

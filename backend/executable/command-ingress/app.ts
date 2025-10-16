@@ -42,6 +42,18 @@ import initSpeechRoute from "./features/handle_audio/adapter/route";
 import { SpeechController } from "./features/handle_audio/adapter/controller";
 import { SpeechToTextService } from "./features/handle_audio/domain/service";
 
+
+import { ProjectService } from './features/project/domain/service';
+import { ProjectController } from './features/project/adapter/controller';
+import initProjectRoute from './features/project/adapter/route';
+
+import input from '@/internal/model/input';
+import { InputService } from './features/orchestrator/domain/InputService';
+
+import { UsecaseService } from './features/usecase/domain/service';
+import { UsecaseController } from './features/usecase/adapter/controller';
+import initUsecaseRoute from './features/usecase/adapter/route';
+
 import initTextRoute from "./features/handle_text/adapter/route";
 import { TextController } from "./features/handle_text/adapter/controller";
 import { TextService } from "./features/handle_text/domain/service";
@@ -50,10 +62,8 @@ import initOrchestratorRoute from "./features/orchestrator/adapter/route";
 import { OrchestratorController } from "./features/orchestrator/adapter/controller";
 import { OrchestratorService } from "./features/orchestrator/domain/service";
 
-import { ProjectService } from "./features/project/domain/service";
-import { ProjectController } from "./features/project/adapter/controller";
-import initProjectRoute from "./features/project/adapter/route";
 
+import initDatabaseRoute from './features/database/adapter/route';
 const app = express();
 
 const createHttpServer = (redisClient: any) => {
@@ -119,19 +129,27 @@ const createHttpServer = (redisClient: any) => {
   );
   // 1. Khởi tạo OrchestratorService trước
   const orchestratorService = new OrchestratorService();
-
+  const inputService = new InputService();
   // 2. Khởi tạo ProjectService và "inject" orchestratorService vào
-  const projectService = new ProjectService(orchestratorService);
-
+  const projectService = new ProjectService(orchestratorService, inputService);
   // 3. Khởi tạo ProjectController và inject projectService vào
   const projectController = new ProjectController(projectService);
+  const usecaseService = new UsecaseService();
+  const usecaseController = new UsecaseController(usecaseService);
+
   // Setup route
-  app.use("/api/auth", initAuthRoute(new AuthController(authService)));
+
+  app.use('/api/auth', initAuthRoute(new AuthController(authService)));
+  app.use('/api/orchestrate', initOrchestratorRoute(new OrchestratorController(new OrchestratorService())));
+  app.use('/api/projects', initProjectRoute(projectController));
+  app.use('/api/usecaseManagement', initUsecaseRoute(usecaseController));
+  app.use('/api/databases', initDatabaseRoute())
 
   app.use(
     "/api/keys",
     initApiKeyRoute(new ApiKeyController(new ApiKeyServiceImpl()))
   );
+
 
   app.use(
     "/api/users",

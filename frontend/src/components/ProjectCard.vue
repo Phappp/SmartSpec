@@ -2,8 +2,67 @@
   <div
     @click="openProject"
     class="project-card"
-    :class="{ trashed: isTrashed, editing: isEditing }"
+    :class="{
+      trashed: isTrashed,
+      editing: isEditing,
+      creating: isCreating,
+      failed: project.creationStatus === 'failed',
+      retrying: project.isRetry, // THÊM class retrying
+    }"
   >
+    <!-- TRẠNG THÁI ĐANG TẠO HOẶC RETRY -->
+    <div v-if="isCreating" class="creating-state">
+      <div class="creating-header">
+        <h3 class="creating-title">{{ project.name }}</h3>
+        <span
+          class="creating-badge"
+          :class="{
+            failed: project.creationStatus === 'failed',
+            retrying: project.isRetry,
+          }"
+        >
+          {{ creatingLabel }}
+          <!-- SỬ DỤNG computed property -->
+        </span>
+      </div>
+
+      <p class="creating-description">{{ project.description }}</p>
+
+      <!-- HIỂN THỊ PROGRESS BAR KHI ĐANG TẠO HOẶC RETRY -->
+      <div v-if="project.creationStatus !== 'failed'" class="creating-progress">
+        <div class="progress-info">
+          <span class="stage-text">{{ project.currentStage }}</span>
+          <span class="progress-percent">{{ project.processingProgress }}%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" :style="{ width: project.processingProgress + '%' }"></div>
+        </div>
+      </div>
+
+      <!-- HIỂN THỊ LỖI KHI FAILED -->
+      <div v-else class="creating-failed">
+        <span class="material-symbols-outlined failed-icon">error</span>
+        <p class="failed-message">
+          {{ project.isRetry ? 'Retry failed' : 'Project creation failed' }}
+        </p>
+        <button class="retry-btn" @click.stop="retryCreation">Retry</button>
+      </div>
+
+      <div class="creating-footer">
+        <span class="creating-note">
+          <span class="material-symbols-outlined">schedule</span>
+          {{
+            project.creationStatus === 'failed'
+              ? project.isRetry
+                ? 'Retry failed - Will be removed soon'
+                : 'Creation failed - Will be removed soon'
+              : project.isRetry
+              ? 'Project is being retried in background'
+              : 'Project is being created in background'
+          }}
+        </span>
+      </div>
+    </div>
     <div v-if="!isEditing" class="project-content">
       <div class="project-header">
         <h3>{{ project.name }}</h3>
@@ -134,6 +193,23 @@ export default {
       }
       return false
     },
+    isCreating() {
+      return (
+        this.project.isTemp ||
+        this.project.creationStatus === 'creating' ||
+        this.project.creationStatus === 'polling' ||
+        this.project.status === 'retrying' || // THÊM điều kiện này
+        this.project.isRetry // THÊM điều kiện này
+      )
+    },
+
+    // COMPUTED PROPERTY MỚI: Hiển thị label phù hợp
+    creatingLabel() {
+      if (this.project.isRetry) {
+        return 'Retrying...'
+      }
+      return this.project.creationStatus === 'failed' ? 'Failed' : 'Creating...'
+    },
 
     projectType() {
       return this.isOwner ? 'my' : 'shared'
@@ -230,7 +306,10 @@ export default {
         this.$refs.nameInput?.focus()
       })
     },
-
+    retryCreation() {
+      // Emit event để parent xử lý retry
+      this.$emit('retry-creation', this.project._id)
+    },
     changeColor() {
       alert('Change color clicked')
     },
@@ -292,8 +371,9 @@ export default {
       }
     },
 
+    // Trong methods
     openProject() {
-      if (this.isTrashed || this.isEditing) return
+      if (this.isTrashed || this.isEditing || this.isCreating) return
       this.$emit('open', this.project)
     },
 
@@ -689,5 +769,152 @@ export default {
   color: #ffffff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
   transform: scale(1);
+}
+/* Creating State Styles */
+/* Creating State Styles */
+.project-card.creating {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 2px dashed #1a365d;
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+
+.creating-state {
+  padding: 4px;
+}
+
+.creating-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.creating-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a365d;
+  margin: 0;
+  flex: 1;
+}
+
+.creating-badge {
+  background: #1a365d;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.creating-badge.failed {
+  background: #ef4444;
+}
+
+.creating-description {
+  color: #666;
+  font-size: 14px;
+  margin: 8px 0 16px;
+  line-height: 1.4;
+}
+
+.creating-progress {
+  margin: 16px 0;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #666;
+}
+
+.stage-text {
+  font-weight: 500;
+}
+
+.progress-percent {
+  font-weight: 600;
+  color: #1a365d;
+}
+
+.progress-bar {
+  height: 6px;
+  background-color: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1a365d, #2c5282);
+  border-radius: 3px;
+  transition: width 0.5s ease-in-out;
+}
+
+.creating-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e9ecef;
+}
+
+.creating-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.creating-note .material-symbols-outlined {
+  font-size: 14px;
+}
+
+/* Failed State */
+.project-card.failed {
+  border-color: #ef4444;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+}
+
+.creating-failed {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.failed-icon {
+  font-size: 32px;
+  color: #ef4444;
+  margin-bottom: 8px;
+}
+
+.failed-message {
+  color: #ef4444;
+  font-size: 14px;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.retry-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.retry-btn:hover {
+  background: #dc2626;
+}
+
+/* Ẩn FAB menu và normal content khi đang creating */
+.project-card.creating .project-content,
+.project-card.creating .fab-container {
+  display: none !important;
 }
 </style>

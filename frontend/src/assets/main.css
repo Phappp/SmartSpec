@@ -1,45 +1,95 @@
-@import './base.css';
-
-#app {
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  font-weight: normal;
-}
-
-a,
-.green {
-  text-decoration: none;
-  transition: 0.4s;
-  padding: 3px;
-}
-
-@media (hover: hover) {}
-
-@media (min-width: 1024px) {
-  body {
-    display: flex;
-    place-items: center;
-  }
+  @import './base.css';
 
   #app {
-    grid-template-columns: 1fr 1fr;
-    padding: 0 .6rem;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    font-weight: normal;
+    overflow: hidden;
   }
-}
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+  a,
+  .green {
+    text-decoration: none;
+    transition: 0.4s;
+    padding: 3px;
+  }
 
-.material-symbols-outlined {
-  font-variation-settings:
-    'FILL' 0,
-    'wght' 400,
-    'GRAD' 0,
-    'opsz' 24;
-  font-size: 18px;
-  vertical-align: middle;
-}
+  @media (hover: hover) {}
+
+  @media (min-width: 1024px) {
+    body {
+      display: flex;
+      place-items: center;
+    }
+
+    #app {
+      grid-template-columns: 1fr 1fr;
+      padding: 0 .6rem;
+    }
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  .material-symbols-outlined {
+    font-variation-settings:
+      'FILL' 0,
+      'wght' 400,
+      'GRAD' 0,
+      'opsz' 24;
+    font-size: 18px;
+    vertical-align: middle;
+  }
+
+  /* Base toast container */
+  .Vue-Toastification__toast {
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 15px;
+    font-weight: 500;
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Success toast */
+  .Vue-Toastification__toast--success {
+    background: linear-gradient(135deg, #28a745, #1e2696);
+  }
+
+  /* Error toast */
+  .Vue-Toastification__toast--error {
+    background: linear-gradient(135deg, #dc3545, #b02a37);
+  }
+
+  /* Info toast */
+  .Vue-Toastification__toast--info {
+    background: linear-gradient(135deg, #17a2b8, #117a8b);
+  }
+
+  /* Warning toast */
+  .Vue-Toastification__toast--warning {
+    background: linear-gradient(135deg, #ffc107, #d39e00);
+    color: #222;
+  }
+
+  /* Nội dung */
+  .Vue-Toastification__toast-body {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Nút đóng */
+  .Vue-Toastification__close-button {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 16px;
+    transition: color 0.2s;
+  }
+
+  .Vue-Toastification__close-button:hover {
+    color: #fff;
+  }
