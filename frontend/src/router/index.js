@@ -27,8 +27,38 @@ const routes = [
 
   { path: '/reset-password', component: ResetPassword },
   {
-    path: '/dashboard',
-    name: 'Home',
+    path: '/project/:id/output',
+    name: 'OutputManagement',
+    component: OutputManagement,
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/project/:id/testcases',
+    name: 'TestcaseManagement',
+    component: TestcaseManagement,
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/project/:id/database',
+    name: 'DatabaseManagement',
+    component: DatabaseManagement,
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/project/:id/uml',
+    name: 'UmlManagement',
+    component: UmlManagement,
+    props: true,
+    meta: { requiresAuth: true }
+  }
+
+
+  { 
+    path: '/dashboard', 
+    name: 'Home', 
     component: Homepage,
     beforeEnter: authGuard
   },

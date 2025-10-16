@@ -45,6 +45,7 @@ import { SpeechToTextService } from "./features/handle_audio/domain/service";
 import { ProjectService } from './features/project/domain/service';
 import { ProjectController } from './features/project/adapter/controller';
 import initProjectRoute from './features/project/adapter/route';
+
 import input from '@/internal/model/input';
 import { InputService } from './features/orchestrator/domain/InputService';
 
@@ -139,17 +140,16 @@ const createHttpServer = (redisClient: any) => {
   // Setup route
 
   app.use('/api/auth', initAuthRoute(new AuthController(authService)));
-
+  app.use('/api/orchestrate', initOrchestratorRoute(new OrchestratorController(new OrchestratorService())));
   app.use('/api/projects', initProjectRoute(projectController));
-
   app.use('/api/usecaseManagement', initUsecaseRoute(usecaseController));
-
   app.use('/api/databases', initDatabaseRoute())
 
   app.use(
     "/api/keys",
     initApiKeyRoute(new ApiKeyController(new ApiKeyServiceImpl()))
   );
+
 
   app.use(
     "/api/users",

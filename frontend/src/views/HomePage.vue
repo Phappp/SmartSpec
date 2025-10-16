@@ -715,6 +715,7 @@ export default {
       localStorage.removeItem('email')
       console.log('🚪 Logging out...')
       authLogout()
+
       this.$router.push('/login')
     },
   },

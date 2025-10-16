@@ -58,6 +58,47 @@ export const getTableRelationships = (databaseId, tableName) => {
   return axiosClient.get(`/api/databases/${databaseId}/tables/${tableName}/relationships`);
 };
 
+
+//Usecase
+export const usecaseApi = {
+  // GET /versions/:versionId/usecases
+  getUsecases: (versionId) => axiosClient.get(`/api/usecaseManagement/versions/${versionId}/usecases`),
+
+  // POST /versions/:versionId/usecases
+  createUsecase: (versionId, data) => axiosClient.post(`/api/usecaseManagement/versions/${versionId}/usecases`, data),
+
+  // PUT /versions/:versionId/usecases/:usecaseId
+  updateUsecase: (versionId, usecaseId, data) =>
+    axiosClient.put(`/api/usecaseManagement/versions/${versionId}/usecases/${usecaseId}`, data),
+
+  // DELETE /versions/:versionId/usecases/:usecaseId
+  deleteUsecase: (versionId, usecaseId) =>
+    axiosClient.delete(`/api/usecaseManagement/versions/${versionId}/usecases/${usecaseId}`)
+};
+
+// DATABASE
+// 🔥 THÊM API MỚI ĐỂ SINH DATABASE
+export const generateDatabaseSchema = (versionId) => {
+  return axiosClient.post(`/api/databases/versions/${versionId}/generate-database`);
+};
+
+export const getDatabasesByVersion = (versionId) => {
+  return axiosClient.get(`/api/databases?versionId=${versionId}`);
+};
+
+export const getDatabaseById = (databaseId) => {
+  return axiosClient.get(`/api/databases/${databaseId}`);
+};
+
+// 🔥 THÊM API MỚI CHO REFERENCES
+export const getDatabaseWithReferences = (databaseId) => {
+  return axiosClient.get(`/api/databases/${databaseId}/with-references`);
+};
+
+export const getTableRelationships = (databaseId, tableName) => {
+  return axiosClient.get(`/api/databases/${databaseId}/tables/${tableName}/relationships`);
+};
+
 export const validateForeignKey = (databaseId, data) => {
   return axiosClient.post(`/api/databases/${databaseId}/validate-foreign-key`, data);
 };
