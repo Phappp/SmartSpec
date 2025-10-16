@@ -18,12 +18,14 @@ export const handleServiceResponse = (
     return response.status(serviceResponse.code).json({
       status: 'Failed',
       message: serviceResponse.message,
+      data: serviceResponse.data,
     });
   }
 
   // Nếu không có lỗi, trả về mã thành công và dữ liệu
   return response.status(serviceResponse.code).json({
     status: 'Success',
+    message: serviceResponse.message,
     data: serviceResponse.data,
   });
 };

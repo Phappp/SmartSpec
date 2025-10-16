@@ -42,16 +42,29 @@ import initSpeechRoute from "./features/handle_audio/adapter/route";
 import { SpeechController } from "./features/handle_audio/adapter/controller";
 import { SpeechToTextService } from "./features/handle_audio/domain/service";
 
-import { ProjectService } from './features/project/domain/service';
-import { ProjectController } from './features/project/adapter/controller';
-import initProjectRoute from './features/project/adapter/route';
+// import initOcrRoute from "./features/handle_image/adapter/route";
+// import { OcrController } from "./features/handle_image/adapter/controller";
+// import { OcrService } from "./features/handle_image/domain/service";
 
-import input from '@/internal/model/input';
-import { InputService } from './features/orchestrator/domain/InputService';
+import initNotificationRoute from "./features/notification/adapter/route";
+import { NotificationController } from "./features/notification/adapter/controller";
+import { NotificationServiceImpl } from "./features/notification/domain/service"
 
-import { UsecaseService } from './features/usecase/domain/service';
-import { UsecaseController } from './features/usecase/adapter/controller';
-import initUsecaseRoute from './features/usecase/adapter/route';
+// import initReadDocxRoute from "./features/handle_docx/adapter/route";
+// import { ReadDocxController } from "./features/handle_docx/adapter/controller";
+// import { ReadDocxService } from "./features/handle_docx/domain/service";
+
+// import initPdfRoute from "./features/handle_pdf/adapter/route";
+// import { PdfController } from "./features/handle_pdf/adapter/controller";
+// import { PdfService } from "./features/handle_pdf/domain/service";
+
+// import initExtractorRoute from "./features/handle_extraction/adapter/route";
+// import { ExtractorController } from "./features/handle_extraction/adapter/controller";
+// import { ExtractorService } from "./features/handle_extraction/domain/ExtractorService";
+
+// import initSpeechRoute from "./features/handle_audio/adapter/route";
+// import { SpeechController } from "./features/handle_audio/adapter/controller";
+// import { SpeechToTextService } from "./features/handle_audio/domain/service";
 
 import initTextRoute from "./features/handle_text/adapter/route";
 import { TextController } from "./features/handle_text/adapter/controller";
@@ -61,8 +74,30 @@ import initOrchestratorRoute from "./features/orchestrator/adapter/route";
 import { OrchestratorController } from "./features/orchestrator/adapter/controller";
 import { OrchestratorService } from "./features/orchestrator/domain/service";
 
+import { ProjectService } from "./features/project/domain/service";
+import { ProjectController } from "./features/project/adapter/controller";
+import initProjectRoute from "./features/project/adapter/route";
+
+import { ShareProjectService } from "./features/share/domain/service";
+import { ShareProjectController } from "./features/share/adapter/controller";
+import initShareProjectRoute from "./features/share/adapter/route";
+import { notificationService } from "./services/notification.service";
+
+import { UsecaseService } from './features/usecase/domain/service';
+import { UsecaseController } from './features/usecase/adapter/controller';
+import initUsecaseRoute from './features/usecase/adapter/route';
+
+// import initTextRoute from "./features/handle_text/adapter/route";
+// import { TextController } from "./features/handle_text/adapter/controller";
+// import { TextService } from "./features/handle_text/domain/service";
+
+// import initOrchestratorRoute from "./features/orchestrator/adapter/route";
+// import { OrchestratorController } from "./features/orchestrator/adapter/controller";
+// import { OrchestratorService } from "./features/orchestrator/domain/service";
+
 
 import initDatabaseRoute from './features/database/adapter/route';
+import { InputService } from "./features/orchestrator/domain/InputService";
 const app = express();
 
 const createHttpServer = (redisClient: any) => {
@@ -160,7 +195,10 @@ const createHttpServer = (redisClient: any) => {
     "/api/handle_docx",
     initReadDocxRoute(new ReadDocxController(new ReadDocxService()))
   );
-  app.use("/api/handle_pdf", initPdfRoute(new PdfController(new PdfService())));
+  app.use(
+    "/api/handle_pdf",
+    initPdfRoute(new PdfController(new PdfService()))
+  );
   app.use(
     "/api/handle_extraction",
     initExtractorRoute(new ExtractorController(new ExtractorService()))
@@ -181,7 +219,19 @@ const createHttpServer = (redisClient: any) => {
     "/api/orchestrate",
     initOrchestratorRoute(new OrchestratorController(new OrchestratorService()))
   );
-
+  app.use("/api/projects", initProjectRoute(projectController));
+  app.use(
+    "/api/projects",
+    initShareProjectRoute(new ShareProjectController(new ShareProjectService()))
+  );
+  app.use(
+    "/api/users",
+    initShareProjectRoute(new ShareProjectController(new ShareProjectService()))
+  );
+  app.use(
+    "/api/notifications",
+    initNotificationRoute(new NotificationController(new NotificationServiceImpl))
+  );
 
   app.use(recoverMiddleware);
 
