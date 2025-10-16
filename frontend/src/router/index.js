@@ -53,9 +53,7 @@ const routes = [
     component: UmlManagement,
     props: true,
     meta: { requiresAuth: true }
-  }
-
-
+  },
   { 
     path: '/dashboard', 
     name: 'Home', 

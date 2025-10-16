@@ -430,7 +430,7 @@ export default {
         this.hasConflicts = false
         this.pendingConflicts = []
       }
-
+    },
     // Format utils
     formatDate(dateString) {
       if (!dateString) return 'N/A'
