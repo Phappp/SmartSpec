@@ -78,7 +78,7 @@
         <div v-if="showUserMenu" class="user-menu">
           <ul class="menu-list">
             <li><span class="material-symbols-outlined">help</span> Help</li>
-            <li><span class="material-symbols-outlined">settings</span> Settings</li>
+            <li @click.stop="$emit('open-personal')"><span class="material-symbols-outlined">settings</span> Settings </li>
             <hr />
             <li @click.stop="handleLogout">
               <span class="material-symbols-outlined">logout</span> Logout
@@ -131,6 +131,7 @@ export default {
     }
   },
   methods: {
+    
     toggleUserMenu() {
       this.showUserMenu = !this.showUserMenu
 

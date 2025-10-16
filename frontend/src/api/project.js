@@ -179,7 +179,10 @@ export function getCurrentUser() {
 // Documentation generation
 export const generateDocumentation = (projectId, payload = {}) =>
   axiosClient.post(`/api/projects/${projectId}/generate`, payload);
-
+// Invitations
+export const getMyInvitations = () => {
+  return axiosClient.get('/api/users/me/invites');
+}
 export default {
   getMyProjects,
   getSharedProjects,

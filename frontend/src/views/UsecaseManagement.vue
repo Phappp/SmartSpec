@@ -22,6 +22,57 @@
         <span class="material-symbols-outlined">output</span>
         Output Management
       </button>
+      <div class="project-info">
+        <h2>{{ project.name }}</h2>
+        <div class="description-container">
+          <button class="toggle-description" @click="toggleDescription">
+            <span class="material-symbols-outlined">
+              {{ showDescription ? 'expand_less' : 'expand_more' }}
+            </span>
+            {{ showDescription ? 'Hide Description' : 'Show Description' }}
+          </button>
+          <div v-if="showDescription" class="project-description">
+            <p>{{ project.description || 'No description available' }}</p>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <div class="version-selector">
+          <span class="material-symbols-outlined">history</span>
+
+          <!-- Dropdown button -->
+          <div class="dropdown" @click="toggleDropdown">
+            <span>{{ selectedLabel }}</span>
+            <span class="material-symbols-outlined arrow" :class="{ open: isOpen }">
+              <span class="material-symbols-outlined"> chevron_right </span>
+            </span>
+          </div>
+
+          <!-- Dropdown menu -->
+          <ul v-if="isOpen" class="dropdown-menu">
+            <li v-for="v in versions" :key="v._id" @click="selectVersion(v)">
+              Version {{ v.version_number }} ({{ v.status }})
+            </li>
+          </ul>
+
+          <!-- Retry button -->
+          <button
+            v-if="hasFailedVersion"
+            @click="retryFailedVersion"
+            class="retry-btn"
+            :disabled="isRetrying"
+          >
+            <span v-if="isRetrying" class="button-spinner-small"></span>
+            <span v-else class="material-symbols-outlined">refresh</span>
+            {{ isRetrying ? 'Retrying...' : 'Retry Failed' }}
+          </button>
+        </div>
+        <button class="members-button" @click="openShareModal">
+          <span class="material-symbols-outlined">group</span>
+          {{ project.members ? project.members.length : 0 }} Members
+        </button>
+      </div>
+      >>>>>>> origin/feature/Sprint2UI_Cuong
     </div>
 
     <!-- Incremental Analysis Component -->
@@ -97,6 +148,11 @@
       @close="showConflictDetailModal = false"
       @skip-conflict="skipCurrentConflict"
     />
+    <ProjectSharingModal
+      v-if="isShareModalVisible"
+      :project-id="selectedProject._id"
+      @close="closeShareModal"
+    />
   </div>
 </template>
 
@@ -122,22 +178,17 @@ import HandleConflict from '@/components/HandleConflict.vue'
 import ConflictDetailModal from '@/components/ConflictDetailModal.vue'
 import AddInputModal from '@/components/AddInputModal.vue'
 import IncrementalAnalysis from '@/components/IncrementalAnalysis.vue'
+import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
+
 
 export default {
   name: 'ProjectDetailView',
-  components: {
-    AppModal,
-    ProjectHeader,
-    UseCaseMainContent,
-    InputSidebar,
-    HandleConflict,
-    ConflictDetailModal,
-    AddInputModal,
-    IncrementalAnalysis,
-  },
+  components: { ProjectSharingModal },
   data() {
     return {
       project: {},
+      selectedProject:null,
+      currentVersion: null,
       versions: [],
       inputs: [],
       useCases: [],
@@ -155,6 +206,13 @@ export default {
       showIncrementalButton: false,
       unprocessedInputsCount: 0,
       currentVersionDetails: null,
+      // loading overlay
+      overlayLoading: false,
+      loadingMessage: 'Retrying analysis...',
+      messageInterval: null,
+      messageIndex: 0,
+      //sharingproject
+      isShareModalVisible: false,
 
       // ========== CONFLICT RESOLUTION STATE ==========
       hasConflicts: false,
@@ -285,6 +343,15 @@ export default {
         this.toast.error('Failed to load project data')
         return false
       }
+    },
+    //function open,close sharing modal
+    // --- Project Sharing Methods ---
+    openShareModal() {
+    this.selectedProject = this.project; // Lưu lại project được chọn
+    this.isShareModalVisible = true;  // Mở modal
+    },
+    closeShareModal() {
+      this.isShareModalVisible = false; // Đóng modal
     },
 
     /**
