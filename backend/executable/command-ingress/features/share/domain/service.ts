@@ -720,6 +720,29 @@ export class ShareProjectService {
       project.members.splice(memberIndex, 1);
       await project.save();
 
+      const sender = await User.findOne({ _id: userId });
+      const recipient = await User.findOne({ _id: memberId });
+
+      if (!sender) {
+        throw new Error("Sender not found");
+      }
+      const notificationServiceDomain = new NotificationServiceImpl();
+
+      await notificationService.SocketNotification(
+        recipient.id,
+        "Project Access Removed",
+        `You have been removed from the project ${project.name}`
+      );
+
+      await notificationServiceDomain.createNotification(
+        sender.id,
+        recipient.id,
+        "LEAVE THE PROJECT",
+        "Project Access Removed",
+        `${recipient.name}has been removed from the project ${project.name}.`,
+        ""
+      );
+
       return new ServiceResponse<any>(
         ResponseStatus.Success,
         "Member has been removed from project",
