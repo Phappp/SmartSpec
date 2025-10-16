@@ -209,9 +209,25 @@ export default {
           localStorage.setItem('accessToken', data.accessToken)
           localStorage.setItem('refreshToken', data.refreshToken)
           localStorage.setItem('userId', data.sub)
-          openModal('Log in successfully', 'Login', () => {
-            router.push('/dashboard')
-          })
+          
+          // Kiểm tra nếu là ADMIN thì chuyển vào trang admin
+          try {
+            const payload = JSON.parse(atob(data.accessToken.split('.')[1]))
+            if (payload.system_role === 'ADMIN') {
+              openModal('Log in successfully', 'Login', () => {
+                router.push('/admin')
+              })
+            } else {
+              openModal('Log in successfully', 'Login', () => {
+                router.push('/dashboard')
+              })
+            }
+          } catch (error) {
+            console.error('Error parsing token:', error)
+            openModal('Log in successfully', 'Login', () => {
+              router.push('/dashboard')
+            })
+          }
         }
       } catch (error) {
         console.error(error)

@@ -211,6 +211,7 @@ import {
   updateProject,
   getVersionStatus,
 } from '@/api/project'
+import { getUserInfo, logout as authLogout } from '@/utils/authGuard'
 
 export default {
   name: 'Homepage',
@@ -608,7 +609,17 @@ export default {
     async fetchInitialData() {
       try {
         this.cleanupOldCreatingProjects()
-
+        // Load user info from token first
+        const userInfo = getUserInfo()
+        if (userInfo) {
+          this.user = {
+            name: userInfo.name,
+            email: userInfo.email,
+            role: userInfo.role,
+            id: userInfo.id
+          }
+          console.log('👤 User info loaded from token:', this.user)
+        }
         const [userRes, myRes, sharedRes, recentRes, trashedRes] = await Promise.all([
           getCurrentUser(),
           getMyProjects(),
@@ -617,7 +628,6 @@ export default {
           getTrashedProjects(),
         ])
 
-        this.user = userRes.data.data
         this.myProjects = myRes.data?.data || []
         this.sharedProjects = sharedRes.data?.data || []
         this.recentProjects = recentRes.data?.data || []
@@ -713,6 +723,8 @@ export default {
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('userId')
       localStorage.removeItem('email')
+      console.log('🚪 Logging out...')
+      authLogout()
       this.$router.push('/login')
     },
   },
