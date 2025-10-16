@@ -1,7 +1,9 @@
+import { ObjectId } from "mongodb";
+
 interface NotificationResponse {
   id: string;
-  recipient_id: string;
-  sender_id: string;
+  recipient_id: ObjectId;
+  sender_id: ObjectId;
   type: string;
   title: string;
   message: string;
@@ -18,7 +20,10 @@ interface NotificationService {
     message: string,
     link: string
   ): Promise<any>;
-  getNotificationById(id: string): Promise<NotificationResponse>;
+  getNotificationById(
+    userId: string,
+    id: string
+  ): Promise<NotificationResponse>;
   getNotificationsByUserId(userId: string): Promise<NotificationResponse[]>;
   deleteNotification(id: string): Promise<string>;
 }

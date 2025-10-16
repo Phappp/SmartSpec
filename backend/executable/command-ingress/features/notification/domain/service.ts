@@ -44,8 +44,36 @@ export class NotificationServiceImpl implements NotificationService {
     };
   }
 
-  async getNotificationById(): Promise<NotificationResponse> {
-    throw new Error("Method not implemented.");
+  async getNotificationById(
+    userId: string,
+    notId: string
+  ): Promise<NotificationResponse> {
+    const user = await User.findOne({ _id: userId });
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const notification = await Notification.findOne({ _id: notId });
+    if (!notification) {
+      throw new Error("Notification not found");
+    }
+    console.log("RecipientID: ", notification.recipient_id);
+    console.log("Userid: ", user.id);
+    if (notification.recipient_id.toString() !== user.id) {
+      throw new Error(`You do not have permission to view this notice`);
+    }
+
+    return {
+      id: notification.id,
+      recipient_id: notification.recipient_id,
+      sender_id: notification.sender_id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      is_read: notification.is_read,
+      link: notification.link,
+      created_at: notification.created_at,
+    };
   }
 
   async getNotificationsByUserId(): Promise<NotificationResponse[]> {

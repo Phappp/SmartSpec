@@ -735,11 +735,11 @@ export class ShareProjectService {
       );
 
       await notificationServiceDomain.createNotification(
-        sender.id,
         recipient.id,
+        sender.id,
         "LEAVE THE PROJECT",
         "Project Access Removed",
-        `${recipient.name}has been removed from the project ${project.name}.`,
+        `${recipient.name} has been removed from the project ${project.name}.`,
         ""
       );
 

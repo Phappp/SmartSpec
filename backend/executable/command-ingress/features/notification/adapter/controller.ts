@@ -8,6 +8,7 @@ import { HttpRequest } from "../../../types";
 import { handleServiceResponse } from "../../../services/httpHandlerResponse";
 import { StatusCodes } from "http-status-codes";
 import { th } from "@faker-js/faker/.";
+import user from "@/internal/model/user";
 
 class NotificationController extends BaseController {
   service: NotificationService;
@@ -27,7 +28,7 @@ class NotificationController extends BaseController {
       next,
       async (req, res, _next) => {
         const sender_id = req.getSubject();
-        console.log("sender: ", sender_id)
+        console.log("sender: ", sender_id);
         const { recipient_id, type, title, message, link } = req.body;
         const notificationRequestBody = new NotificationRequestBody(req.body);
         const validationResult = await notificationRequestBody.validate();
@@ -65,12 +66,32 @@ class NotificationController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const notId = req.params.id;
+        if (!notId) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "NotificationID are required",
+          });
+          return;
+        }
+
+        const userId = req.getSubject();
+
+        const serviceResponse = await this.service.getNotificationById(
+          userId,
+          notId
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Get notification by id successfull",
+          data: serviceResponse,
+        });
       }
     );
   }
 
-  async getNotificationsByUserId(
+  async getAllMyNotifications(
     req: HttpRequest,
     res: Response,
     next: NextFunction
@@ -80,7 +101,14 @@ class NotificationController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const userId = req.params.userId;
+        if (!userId) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "UserId are required",
+          });
+          return;
+        }
       }
     );
   }
