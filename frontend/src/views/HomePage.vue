@@ -1,42 +1,58 @@
 <template>
   <div class="homepage">
     <div class="app-container">
-      <Sidebar :user="user" @new="openNewProjectModal" @navigate="navigateTo" @logout="logout" @open-personal="openPersonalInfo" />
+      <Sidebar
+        :user="user"
+        @new="openNewProjectModal"
+        @navigate="navigateTo"
+        @logout="logout"
+        @open-personal="openPersonalInfo"
+      />
 
       <div class="main-content">
         <header class="page-header">
           <h1>HOME PAGE</h1>
           <div class="header-actions">
-              <div class="notifications-container">
-                <button @click="toggleNotifications" class="btn-icon notifications-btn">
-                  <span class="material-symbols-outlined">notifications</span>
-                  <span v-if="notificationCount > 0" class="notification-badge">{{ notificationCount }}</span>
-                </button>
-                
-                <div v-if="isNotificationsVisible" class="notifications-dropdown">
-                  <div class="dropdown-header">
-                    <h3>Project Invitations</h3>
-                  </div>
-                  <ul v-if="myInvitations.length > 0" class="invitations-list">
-                    <li v-for="inv in myInvitations" :key="inv.id" class="invitation-item">
-                      <div class="invitation-details">
-                        <p>
-                          <strong>{{ inv.invitedBy }}</strong> has invited you to join a project as a <strong>{{ inv.role }}</strong>.
-                        </p>
-                        <small>Project: <strong>{{ inv.projectName }}</strong></small>
-                      </div>
-                      <div class="invitation-actions">
-                        <button @click="handleAcceptInvitation(inv)" class="btn btn-sm btn-primary">Accept</button>
-                        <button @click="handleRejectInvitation(inv)" class="btn btn-sm btn-secondary">Decline</button>
-                      </div>
-                    </li>
-                  </ul>
-                  <div v-else class="empty-invitations">
-                    <p>No pending invitations.</p>
-                  </div>
+            <div class="notifications-container">
+              <button @click="toggleNotifications" class="btn-icon notifications-btn">
+                <span class="material-symbols-outlined">notifications</span>
+                <span v-if="notificationCount > 0" class="notification-badge">{{
+                  notificationCount
+                }}</span>
+              </button>
+
+              <div v-if="isNotificationsVisible" class="notifications-dropdown">
+                <div class="dropdown-header">
+                  <h3>Project Invitations</h3>
+                </div>
+                <ul v-if="myInvitations.length > 0" class="invitations-list">
+                  <li v-for="inv in myInvitations" :key="inv.id" class="invitation-item">
+                    <div class="invitation-details">
+                      <p>
+                        <strong>{{ inv.invitedBy }}</strong> has invited you to join a project as a
+                        <strong>{{ inv.role }}</strong
+                        >.
+                      </p>
+                      <small
+                        >Project: <strong>{{ inv.projectName }}</strong></small
+                      >
+                    </div>
+                    <div class="invitation-actions">
+                      <button @click="handleAcceptInvitation(inv)" class="btn btn-sm btn-primary">
+                        Accept
+                      </button>
+                      <button @click="handleRejectInvitation(inv)" class="btn btn-sm btn-secondary">
+                        Decline
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+                <div v-else class="empty-invitations">
+                  <p>No pending invitations.</p>
                 </div>
               </div>
             </div>
+          </div>
         </header>
 
         <div class="content-area">
@@ -219,16 +235,12 @@
       @close-during-creation="handleCloseDuringCreation"
       @project-created="handleProjectCreated"
     />
-    <PersonalInfor
-      v-if="showPersonalInfo"
-      :user="user"
-      @close="showPersonalInfo = false"
-    />
+    <PersonalInfor v-if="showPersonalInfo" :user="user" @close="showPersonalInfo = false" />
     <ProjectSharingModal
-    v-if="isShareModalVisible"
-    :project-id="selectedProject._id"  
-    @close="closeShareModal"
-  />
+      v-if="isShareModalVisible"
+      :project-id="selectedProject._id"
+      @close="closeShareModal"
+    />
 
     <AppModal
       v-model="isAppModalVisible"
@@ -243,7 +255,7 @@
 <script>
 import { useToast } from 'vue-toastification'
 import Sidebar from '@/components/Sidebar.vue'
-import PersonalInfor from "../components/PersonalInfor.vue"
+import PersonalInfor from '../components/PersonalInfor.vue'
 import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
 import NewProjectModal from '@/components/NewProjectForm.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
@@ -270,7 +282,7 @@ export default {
     ProjectCard,
     AppModal,
     PersonalInfor,
-    ProjectSharingModal
+    ProjectSharingModal,
   },
   data() {
     return {
@@ -307,8 +319,8 @@ export default {
   computed: {
     // ✨ NEW: Computed property for notification count
     notificationCount() {
-      return this.myInvitations.length;
-    }
+      return this.myInvitations.length
+    },
   },
   computed: {
     currentProjects() {
@@ -386,61 +398,60 @@ export default {
           getRecentProjects(),
           getTrashedProjects(),
           getMyInvitations(), // Using the new API function
-        ]);
+        ])
 
-        this.user = userRes.data.data;
-        this.myProjects = myRes.data?.data || [];
-        this.sharedProjects = sharedRes.data?.data || [];
-        this.recentProjects = recentRes.data?.data || [];
-        this.trashedProjects = trashedRes.data?.data || [];
-        
+        this.user = userRes.data.data
+        this.myProjects = myRes.data?.data || []
+        this.sharedProjects = sharedRes.data?.data || []
+        this.recentProjects = recentRes.data?.data || []
+        this.trashedProjects = trashedRes.data?.data || []
+
         // ✨ NEW: Populate invitations data
-        this.myInvitations = (invRes.data?.data || []).map(inv => ({
+        this.myInvitations = (invRes.data?.data || []).map((inv) => ({
           id: inv._id,
           project_id: inv.project_id,
-          projectName: inv.project_name || "Unnamed Project",
+          projectName: inv.project_name || 'Unnamed Project',
           role: inv.role,
-          invitedBy: inv.inviter?.name || "Unknown",
+          invitedBy: inv.inviter?.name || 'Unknown',
           date: inv.created_at,
           invitee: inv.invitee,
-        }));
-
+        }))
       } catch (err) {
-        console.error('Failed to fetch initial data:', err);
+        console.error('Failed to fetch initial data:', err)
         if (err.response?.status === 401 || err.response?.status === 400) {
-          this.logout();
+          this.logout()
         }
       }
     },
 
     // --- ✨ NEW: Notification Methods ---
     toggleNotifications() {
-      this.isNotificationsVisible = !this.isNotificationsVisible;
+      this.isNotificationsVisible = !this.isNotificationsVisible
     },
     async handleAcceptInvitation(inv) {
-      const userId = inv.invitee?._id;
-      if (!userId) return this.showNotification("Error", "Invitee user ID not found.");
+      const userId = inv.invitee?._id
+      if (!userId) return this.showNotification('Error', 'Invitee user ID not found.')
       try {
-        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/accept`);
-        this.myInvitations = this.myInvitations.filter(i => i.id !== inv.id);
-        this.showNotification("Success", `You have joined the project: ${inv.projectName}`);
+        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/accept`)
+        this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
+        this.showNotification('Success', `You have joined the project: ${inv.projectName}`)
         // Optionally, refresh project lists
-        this.fetchInitialData(); 
+        this.fetchInitialData()
       } catch (err) {
-        console.error(err);
-        this.showNotification("Error", "Failed to accept the invitation.");
+        console.error(err)
+        this.showNotification('Error', 'Failed to accept the invitation.')
       }
     },
     async handleRejectInvitation(inv) {
-      const userId = inv.invitee?._id;
-      if (!userId) return this.showNotification("Error", "Invitee user ID not found.");
+      const userId = inv.invitee?._id
+      if (!userId) return this.showNotification('Error', 'Invitee user ID not found.')
       try {
-        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/reject`);
-        this.myInvitations = this.myInvitations.filter(i => i.id !== inv.id);
-        this.showNotification("Info", "You have declined the invitation.");
+        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/reject`)
+        this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
+        this.showNotification('Info', 'You have declined the invitation.')
       } catch (err) {
-        console.error(err);
-        this.showNotification("Error", "Failed to decline the invitation.");
+        console.error(err)
+        this.showNotification('Error', 'Failed to decline the invitation.')
       }
     },
     // --- Modal Methods ---
@@ -449,12 +460,12 @@ export default {
     },
     // --- Project Sharing Methods ---
     openShareModal(project) {
-      this.selectedProject = project;
-      this.isShareModalVisible = true;
+      this.selectedProject = project
+      this.isShareModalVisible = true
     },
     closeShareModal() {
-      this.isShareModalVisible = false;
-      this.fetchInitialData(); // Reload data in case the user left a project from the modal
+      this.isShareModalVisible = false
+      this.fetchInitialData() // Reload data in case the user left a project from the modal
     },
 
     showNotification(title, message) {
@@ -1053,6 +1064,7 @@ export default {
   display: flex;
   gap: 12px;
   align-items: center;
+  margin-left: 0;
 }
 
 .search-input-container {
