@@ -125,7 +125,17 @@ class NotificationController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const userId = req.getSubject();
+        const notId = req.params.id;
+        const serviceResponse = await this.service.deleteNotification(
+          userId, notId
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Delete notification successfull",
+          data: serviceResponse,
+        });
       }
     );
   }

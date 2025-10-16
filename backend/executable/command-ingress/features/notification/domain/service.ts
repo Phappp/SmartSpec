@@ -86,7 +86,7 @@ export class NotificationServiceImpl implements NotificationService {
     const notifications = await Notification.find({
       recipient_id: user.id,
     }).sort({ created_at: -1 });
-    
+
     return notifications.map((notification) => ({
       id: notification.id,
       recipient_id: notification.recipient_id,
@@ -100,7 +100,22 @@ export class NotificationServiceImpl implements NotificationService {
     }));
   }
 
-  async deleteNotification(): Promise<string> {
-    throw new Error("Method not implemented.");
+  async deleteNotification(userId: string, notId: string): Promise<string> {
+    const user = await User.findOne({ _id: userId });
+    if (!user) {
+      throw new Error("User not found");
+    }
+    const notification = await Notification.findOne({ _id: notId });
+    if (!notification) {
+      throw new Error("Notification not found");
+    }
+    if (user.system_role === "ADMIN" || user.id === notification.recipient_id.toString()) {
+      await notification.deleteOne();
+      return "Delete notification Successfull";
+    }
+
+    throw new Error(
+      "This notification can only be deleted by the admin or its recipient."
+    );
   }
 }
