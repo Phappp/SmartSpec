@@ -42,7 +42,6 @@ import initSpeechRoute from "./features/handle_audio/adapter/route";
 import { SpeechController } from "./features/handle_audio/adapter/controller";
 import { SpeechToTextService } from "./features/handle_audio/domain/service";
 
-
 import { ProjectService } from './features/project/domain/service';
 import { ProjectController } from './features/project/adapter/controller';
 import initProjectRoute from './features/project/adapter/route';
@@ -76,6 +75,7 @@ const createHttpServer = (redisClient: any) => {
   // app.use(cors());
 
   app.use(morgan(() => null));
+
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(fileUpload());
@@ -181,7 +181,7 @@ const createHttpServer = (redisClient: any) => {
     "/api/orchestrate",
     initOrchestratorRoute(new OrchestratorController(new OrchestratorService()))
   );
-  app.use("/api/projects", initProjectRoute(projectController));
+
 
   app.use(recoverMiddleware);
 

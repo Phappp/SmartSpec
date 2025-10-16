@@ -62,15 +62,44 @@ const routes = [
     component: Homepage,
     beforeEnter: authGuard
   },
-  { 
-    path: '/editor/:id', 
-    name: 'Editor', 
-    component: UsecaseManagement, 
+  {
+    path: '/editor/:id',
+    name: 'Editor',
+    component: UsecaseManagement,
     props: true,
     beforeEnter: authGuard
   },
   ...adminRoutes,
+  {
+    path: '/project/:id/output',
+    name: 'OutputManagement',
+    component: OutputManagement,
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/project/:id/testcases',
+    name: 'TestcaseManagement',
+    component: TestcaseManagement,
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/project/:id/database',
+    name: 'DatabaseManagement',
+    component: DatabaseManagement,
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/project/:id/uml',
+    name: 'UmlManagement',
+    component: UmlManagement,
+    props: true,
+    meta: { requiresAuth: true }
+  },
 ]
+
 
 const router = createRouter({
   history: createWebHistory(),

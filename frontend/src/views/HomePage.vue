@@ -609,16 +609,15 @@ export default {
     async fetchInitialData() {
       try {
         this.cleanupOldCreatingProjects()
-
+        // Load user info from token first
         const [userRes, myRes, sharedRes, recentRes, trashedRes] = await Promise.all([
           getCurrentUser(),
-
           getMyProjects(),
           getSharedProjects(),
           getRecentProjects(),
           getTrashedProjects(),
         ])
-
+        this.user = userRes.data.data
         this.myProjects = myRes.data?.data || []
         this.sharedProjects = sharedRes.data?.data || []
         this.recentProjects = recentRes.data?.data || []
@@ -709,7 +708,6 @@ export default {
     },
 
     logout() {
-
       this.cleanupAllPolling()
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
