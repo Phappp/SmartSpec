@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { ProjectController } from './controller'; // đường dẫn tới controller của bạn
-import requireAuthorizedUser from '../../../middlewares/auth';
+import {requireAuthorizedUser} from '../../../middlewares/auth';
 import multer from 'multer';
 
 export default function initProjectRoute(controller: ProjectController) {
@@ -46,7 +46,13 @@ export default function initProjectRoute(controller: ProjectController) {
     requireAuthorizedUser,
     (req: Request, res: Response, next: NextFunction) => controller.getDeleteProjects(req as any, res, next)
   );
-
+  // GET /admin/all -> Lấy tất cả dự án (dành cho admin)
+  router.get(
+    '/admin/all',
+    requireAuthorizedUser,
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.getAllProjectsForAdmin(req as any, res, next)
+  );
   // GET /:projectId -> lấy chi tiết project với version hiện tại 
   router.get('/:projectId',
     requireAuthorizedUser,

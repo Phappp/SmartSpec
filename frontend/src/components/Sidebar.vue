@@ -94,7 +94,7 @@
 </template>
 
 <script>
-// import { getCurrentUser } from '../api/project'
+import { isAdmin } from '../utils/authGuard'
 
 export default {
   name: 'Sidebar',
@@ -120,6 +120,9 @@ export default {
         return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
       }
       return this.user.name.substring(0, 2).toUpperCase()
+    },
+    isAdmin() {
+      return isAdmin()
     },
   },
   mounted() {
@@ -418,11 +421,6 @@ export default {
 .fade-slide-leave-to {
   opacity: 0;
   transform: translateY(10px);
-}
-.fade-slide-enter-to,
-.fade-slide-leave-from {
-  opacity: 1;
-  transform: translateY(0);
 }
 
 /* Responsive */

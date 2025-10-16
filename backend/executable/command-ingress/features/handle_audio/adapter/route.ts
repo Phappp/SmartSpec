@@ -1,7 +1,7 @@
 // features/handle_audio/adapter/route.ts
 import { Router } from 'express';
 import { SpeechController } from './controller';
-import requireAuthorizedUser from '../../../middlewares/auth'; // Giả sử bạn có middleware xác thực
+import {requireAuthorizedUser} from '../../../middlewares/auth'; // Giả sử bạn có middleware xác thực
 
 export default function initSpeechRoute(controller: SpeechController): Router {
     const router = Router();

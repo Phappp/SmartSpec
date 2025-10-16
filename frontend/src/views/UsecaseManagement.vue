@@ -504,13 +504,31 @@ export default {
     // Format utils
     formatDate(dateString) {
       if (!dateString) return 'N/A'
-      const date = new Date(dateString)
-      return date.toLocaleDateString('en-US')
+
+      try {
+        const date = new Date(dateString)
+        if (isNaN(date.getTime())) {
+          return 'N/A'
+        }
+        return date.toLocaleDateString('en-US')
+      } catch (error) {
+        console.error('Error formatting date:', error, 'dateString:', dateString)
+        return 'N/A'
+      }
     },
     formatDateTime(dateString) {
       if (!dateString) return 'N/A'
-      const date = new Date(dateString)
-      return date.toLocaleString('en-US')
+
+      try {
+        const date = new Date(dateString)
+        if (isNaN(date.getTime())) {
+          return 'N/A'
+        }
+        return date.toLocaleString('en-US')
+      } catch (error) {
+        console.error('Error formatting datetime:', error, 'dateString:', dateString)
+        return 'N/A'
+      }
     },
     goBack() {
       this.$router.push('/dashboard')
