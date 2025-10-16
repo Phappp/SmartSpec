@@ -8,6 +8,7 @@ import { UploadedFile } from "express-fileupload";
 import { ServiceResponse, ResponseStatus } from '../../../services/serviceResponse';
 import mongoose, { Types } from 'mongoose';
 import { CreateProjectDto, UpdateProjectDto } from '../adapter/dto';
+// import { GeminiService } from "../../../features/orchestrator/domain/GeminiService";
 
 export class ProjectService {
   // THAY ĐỔI: Sử dụng Dependency Injection cho OrchestratorService
@@ -191,8 +192,13 @@ export class ProjectService {
       return new ServiceResponse(ResponseStatus.Failed, 'Version not found', null, 404);
     }
 
-    return new ServiceResponse(ResponseStatus.Success, 'OK', { status: version.status, version, project }, 200);
-
+    return new ServiceResponse(ResponseStatus.Success, 'OK', {
+      status: version.status,
+      stage: version.stage,
+      progress: version.progress,
+      version,
+      project
+    }, 200);
   }
 
   async getProjectDetail(projectId: string, userId: string): Promise<ServiceResponse<any>> {
@@ -365,5 +371,54 @@ export class ProjectService {
       throw error;
     }
   }
+
+  // async suggestRelations(versionId: string): Promise<ServiceResponse<null>> {
+  //   // Chạy tác vụ nặng trong nền và trả về response ngay
+  //   this._backgroundSuggestRelations(versionId).catch(err => {
+  //     console.error(`[SUGGEST_RELATIONS] Failed for version ${versionId}:`, err);
+  //     Version.findByIdAndUpdate(versionId, {
+  //       $set: { status: 'failed' },
+  //       $push: { processing_errors: `Relation suggestion failed: ${err.message}` }
+  //     });
+  //   });
+
+  //   // Trả về 202 Accepted để báo cho FE biết yêu cầu đã được chấp nhận
+  //   return new ServiceResponse(ResponseStatus.Success, "Relation suggestion process started.", null, 202);
+  // }
+
+  // private async _backgroundSuggestRelations(versionId: string): Promise<void> {
+  //   const version = await Version.findById(versionId);
+  //   const project = await Project.findById(version?.project_id);
+  //   if (!version || !version.requirement_model || version.requirement_model.length <= 1) {
+  //     console.log("Not enough requirements to suggest relations. Marking as complete.");
+  //     await Version.findByIdAndUpdate(versionId, { $set: { status: 'completed' } });
+  //     return;
+  //   }
+
+  //   // Cập nhật trạng thái 'processing'
+  //   version.status = 'processing';
+  //   await version.save();
+
+  //   try {
+  //     const gemini = new GeminiService(); // Giả định bạn có thể tạo instance mới
+  //     const requirementsWithRelations = await gemini.addRelatedUseCases(
+  //       version.requirement_model,
+  //       { incremental: false },
+  //       project.language
+  //     );
+
+  //     version.set('requirement_model', requirementsWithRelations);
+  //     version.status = 'completed'; 
+
+  //     await version.save();
+  //     console.log(`✅ Successfully suggested relations for version ${versionId}`);
+
+  //   } catch (error: any) {
+  //     console.error("Error during relation suggestion:", error);
+  //     version.status = 'failed';
+  //     version.processing_errors.push(`Relation suggestion failed: ${error.message}`);
+  //     await version.save();
+  //   }
+  // }
 
 }

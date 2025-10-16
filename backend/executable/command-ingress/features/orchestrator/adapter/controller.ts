@@ -52,6 +52,37 @@ export class OrchestratorController {
             return res.status(500).json({ success: false, error: e?.message || 'Internal error' });
         }
     }
+    // Hàm RETRY chuyên dụng
+    async retryHandler(req: Request, res: Response) {
+        try {
+            const { project_id, version_id } = req.params;
+
+            if (!project_id || !version_id) {
+                return res.status(400).json({ success: false, error: 'Missing project_id or version_id' });
+            }
+
+            const project = await Project.findById(project_id).lean();
+            if (!project) {
+                return res.status(404).json({ success: false, error: 'Project not found' });
+            }
+
+            const language = project.language;
+
+            // Chạy nền với mode 'full' và không có dữ liệu mới
+            // Service sẽ tự động dọn dẹp kết quả cũ
+            this.service.run(
+                project_id,
+                version_id,
+                { files: [], rawText: '', mode: 'full' }, // Luôn là 'full' và không có dữ liệu mới
+                language
+            );
+
+            return res.status(202).json({ success: true, message: 'Retry process started.' });
+
+        } catch (e: any) {
+            return res.status(500).json({ success: false, error: e?.message || 'Internal error' });
+        }
+    }
 
     async resolveDuplicate(req: Request, res: Response) {
         const project_id = req.params.project_id || (req.query.project_id as string) || (req.body.project_id as string) || (req.headers['x-project-id'] as string);
