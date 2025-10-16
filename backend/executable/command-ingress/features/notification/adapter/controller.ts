@@ -101,14 +101,16 @@ class NotificationController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        const userId = req.params.userId;
-        if (!userId) {
-          res.status(StatusCodes.BAD_REQUEST).json({
-            status: "Error",
-            message: "UserId are required",
-          });
-          return;
-        }
+        const userId = req.getSubject();
+        const serviceResponse = await this.service.getNotificationsByUserId(
+          userId
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Get all notification by user successfull",
+          data: serviceResponse,
+        });
       }
     );
   }

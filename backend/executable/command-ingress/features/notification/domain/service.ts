@@ -76,8 +76,28 @@ export class NotificationServiceImpl implements NotificationService {
     };
   }
 
-  async getNotificationsByUserId(): Promise<NotificationResponse[]> {
-    throw new Error("Method not implemented.");
+  async getNotificationsByUserId(
+    userId: string
+  ): Promise<NotificationResponse[]> {
+    const user = await User.findOne({ _id: userId });
+    if (!user) {
+      throw new Error("User not found");
+    }
+    const notifications = await Notification.find({
+      recipient_id: user.id,
+    }).sort({ created_at: -1 });
+    
+    return notifications.map((notification) => ({
+      id: notification.id,
+      recipient_id: notification.recipient_id,
+      sender_id: notification.sender_id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      is_read: notification.is_read,
+      link: notification.link,
+      created_at: notification.created_at,
+    }));
   }
 
   async deleteNotification(): Promise<string> {

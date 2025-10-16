@@ -111,7 +111,7 @@ export class ShareProjectService {
         await notificationService.SocketNotification(
           user.id,
           "Request to join",
-          `${sender.name} has re-sent you an invitation to join the project ${project.name} as an ${role}.`,
+          `<b>${sender.name}</b> has re-sent you an invitation to join the project <b>${project.name}</b> as an <b>${role}</b>.`,
           acceptUrl,
           rejectUrl
         );
@@ -121,7 +121,7 @@ export class ShareProjectService {
           subId,
           "INVITATION",
           "Request to join",
-          `${sender.name} has re-sent you an invitation to join the project ${project.name} as an ${role}.`,
+          `<b>${sender.name}</b> has re-sent you an invitation to join the project <b>${project.name}</b> as an <b>${role}</b>.`,
           ""
         );
 
@@ -168,7 +168,7 @@ export class ShareProjectService {
         await notificationService.SocketNotification(
           user.id,
           "Request to join",
-          `${sender.name} has invited you to re-join the project ${project.name} as an ${role}.`,
+          `<b>${sender.name}</b> has invited you to re-join the project <b>${project.name}</b> as an <b>${role}</b>.`,
           acceptUrl,
           rejectUrl
         );
@@ -178,7 +178,7 @@ export class ShareProjectService {
           subId,
           "INVITATION",
           "Request to join",
-          `${sender.name} has invited you to re-join the project ${project.name} as an ${role}.`,
+          `<b>${sender.name}</b> has invited you to re-join the project <b>${project.name}</b> as an <b>${role}</b>.`,
           ""
         );
 
@@ -228,7 +228,7 @@ export class ShareProjectService {
       await notificationService.SocketNotification(
         user.id,
         "Request to join",
-        `${sender.name} has invited you to join the project ${project.name} as an ${role}.`,
+        `<b>${sender.name}</b> has invited you to join the project <b>${project.name}</b> as an <b>${role}</b>.`,
         acceptUrl,
         rejectUrl
       );
@@ -238,7 +238,7 @@ export class ShareProjectService {
         subId,
         "INVITATION",
         "Request to join",
-        `${sender.name} has invited you to join the project ${project.name} as an ${role}.`,
+        `<b>${sender.name}</b> has invited you to join the project <b>${project.name}</b> as an <b>${role}</b>.`,
         ""
       );
       return new ServiceResponse<any>(
@@ -480,7 +480,7 @@ export class ShareProjectService {
     await notificationService.SocketNotification(
       sender.id,
       "New Member Joined Project",
-      `${recipient.name} has accepted your invitation to project ${project.name}.`
+      `<b>${recipient.name}</b> has accepted your invitation to project <b>${project.name}</b>.`
     );
 
     await notificationServiceDomain.createNotification(
@@ -488,7 +488,7 @@ export class ShareProjectService {
       recipient.id,
       "RESPOND TO INVITATION",
       "New Member Joined Project",
-      `${recipient.name} has accepted your invitation to project ${project.name}.`,
+      `<b>${recipient.name}</b> has accepted your invitation to project <b>${project.name}</b>.`,
       ""
     );
 
@@ -558,7 +558,7 @@ export class ShareProjectService {
     await notificationService.SocketNotification(
       sender.id,
       "Invitation Declined",
-      `${recipient.name} has rejected your invitation to project ${project.name}.`
+      `<b>${recipient.name}</b> has rejected your invitation to project <b>${project.name}</b>.`
     );
 
     await notificationServiceDomain.createNotification(
@@ -566,7 +566,7 @@ export class ShareProjectService {
       recipient.id,
       "RESPOND TO INVITATION",
       "Invitation Declined",
-      `${recipient.name} has rejected your invitation to project ${project.name}.`,
+      `<b>${recipient.name}</b> has rejected your invitation to project <b>${project.name}</b>.`,
       ""
     );
 
@@ -731,7 +731,7 @@ export class ShareProjectService {
       await notificationService.SocketNotification(
         recipient.id,
         "Project Access Removed",
-        `You have been removed from the project ${project.name}`
+        `You have been removed from the project <b>${project.name}</b>`
       );
 
       await notificationServiceDomain.createNotification(
@@ -739,7 +739,7 @@ export class ShareProjectService {
         sender.id,
         "LEAVE THE PROJECT",
         "Project Access Removed",
-        `${recipient.name} has been removed from the project ${project.name}.`,
+        `<b>${recipient.name}</b> has been removed from the project <b>${project.name}</b>.`,
         ""
       );
 
@@ -830,7 +830,7 @@ export class ShareProjectService {
       await notificationService.SocketNotification(
         sender.id,
         "Member Left Project",
-        `${recipient.name} has left the project ${project.name}.`
+        `<b>${recipient.name}</b> has left the project <b>${project.name}</b>.`
       );
 
       await notificationServiceDomain.createNotification(
@@ -838,7 +838,7 @@ export class ShareProjectService {
         recipient.id,
         "LEAVE THE PROJECT",
         "Member Left Project",
-        `${recipient.name} has left the project ${project.name}.`,
+        `<b>${recipient.name}</b> has left the project <b>${project.name}</b>.`,
         ""
       );
 

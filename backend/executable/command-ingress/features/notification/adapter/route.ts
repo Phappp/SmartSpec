@@ -9,8 +9,8 @@ const initNotificationRoute: (controller: NotificationController) => express.Rou
   const router = express.Router();
 
   router.route('').post(requireAuthorizedUser, controller.createNotification.bind(controller));
+  router.route('/me').get(requireAuthorizedUser, controller.getAllMyNotifications.bind(controller));
   router.route('/:id').get(requireAuthorizedUser, controller.getNotificationById.bind(controller));
-  router.route('/me/:userId').get(requireAuthorizedUser, controller.getAllMyNotifications.bind(controller));
   router.route('/:id').delete(requireAuthorizedUser, controller.deleteNotification.bind(controller));
 
   return router;
