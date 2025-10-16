@@ -8,7 +8,7 @@ import VerifyEmail from '../pages/VerifyEmail.vue'
 import VerifyOtp from '../pages/VerifyOtp.vue'
 import ForgotPassword from '../pages/ForgotPassword.vue'
 import ResetPassword from '../pages/ResetPassword.vue'
-
+//import ProjectSharing from '@./components/ProjectSharingManagement.vue'
 const routes = [
   { path: '/', redirect: '/login' },
   { path: '/login', component: Login },
@@ -20,7 +20,9 @@ const routes = [
   { path: '/reset-password', component: ResetPassword },
   { path: '/reset-password', component: ResetPassword },
   { path: '/dashboard', name: 'Home', component: Homepage },
-  { path: '/editor/:id', name: 'Editor', component: UsecaseManagement, props: true }
+  { path: '/editor/:id', name: 'Editor', component: UsecaseManagement, props: true },
+  //{ path: '/project-sharing', name: 'ProjectSharing', component: ProjectSharing },
+
 ]
 const router = createRouter({
   history: createWebHistory(),

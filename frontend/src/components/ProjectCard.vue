@@ -236,7 +236,8 @@ export default {
     },
 
     shareProject() {
-      alert('Share clicked')
+      this.$emit('share', this.project)
+      this.closeFab()
     },
 
     leaveProject() {

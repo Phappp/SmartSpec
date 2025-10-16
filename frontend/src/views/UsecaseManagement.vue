@@ -50,10 +50,11 @@
             {{ isRetrying ? 'Retrying...' : 'Retry Failed' }}
           </button>
         </div>
-        <button class="members-button">
+        <button class="members-button" @click="openShareModal">
           <span class="material-symbols-outlined">group</span>
           {{ project.members ? project.members.length : 0 }} Members
         </button>
+
       </div>
     </div>
 
@@ -288,6 +289,12 @@
         </div>
       </div>
     </div>
+    <ProjectSharingModal
+      v-if="isShareModalVisible"
+      :project-id="selectedProject._id"  
+      @close="closeShareModal"
+    />
+
   </div>
 </template>
 
@@ -298,12 +305,15 @@ import {
   retryProjectAnalysis,
   getVersionStatus,
 } from '@/api/project'
+import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
 
 export default {
   name: 'ProjectDetailView',
+  components: { ProjectSharingModal },
   data() {
     return {
       project: {},
+      selectedProject:null,
       currentVersion: null,
       versions: [],
       inputs: [],
@@ -322,6 +332,8 @@ export default {
       loadingMessage: 'Retrying analysis...',
       messageInterval: null,
       messageIndex: 0,
+      //sharingproject
+      isShareModalVisible: false,
 
       loadingMessages: [
         'Retrying analysis...',
@@ -395,6 +407,15 @@ export default {
       } catch (err) {
         console.error('Error fetching project details:', err)
       }
+    },
+    //function open,close sharing modal
+    // --- Project Sharing Methods ---
+    openShareModal() {
+    this.selectedProject = this.project; // Lưu lại project được chọn
+    this.isShareModalVisible = true;  // Mở modal
+    },
+    closeShareModal() {
+      this.isShareModalVisible = false; // Đóng modal
     },
 
     // xử lý click ngoài dropdown
