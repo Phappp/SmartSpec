@@ -16,6 +16,7 @@ import responseValidationError from "../../../shared/response";
 import { HttpRequest } from "../../../types";
 import { handleServiceResponse } from "../../../services/httpHandlerResponse";
 import { StatusCodes } from "http-status-codes";
+import { getClientInfo } from "../../../utils/networkInfo";
 
 class AuthController extends BaseController {
   service: AuthService;
@@ -37,6 +38,9 @@ class AuthController extends BaseController {
       async (req, res, _next) => {
         const exchangeGoogleTokenBody = new ExchangeGoogleTokenBody(req.query);
         console.log("exchangeGoogleTokenBody: ", exchangeGoogleTokenBody);
+        // lấy ip và userAgent
+        const { ip, userAgent } = getClientInfo(req);
+        //
         const validateResult = await exchangeGoogleTokenBody.validate();
         if (!validateResult.ok) {
           responseValidationError(res, validateResult.errors[0]);
@@ -63,7 +67,6 @@ class AuthController extends BaseController {
     );
   }
 
-
   async logout(
     req: HttpRequest,
     res: Response,
@@ -75,6 +78,9 @@ class AuthController extends BaseController {
       next,
       async (req, res, _next) => {
         const logoutRequestBody = new LogoutRequestBody(req.body);
+        // lấy ip và userAgent
+        const { ip, userAgent } = getClientInfo(req);
+        //
         const validateResult = await logoutRequestBody.validate();
         if (!validateResult.ok) {
           responseValidationError(res, validateResult.errors[0]);
@@ -84,7 +90,7 @@ class AuthController extends BaseController {
           "logoutRequestBody.refreshToken: ",
           logoutRequestBody.refreshToken
         );
-        await this.service.logout(logoutRequestBody.refreshToken);
+        await this.service.logout(logoutRequestBody.refreshToken,ip, userAgent);
 
         res.status(StatusCodes.OK).json({
           status: "Success",
@@ -140,6 +146,9 @@ class AuthController extends BaseController {
       console.log(req.body);
 
       const registerRequestBody = new RegisterRequestBody(req.body);
+      // lấy ip và userAgent
+      const { ip, userAgent } = getClientInfo(req);
+      //
       const validateResult = await registerRequestBody.validate();
 
       console.log("register:", registerRequestBody);
@@ -155,7 +164,8 @@ class AuthController extends BaseController {
         name,
         isTwoFactorEnabled,
         newDob,
-        gender
+        gender,
+        ip, userAgent
       );
 
       const serviceResponse = {
@@ -239,18 +249,22 @@ class AuthController extends BaseController {
       });
     }
   }
+  
   async login(req: Request, res: Response, _next: NextFunction): Promise<void> {
     try {
       const { email, password } = req.body;
       const loginRequestBody = new LoginRequestBody(req.body);
-
+      // lấy ip và userAgent
+      const { ip, userAgent } = getClientInfo(req);
+      //
       const validateResult = await loginRequestBody.validate();
       console.log(validateResult);
       if (!validateResult.ok) {
         responseValidationError(res, validateResult.errors[0]);
         return;
       }
-      const loginResult = await this.service.login(email, password);
+      // có sửa tham số
+      const loginResult = await this.service.login(email, password,ip, userAgent);
       const serviceResponse = {
         success: true,
         message: "User logged in successfully",
@@ -309,8 +323,10 @@ class AuthController extends BaseController {
         });
         return;
       }
-
-      const verifyOTP = await this.service.verifyOTP(email, otp, otpToken);
+      // lấy ip và userAgent
+      const { ip, userAgent } = getClientInfo(req);
+      //
+      const verifyOTP = await this.service.verifyOTP(email, otp, otpToken,ip,userAgent);
       const serviceResponse = {
         success: true,
         message: "User logged in successfully",
@@ -335,14 +351,16 @@ class AuthController extends BaseController {
     try {
       const { email } = req.body;
       const forgotPasswordRequestBody = new ForgotPasswordRequestBody(req.body);
-
+      // lấy ip và userAgent
+      const { ip, userAgent } = getClientInfo(req);
+      //
       const validateResult = await forgotPasswordRequestBody.validate();
       if (!validateResult.ok) {
         responseValidationError(res, validateResult.errors[0]);
         return;
       }
 
-      const serviceResponse = await this.service.forgotPassword(email);
+      const serviceResponse = await this.service.forgotPassword(email,ip, userAgent);
 
       res.status(StatusCodes.OK).json({
         status: "Success",
@@ -379,6 +397,9 @@ class AuthController extends BaseController {
         newPassword,
         confirmNewPassword,
       });
+      // lấy ip và userAgent
+      const { ip, userAgent } = getClientInfo(req);
+      //
       const validatePasswords = await resetPasswordRequestBody.validate();
 
       if (!validatePasswords.ok) {
@@ -386,7 +407,7 @@ class AuthController extends BaseController {
         return;
       }
 
-      await this.service.resetPassword(token, newPassword);
+      await this.service.resetPassword(token, newPassword,ip, userAgent);
 
       res.status(StatusCodes.OK).json({
         status: "Success",
@@ -421,7 +442,10 @@ class AuthController extends BaseController {
         if (!userId) {
           throw new Error("User ID not found in request");
         }
-        const result = await this.service.toggleTwoFactorAuth(userId, enable);
+        // lấy ip và userAgent
+        const { ip, userAgent } = getClientInfo(req);
+        //
+        const result = await this.service.toggleTwoFactorAuth(userId, enable,ip, userAgent);
         res.status(StatusCodes.OK).json({
           status: "Success",
           message: `Two-factor authentication has been ${enable ? "enabled" : "disabled"

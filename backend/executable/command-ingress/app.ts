@@ -95,6 +95,9 @@ import initUsecaseRoute from './features/usecase/adapter/route';
 // import { OrchestratorController } from "./features/orchestrator/adapter/controller";
 // import { OrchestratorService } from "./features/orchestrator/domain/service";
 
+import initLogRoute from "../command-ingress/features/log/adapter/route";
+import { LogService } from "../command-ingress/features/log/domain/service";
+import { LogController } from "../command-ingress/features/log/adapter/controller";
 
 import initDatabaseRoute from './features/database/adapter/route';
 import { InputService } from "./features/orchestrator/domain/InputService";
@@ -232,6 +235,7 @@ const createHttpServer = (redisClient: any) => {
     "/api/notifications",
     initNotificationRoute(new NotificationController(new NotificationServiceImpl))
   );
+  app.use("/api/logs", initLogRoute(new LogController(new LogService())));
 
   app.use(recoverMiddleware);
 
