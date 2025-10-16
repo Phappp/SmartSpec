@@ -83,6 +83,7 @@ export class ShareProjectService {
         existingMember.role = role;
         existingMember.invited_by = new Types.ObjectId(subId);
         existingMember.invited_at = new Date();
+        existingMember.invite_token = inviteToken;
         existingMember.history.push({
           action: "invited",
           by: new Types.ObjectId(subId),
@@ -139,6 +140,7 @@ export class ShareProjectService {
         existingMember.invited_by = new Types.ObjectId(subId);
         existingMember.invited_at = new Date();
         existingMember.responded_at = null;
+        existingMember.invite_token = inviteToken;
         existingMember.history.push({
           action: "invited",
           by: new Types.ObjectId(subId),
@@ -197,6 +199,7 @@ export class ShareProjectService {
         status: "pending",
         invited_by: new Types.ObjectId(subId),
         invited_at: new Date(),
+        invite_token: inviteToken,
         history: [
           {
             action: "invited",
@@ -358,6 +361,7 @@ export class ShareProjectService {
           role: "$members.role",
           status: "$members.status",
           created_at: "$members.invited_at",
+          invite_token: "$members.invite_token",
           inviter: {
             _id: "$inviter._id",
             name: "$inviter.name",
@@ -409,6 +413,7 @@ export class ShareProjectService {
           role: "$members.role",
           status: "$members.status",
           created_at: "$members.invited_at",
+          invite_token: "$members.invite_token",
           inviter: {
             _id: "$inviter._id",
             name: "$inviter.name",
@@ -431,7 +436,8 @@ export class ShareProjectService {
    */
   async acceptInvite(
     projectId: string,
-    userId: string
+    userId: string,
+    token: string
   ): Promise<ServiceResponse<{ status: string }>> {
     const project = await Project.findById(projectId);
 
@@ -452,6 +458,22 @@ export class ShareProjectService {
         404
       );
     console.log("sender: ", member.invited_by);
+    if (member.invite_token !== token) {
+      return new ServiceResponse(
+        ResponseStatus.Failed,
+        "Token mismatch (possibly re-invited)",
+        null,
+        403
+      );
+    }
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_EMAIL_SECRET!) as any;
+      if (decoded.projectId !== projectId || decoded.userId !== userId)
+        return new ServiceResponse(ResponseStatus.Failed, "Invalid token payload", null, 403);
+    } catch (err) {
+      return new ServiceResponse(ResponseStatus.Failed, "Invalid or expired token", null, 403);
+    }
+
     if (member.status !== "pending")
       return new ServiceResponse(
         ResponseStatus.Failed,
@@ -463,12 +485,13 @@ export class ShareProjectService {
     // Cập nhật trạng thái
     member.status = "accepted";
     member.responded_at = new Date();
+    member.invite_token = null;
     member.history.push({
       action: "accepted",
       by: new Types.ObjectId(userId),
       at: new Date(),
     });
-
+    await project.save();
     const sender = await User.findOne({ _id: member.invited_by });
     const recipient = await User.findOne({ _id: userId });
 
@@ -505,7 +528,8 @@ export class ShareProjectService {
    */
   async rejectInvite(
     projectId: string,
-    userId: string
+    userId: string,
+    token: string
   ): Promise<ServiceResponse<{ status: string }>> {
     const project = await Project.findById(projectId);
     if (!project) {
@@ -526,6 +550,21 @@ export class ShareProjectService {
         404
       );
     }
+    if (member.invite_token !== token) {
+      return new ServiceResponse(
+        ResponseStatus.Failed,
+        "Token mismatch (possibly re-invited)",
+        null,
+        403
+      );
+    }
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_EMAIL_SECRET!) as any;
+      if (decoded.projectId !== projectId || decoded.userId !== userId)
+        return new ServiceResponse(ResponseStatus.Failed, "Invalid token payload", null, 403);
+    } catch (err) {
+      return new ServiceResponse(ResponseStatus.Failed, "Invalid or expired token", null, 403);
+    }
 
     if (member.status !== "pending") {
       return new ServiceResponse(
@@ -539,6 +578,7 @@ export class ShareProjectService {
     //Cập nhật trạng thái
     member.status = "rejected";
     member.responded_at = new Date();
+    member.invite_token = null;
     member.history.push({
       action: "rejected",
       by: new Types.ObjectId(userId),

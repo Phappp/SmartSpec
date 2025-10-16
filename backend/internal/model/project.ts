@@ -48,6 +48,7 @@ const memberSchema = new Schema({
     type: Date,
     default: null
   },
+  invite_token: { type: String, default: null },
   history: [memberHistorySchema]
 }, { _id: false });
 
