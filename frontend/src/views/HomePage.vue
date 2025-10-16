@@ -610,16 +610,6 @@ export default {
       try {
         this.cleanupOldCreatingProjects()
         // Load user info from token first
-        const userInfo = getUserInfo()
-        if (userInfo) {
-          this.user = {
-            name: userInfo.name,
-            email: userInfo.email,
-            role: userInfo.role,
-            id: userInfo.id
-          }
-          console.log('👤 User info loaded from token:', this.user)
-        }
         const [userRes, myRes, sharedRes, recentRes, trashedRes] = await Promise.all([
           getCurrentUser(),
           getMyProjects(),
@@ -627,7 +617,7 @@ export default {
           getRecentProjects(),
           getTrashedProjects(),
         ])
-
+        this.user = userRes.data.data
         this.myProjects = myRes.data?.data || []
         this.sharedProjects = sharedRes.data?.data || []
         this.recentProjects = recentRes.data?.data || []

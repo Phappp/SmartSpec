@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { UsecaseController } from './controller'; // đường dẫn tới controller của bạn
-import requireAuthorizedUser from '../../../middlewares/auth';
+import { requireAuthorizedUser } from '../../../middlewares/auth';
 import multer from 'multer';
 
 export default function initUsecaseRoute(controller: UsecaseController) {

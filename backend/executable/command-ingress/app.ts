@@ -60,7 +60,7 @@ import initOrchestratorRoute from "./features/orchestrator/adapter/route";
 import { OrchestratorController } from "./features/orchestrator/adapter/controller";
 import { OrchestratorService } from "./features/orchestrator/domain/service";
 
-\
+
 import initDatabaseRoute from './features/database/adapter/route';
 const app = express();
 

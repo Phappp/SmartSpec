@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { DatabaseController } from './controller';
-import requireAuthorizedUser from '../../../middlewares/auth';
+import {requireAuthorizedUser} from '../../../middlewares/auth';
 
 export default function initDatabaseRoute(): Router {
     const router = Router();
