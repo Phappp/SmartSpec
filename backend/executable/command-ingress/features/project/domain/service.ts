@@ -307,6 +307,55 @@ export class ProjectService {
 
     return new ServiceResponse(ResponseStatus.Success, 'OK', resultData, 200);
   }
+  /**
+  * Lấy toàn bộ dự án cho admin (dashboard, thống kê, quản lý hệ thống)
+  */
+  async getAllProjectsForAdmin(): Promise<ServiceResponse<any>> {
+    try {
+      // Lấy tất cả project (kể cả đã bị xóa nếu bạn muốn quản trị toàn bộ)
+      const projects = await Project.find()
+        .populate('owner_id', 'full_name email avatar_url')
+        .populate('members.user_id', 'full_name email avatar_url')
+        .sort({ updated_at: -1 })
+        .lean();
+
+      // Biến đổi dữ liệu gọn gàng hơn cho dashboard admin
+      const formattedProjects = projects.map((project: any) => ({
+        id: project._id,
+        name: project.name,
+        description: project.description,
+        language: project.language,
+        owner: project.owner_id ? {
+          id: project.owner_id._id,
+          name: project.owner_id.full_name,
+          email: project.owner_id.email,
+          avatar: project.owner_id.avatar_url
+        } : null,
+        memberCount: project.members?.length || 0,
+        acceptedMembers: project.members?.filter((m: any) => m.status === 'accepted').length || 0,
+        pendingMembers: project.members?.filter((m: any) => m.status === 'pending').length || 0,
+        isTrashed: project.status?.is_trashed || false,
+        createdAt: project.created_at,
+        updatedAt: project.updated_at,
+        lastAccessedAt: project.last_accessed_at,
+      }));
+
+      return new ServiceResponse(
+        ResponseStatus.Success,
+        "Fetched all projects for admin successfully",
+        formattedProjects,
+        200
+      );
+    } catch (error) {
+      console.error("[SERVICE] Error fetching all projects for admin:", error);
+      return new ServiceResponse(
+        ResponseStatus.Failed,
+        "Failed to retrieve all projects",
+        null,
+        500
+      );
+    }
+  }
 
 
   async getDeleteProjects(userId: string): Promise<ServiceResponse<any>> {

@@ -14,9 +14,10 @@ export const deleteProject = (id) => axiosClient.delete(`/api/projects/${id}`);
 export const restoreProject = (id) => axiosClient.post(`/api/projects/${id}/restore`);
 export const retryProjectAnalysis = (projectId, versionId) => {
   return axiosClient.post(`/api/orchestrate/projects/${projectId}/versions/${versionId}/retry`, {
-    mode: 'full'
-  });
-};
+      mode: 'full'
+    });
+  };
+
 
 //Usecase
 export const usecaseApi = {

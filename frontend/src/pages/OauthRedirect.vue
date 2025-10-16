@@ -18,8 +18,21 @@ onMounted(async () => {
       localStorage.setItem('refreshToken', refreshToken)
       localStorage.setItem('userId', userId)
 
-      console.log('✅ Google OAuth success, redirecting to dashboard...')
-      router.push('/dashboard')
+      // Kiểm tra nếu là ADMIN thì chuyển vào trang admin
+      try {
+        const payload = JSON.parse(atob(accessToken.split('.')[1]))
+        if (payload.system_role === 'ADMIN') {
+          console.log('✅ Google OAuth success - ADMIN user, redirecting to admin...')
+          router.push('/admin')
+        } else {
+          console.log('✅ Google OAuth success - Regular user, redirecting to dashboard...')
+          router.push('/dashboard')
+        }
+      } catch (error) {
+        console.error('Error parsing token:', error)
+        console.log('✅ Google OAuth success, redirecting to dashboard...')
+        router.push('/dashboard')
+      }
     } else if (code) {
       // 👉 Đây là redirect lần 1 từ Google
       // Gọi backend để đổi code sang token

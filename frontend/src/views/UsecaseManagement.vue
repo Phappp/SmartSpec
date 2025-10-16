@@ -417,6 +417,7 @@ export default {
       }
     },
 
+
     /**
      * Check conflicts from current version details
      */
@@ -429,6 +430,39 @@ export default {
         this.hasConflicts = false
         this.pendingConflicts = []
       }
+
+    // Format utils
+    formatDate(dateString) {
+      if (!dateString) return 'N/A'
+
+      try {
+        const date = new Date(dateString)
+        if (isNaN(date.getTime())) {
+          return 'N/A'
+        }
+        return date.toLocaleDateString('en-US')
+      } catch (error) {
+        console.error('Error formatting date:', error, 'dateString:', dateString)
+        return 'N/A'
+      }
+    },
+    formatDateTime(dateString) {
+      if (!dateString) return 'N/A'
+
+      try {
+        const date = new Date(dateString)
+        if (isNaN(date.getTime())) {
+          return 'N/A'
+        }
+        return date.toLocaleString('en-US')
+      } catch (error) {
+        console.error('Error formatting datetime:', error, 'dateString:', dateString)
+        return 'N/A'
+      }
+    },
+    goBack() {
+      this.$router.push('/dashboard')
+
     },
 
     /**

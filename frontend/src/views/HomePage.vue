@@ -211,6 +211,7 @@ import {
   updateProject,
   getVersionStatus,
 } from '@/api/project'
+import { getUserInfo, logout as authLogout } from '@/utils/authGuard'
 
 export default {
   name: 'Homepage',
@@ -611,13 +612,13 @@ export default {
 
         const [userRes, myRes, sharedRes, recentRes, trashedRes] = await Promise.all([
           getCurrentUser(),
+
           getMyProjects(),
           getSharedProjects(),
           getRecentProjects(),
           getTrashedProjects(),
         ])
 
-        this.user = userRes.data.data
         this.myProjects = myRes.data?.data || []
         this.sharedProjects = sharedRes.data?.data || []
         this.recentProjects = recentRes.data?.data || []
@@ -708,11 +709,15 @@ export default {
     },
 
     logout() {
+
       this.cleanupAllPolling()
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('userId')
       localStorage.removeItem('email')
+      console.log('🚪 Logging out...')
+      authLogout()
+
       this.$router.push('/login')
     },
   },
