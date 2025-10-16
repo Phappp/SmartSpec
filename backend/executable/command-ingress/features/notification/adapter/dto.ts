@@ -56,8 +56,8 @@ export class NotificationRequestBody extends RequestDto {
 
   @IsNotEmpty({ message: "Notify type is required" })
   @IsString()
-  @Matches(/^(INVITATION|TESTCASE|PROJECT|RESPOND TO INVITATION)$/, {
-    message: "Notify type must be one of INVITATION, TESTCASE, PROJECT, RESPOND TO INVITATION",
+  @Matches(/^(INVITATION|TESTCASE|PROJECT|RESPOND TO INVITATION|LEAVE THE PROJECT)$/, {
+    message: "Notify type must be one of INVITATION, TESTCASE, PROJECT, RESPOND TO INVITATION, LEAVE THE PROJECT",
   })
   type: string;
 

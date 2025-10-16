@@ -8,32 +8,48 @@ interface notificationOptions {
   message?: string; // nội dung thông báo
 }
 
-export const notificationService = {
-  async sendInvitationSocketNotification(
-    recipient: string,
-    title: string,
-    message?: string,
-    acceptUrl?: string,
-    rejectUrl?: string
-  ) {
+async function SocketNotification(
+  recipient: string,
+  title: string,
+  message?: string
+): Promise<void>;
+
+async function SocketNotification(
+  recipient: string,
+  title: string,
+  message?: string,
+  acceptUrl?: string,
+  rejectUrl?: string
+): Promise<void>;
+
+// 2️⃣ Phần triển khai duy nhất
+async function SocketNotification(
+  recipient: string,
+  title: string,
+  message?: string,
+  acceptUrl?: string,
+  rejectUrl?: string
+): Promise<void> {
+  if (acceptUrl && rejectUrl) {
+    // Trường hợp có 5 tham số
     io.to(`user_${recipient}`).emit("notification", {
-      title: title,
-      message: message,
+      title,
+      message,
       action: [
         { label: "accept", api: acceptUrl },
         { label: "reject", api: rejectUrl },
       ],
     });
-  },
-
-  async RespondToInvitation(
-    recipient: string,
-    title: string,
-    message?: string
-  ) {
+  } else {
+    // Trường hợp có 3 tham số
     io.to(`user_${recipient}`).emit("notification", {
-      title: title,
-      message: message,
+      title,
+      message,
     });
-  },
+  }
+}
+
+// 3️⃣ Gắn hàm đó vào service
+export const notificationService = {
+  SocketNotification,
 };

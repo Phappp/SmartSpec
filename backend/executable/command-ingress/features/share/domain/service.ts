@@ -108,7 +108,7 @@ export class ShareProjectService {
             500
           );
         }
-        await notificationService.sendInvitationSocketNotification(
+        await notificationService.SocketNotification(
           user.id,
           "Request to join",
           `${sender.name} has re-sent you an invitation to join the project ${project.name} as an ${role}.`,
@@ -165,7 +165,7 @@ export class ShareProjectService {
           );
         }
 
-        await notificationService.sendInvitationSocketNotification(
+        await notificationService.SocketNotification(
           user.id,
           "Request to join",
           `${sender.name} has invited you to re-join the project ${project.name} as an ${role}.`,
@@ -225,7 +225,7 @@ export class ShareProjectService {
           500
         );
       }
-      await notificationService.sendInvitationSocketNotification(
+      await notificationService.SocketNotification(
         user.id,
         "Request to join",
         `${sender.name} has invited you to join the project ${project.name} as an ${role}.`,
@@ -477,8 +477,7 @@ export class ShareProjectService {
     }
     const notificationServiceDomain = new NotificationServiceImpl();
 
-    await project.save();
-    await notificationService.RespondToInvitation(
+    await notificationService.SocketNotification(
       sender.id,
       "New Member Joined Project",
       `${recipient.name} has accepted your invitation to project ${project.name}.`
@@ -556,8 +555,7 @@ export class ShareProjectService {
     }
     const notificationServiceDomain = new NotificationServiceImpl();
 
-    await project.save();
-    await notificationService.RespondToInvitation(
+    await notificationService.SocketNotification(
       sender.id,
       "Invitation Declined",
       `${recipient.name} has rejected your invitation to project ${project.name}.`
@@ -797,6 +795,29 @@ export class ShareProjectService {
       // xoá thành viên
       project.members.splice(memberIndex, 1);
       await project.save();
+
+      const sender = await User.findOne({ _id: member.invited_by });
+      const recipient = await User.findOne({ _id: userId });
+
+      if (!sender) {
+        throw new Error("Sender not found");
+      }
+      const notificationServiceDomain = new NotificationServiceImpl();
+
+      await notificationService.SocketNotification(
+        sender.id,
+        "Member Left Project",
+        `${recipient.name} has left the project ${project.name}.`
+      );
+
+      await notificationServiceDomain.createNotification(
+        sender.id,
+        recipient.id,
+        "LEAVE THE PROJECT",
+        "Member Left Project",
+        `${recipient.name} has left the project ${project.name}.`,
+        ""
+      );
 
       return new ServiceResponse<any>(
         ResponseStatus.Success,
