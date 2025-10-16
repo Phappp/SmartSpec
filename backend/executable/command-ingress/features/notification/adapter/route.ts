@@ -7,7 +7,8 @@ const initNotificationRoute: (controller: NotificationController) => express.Rou
   controller
 ) => {
   const router = express.Router();
-
+  
+  router.route('/is-read/:id').patch(requireAuthorizedUser, controller.markAsRead.bind(controller));
   router.route('').post(requireAuthorizedUser, controller.createNotification.bind(controller));
   router.route('/me').get(requireAuthorizedUser, controller.getAllMyNotifications.bind(controller));
   router.route('/:id').get(requireAuthorizedUser, controller.getNotificationById.bind(controller));

@@ -26,6 +26,7 @@ interface NotificationService {
   ): Promise<NotificationResponse>;
   getNotificationsByUserId(userId: string): Promise<NotificationResponse[]>;
   deleteNotification(userId: string, notId: string): Promise<string>;
+  markAsRead(userid: string, notId: string, is_mark: boolean): Promise<NotificationResponse>;
 }
 
 export { NotificationService, NotificationResponse };

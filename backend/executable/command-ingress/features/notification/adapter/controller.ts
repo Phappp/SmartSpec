@@ -128,12 +128,53 @@ class NotificationController extends BaseController {
         const userId = req.getSubject();
         const notId = req.params.id;
         const serviceResponse = await this.service.deleteNotification(
-          userId, notId
+          userId,
+          notId
         );
 
         res.status(StatusCodes.OK).json({
           status: "Success",
           message: "Delete notification successfull",
+          data: serviceResponse,
+        });
+      }
+    );
+  }
+
+  async markAsRead(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const userId = req.getSubject();
+        const notId = req.params.id;
+        const {is_read} = req.body;
+
+        if (is_read == undefined || is_read == null) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "is_read are required",
+          });
+          return;
+        }
+        if (!notId) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "NotificationID are required",
+          });
+          return;
+        }
+
+        const serviceResponse = await this.service.markAsRead(userId, notId, is_read);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Mark notification successfull",
           data: serviceResponse,
         });
       }
