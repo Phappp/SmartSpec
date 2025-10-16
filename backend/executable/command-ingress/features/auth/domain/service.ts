@@ -19,6 +19,7 @@ import mailService from "../../../services/sendMail.service";
 import { ac, L } from "@faker-js/faker/dist/airline-BcEu2nRk";
 import { Double } from "mongodb";
 import { NumberingPlan } from "libphonenumber-js";
+import { LogService } from "../../log/domain/service";
 
 export class AuthServiceImpl implements AuthService {
   googleIdentityBroker: GoogleIdentityBroker;
@@ -26,7 +27,8 @@ export class AuthServiceImpl implements AuthService {
   jwtRefreshSecret: string;   // Dùng cho Refresh Token
   jwtOtpSecret: string;       // Dùng cho OTP Token
   jwtEmailSecret: string      // Dùng cho Verify Email & Reset Password
-
+  //Thêm log
+  private logService: LogService;
   constructor(
     googleIdentityBroker: GoogleIdentityBroker,
     jwtSecret: string,
@@ -39,6 +41,8 @@ export class AuthServiceImpl implements AuthService {
     this.jwtRefreshSecret = jwtRefreshSecret;
     this.jwtOtpSecret = jwtOtpSecret;
     this.jwtEmailSecret = jwtEmailSecret;
+    //Khởi tạo log
+    this.logService = new LogService();
   }
 
   signAccessToken(payload: any): string {
@@ -79,13 +83,21 @@ export class AuthServiceImpl implements AuthService {
       });
 
       await user.save();
+      await this.logService.createLog({
+        user_id: user._id.toString(),
+        target_id: user._id.toString(),
+        action: "create_user",
+        target_type: "system",
+        details: { message: `New Google user created: ${user.email}` },
+        level: "info",
+      });
     }
 
     return user;
   }
 
   async exchangeWithGoogleIDP(
-    request: ExchangeTokenRequest
+    request: ExchangeTokenRequest, ip?: string, userAgent?:string
   ): Promise<ExchangeTokenResult> {
     const { code } = request;
     const googleToken =
@@ -107,18 +119,38 @@ export class AuthServiceImpl implements AuthService {
     const session = new Session({ sessionID: sessionID, userID: user._id });
     await session.save();
 
+    await this.logService.createLog({
+      user_id: user._id.toString(),
+      target_id: user._id.toString(),
+      action: "login",
+      target_type: "system",
+      details: { message: `Google login success for ${user.email}` },
+      level: "info",
+      ip: ip,
+      user_agent: userAgent
+    });
     return {
       refreshToken,
       accessToken,
       sub: String(user._id),
     };
   }
-  async logout(refreshToken: string): Promise<string> {
+  async logout(refreshToken: string,ip?: string,userAgent?: string): Promise<string> {
     const jwtClaims = jwt.verify(refreshToken, this.jwtRefreshSecret);
     const sid = jwtClaims["sid"];
-
+    const sub = jwtClaims["sub"];
     await Session.deleteOne({
       sessionID: sid,
+    });
+    await this.logService.createLog({
+      user_id: sub?.toString(),
+      target_id: sub?.toString(),
+      action: "logout",
+      target_type: "system",
+      details: { message: "User logged out" },
+      level: "info",
+      ip: ip,
+      user_agent: userAgent
     });
     return "User logged out successfully";
   }
@@ -193,7 +225,8 @@ export class AuthServiceImpl implements AuthService {
     name: string,
     isTwoFactorEnabled: boolean,
     dob: Date,
-    gender: string
+    gender: string,
+    ip?: string,userAgent?: string
   ): Promise<ExchangeTokenResult> {
     // ✨ FIX: Thêm bước kiểm tra mật khẩu trùng khớp.
     if (password !== confirmPassword) {
@@ -218,6 +251,17 @@ export class AuthServiceImpl implements AuthService {
     });
     await user.save();
 
+    await this.logService.createLog({
+      user_id: user._id.toString(),
+      target_id: user._id.toString(),
+      action: "create_user",
+      target_type: "system",
+      details: { message: `User registered: ${email}` },
+      level: "info",
+      ip: ip,
+      user_agent: userAgent
+    });
+
     const sessionID = uuidv4();
     const jwtPayload = {
       _id: user._id,
@@ -238,13 +282,34 @@ export class AuthServiceImpl implements AuthService {
     };
   }
 
-  async login(email: string, password: string): Promise<LoginResponse> {
+  // có chỉnh thêm tham số
+  async login(email: string, password: string,ip?: string,userAgent?: string): Promise<LoginResponse> {
     const user = await User.findOne({ email });
     if (!user) {
+      await this.logService.createLog({
+        user_id: undefined,
+        target_id: undefined,
+        action: "failed_login",
+        target_type: "system",
+        details: { message: `Login failed: user ${email} not found` },
+        level: "warning",
+        ip: ip,
+        user_agent: userAgent
+      });
       throw new Error("User not found");
     }
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+       await this.logService.createLog({
+        user_id: undefined,
+        target_id: undefined,
+        action: "failed_login",
+        target_type: "system",
+        details: { message: `Login failed: invalid password for ${email}` },
+        level: "warning",
+        ip: ip,
+        user_agent: userAgent
+      });
       throw new Error("Invalid password");
     }
 
@@ -275,7 +340,16 @@ export class AuthServiceImpl implements AuthService {
     const refreshToken = this.signRefreshToken(jwtPayload);
     const session = new Session({ sessionID, userID: user._id });
     await session.save();
-
+    await this.logService.createLog({
+      user_id: user._id.toString(),
+      target_id: user._id.toString(),
+      action: "login",
+      target_type: "system",
+      details: { message: `User logged in: ${email}` },
+      level: "info",
+      ip: ip,
+      user_agent: userAgent
+    });
     return {
       isTwoFactorEnabled: false,
       refreshToken,
@@ -287,7 +361,8 @@ export class AuthServiceImpl implements AuthService {
   async verifyOTP(
     email: string,
     otp: string,
-    otpToken: string
+    otpToken: string,
+    ip?: string, userAgent?:string
   ): Promise<ExchangeTokenResult> {
     const user = await User.findOne({ email });
     if (!user) {
@@ -316,7 +391,16 @@ export class AuthServiceImpl implements AuthService {
     const refreshToken = this.signRefreshToken(jwtPayload);
     const session = new Session({ sessionID, userID: user._id });
     await session.save();
-
+    await this.logService.createLog({
+      user_id: user._id.toString(),
+      target_id: user._id.toString(),
+      action: "login",
+      target_type: "system",
+      details: { message: `2FA login success for ${email}` },
+      level: "info",
+      ip: ip,
+      user_agent: userAgent
+    });
     return {
       refreshToken,
       accessToken,
@@ -348,7 +432,7 @@ export class AuthServiceImpl implements AuthService {
       return false;
     }
   }
-  async forgotPassword(email: string): Promise<string> {
+  async forgotPassword(email: string, ip?: string, userAgent?:string): Promise<string> {
     const user = await User.findOne({ email });
     if (!user) {
       throw new Error("Email not found");
@@ -357,6 +441,16 @@ export class AuthServiceImpl implements AuthService {
     console.log("verifyEmailToken generated");
     const subject = "Reset your password";
     const data = `Click the link to reset your password: http://localhost:5173/reset-password?token=${token}`;
+    await this.logService.createLog({
+      user_id: user?._id?.toString(),
+      target_id: user?._id?.toString(),
+      action: "update_user",
+      target_type: "system",
+      details: { message: `User requested password reset for ${email}` },
+      level: "info",
+      ip,
+      user_agent: userAgent
+    });
 
     const mailIsSent = await this.sendmail(email, subject, data);
     if (!mailIsSent) {
@@ -365,7 +459,7 @@ export class AuthServiceImpl implements AuthService {
     return token;
   }
 
-  async resetPassword(token: string, newPassword: string): Promise<string> {
+  async resetPassword(token: string, newPassword: string,ip?: string,userAgent?: string): Promise<string> {
     try {
       // ✨ FIX: Dùng secret key riêng cho email/reset password.
       const payload = jwt.verify(token, this.jwtSecret) as { email: string }; // THAY this.jwtSecret BẰNG this.jwtEmailSecret
@@ -373,23 +467,54 @@ export class AuthServiceImpl implements AuthService {
       if (!user) {
         throw new Error("User not found");
       }
+      const oldPasswordHash = user.password;
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       user.password = hashedPassword;
       await user.save();
+
+      await this.logService.createLog({
+        user_id: user._id.toString(),
+        target_id: user._id.toString(),
+        action: "update_user",
+        target_type: "system",
+        details: {
+          before: { password: oldPasswordHash.slice(0, 10) + "..." },
+          after: { password: hashedPassword.slice(0, 10) + "..." },
+          message: `User reset password for ${user.email}`,
+        },
+        level: "info",
+        ip: ip,
+        user_agent: userAgent
+      });
       return "Password reset successfully";
     } catch (error) {
       throw new Error("Invalid or expired token");
     }
   }
 
-  async toggleTwoFactorAuth(userId: string, enable: boolean): Promise<string> {
+  async toggleTwoFactorAuth(userId: string, enable: boolean,ip?: string,userAgent?: string): Promise<string> {
     try {
       const user = await User.findOne({ _id: userId });
       if (!user) {
         throw new Error("User not found");
       }
+      const oldValue = user.isTwoFactorEnabled;
       user.isTwoFactorEnabled = enable === true;
       await user.save();
+      await this.logService.createLog({
+        user_id: userId,
+        target_id: userId,
+        action: "update_user",
+        target_type: "system",
+        details: {
+          before: { isTwoFactorEnabled: oldValue },
+          after: { isTwoFactorEnabled: enable },
+          message: `User ${enable ? "enabled" : "disabled"} 2FA`,
+        },
+        level: "info",
+        ip: ip,
+        user_agent: userAgent
+      });
       return `Two-factor authentication has been ${enable === true ? "enabled" : "disabled"
         } successfully.`;
     } catch (error) {

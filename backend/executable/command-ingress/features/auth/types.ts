@@ -19,10 +19,10 @@ interface LoginResponse {
 
 interface AuthService {
   exchangeWithGoogleIDP(
-    request: ExchangeTokenRequest
+    request: ExchangeTokenRequest, ip?: string, userAgent?:string
   ): Promise<ExchangeTokenResult>;
 
-  logout(token: string): Promise<string>;
+  logout(token: string,ip?: string, userAgent?:string): Promise<string>;
 
   refreshToken(token: string): Promise<ExchangeTokenResult>;
 
@@ -33,19 +33,21 @@ interface AuthService {
     name: string,
     isTwoFactorEnabled: boolean,
     dob: Date,
-    gender: string
+    gender: string,
+    ip?: string, userAgent?:string
   ): Promise<ExchangeTokenResult>;
-  login(email: string, password: string): Promise<LoginResponse>;
+  // có sửa
+  login(email: string, password: string,ip?: string, userAgent?:string): Promise<LoginResponse>;
 
-  forgotPassword(email: string): Promise<string>;
+  forgotPassword(email: string, ip?: string, userAgent?:string): Promise<string>;
 
-  resetPassword(token: string, newPassword: string): Promise<string>;
+  resetPassword(token: string, newPassword: string,ip?: string, userAgent?:string): Promise<string>;
 
-  toggleTwoFactorAuth(userId: string, enable: boolean): Promise<string>;
+  toggleTwoFactorAuth(userId: string, enable: boolean,ip?: string, userAgent?:string): Promise<string>;
 
   sendVerificationEmail(email: string): Promise<boolean>;
-  verifyOTP(email: string, otp: string, otpToken: string): Promise<ExchangeTokenResult>;
-  verifyEmail(token: string): Promise<boolean>;
+  verifyOTP(email: string, otp: string, otpToken: string,ip?: string, userAgent?:string): Promise<ExchangeTokenResult>;
+  verifyEmail(token: string,ip?: string, userAgent?:string): Promise<boolean>;
   getProfile(userId: string): Promise<any>;
 }
 

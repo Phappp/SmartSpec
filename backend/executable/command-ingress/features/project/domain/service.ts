@@ -2,17 +2,20 @@ import Project from '../../../../../internal/model/project';
 import Input from '../../../../../internal/model/input';
 import Output from '../../../../../internal/model/output';
 import Version from '../../../../../internal/model/version';
-import ProjectLog from '../../../../../internal/model/projectLog';
+import ProjectLog from '../../../../../internal/model/log';
 import { OrchestratorService } from "../../orchestrator/domain/service";
 import { UploadedFile } from "express-fileupload";
 import { ServiceResponse, ResponseStatus } from '../../../services/serviceResponse';
 import mongoose, { Types } from 'mongoose';
 import { CreateProjectDto, UpdateProjectDto } from '../adapter/dto';
+import { LogService } from '../../log/domain/service';
+import User from '../../../../../internal/model/user'
 // import { GeminiService } from "../../../features/orchestrator/domain/GeminiService";
 
 export class ProjectService {
+  private logService: LogService;
   // THAY ĐỔI: Sử dụng Dependency Injection cho OrchestratorService
-  constructor(private orchestratorService: OrchestratorService) { }
+  constructor(private orchestratorService: OrchestratorService) {this.logService = new LogService() }
 
   async createProject(
     data: CreateProjectDto,
@@ -54,7 +57,25 @@ export class ProjectService {
         console.error(`[SERVICE] ${errorMessage} cho version ${newVersion._id}`);
         await Version.findByIdAndUpdate(newVersion._id, { $push: { processing_errors: errorMessage } });
       });
+      const owner = await User.findById(ownerId).select("email").lean();
+      const userEmail = owner?.email || ownerId;
 
+      await this.logService.createLog({
+        user_id: ownerId,
+        project_id: newProject._id.toString(),
+        action: "create_project",
+        target_id: newProject._id.toString(),
+        target_type: "project",
+        details: {
+          after: {
+            name: newProject.name,
+            description: newProject.description,
+            language: newProject.language,
+          },
+          message: `Project "${newProject.name}" created by user ${userEmail}`,
+        },
+        level: "info",
+      });
       return new ServiceResponse(ResponseStatus.Success, 'Project created successfully', newProject, 201);
     } catch (error: any) {
       await session.abortTransaction();
@@ -86,12 +107,32 @@ export class ProjectService {
     if (!project) {
       return new ServiceResponse(ResponseStatus.Failed, 'Project not found or access denied', null, 404);
     }
-
+    const before = {
+      name: project.name,
+      description: project.description,
+      language: project.language,
+    };
     // ... (logic update project không đổi)
     const { members, ...otherData } = data;
     Object.assign(project, otherData); // Cách gán an toàn hơn
 
     const updatedProject = await project.save();
+    const after = {
+      name: updatedProject.name,
+      description: updatedProject.description,
+      language: updatedProject.language,
+    };
+    const user = await User.findById(userId).select("email").lean();
+    const userEmail = user?.email || userId;
+    await this.logService.createLog({
+      user_id: userId,
+      project_id: projectId,
+      action: "update_project",
+      target_id: projectId,
+      target_type: "project",
+      details: { before, after, message: `User ${userEmail} updated project ${project.name}` },
+      level: "info",
+    });
     return new ServiceResponse(ResponseStatus.Success, 'Project updated successfully', updatedProject, 200);
   }
 
@@ -116,6 +157,17 @@ export class ProjectService {
       }
 
       await project.save();
+      const user = await User.findById(userId).select("email").lean();
+      const userEmail = user?.email || userId;
+      await this.logService.createLog({
+        user_id: userId,
+        project_id: projectId,
+        action: "delete_project",
+        target_id: projectId,
+        target_type: "project",
+        details: { message: `User ${userEmail} deleted project ${project.name}` },
+        level: "info",
+      });
       return true;
     }
     await Promise.all([
@@ -147,7 +199,17 @@ export class ProjectService {
     }
 
     await project.save();
-
+    const user = await User.findById(userId).select("email").lean();
+    const userEmail = user?.email || userId;
+    await this.logService.createLog({
+      user_id: userId,
+      project_id: projectId,
+      action: "restore_project",
+      target_id: projectId,
+      target_type: "project",
+      details: { message: `User ${userEmail} restored project ${project.name}` },
+      level: "info",
+    });
     return new ServiceResponse(ResponseStatus.Success, 'Project restored successfully', null, 200);
   }
 
@@ -215,7 +277,7 @@ export class ProjectService {
       (m: any) => m.user_id._id.toString() === userId && m.status === "accepted"
     );
     if (!isOwner && !isMember) {
-      throw { status: 403, message: "Bạn không có quyền truy cập project này" };
+      throw { status: 403, message: "You do not have access to this project."};
     }
 
     // Nếu chưa có version => tạo Version 1

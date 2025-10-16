@@ -46,6 +46,9 @@ import { ProjectService } from './features/project/domain/service';
 import { ProjectController } from './features/project/adapter/controller';
 import initProjectRoute from './features/project/adapter/route';
 
+import initLogRoute from "../command-ingress/features/log/adapter/route";
+import { LogService } from "../command-ingress/features/log/domain/service";
+import { LogController } from "../command-ingress/features/log/adapter/controller";
 
 const app = express();
 
@@ -116,7 +119,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/handle_text', initTextRoute(new TextController(new TextService())));
   app.use('/api/orchestrate', initOrchestratorRoute(new OrchestratorController(new OrchestratorService())));
   app.use('/api/projects', initProjectRoute(projectController));
-
+  app.use("/api/logs", initLogRoute(new LogController(new LogService())));
 
   app.use(recoverMiddleware);
 
