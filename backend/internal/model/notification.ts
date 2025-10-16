@@ -1,12 +1,11 @@
 import { InferSchemaType, model, Schema } from "mongoose";
-import { title } from "process";
 
 const notificationSchema = new Schema({
   recipient_id: { type: Schema.Types.ObjectId, ref: "users" },
   sender_id: { type: Schema.Types.ObjectId, ref: "users" },
   type: {
     type: String,
-    enum: ["INVITATION", "TESTCASE", "PROJECT"],
+    enum: ["INVITATION", "TESTCASE", "PROJECT", "RESPOND TO INVITATION"],
     required: true,
   },
   title: { type: String, required: true },

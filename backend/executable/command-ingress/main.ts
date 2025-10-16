@@ -12,7 +12,7 @@ async function start() {
   const redisClient = undefined;
   const server = createHttpServer(redisClient);
 
-const io = initSocket(server);
+  initSocket(server);
 
   server.listen(env.PORT, () => {
     console.log(`Server running on port http://localhost:${env.PORT}`);

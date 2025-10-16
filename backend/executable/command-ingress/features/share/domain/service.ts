@@ -108,9 +108,8 @@ export class ShareProjectService {
             500
           );
         }
-        await notificationService.sendSocketNotification(
+        await notificationService.sendInvitationSocketNotification(
           user.id,
-          sender.id,
           "Request to join",
           `${sender.name} has re-sent you an invitation to join the project ${project.name} as an ${role}.`,
           acceptUrl,
@@ -166,9 +165,8 @@ export class ShareProjectService {
           );
         }
 
-        await notificationService.sendSocketNotification(
+        await notificationService.sendInvitationSocketNotification(
           user.id,
-          sender.id,
           "Request to join",
           `${sender.name} has invited you to re-join the project ${project.name} as an ${role}.`,
           acceptUrl,
@@ -227,9 +225,8 @@ export class ShareProjectService {
           500
         );
       }
-      await notificationService.sendSocketNotification(
+      await notificationService.sendInvitationSocketNotification(
         user.id,
-        sender.id,
         "Request to join",
         `${sender.name} has invited you to join the project ${project.name} as an ${role}.`,
         acceptUrl,
@@ -437,6 +434,7 @@ export class ShareProjectService {
     userId: string
   ): Promise<ServiceResponse<{ status: string }>> {
     const project = await Project.findById(projectId);
+
     if (!project)
       return new ServiceResponse(
         ResponseStatus.Failed,
@@ -453,7 +451,7 @@ export class ShareProjectService {
         null,
         404
       );
-
+    console.log("sender: ", member.invited_by);
     if (member.status !== "pending")
       return new ServiceResponse(
         ResponseStatus.Failed,
@@ -471,7 +469,30 @@ export class ShareProjectService {
       at: new Date(),
     });
 
+    const sender = await User.findOne({ _id: member.invited_by });
+    const recipient = await User.findOne({ _id: userId });
+
+    if (!sender) {
+      throw new Error("Sender not found");
+    }
+    const notificationServiceDomain = new NotificationServiceImpl();
+
     await project.save();
+    await notificationService.RespondToInvitation(
+      sender.id,
+      "New Member Joined Project",
+      `${recipient.name} has accepted your invitation to project ${project.name}.`
+    );
+
+    await notificationServiceDomain.createNotification(
+      sender.id,
+      recipient.id,
+      "RESPOND TO INVITATION",
+      "New Member Joined Project",
+      `${recipient.name} has accepted your invitation to project ${project.name}.`,
+      ""
+    );
+
     return new ServiceResponse(
       ResponseStatus.Success,
       "You have joined the project",
@@ -526,6 +547,30 @@ export class ShareProjectService {
     });
 
     await project.save();
+
+    const sender = await User.findOne({ _id: member.invited_by });
+    const recipient = await User.findOne({ _id: userId });
+
+    if (!sender) {
+      throw new Error("Sender not found");
+    }
+    const notificationServiceDomain = new NotificationServiceImpl();
+
+    await project.save();
+    await notificationService.RespondToInvitation(
+      sender.id,
+      "Invitation Declined",
+      `${recipient.name} has rejected your invitation to project ${project.name}.`
+    );
+
+    await notificationServiceDomain.createNotification(
+      sender.id,
+      recipient.id,
+      "RESPOND TO INVITATION",
+      "Invitation Declined",
+      `${recipient.name} has rejected your invitation to project ${project.name}.`,
+      ""
+    );
 
     return new ServiceResponse(
       ResponseStatus.Success,

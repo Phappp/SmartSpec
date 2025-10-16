@@ -9,9 +9,8 @@ interface notificationOptions {
 }
 
 export const notificationService = {
-  async sendSocketNotification(
+  async sendInvitationSocketNotification(
     recipient: string,
-    sender: string,
     title: string,
     message?: string,
     acceptUrl?: string,
@@ -25,6 +24,16 @@ export const notificationService = {
         { label: "reject", api: rejectUrl },
       ],
     });
-    console.log("Gửi thông báo qua socket.io đến userId:", recipient);
+  },
+
+  async RespondToInvitation(
+    recipient: string,
+    title: string,
+    message?: string
+  ) {
+    io.to(`user_${recipient}`).emit("notification", {
+      title: title,
+      message: message,
+    });
   },
 };
