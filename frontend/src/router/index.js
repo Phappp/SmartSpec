@@ -15,6 +15,7 @@ import ResetPassword from '../pages/ResetPassword.vue'
 import adminRoutes from './admin'
 import { authGuard, adminGuard } from '../utils/authGuard'
 
+//import ProjectSharing from '@./components/ProjectSharingManagement.vue'
 const routes = [
   { path: '/', redirect: '/login' },
   { path: '/login', component: Login },

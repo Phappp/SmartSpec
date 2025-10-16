@@ -904,6 +904,7 @@ export default {
   border-radius: 12px;
   max-width: 1000px;
   width: 100%;
+  padding: 12px 0px;
   max-height: 90vh;
   overflow-y: hidden;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
@@ -933,6 +934,7 @@ export default {
 .modal-header {
   position: absolute;
   width: 100%;
+  height: 80px;
   top: 0;
   display: flex;
   justify-content: space-between;
@@ -942,7 +944,9 @@ export default {
   background: #fafafa;
   border-radius: 12px 12px 0 0;
 }
-
+.header-content {
+  padding-bottom: 12px;
+}
 .header-content h2 {
   margin: 0 0 4px 0;
   color: #111827;
@@ -1357,7 +1361,7 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: 16px 24px;
   border-top: 1px solid #e5e7eb;
   background: #fafafa;
   border-radius: 0 0 12px 12px;

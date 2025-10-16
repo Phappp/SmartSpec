@@ -1,11 +1,58 @@
 <template>
   <div class="homepage">
     <div class="app-container">
-      <Sidebar :user="user" @new="openNewProjectModal" @navigate="navigateTo" @logout="logout" />
+      <Sidebar
+        :user="user"
+        @new="openNewProjectModal"
+        @navigate="navigateTo"
+        @logout="logout"
+        @open-personal="openPersonalInfo"
+      />
 
       <div class="main-content">
         <header class="page-header">
           <h1>HOME PAGE</h1>
+          <div class="header-actions">
+            <div class="notifications-container">
+              <button @click="toggleNotifications" class="btn-icon notifications-btn">
+                <span class="material-symbols-outlined">notifications</span>
+                <span v-if="notificationCount > 0" class="notification-badge">{{
+                  notificationCount
+                }}</span>
+              </button>
+
+              <div v-if="isNotificationsVisible" class="notifications-dropdown">
+                <div class="dropdown-header">
+                  <h3>Project Invitations</h3>
+                </div>
+                <ul v-if="myInvitations.length > 0" class="invitations-list">
+                  <li v-for="inv in myInvitations" :key="inv.id" class="invitation-item">
+                    <div class="invitation-details">
+                      <p>
+                        <strong>{{ inv.invitedBy }}</strong> has invited you to join a project as a
+                        <strong>{{ inv.role }}</strong
+                        >.
+                      </p>
+                      <small
+                        >Project: <strong>{{ inv.projectName }}</strong></small
+                      >
+                    </div>
+                    <div class="invitation-actions">
+                      <button @click="handleAcceptInvitation(inv)" class="btn btn-sm btn-primary">
+                        Accept
+                      </button>
+                      <button @click="handleRejectInvitation(inv)" class="btn btn-sm btn-secondary">
+                        Decline
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+                <div v-else class="empty-invitations">
+                  <p>No pending invitations.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </header>
 
         <div class="content-area">
@@ -77,6 +124,7 @@
                 @open="openProject"
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
+                @share="openShareModal"
               />
             </div>
             <div v-else class="empty-state">
@@ -107,6 +155,7 @@
                 @open="openProject"
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
+                @share="openShareModal"
               />
             </div>
             <div v-else class="empty-state">
@@ -137,6 +186,7 @@
                 @open="openProject"
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
+                @share="openShareModal"
               />
             </div>
             <div v-else class="empty-state">
@@ -163,6 +213,7 @@
                 :is-trashed="true"
                 @restore="restoreProject"
                 @delete-permanently="confirmDeletePermanently"
+                @share="openShareModal"
               />
             </div>
             <div v-else class="empty-state">
@@ -184,6 +235,13 @@
       @close-during-creation="handleCloseDuringCreation"
       @project-created="handleProjectCreated"
     />
+    <PersonalInfor v-if="showPersonalInfo" :user="user" @close="showPersonalInfo = false" />
+    <ProjectSharingModal
+      v-if="isShareModalVisible"
+      :project-id="selectedProject._id"
+      @close="closeShareModal"
+    />
+
     <AppModal
       v-model="isAppModalVisible"
       :title="modalContent.title"
@@ -197,6 +255,8 @@
 <script>
 import { useToast } from 'vue-toastification'
 import Sidebar from '@/components/Sidebar.vue'
+import PersonalInfor from '../components/PersonalInfor.vue'
+import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
 import NewProjectModal from '@/components/NewProjectForm.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
 import AppModal from '@/components/AppModal.vue'
@@ -210,6 +270,7 @@ import {
   restoreProject as apiRestoreProject,
   updateProject,
   getVersionStatus,
+  getMyInvitations,
 } from '@/api/project'
 import { getUserInfo, logout as authLogout } from '@/utils/authGuard'
 
@@ -220,10 +281,15 @@ export default {
     NewProjectModal,
     ProjectCard,
     AppModal,
+    PersonalInfor,
+    ProjectSharingModal,
   },
   data() {
     return {
       isNewProjectModalVisible: false,
+      showPersonalInfo: false,
+      isShareModalVisible: false,
+      selectedProject: null,
       creationSuccess: false,
       currentView: 'recent-projects',
       user: null,
@@ -246,7 +312,15 @@ export default {
       searchQuery: '',
       languageFilter: '',
       sortBy: 'updatedAt',
+      isNotificationsVisible: false,
+      myInvitations: [],
     }
+  },
+  computed: {
+    // ✨ NEW: Computed property for notification count
+    notificationCount() {
+      return this.myInvitations.length
+    },
   },
   computed: {
     currentProjects() {
@@ -315,7 +389,85 @@ export default {
       this.pollingIntervals = {}
     },
 
+    async fetchInitialData() {
+      try {
+        const [userRes, myRes, sharedRes, recentRes, trashedRes, invRes] = await Promise.all([
+          getCurrentUser(),
+          getMyProjects(),
+          getSharedProjects(),
+          getRecentProjects(),
+          getTrashedProjects(),
+          getMyInvitations(), // Using the new API function
+        ])
+
+        this.user = userRes.data.data
+        this.myProjects = myRes.data?.data || []
+        this.sharedProjects = sharedRes.data?.data || []
+        this.recentProjects = recentRes.data?.data || []
+        this.trashedProjects = trashedRes.data?.data || []
+
+        // ✨ NEW: Populate invitations data
+        this.myInvitations = (invRes.data?.data || []).map((inv) => ({
+          id: inv._id,
+          project_id: inv.project_id,
+          projectName: inv.project_name || 'Unnamed Project',
+          role: inv.role,
+          invitedBy: inv.inviter?.name || 'Unknown',
+          date: inv.created_at,
+          invitee: inv.invitee,
+        }))
+      } catch (err) {
+        console.error('Failed to fetch initial data:', err)
+        if (err.response?.status === 401 || err.response?.status === 400) {
+          this.logout()
+        }
+      }
+    },
+
+    // --- ✨ NEW: Notification Methods ---
+    toggleNotifications() {
+      this.isNotificationsVisible = !this.isNotificationsVisible
+    },
+    async handleAcceptInvitation(inv) {
+      const userId = inv.invitee?._id
+      if (!userId) return this.showNotification('Error', 'Invitee user ID not found.')
+      try {
+        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/accept`)
+        this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
+        this.showNotification('Success', `You have joined the project: ${inv.projectName}`)
+        // Optionally, refresh project lists
+        this.fetchInitialData()
+      } catch (err) {
+        console.error(err)
+        this.showNotification('Error', 'Failed to accept the invitation.')
+      }
+    },
+    async handleRejectInvitation(inv) {
+      const userId = inv.invitee?._id
+      if (!userId) return this.showNotification('Error', 'Invitee user ID not found.')
+      try {
+        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/reject`)
+        this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
+        this.showNotification('Info', 'You have declined the invitation.')
+      } catch (err) {
+        console.error(err)
+        this.showNotification('Error', 'Failed to decline the invitation.')
+      }
+    },
     // --- Modal Methods ---
+    openPersonalInfo() {
+      this.showPersonalInfo = true
+    },
+    // --- Project Sharing Methods ---
+    openShareModal(project) {
+      this.selectedProject = project
+      this.isShareModalVisible = true
+    },
+    closeShareModal() {
+      this.isShareModalVisible = false
+      this.fetchInitialData() // Reload data in case the user left a project from the modal
+    },
+
     showNotification(title, message) {
       this.modalContent = {
         title,
@@ -728,7 +880,104 @@ export default {
   background-color: #f9fafb;
   min-height: 100vh;
 }
+/* ✨ NEW: Styles for Notifications Dropdown */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 
+.notifications-container {
+  position: relative;
+}
+
+.notifications-btn {
+  position: relative;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -5px;
+  right: -8px;
+  background-color: #ef4444; /* red-500 */
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.notifications-dropdown {
+  position: absolute;
+  top: 120%;
+  right: 0;
+  width: 350px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e5e7eb; /* gray-200 */
+  z-index: 100;
+  overflow: hidden;
+}
+
+.dropdown-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dropdown-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.invitations-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.invitation-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6; /* gray-100 */
+}
+
+.invitation-item:last-child {
+  border-bottom: none;
+}
+
+.invitation-details p {
+  margin: 0;
+  font-weight: 500;
+}
+.invitation-details small {
+  color: #6b7280; /* gray-500 */
+}
+
+.invitation-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.empty-invitations {
+  padding: 24px;
+  text-align: center;
+  color: #6b7280; /* gray-500 */
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
 .app-container {
   display: flex;
   min-height: 100vh;
@@ -815,6 +1064,7 @@ export default {
   display: flex;
   gap: 12px;
   align-items: center;
+  margin-left: 0;
 }
 
 .search-input-container {
