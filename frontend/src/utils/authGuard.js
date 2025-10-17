@@ -1,6 +1,6 @@
 // Authentication Guard cho Admin Panel
 import { useRouter } from 'vue-router'
-
+import axios from 'axios'
 /**
  * Kiểm tra user có đăng nhập không
  */
@@ -89,11 +89,24 @@ export const authGuard = (to, from, next) => {
 /**
  * Logout function
  */
-export const logout = () => {
-  localStorage.removeItem('accessToken')
-  localStorage.removeItem('adminToken')
-  localStorage.removeItem('refreshToken')
-  console.log('🚪 Logged out')
+export const logout = async () => {
+  try {
+    const refreshToken = localStorage.getItem('refreshToken')
+    console.log('refreshToken before logout:', refreshToken)
+
+    if (refreshToken) {
+      await axios.post('http://localhost:8000/api/auth/logout', { refresh_token: refreshToken })
+    }
+  } catch (error) {
+    console.error('Logout API error:', error)
+  } finally {
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('adminToken')
+    localStorage.removeItem('refreshToken')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('email')
+    console.log('🚪 Logged out')
+  }
 }
 
 /**
