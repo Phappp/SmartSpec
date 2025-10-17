@@ -9,7 +9,11 @@ import mailService from "../../../services/sendMail.service";
 import jwt from "jsonwebtoken";
 import { notificationService } from "../../../services/notification.service";
 import { NotificationServiceImpl } from "../../notification/domain/service";
+import { LogService } from "../../../../command-ingress/features/log/domain/service";
+
 export class ShareProjectService {
+  private logService = new LogService();
+
   async inviteMemberByEmail(
     projectId: string,
     subId: string,
@@ -90,6 +94,15 @@ export class ShareProjectService {
         });
 
         await project.save();
+        await this.logService.createLog({
+          project_id: projectId,
+          user_id: subId,
+          action: "invite_member",
+          target_id: existingMember._id.toString(),
+          target_type: "member",
+          level: "info",
+          details: {message: `${sender.name} re-invited ${user.name} as ${role}`}
+        });
 
         const mailIsSent = await this.sendInviteEmail(
           user.email,
@@ -146,6 +159,15 @@ export class ShareProjectService {
         });
 
         await project.save();
+        await this.logService.createLog({
+          project_id: projectId,
+          user_id: subId,
+          action: "invite_member",
+          target_id: existingMember._id.toString(),
+          target_type: "member",
+          level: "info",
+          details: {message: `${sender.name} re-invited ${user.name} as ${role}`}
+        });
 
         const mailIsSent = await this.sendInviteEmail(
           user.email,
@@ -207,6 +229,16 @@ export class ShareProjectService {
       });
 
       await project.save();
+
+      await this.logService.createLog({
+        project_id: projectId,
+        user_id: subId,
+        action: "invite_member",
+        target_id: userId.toString(),
+        target_type: "member",
+        level: "info",
+        details: {message: `${sender.name} invited ${user.name} as ${role}`}
+      });
 
       const mailIsSent = await this.sendInviteEmail(
         user.email,
@@ -471,6 +503,15 @@ export class ShareProjectService {
 
     const sender = await User.findOne({ _id: member.invited_by });
     const recipient = await User.findOne({ _id: userId });
+    await this.logService.createLog({
+      project_id: projectId,
+      user_id: userId,
+      action: "accept_invite",
+      target_id: member._id.toString(),
+      target_type: "member",
+      level: "info",
+      details: {  message: `User ${recipient.name} (${recipient.email}) accepted invitation to project ${project.name}` }
+    });
 
     if (!sender) {
       throw new Error("Sender not found");
@@ -549,6 +590,16 @@ export class ShareProjectService {
 
     const sender = await User.findOne({ _id: member.invited_by });
     const recipient = await User.findOne({ _id: userId });
+
+    await this.logService.createLog({
+      project_id: projectId,
+      user_id: userId,
+      action: "reject_invite",
+      target_id: member._id.toString(),
+      target_type: "member",
+      level: "info",
+      details: {message: `User ${recipient.name} (${recipient.email}) rejected invitation to project ${project.name}`}
+    });
 
     if (!sender) {
       throw new Error("Sender not found");
@@ -646,6 +697,17 @@ export class ShareProjectService {
 
     await project.save();
 
+    const sender = await User.findOne({ _id: member.invited_by });
+    const recipient = await User.findOne({ _id: userId });
+    await this.logService.createLog({
+      project_id: projectId,
+      user_id: userId.toString(),
+      action: "cancel_invite",
+      target_id: member._id.toString(),
+      target_type: "member",
+      level: "info",
+      details: { message: `User ${sender.name} (${sender.email}) canceled invitation for ${recipient.name} (${recipient.email}) in project ${project.name}` }
+    });
     return new ServiceResponse<any>(
       ResponseStatus.Success,
       "Invite has been canceled",
@@ -719,10 +781,20 @@ export class ShareProjectService {
       // xoá hẳn member
       project.members.splice(memberIndex, 1);
       await project.save();
-
+      
       const sender = await User.findOne({ _id: userId });
       const recipient = await User.findOne({ _id: memberId });
 
+      await this.logService.createLog({
+        project_id: projectId,
+        user_id: userId,
+        action: "remove_member",
+        target_type: "member",
+        target_id: memberId,
+        level: "info",
+        details: {message: `User ${sender.name} (${sender.email}) removed member ${recipient.name} (${recipient.email}) from project ${project.name}`}
+      });
+      
       if (!sender) {
         throw new Error("Sender not found");
       }
@@ -818,10 +890,20 @@ export class ShareProjectService {
       // xoá thành viên
       project.members.splice(memberIndex, 1);
       await project.save();
-
+      
       const sender = await User.findOne({ _id: member.invited_by });
       const recipient = await User.findOne({ _id: userId });
 
+      await this.logService.createLog({
+        project_id: projectId,
+        user_id: userId,
+        action: "leave_project",
+        target_id: userId,
+        target_type: "member",
+        level: "info",
+        details: {message: `User ${recipient.name} (${recipient.email}) left the project ${project.name}`}
+      });
+      
       if (!sender) {
         throw new Error("Sender not found");
       }
