@@ -2,7 +2,7 @@ import { Types } from "mongoose";
 import { Parser as Json2CsvParser } from "json2csv";
 import PDFDocument from "pdfkit";
 import LogModel from "../../../../../internal/model/log";
-import {CreateLogDTO} from  "../adapter/dto";
+import { CreateLogDTO } from "../adapter/dto";
 import { ServiceResponse, ResponseStatus } from "../../../services/serviceResponse";
 import ProjectModel from "../../../../../internal/model/project";
 import UserModel from "../../../../../internal/model/user";
@@ -102,7 +102,7 @@ export class LogService {
         return new ServiceResponse(ResponseStatus.Success, "Export successful", result, 200);
       }
 
-      const truncateText = (doc: PDFDocument, text: string, maxWidth: number): string => {
+      const truncateText = (doc: InstanceType<typeof PDFDocument>, text: string, maxWidth: number): string => {
         let t = String(text ?? "");
         while (doc.widthOfString(t) > maxWidth && t.length > 0) {
           t = t.slice(0, -1);
@@ -221,7 +221,7 @@ export class LogService {
 
   // Lọc các log về hoạt động người dùng
   async getUserActivityLogs(userId: string, projectId?: string) {
-    console.log("🟡 [getUserActivityLogs] Params:", { userId, projectId});
+    console.log("🟡 [getUserActivityLogs] Params:", { userId, projectId });
     const user = await UserModel.findById(userId);
     if (!user)
       return new ServiceResponse(ResponseStatus.Failed, "User not found", null, 404);
@@ -244,7 +244,7 @@ export class LogService {
           (m) => m.user_id.equals(userId) && m.status === "accepted"
         );
         if (!isMember)
-          return new ServiceResponse(ResponseStatus.Failed,"User is not a project member",null,403);
+          return new ServiceResponse(ResponseStatus.Failed, "User is not a project member", null, 403);
       }
 
       filter.project_id = new Types.ObjectId(projectId);
@@ -266,7 +266,7 @@ export class LogService {
     );
 
     if (!member)
-      return new ServiceResponse(ResponseStatus.Failed,"User is not a project member",null,403);
+      return new ServiceResponse(ResponseStatus.Failed, "User is not a project member", null, 403);
     const role = member.role?.toLowerCase(); // "viewer" | "editor" | "owner"
     console.log(`🟢 [getProjectLogs] User role in project: ${role}`);
     const filter: any = { project_id: new Types.ObjectId(projectId) };
@@ -290,8 +290,8 @@ export class LogService {
           "create_input", "update_input", "delete_input",
           "generate_output", "update_output", "delete_output",
           "create_version", "update_version", "rollback",
-          "invite_member", "accept_invite", "reject_invite", "leave_project", 
-          "generate_data","update_data", "delete_data", "resolve_conflict", 
+          "invite_member", "accept_invite", "reject_invite", "leave_project",
+          "generate_data", "update_data", "delete_data", "resolve_conflict",
         ],
       };
     } else if (role === "owner") {
@@ -305,7 +305,7 @@ export class LogService {
 
   async getOutputLogs(userId: string, targetType: string, projectId?: string) {
     console.log("🟡 [getLogs] Params:", { userId, targetType, projectId });
-    const allowedTargets = ["databases","testcases", "activity_diagrams", "usecase_diagrams", "sequence_diagrams"];
+    const allowedTargets = ["databases", "testcases", "activity_diagrams", "usecase_diagrams", "sequence_diagrams"];
     if (!allowedTargets.includes(targetType)) {
       return new ServiceResponse(ResponseStatus.Failed, "Invalid target_type", null, 400);
     }
@@ -339,8 +339,8 @@ export class LogService {
     if (user.system_role !== "ADMIN")
       return new ServiceResponse(ResponseStatus.Failed, "Access denied: Admin only", null, 403);
     const systemActions = [
-      "create_user","failed_login","login","logout","update_user",
-      "performance","deploy","startup"
+      "create_user", "failed_login", "login", "logout", "update_user",
+      "performance", "deploy", "startup"
     ];
     const filter: any = {
       $or: [
@@ -353,7 +353,7 @@ export class LogService {
     const result = await this._query(filter, { sort: { created_at: -1 }, limit: 500 });
     console.log(`✅ [getSystemLogs] Retrieved ${result.total} system logs`);
 
-    return new ServiceResponse(ResponseStatus.Success,"Fetched system & user system logs successfully",result,200);
+    return new ServiceResponse(ResponseStatus.Success, "Fetched system & user system logs successfully", result, 200);
   }
   // Hàm lọc chính
   private async _query(filters: any, options: any) {
