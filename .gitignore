@@ -7,3 +7,5 @@ backend/executable/command-ingress/output/usecase_doc.json
 backend/executable/command-ingress/uploads_ocr/
 
 *.docx
+/backend/uploads/avatars
+/backend/uploads/avatars

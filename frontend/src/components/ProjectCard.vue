@@ -142,7 +142,7 @@
       </div>
     </div>
   </div>
-</template>
+</template>''
 
 <script>
 // Custom directive for click outside
@@ -400,6 +400,74 @@ export default {
       const m = String(date.getMonth() + 1).padStart(2, '0')
       const y = date.getFullYear()
       return `${d}/${m}/${y}`
+    },
+    async handleAvatarUpload(e) {
+      const file = e.target.files[0]
+      if (!file) return
+
+      // Validate file
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+      if (!allowedTypes.includes(file.type)) {
+        this.showNotification({
+          type: 'error',
+          title: 'Invalid File',
+          message: 'Only JPEG, PNG, GIF, and WebP images are allowed.',
+        })
+        return
+      }
+
+      // Validate file size (5MB)
+      const maxSize = 5 * 1024 * 1024
+      if (file.size > maxSize) {
+        this.showNotification({
+          type: 'error',
+          title: 'File Too Large',
+          message: 'File size must be less than 5MB.',
+        })
+        return
+      }
+
+      this.isUploadingAvatar = true
+
+      try {
+        // Tạo FormData
+        const formData = new FormData()
+        formData.append('avatar', file)
+
+        // Gọi API upload
+        const response = await axiosClient.post('/api/users/upload-avatar', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+
+        // Cập nhật avatar_url từ response
+        const newAvatarUrl = response.data.data.avatar_url
+        this.localUser.avatar_url = newAvatarUrl
+
+        // 🔥 QUAN TRỌNG: Emit event để thông báo avatar đã thay đổi
+        this.$emit('avatar-updated', {
+          avatar_url: newAvatarUrl,
+          user: this.localUser,
+        })
+
+        this.showNotification({
+          type: 'success',
+          title: 'Success',
+          message: 'Avatar uploaded successfully!',
+        })
+      } catch (err) {
+        console.error('Error uploading avatar:', err.response?.data || err.message)
+        this.showNotification({
+          type: 'error',
+          title: 'Upload Failed',
+          message: err.response?.data?.message || 'Failed to upload avatar.',
+        })
+      } finally {
+        this.isUploadingAvatar = false
+        // Reset file input
+        this.$refs.fileInput.value = ''
+      }
     },
   },
 }
