@@ -82,14 +82,18 @@ export class ShareProjectController extends BaseController {
    */
   public acceptInvite = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async () => {
-      const userId = req.getSubject();
+      const userId = typeof req.getSubject === "function" ? req.getSubject() : req.params.memberId;
       if (!userId) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
         return;
       }
-
       const { projectId} = req.params;
-      const result = await this.service.acceptInvite(projectId, userId);
+      const token = (req.query.token as string) || (req.body.token as string);
+      if (!token) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Token is required", null, 400), res);
+        return;
+      }
+      const result = await this.service.acceptInvite(projectId, userId,token);
       handleServiceResponse(result, res);
     });
   };
@@ -100,14 +104,18 @@ export class ShareProjectController extends BaseController {
    */
   public rejectInvite = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async () => {
-      const userId = req.getSubject();
+      const userId = typeof req.getSubject === "function" ? req.getSubject() : req.params.memberId;
       if (!userId) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
         return;
       }
-
       const { projectId } = req.params;
-      const result = await this.service.rejectInvite(projectId, userId);
+      const token = (req.query.token as string) || (req.body.token as string);
+      if (!token) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Token is required", null, 400), res);
+        return;
+      }
+      const result = await this.service.rejectInvite(projectId, userId,token);
       handleServiceResponse(result, res);
     });
   };

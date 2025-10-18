@@ -42,30 +42,7 @@ export default function initShareProjectRoute(
       controller.acceptInvite(req as any, res, next)
   );
 
-  router.get("/:projectId/members/:memberId/accept", async (req, res) => {
-    const { projectId, memberId } = req.params;
-    const token = req.query.token as string;
-
-    if (!token) return res.status(400).json({ message: "Missing token" });
-
-    try {
-      // verify token email
-      const payload = jwt.verify(token, process.env.JWT_EMAIL_SECRET!) as any;
-      if (payload.projectId !== projectId || payload.userId !== memberId) {
-        return res.status(403).json({ message: "Invalid token" });
-      }
-
-      // gọi service trực tiếp
-      const result = await shareProjectService.acceptInvite(
-        projectId,
-        memberId
-      );
-      return res.status(result.code || 200).json(result);
-    } catch (err) {
-      console.error("Error verifying invite token:", err);
-      return res.status(403).json({ message: "Expired or invalid token" });
-    }
-  });
+  router.get("/:projectId/members/:memberId/accept", controller.acceptInvite);
 
   // POST /api/projects/:projectId/members/:memberId/reject
   router.post(
@@ -75,30 +52,7 @@ export default function initShareProjectRoute(
       controller.rejectInvite(req as any, res, next)
   );
 
-  router.get("/:projectId/members/:memberId/reject", async (req, res) => {
-    const { projectId, memberId } = req.params;
-    const token = req.query.token as string;
-
-    if (!token) return res.status(400).json({ message: "Missing token" });
-
-    try {
-      // verify token email
-      const payload = jwt.verify(token, process.env.JWT_EMAIL_SECRET!) as any;
-      if (payload.projectId !== projectId || payload.userId !== memberId) {
-        return res.status(403).json({ message: "Invalid token" });
-      }
-
-      // gọi service trực tiếp
-      const result = await shareProjectService.rejectInvite(
-        projectId,
-        memberId
-      );
-      return res.status(result.code || 200).json(result);
-    } catch (err) {
-      console.error("Error verifying invite token:", err);
-      return res.status(403).json({ message: "Expired or invalid token" });
-    }
-  });
+  router.get("/:projectId/members/:memberId/reject", controller.rejectInvite);
 
   // Cancel Invite
   router.delete(
