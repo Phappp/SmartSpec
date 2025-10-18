@@ -273,6 +273,8 @@ import {
   getMyInvitations,
 } from '@/api/project'
 import { getUserInfo, logout as authLogout } from '@/utils/authGuard'
+import axiosClient from '@/utils/axiosClient'
+import { socket } from "@/utils/socket";
 
 export default {
   name: 'Homepage',
@@ -284,6 +286,30 @@ export default {
     PersonalInfor,
     ProjectSharingModal,
   },
+  mounted() {
+      socket.on("notification", (data) => {
+        console.log("📩 Realtime notification received:", data);
+
+        // Cho phép HTML render đúng
+        this.toast.info(`${data.title}: ${data.message}`, {
+          dangerouslyHTMLString: true,
+        });
+
+        // Cập nhật danh sách realtime
+        if (data.type === "invitation" || data.title?.includes("Request to join")) {
+          this.fetchMyInvitationsRealtime();
+        }
+
+        if (
+          data.title?.includes("Joined") ||
+          data.title?.includes("Declined") ||
+          data.title?.includes("Left")
+        ) {
+          this.fetchInitialData();
+        }
+      });
+  },
+
   data() {
     return {
       isNewProjectModalVisible: false,
@@ -316,12 +342,7 @@ export default {
       myInvitations: [],
     }
   },
-  computed: {
-    // ✨ NEW: Computed property for notification count
-    notificationCount() {
-      return this.myInvitations.length
-    },
-  },
+  
   computed: {
     currentProjects() {
       switch (this.currentView) {
@@ -335,7 +356,9 @@ export default {
           return []
       }
     },
-
+    notificationCount() {
+          return this.myInvitations.length
+        },
     languageLabel() {
       const labels = {
         'vi-VN': 'Vietnamese',
@@ -379,6 +402,11 @@ export default {
   },
   beforeUnmount() {
     this.cleanupAllPolling()
+  // Gỡ bỏ listener socket khi component bị unmount
+    if (socket) {
+    socket.off("notification");
+    console.log("🧹 Socket listener removed on unmount");
+  }
   },
   methods: {
     // --- Dọn dẹp polling ---
@@ -389,24 +417,9 @@ export default {
       this.pollingIntervals = {}
     },
 
-    async fetchInitialData() {
+    async fetchMyInvitationsRealtime() {
       try {
-        const [userRes, myRes, sharedRes, recentRes, trashedRes, invRes] = await Promise.all([
-          getCurrentUser(),
-          getMyProjects(),
-          getSharedProjects(),
-          getRecentProjects(),
-          getTrashedProjects(),
-          getMyInvitations(), // Using the new API function
-        ])
-
-        this.user = userRes.data.data
-        this.myProjects = myRes.data?.data || []
-        this.sharedProjects = sharedRes.data?.data || []
-        this.recentProjects = recentRes.data?.data || []
-        this.trashedProjects = trashedRes.data?.data || []
-
-        // ✨ NEW: Populate invitations data
+        const invRes = await getMyInvitations();
         this.myInvitations = (invRes.data?.data || []).map((inv) => ({
           id: inv._id,
           project_id: inv.project_id,
@@ -415,14 +428,14 @@ export default {
           invitedBy: inv.inviter?.name || 'Unknown',
           date: inv.created_at,
           invitee: inv.invitee,
-        }))
-      } catch (err) {
-        console.error('Failed to fetch initial data:', err)
-        if (err.response?.status === 401 || err.response?.status === 400) {
-          this.logout()
-        }
+          invite_token: inv.invite_token,
+        }));
+        console.log("🔄 Invitations updated via realtime socket");
+      } catch (error) {
+        console.error("❌ Failed to fetch invitations via socket:", error);
       }
     },
+
 
     // --- ✨ NEW: Notification Methods ---
     toggleNotifications() {
@@ -432,7 +445,7 @@ export default {
       const userId = inv.invitee?._id
       if (!userId) return this.showNotification('Error', 'Invitee user ID not found.')
       try {
-        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/accept`)
+        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/accept`,{ token: inv.invite_token });
         this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
         this.showNotification('Success', `You have joined the project: ${inv.projectName}`)
         // Optionally, refresh project lists
@@ -446,7 +459,7 @@ export default {
       const userId = inv.invitee?._id
       if (!userId) return this.showNotification('Error', 'Invitee user ID not found.')
       try {
-        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/reject`)
+        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/reject`,{ token: inv.invite_token });
         this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
         this.showNotification('Info', 'You have declined the invitation.')
       } catch (err) {
@@ -760,29 +773,37 @@ export default {
 
     async fetchInitialData() {
       try {
-        this.cleanupOldCreatingProjects()
-        // Load user info from token first
-        const [userRes, myRes, sharedRes, recentRes, trashedRes] = await Promise.all([
+        this.cleanupOldCreatingProjects();
+        const [userRes, myRes, sharedRes, recentRes, trashedRes, invRes] = await Promise.all([
           getCurrentUser(),
           getMyProjects(),
           getSharedProjects(),
           getRecentProjects(),
           getTrashedProjects(),
-        ])
-        this.user = userRes.data.data
-        this.myProjects = myRes.data?.data || []
-        this.sharedProjects = sharedRes.data?.data || []
-        this.recentProjects = recentRes.data?.data || []
-        this.trashedProjects = trashedRes.data?.data || []
+          getMyInvitations(),
+        ]);
 
-        // Khôi phục retry processes sau khi fetch data
-        this.$nextTick(() => {
-          this.restoreRetryProcesses()
-        })
+        this.user = userRes.data.data;
+        this.myProjects = myRes.data?.data || [];
+        this.sharedProjects = sharedRes.data?.data || [];
+        this.recentProjects = recentRes.data?.data || [];
+        this.trashedProjects = trashedRes.data?.data || [];
+        this.myInvitations = (invRes.data?.data || []).map((inv) => ({
+          id: inv._id,
+          project_id: inv.project_id,
+          projectName: inv.project_name || 'Unnamed Project',
+          role: inv.role,
+          invitedBy: inv.inviter?.name || 'Unknown',
+          date: inv.created_at,
+          invitee: inv.invitee,
+          invite_token: inv.invite_token,
+        }));
+
+        this.$nextTick(() => this.restoreRetryProcesses());
       } catch (err) {
-        console.error('Failed to fetch initial data:', err)
+        console.error('Failed to fetch initial data:', err);
         if (err.response?.status === 401 || err.response?.status === 400) {
-          this.logout()
+          this.logout();
         }
       }
     },
@@ -861,6 +882,10 @@ export default {
 
     logout() {
       this.cleanupAllPolling()
+        if (socket && socket.connected) {
+        socket.disconnect();
+        console.log("🔌 Socket disconnected on logout");
+      }
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('userId')
