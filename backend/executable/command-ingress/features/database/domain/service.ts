@@ -88,8 +88,6 @@ export class DatabaseService {
 
         return { database, table, primaryKeys };
     }
-
-
     /**
      * VALIDATION: Kiểm tra tính hợp lệ của FOREIGN KEY
      */
@@ -152,8 +150,6 @@ export class DatabaseService {
 
         return { targetTable, targetPrimaryKeys, matchingPrimaryKey };
     }
-
-
     /**
      * VALIDATION: Kiểm tra tính duy nhất của tên bảng và cột
      */
@@ -333,7 +329,6 @@ export class DatabaseService {
             console.warn(`💡 Consider adding 'deleted_at' column for soft delete functionality`);
         }
     }
-
     /**
     * VALIDATION: Kiểm tra composite primary key - NEW METHOD
     */
@@ -394,13 +389,11 @@ export class DatabaseService {
         }
     }
 
-
     private isValidNumericDefault(value: string): boolean {
         if (value.toLowerCase() === 'null') return true;
         return !isNaN(Number(value)) ||
             ['current_timestamp', 'now()'].includes(value.toLowerCase());
     }
-
     /**
      * TỰ ĐỘNG ĐỒNG BỘ KIỂU DỮ LIỆU KHI PK THAY ĐỔI
      */
@@ -517,7 +510,9 @@ export class DatabaseService {
     public async getDatabaseById(databaseId: string) {
         return DatabaseModel.findById(databaseId);
     }
-
+    /**
+     * Cập nhật Database
+     */
     public async updateDatabase(databaseId: string, updateData: any) {
         // Validate foreign key relationships if tables are being updated
         if (updateData.tables) {
@@ -537,11 +532,12 @@ export class DatabaseService {
 
         return await DatabaseModel.findById(databaseId);
     }
-
+    /**
+     * Xóa bảng
+    */
     public async deleteDatabase(databaseId: string) {
         return DatabaseModel.findByIdAndDelete(databaseId);
     }
-
     /**
      * [C] Thêm một bảng mới với validation đầy đủ
      */
@@ -579,7 +575,6 @@ export class DatabaseService {
             { new: true }
         );
     }
-
     /**
      * [U] Cập nhật một bảng với validation đầy đủ
      */
@@ -592,29 +587,38 @@ export class DatabaseService {
 
         // 1. Validate cơ bản trước
         await this.validateTableModification(databaseId, tableName, 'update');
-        this.validateTableStructure(tableData);
 
+        // 2. Lấy database và table hiện tại để giữ position
         const database = await DatabaseModel.findById(databaseId);
         if (!database) throw new Error("Database not found");
         const existingTable = database.tables.find(t => t.name === tableName);
         if (!existingTable) throw new Error("Table not found");
 
-        // 2. Kiểm tra trùng tên bảng TRƯỚC
-        if (tableData.name !== tableName) {
+        // 3. Giữ nguyên position từ table hiện tại nếu không có position mới
+        const updatedTableData = {
+            ...tableData,
+            position: tableData.position || existingTable.position // Giữ position cũ nếu không có mới
+        };
+
+        // 4. Validate structure với data đã được merge position
+        this.validateTableStructure(updatedTableData);
+
+        // 5. Kiểm tra trùng tên bảng TRƯỚC
+        if (updatedTableData.name !== tableName) {
             const duplicateTable = database.tables.find(t =>
-                t.name.toLowerCase() === tableData.name.toLowerCase() && t.name !== tableName
+                t.name.toLowerCase() === updatedTableData.name.toLowerCase() && t.name !== tableName
             );
             if (duplicateTable) {
-                throw new Error(`Table '${tableData.name}' already exists in database`);
+                throw new Error(`Table '${updatedTableData.name}' already exists in database`);
             }
         }
 
-        // 3. Validate foreign keys TRƯỚC
-        for (const column of tableData.columns) {
+        // 6. Validate foreign keys TRƯỚC
+        for (const column of updatedTableData.columns) {
             if (column.is_foreign_key && column.references) {
                 await this.validateForeignKeyConstraint(
                     databaseId,
-                    tableData.name, // dùng tableData.name vì có thể đã đổi tên
+                    updatedTableData.name, // dùng updatedTableData.name vì có thể đã đổi tên
                     column.name,
                     column.references,
                     column.type
@@ -622,15 +626,15 @@ export class DatabaseService {
             }
         }
 
-        // 4. Sync FK changes SAU KHI tất cả validation passed
+        // 7. Sync FK changes SAU KHI tất cả validation passed
         await this.syncForeignKeyTypesForPKChanges(
             databaseId,
             tableName,
             existingTable,
-            tableData
+            updatedTableData
         );
 
-        // 5. Thực hiện update
+        // 8. Thực hiện update với data đã giữ position
         const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const normalizedName = (tableName || '').trim();
 
@@ -639,7 +643,7 @@ export class DatabaseService {
                 _id: databaseId,
                 "tables.name": { $regex: `^${escape(normalizedName)}$`, $options: 'i' }
             },
-            { $set: { "tables.$": tableData } }
+            { $set: { "tables.$": updatedTableData } }
         );
 
         if (result.matchedCount === 0) {
@@ -649,8 +653,6 @@ export class DatabaseService {
 
         return await DatabaseModel.findById(databaseId);
     }
-
-
     /**
      * [D] Xóa một bảng với validation constraints
      */
@@ -664,7 +666,6 @@ export class DatabaseService {
             { new: true }
         );
     }
-
     /**
      * [R] - Lấy database schema với thông tin references đầy đủ
      */
@@ -711,8 +712,6 @@ export class DatabaseService {
             tables: enrichedTables
         };
     }
-
-
     /**
      * [R] - Lấy thông tin relationships của một bảng cụ thể
      */
@@ -778,48 +777,9 @@ export class DatabaseService {
             )
         };
     }
-
     /**
-     * [U] - Validate foreign key trước khi tạo/cập nhật
+     * [R] - Lấy các bảng có references
      */
-    public async validateForeignKey(databaseId: string, tableName: string, columnName: string, referencedTable: string) {
-        const database = await DatabaseModel.findById(databaseId);
-        if (!database) throw new Error("Database not found");
-
-        // Kiểm tra referenced table có tồn tại không
-        const targetTable = database.tables.find(t => t.name === referencedTable);
-        if (!targetTable) {
-            return {
-                valid: false,
-                error: `Table '${referencedTable}' does not exist in database`
-            };
-        }
-
-        // Kiểm tra referenced table có primary key không
-        const primaryKeys = targetTable.columns.filter(col => col.is_primary_key)
-            .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0));
-        if (primaryKeys.length === 0) {
-            return {
-                valid: false,
-                error: `Table '${referencedTable}' has no primary key column`
-            };
-        }
-
-        // Kiểm tra relationship có tồn tại không
-        const existingRelationship = database.relationships.find(rel =>
-            rel.from_table === tableName && rel.to_table === referencedTable
-        );
-
-        return {
-            valid: true,
-            referencedTable: targetTable,
-            primaryKeys,
-            isCompositeKey: primaryKeys.length > 1,
-            existingRelationship
-        };
-    }
-
-
     public async getAvailableTablesForReferences(databaseId: string, excludeTable?: string) {
         const database = await DatabaseModel.findById(databaseId);
         if (!database) throw new Error("Database not found");
@@ -833,7 +793,6 @@ export class DatabaseService {
                 columnCount: table.columns.length
             }));
     }
-
     /**
      * UTILITY: Lấy thông tin composite key của một bảng - NEW METHOD
      */
@@ -861,7 +820,6 @@ export class DatabaseService {
             totalColumns: primaryKeyColumns.length
         };
     }
-
     /**
      * UTILITY: Tạo composite key mới - NEW METHOD
      */
@@ -914,7 +872,6 @@ export class DatabaseService {
 
         return await this.getCompositeKeyInfo(databaseId, tableName);
     }
-
     /**
      * UTILITY: Chuyển từ composite key sang single key - NEW METHOD
      */
@@ -957,7 +914,9 @@ export class DatabaseService {
 
         return await this.getCompositeKeyInfo(databaseId, tableName);
     }
-
+    /**
+     * Cập nhật vị trí bảng
+     */
     public async updateTablePosition(databaseId: string, tableName: string, position: { x: number; y: number }) {
         const result = await DatabaseModel.updateOne(
             { _id: databaseId, "tables.name": tableName },
@@ -974,7 +933,9 @@ export class DatabaseService {
 
         return await DatabaseModel.findById(databaseId);
     }
-
+    /**
+     * Cập nhật vị trí nhiều bảng cùng lúc
+     */
     public async updateMultipleTablePositions(databaseId: string, positionUpdates: TablePositionUpdate[]) {
         console.log("✅✅✅ RUNNING THE FIXED AND ROBUST BATCH UPDATE v2 ✅✅✅");
 
@@ -1017,7 +978,6 @@ export class DatabaseService {
 
         return await DatabaseModel.findById(databaseId);
     }
-
     /**
      * [R] - Lấy thống kê database
      */
@@ -1039,7 +999,6 @@ export class DatabaseService {
 
         return stats;
     }
-
     /**
      * [U] - Export database schema thành SQL
      */

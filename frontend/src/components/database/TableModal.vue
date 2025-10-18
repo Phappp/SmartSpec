@@ -46,6 +46,32 @@
             </div>
           </div>
 
+          <!-- Composite Key Management -->
+          <div v-if="primaryKeyCount > 1" class="composite-key-section">
+            <div class="composite-key-header">
+              <span class="material-symbols-outlined">key</span>
+              <span>Composite Primary Key Configuration</span>
+            </div>
+            <div class="composite-key-info">
+              <p>This table uses a composite primary key with {{ primaryKeyCount }} columns.</p>
+              <div class="composite-key-order">
+                <div
+                  v-for="pkColumn in sortedPrimaryKeys"
+                  :key="pkColumn.name"
+                  class="composite-key-item"
+                >
+                  <span class="order-badge">#{{ pkColumn.primary_key_order }}</span>
+                  <span class="column-name">{{ pkColumn.name }}</span>
+                  <span class="column-type">({{ pkColumn.type }})</span>
+                </div>
+              </div>
+              <div class="composite-key-hint">
+                <span class="material-symbols-outlined">info</span>
+                Primary key order determines the sequence in composite key constraints
+              </div>
+            </div>
+          </div>
+
           <!-- Table Statistics -->
           <div class="table-stats" v-if="tableForm.columns.length > 0">
             <div class="stat-item">
@@ -55,6 +81,7 @@
             <div class="stat-item">
               <span class="stat-number">{{ primaryKeyCount }}</span>
               <span class="stat-label">Primary Keys</span>
+              <span v-if="primaryKeyCount > 1" class="stat-badge composite">Composite</span>
             </div>
             <div class="stat-item">
               <span class="stat-number">{{ foreignKeyCount }}</span>
@@ -78,6 +105,9 @@
               </li>
               <li v-if="largeColumnCount > 3">
                 ⚠️ Consider normalizing {{ largeColumnCount }} large object columns
+              </li>
+              <li v-if="primaryKeyCount > 4">
+                ⚠️ Large composite key ({{ primaryKeyCount }} columns) may impact performance
               </li>
               <li v-if="!hasTimestamps">
                 💡 Consider adding 'created_at' and 'updated_at' for audit trail
@@ -107,13 +137,25 @@
                   'has-errors': hasColumnErrors(column),
                   'primary-key': column.is_primary_key,
                   'foreign-key': column.is_foreign_key,
+                  'composite-key': column.is_primary_key && primaryKeyCount > 1,
                 }"
               >
                 <div class="column-header">
-                  <span class="column-badge pk" v-if="column.is_primary_key">PK</span>
+                  <span class="column-badge pk" v-if="column.is_primary_key">
+                    PK
+                    <span v-if="primaryKeyCount > 1" class="composite-order">
+                      #{{ column.primary_key_order }}
+                    </span>
+                  </span>
                   <span class="column-badge fk" v-if="column.is_foreign_key">FK</span>
-                  <span class="column-badge unique" v-if="column.unique">UNIQUE</span>
-                  <span class="column-badge nullable" v-if="column.nullable">NULL</span>
+                  <span class="column-badge unique" v-if="column.unique && !column.is_primary_key"
+                    >UNIQUE</span
+                  >
+                  <span
+                    class="column-badge nullable"
+                    v-if="column.nullable && !column.is_primary_key"
+                    >NULL</span
+                  >
                   <span class="column-index">#{{ index + 1 }}</span>
                 </div>
 
@@ -271,6 +313,7 @@
                         <input
                           v-model="column.is_foreign_key"
                           type="checkbox"
+                          :disabled="column.is_primary_key"
                           @change="handleForeignKeyChange(index)"
                         />
                         <span class="checkbox-custom"></span>
@@ -319,7 +362,11 @@
                               availableTable.primaryKeys && availableTable.primaryKeys.length > 0
                             "
                           >
-                            (PK: {{ availableTable.primaryKeys[0].type }})
+                            ({{
+                              availableTable.primaryKeys.length > 1
+                                ? 'Composite PK'
+                                : availableTable.primaryKeys[0].type
+                            }})
                           </template>
                         </option>
                       </select>
@@ -332,7 +379,7 @@
                         Foreign key will reference primary key of
                         <strong>{{ column.references }}</strong>
                         <template v-if="getReferencedTablePrimaryKey(column.references)">
-                          ({{ getReferencedTablePrimaryKey(column.references).type }})
+                          ({{ getReferencedTablePrimaryKeyType(column.references) }})
                         </template>
                       </div>
                     </div>
@@ -436,6 +483,7 @@ export default {
             unique: true,
             references: '',
             default: null,
+            primary_key_order: null,
           },
         ],
       },
@@ -445,14 +493,14 @@ export default {
     }
   },
   computed: {
-    tablesWithPKChanges() {
-      const changes = {}
-      this.tableForm.columns.forEach((col) => {
-        if (col.is_primary_key && col.originalType !== col.type) {
-          changes[this.tableForm.name] = col.type
-        }
-      })
-      return changes // THIẾU DÒNG NÀY
+    primaryKeyCount() {
+      return this.tableForm.columns.filter((col) => col.is_primary_key).length
+    },
+
+    sortedPrimaryKeys() {
+      return this.tableForm.columns
+        .filter((col) => col.is_primary_key)
+        .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0))
     },
 
     isFormValid() {
@@ -472,7 +520,7 @@ export default {
       }
 
       // Check all columns are valid
-      return this.tableForm.columns.every(
+      const allColumnsValid = this.tableForm.columns.every(
         (column) =>
           this.isValidColumnName(column.name) &&
           column.type &&
@@ -481,7 +529,11 @@ export default {
           this.isValidLength(column.length, column.type) &&
           this.isValidDefault(column.default, column.type)
       )
-      // BỎ KIỂM TRA SỐ LƯỢNG PRIMARY KEY
+
+      // Check composite key validation
+      const compositeKeyValid = this.validateCompositeKey()
+
+      return allColumnsValid && compositeKeyValid
     },
 
     hasFormErrors() {
@@ -537,42 +589,11 @@ export default {
         )
       }
 
-      // BỎ KIỂM TRA SỐ LƯỢNG PRIMARY KEY
-      // const primaryKeyCount = this.tableForm.columns.filter((col) => col.is_primary_key).length
-      // if (primaryKeyCount === 0) {
-      //   errors.push('Table must have at least one primary key')
-      // }
-      // if (primaryKeyCount > 1) {
-      //   errors.push('Table can only have one primary key')
-      // }
+      // Composite key validation
+      const compositeErrors = this.validateCompositeKey(true)
+      errors.push(...compositeErrors)
 
       return errors
-    },
-
-    normalizedAvailableTables() {
-      if (!Array.isArray(this.availableTables)) {
-        console.warn('❌ [TableModal] availableTables is not an array:', this.availableTables)
-        return []
-      }
-
-      return this.availableTables
-        .map((table) => {
-          if (typeof table === 'string') {
-            return { name: table, primaryKeys: [] }
-          }
-          return {
-            name: table.name || table.tableName || table._id || '',
-            primaryKeys:
-              table.primaryKeys || table.columns?.filter((col) => col.is_primary_key) || [],
-            ...table,
-          }
-        })
-        .filter((table) => table.name && table.name !== this.tableForm.name) // Exclude self-reference
-    },
-
-    // Statistics
-    primaryKeyCount() {
-      return this.tableForm.columns.filter((col) => col.is_primary_key).length
     },
 
     foreignKeyCount() {
@@ -605,21 +626,34 @@ export default {
       return (
         this.indexedColumnCount > 10 ||
         this.largeColumnCount > 3 ||
+        this.primaryKeyCount > 4 ||
         !this.hasTimestamps ||
         !this.hasSoftDelete
       )
     },
+
+    normalizedAvailableTables() {
+      if (!Array.isArray(this.availableTables)) {
+        console.warn('❌ [TableModal] availableTables is not an array:', this.availableTables)
+        return []
+      }
+
+      return this.availableTables
+        .map((table) => {
+          if (typeof table === 'string') {
+            return { name: table, primaryKeys: [] }
+          }
+          return {
+            name: table.name || table.tableName || table._id || '',
+            primaryKeys:
+              table.primaryKeys || table.columns?.filter((col) => col.is_primary_key) || [],
+            ...table,
+          }
+        })
+        .filter((table) => table.name && table.name !== this.tableForm.name)
+    },
   },
   watch: {
-    tablesWithPKChanges: {
-      deep: true,
-      handler(newChanges) {
-        if (Object.keys(newChanges).length > 0) {
-          this.updateReferencingFKs(newChanges)
-        }
-      },
-    },
-
     table: {
       immediate: true,
       handler(newTable) {
@@ -639,7 +673,7 @@ export default {
       return {
         name: tableData.name,
         description: tableData.description || '',
-        columns: (tableData.columns || []).map((col) => {
+        columns: (tableData.columns || []).map((col, index) => {
           let type = col.type || ''
           let length = col.length
 
@@ -655,7 +689,7 @@ export default {
           return {
             name: col.name || '',
             type: type,
-            originalType: col.type || type, // Lưu type gốc để theo dõi thay đổi
+            originalType: col.type || type,
             length: length !== undefined && length !== null ? String(length) : null,
             is_primary_key: col.is_primary_key || false,
             is_foreign_key: col.is_foreign_key || false,
@@ -664,6 +698,7 @@ export default {
             references: col.references || '',
             default: col.default || null,
             related_usecase_ids: col.related_usecase_ids || [],
+            primary_key_order: col.primary_key_order || null,
           }
         }),
       }
@@ -684,6 +719,7 @@ export default {
             unique: true,
             references: '',
             default: null,
+            primary_key_order: null,
           },
         ],
       }
@@ -702,12 +738,20 @@ export default {
         unique: false,
         references: '',
         default: null,
+        primary_key_order: null,
       })
       this.checkForChanges()
     },
 
     removeColumn(index) {
       if (this.tableForm.columns.length > 1) {
+        const removedColumn = this.tableForm.columns[index]
+
+        // If removing a primary key, update orders
+        if (removedColumn.is_primary_key && this.primaryKeyCount > 1) {
+          this.updatePrimaryKeyOrders()
+        }
+
         this.tableForm.columns.splice(index, 1)
         this.checkForChanges()
       }
@@ -717,26 +761,14 @@ export default {
       const column = this.tableForm.columns[changedIndex]
 
       if (column.is_primary_key) {
-        // BỎ LOGIC UNSET CÁC PRIMARY KEY KHÁC
-        // this.tableForm.columns.forEach((col, index) => {
-        //   if (index !== changedIndex) {
-        //     col.is_primary_key = false
-        //     // Reset auto-set properties for non-primary keys
-        //     col.nullable = true
-        //     col.unique = false
-        //   }
-        // })
-
         // Set primary key properties
         column.nullable = false
         column.unique = true
-        column.is_foreign_key = false // PK cannot be FK
+        column.is_foreign_key = false
         column.references = ''
 
-        // Ghi nhận type change để sync FK
-        if (column.originalType !== column.type) {
-          console.log(`🔄 PK type changed from ${column.originalType} to ${column.type}`)
-        }
+        // Update primary key orders for composite key
+        this.updatePrimaryKeyOrders()
 
         // Suggest naming convention
         if (!column.name.toLowerCase().endsWith('_id') && column.name.toLowerCase() !== 'id') {
@@ -745,23 +777,44 @@ export default {
           )
         }
       } else {
-        // Khi bỏ chọn PK, reset các thuộc tính đặc biệt
+        // When unchecking PK, reset properties
         column.nullable = true
         column.unique = false
+        column.primary_key_order = null
+
+        // Update remaining PK orders
+        this.updatePrimaryKeyOrders()
       }
 
       this.checkForChanges()
+    },
+
+    updatePrimaryKeyOrders() {
+      const primaryKeys = this.tableForm.columns.filter((col) => col.is_primary_key)
+
+      if (primaryKeys.length === 1) {
+        // Single primary key - set order to null
+        primaryKeys[0].primary_key_order = null
+      } else if (primaryKeys.length > 1) {
+        // Composite key - assign sequential orders
+        primaryKeys.forEach((pk, index) => {
+          pk.primary_key_order = index + 1
+        })
+      }
     },
 
     handleForeignKeyChange(index) {
       const column = this.tableForm.columns[index]
 
       if (column.is_foreign_key) {
-        column.is_primary_key = false // FK cannot be PK
+        column.is_primary_key = false
+        column.primary_key_order = null
+
         // Suggest naming convention
         if (!column.name.toLowerCase().endsWith('_id')) {
           console.warn(`💡 Foreign key columns should typically end with '_id': ${column.name}`)
         }
+
         // Auto-sync type with referenced table's PK if available
         if (column.references) {
           this.syncForeignKeyType(column)
@@ -825,12 +878,51 @@ export default {
         column.default = null
       }
 
-      // Nếu là PK, trigger FK sync
-      if (column.is_primary_key && column.originalType !== column.type) {
-        console.log(`🔄 PK type changed, will sync referencing FKs`)
+      this.checkForChanges()
+    },
+
+    validateCompositeKey(returnErrors = false) {
+      const primaryKeys = this.tableForm.columns.filter((col) => col.is_primary_key)
+
+      if (primaryKeys.length <= 1) {
+        return returnErrors ? [] : true
       }
 
-      this.checkForChanges()
+      const errors = []
+
+      // Check all PKs have primary_key_order
+      const pkWithoutOrder = primaryKeys.filter(
+        (pk) => pk.primary_key_order === null || pk.primary_key_order === undefined
+      )
+      if (pkWithoutOrder.length > 0) {
+        errors.push('All composite primary key columns must have a primary key order')
+      }
+
+      // Check unique orders
+      const orders = primaryKeys.map((pk) => pk.primary_key_order).filter((order) => order !== null)
+      const uniqueOrders = Array.from(new Set(orders))
+      if (uniqueOrders.length !== primaryKeys.length) {
+        errors.push('Composite primary key must have unique primary_key_order values')
+      }
+
+      // Check consecutive orders starting from 1
+      const sortedOrders = [...orders].sort((a, b) => a - b)
+      for (let i = 0; i < sortedOrders.length; i++) {
+        if (sortedOrders[i] !== i + 1) {
+          errors.push('Composite key orders must start from 1 and be consecutive')
+          break
+        }
+      }
+
+      // Check no nullable PKs
+      const nullablePKs = primaryKeys.filter((pk) => pk.nullable)
+      if (nullablePKs.length > 0) {
+        errors.push(
+          `Primary key columns cannot be nullable: ${nullablePKs.map((pk) => pk.name).join(', ')}`
+        )
+      }
+
+      return returnErrors ? errors : errors.length === 0
     },
 
     showLengthInput(type) {
@@ -1030,8 +1122,6 @@ export default {
 
           if (!col.nullable) columnDef += ' NOT NULL'
           if (col.unique && !col.is_primary_key) columnDef += ' UNIQUE'
-          // BỎ "PRIMARY KEY" ở đây để tránh trùng lặp
-          // if (col.is_primary_key) columnDef += ' PRIMARY KEY'
 
           if (col.default) {
             if (['VARCHAR', 'CHAR', 'TEXT', 'LONGTEXT'].includes(col.type)) {
@@ -1050,24 +1140,15 @@ export default {
         .filter(Boolean)
         .join(',\n')
 
-      // Xử lý composite primary key
+      // Handle composite primary key with proper ordering
       const primaryKeys = this.tableForm.columns
         .filter((col) => col.is_primary_key)
+        .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0))
         .map((col) => col.name)
 
       let primaryKeyConstraint = ''
       if (primaryKeys.length > 0) {
-        if (primaryKeys.length === 1) {
-          // Nếu chỉ có 1 PK, thêm vào column definition
-          const pkColumn = this.tableForm.columns.find((col) => col.is_primary_key)
-          const columnIndex = this.tableForm.columns.indexOf(pkColumn)
-          // Cần xử lý phức tạp hơn để thêm PRIMARY KEY vào đúng column
-          // Tạm thời dùng composite style cho đơn giản
-          primaryKeyConstraint = `,\n  PRIMARY KEY (${primaryKeys.join(', ')})`
-        } else {
-          // Nếu có nhiều PK, dùng composite primary key
-          primaryKeyConstraint = `,\n  PRIMARY KEY (${primaryKeys.join(', ')})`
-        }
+        primaryKeyConstraint = `,\n  PRIMARY KEY (${primaryKeys.join(', ')})`
       }
 
       const foreignKeys = this.tableForm.columns
@@ -1085,7 +1166,6 @@ export default {
     async copySQL() {
       try {
         await navigator.clipboard.writeText(this.generateTableSQL())
-        // You might want to add a toast notification here
         console.log('SQL copied to clipboard')
       } catch (err) {
         console.error('Failed to copy SQL:', err)
@@ -1103,7 +1183,6 @@ export default {
           columns: this.tableForm.columns.map((col) => {
             const cleanedColumn = {
               ...col,
-              // CHỈ set nullable=false và unique=true nếu là PK
               nullable: col.is_primary_key ? false : col.nullable,
               unique: col.is_primary_key ? true : col.unique,
             }
@@ -1161,28 +1240,10 @@ export default {
             unique: col.unique,
             references: col.references,
             default: col.default,
+            primary_key_order: col.primary_key_order,
           }))
           .sort((a, b) => a.name.localeCompare(b.name)),
       }
-    },
-    updateReferencingFKs(pkChanges) {
-      this.tableForm.columns.forEach((col) => {
-        if (col.is_foreign_key && col.references && pkChanges[col.references]) {
-          const newType = pkChanges[col.references]
-          console.log(`🔄 Auto-updating FK ${col.name} type from ${col.type} to ${newType}`)
-
-          // Cập nhật type
-          col.type = newType
-
-          // Reset length nếu type mới không hỗ trợ length
-          if (!this.showLengthInput(newType)) {
-            col.length = null
-          }
-
-          // Set default length nếu type mới có length mặc định
-          this.handleTypeChange(col, this.tableForm.columns.indexOf(col))
-        }
-      })
     },
   },
 }
@@ -1883,6 +1944,125 @@ export default {
 
   .modal-actions button {
     width: 100%;
+  }
+}
+/* Composite Key Styles */
+.composite-key-section {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+}
+
+.composite-key-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.composite-key-header .material-symbols-outlined {
+  color: #0369a1;
+}
+
+.composite-key-info p {
+  margin: 0 0 12px 0;
+  color: #075985;
+  font-size: 0.875rem;
+}
+
+.composite-key-order {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.composite-key-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: white;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+
+.order-badge {
+  background: #0369a1;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
+.column-name {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.column-type {
+  color: #64748b;
+  font-style: italic;
+}
+
+.composite-key-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  background: #e0f2fe;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #0369a1;
+}
+
+.composite-key-hint .material-symbols-outlined {
+  font-size: 16px;
+}
+
+/* Composite Key Badge in Stats */
+.stat-badge.composite {
+  background: #0369a1;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* Composite Key Column Styles */
+.column-form.composite-key {
+  border-left: 4px solid #0369a1;
+  background: #f0f9ff;
+}
+
+.composite-order {
+  background: rgba(255, 255, 255, 0.9);
+  color: #0369a1;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .composite-key-order {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .composite-key-item {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 </style>

@@ -55,18 +55,6 @@
       </button>
       <button
         class="btn-icon"
-        @click="$emit('toggle-grid')"
-        :title="showGrid ? 'Hide Grid' : 'Show Grid'"
-      >
-        <span class="material-symbols-outlined">
-          {{ showGrid ? 'grid_off' : 'grid_on' }}
-        </span>
-      </button>
-    </div>
-
-    <div class="control-group">
-      <button
-        class="btn-icon"
         @click="$emit('toggle-relationship-colors')"
         :title="showRelationshipColors ? 'Hide Relationship Colors' : 'Show Relationship Colors'"
       >
@@ -74,6 +62,15 @@
           {{ showRelationshipColors ? 'palette' : 'format_color_reset' }}
         </span>
       </button>
+      <!-- <button
+        class="btn-icon"
+        @click="$emit('toggle-grid')"
+        :title="showGrid ? 'Hide Grid' : 'Show Grid'"
+      >
+        <span class="material-symbols-outlined">
+          {{ showGrid ? 'grid_off' : 'grid_on' }}
+        </span>
+      </button> -->
     </div>
 
     <div class="control-group">
@@ -98,13 +95,11 @@
       </button>
     </div>
 
-    <div class="control-group">
+    <!-- <div class="control-group">
       <button class="btn-icon" @click="$emit('fit-to-screen')" title="Fit to Screen">
         <span class="material-symbols-outlined">fit_screen</span>
       </button>
-      <button class="btn-icon" @click="$emit('export-as-image')" title="Export as Image">
-        <span class="material-symbols-outlined">image</span>
-      </button>
+      
       <button
         class="btn-icon"
         @click="$emit('toggle-mini-map')"
@@ -114,11 +109,14 @@
           {{ showMiniMap ? 'map' : 'map' }}
         </span>
       </button>
-    </div>
+    </div> -->
 
     <!-- Relationship Controls -->
     <div class="control-group">
-      <button
+      <button class="btn-icon" @click="$emit('export-as-image')" title="Export as Image">
+        <span class="material-symbols-outlined">image</span>
+      </button>
+      <!-- <button
         class="btn-icon"
         @click="$emit('toggle-relationship-layer')"
         :title="relationshipOnTop ? 'Relationships on Top' : 'Relationships Under Tables'"
@@ -126,7 +124,7 @@
         <span class="material-symbols-outlined">
           {{ relationshipOnTop ? 'layers' : 'layers_clear' }}
         </span>
-      </button>
+      </button> -->
       <button
         class="btn-icon"
         @click="$emit('show-relationship-manager')"
