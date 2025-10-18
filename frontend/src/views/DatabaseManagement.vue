@@ -101,58 +101,6 @@
         <!-- Statistics Cards -->
         <DatabaseStats :stats="databaseStats" />
 
-        <!-- Composite Key Quick Actions -->
-        <div v-if="compositeKeyTables.length > 0" class="quick-actions-panel">
-          <div class="panel-header">
-            <span class="material-symbols-outlined">key</span>
-            <h3>Composite Keys</h3>
-            <span class="badge">{{ compositeKeyTables.length }}</span>
-          </div>
-          <div class="composite-tables-grid">
-            <div
-              v-for="table in compositeKeyTables"
-              :key="table.name"
-              class="composite-table-card"
-              @click="viewCompositeKeyDetails(table)"
-            >
-              <div class="card-header">
-                <span class="table-name">{{ table.name }}</span>
-                <span class="key-size">{{ table.compositeKey.columns.length }} columns</span>
-              </div>
-              <div class="key-columns-preview">
-                <div
-                  v-for="(col, index) in table.compositeKey.columns.slice(0, 3)"
-                  :key="col.name"
-                  class="key-column-preview"
-                >
-                  <span class="column-order">{{ index + 1 }}</span>
-                  <span class="column-name">{{ col.name }}</span>
-                  <span class="column-type">{{ col.type }}</span>
-                </div>
-                <div v-if="table.compositeKey.columns.length > 3" class="more-columns">
-                  +{{ table.compositeKey.columns.length - 3 }} more
-                </div>
-              </div>
-              <div class="card-actions">
-                <button
-                  class="btn-icon"
-                  @click.stop="convertToSingleKey(table)"
-                  title="Convert to single key"
-                >
-                  <span class="material-symbols-outlined">merge</span>
-                </button>
-                <button
-                  class="btn-icon"
-                  @click.stop="viewTableDetails(table)"
-                  title="View table details"
-                >
-                  <span class="material-symbols-outlined">visibility</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- Database Schema Visualization -->
         <div class="schema-section">
           <div class="section-header">
@@ -1332,6 +1280,7 @@ export default {
   border-radius: 12px;
   margin-bottom: 30px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 2px solid #0000005a;
 }
 
 .section-header {

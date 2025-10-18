@@ -102,45 +102,39 @@ export default {
     },
 
     calculateConnectionPoint(tablePos, targetPos, isStart) {
-      const tableCenter = {
-        x: tablePos.x + 150,
-        y: tablePos.y + 100,
-      }
+      // Hardcode kích thước bảng là 300x300
+      const tableWidth = 300
+      const tableHeight = 300
 
-      const targetCenter = {
-        x: targetPos.x + 150,
-        y: targetPos.y + 100,
-      }
+      let x, y, side
 
-      const dx = targetCenter.x - tableCenter.x
-      const dy = targetCenter.y - tableCenter.y
+      const dx = targetPos.x - tablePos.x
+      const dy = targetPos.y - tablePos.y
 
-      let side = 'right'
-
+      // Xác định side dựa trên vị trí tương đối
       if (Math.abs(dx) > Math.abs(dy)) {
         side = dx > 0 ? 'right' : 'left'
       } else {
         side = dy > 0 ? 'bottom' : 'top'
       }
 
-      let x, y
-
+      // Tính toán điểm kết nối trên mép bảng
       switch (side) {
         case 'top':
-          x = tableCenter.x
-          y = tablePos.y
+          x = tablePos.x + tableWidth / 2
+          y = tablePos.y // Mép trên
           break
         case 'right':
-          x = tablePos.x + 300
-          y = tableCenter.y
+          x = tablePos.x + tableWidth // Mép phải
+          y = tablePos.y + tableHeight / 2
           break
         case 'bottom':
-          x = tableCenter.x
-          y = tablePos.y + 200
+          x = tablePos.x + tableWidth / 2
+          y = tablePos.y + tableHeight // Mép dưới
           break
         case 'left':
-          x = tablePos.x
-          y = tableCenter.y
+          x = tablePos.x // Mép trái
+          y = tablePos.y + tableHeight / 2
           break
       }
 
