@@ -32,6 +32,7 @@ interface UserService {
   searchUsersByNameOrEmail(content: string): Promise<UserResponse[]>;
   filterUsers(system_role?: string, status?: string, gender?: string): Promise<UserResponse[]>;
   changeEmail(userId: string, newEmail: string): Promise<string>;
+  uploadAvatar(userId: string, avatarFile: any): Promise<string>; // Thêm method mới
 }
 
 export { UserService, ExchangeTokenRequest, ExchangeTokenResult, UserResponse };

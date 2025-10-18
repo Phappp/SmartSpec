@@ -66,19 +66,34 @@
 
     <div @click="toggleUserMenu" class="user-account">
       <div class="avatar">
-        <img :src="user.avatar_url" alt="" />
-      </div>
-      <div v-if="user" class="user-info">
-        <div class="user-name">{{ user.name }}</div>
-        <div class="user-email">{{ user.email }}</div>
+        <!-- FIX: Thêm safe checking và full URL -->
+        <img
+          v-if="user && user.avatar_url"
+          :src="getFullAvatarUrl(user.avatar_url)"
+          @error="handleAvatarError"
+          alt="User Avatar"
+        />
+        <div v-else class="avatar-placeholder">
+          {{ userInitials }}
+        </div>
       </div>
 
-      <!-- Dùng transition để fade/slide -->
+      <div v-if="user" class="user-info">
+        <div class="user-name">{{ user.name || 'User' }}</div>
+        <div class="user-email">{{ user.email || 'user@example.com' }}</div>
+      </div>
+      <div v-else class="user-info">
+        <div class="user-name">Loading...</div>
+        <div class="user-email">...</div>
+      </div>
+
       <transition name="fade-slide">
         <div v-if="showUserMenu" class="user-menu">
           <ul class="menu-list">
             <li><span class="material-symbols-outlined">help</span> Help</li>
-            <li @click.stop="$emit('open-personal')"><span class="material-symbols-outlined">settings</span> Settings </li>
+            <li @click.stop="$emit('open-personal')">
+              <span class="material-symbols-outlined">settings</span> Settings
+            </li>
             <hr />
             <li @click.stop="handleLogout">
               <span class="material-symbols-outlined">logout</span> Logout
@@ -92,11 +107,11 @@
 
 <script>
 import { isAdmin } from '../utils/authGuard'
+import axiosClient from '@/utils/axiosClient'
 
 export default {
   name: 'Sidebar',
   props: {
-    // ✨ 1. Khai báo props để nhận 'user' từ HomePage
     user: {
       type: Object,
       default: () => null,
@@ -104,14 +119,15 @@ export default {
   },
   data() {
     return {
-      // user: null,
       showUserMenu: false,
       activeSection: 'recent-projects',
+      avatarLoadError: false,
+      localUser: null, // Backup user data
     }
   },
   computed: {
     userInitials() {
-      if (!this.user || !this.user.name) return '...'
+      if (!this.user || !this.user.name) return 'U'
       const names = this.user.name.split(' ')
       if (names.length > 1) {
         return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
@@ -122,6 +138,19 @@ export default {
       return isAdmin()
     },
   },
+  watch: {
+    // Watch for user prop changes
+    user: {
+      handler(newUser) {
+        console.log('🔄 Sidebar user prop changed:', newUser?.avatar_url)
+        if (newUser) {
+          this.localUser = { ...newUser }
+        }
+      },
+      deep: true, // 🔥 Quan trọng: watch nested changes
+      immediate: true,
+    },
+  },
   mounted() {
     // 🔹 Đọc lại từ localStorage
     const savedSection = localStorage.getItem('activeSection')
@@ -129,9 +158,62 @@ export default {
       this.activeSection = savedSection
       this.$emit('navigate', savedSection) // gọi navigate ngay để đồng bộ
     }
+
+    // 🔹 Fetch user data if not provided via props
+    if (!this.user) {
+      this.fetchUser()
+    }
   },
   methods: {
-    
+    // FIX: Hàm tạo full avatar URL
+    getFullAvatarUrl(avatarUrl) {
+      if (!avatarUrl) {
+        console.log('❌ No avatar_url provided')
+        return ''
+      }
+
+      // Nếu đã là full URL hoặc blob URL
+      if (avatarUrl.startsWith('http') || avatarUrl.startsWith('blob:')) {
+        console.log('✅ Already full URL:', avatarUrl)
+        return avatarUrl
+      }
+
+      // Đảm bảo giữ nguyên toàn bộ URL
+      const cleanUrl = avatarUrl.startsWith('/') ? avatarUrl : `/${avatarUrl}`
+      const baseUrl = 'http://localhost:8000'
+      const fullUrl = `${baseUrl}${cleanUrl}`
+
+      console.log('🔗 Sidebar constructed avatar URL:', fullUrl)
+      return fullUrl
+    },
+
+    // FIX: Xử lý lỗi load avatar
+    handleAvatarError(event) {
+      console.error('❌ Sidebar avatar load failed:', event.target.src)
+      this.avatarLoadError = true
+
+      // Fallback to placeholder
+      const img = event.target
+      img.style.display = 'none'
+    },
+
+    // FIX: Fetch user data với error handling
+    async fetchUser() {
+      try {
+        console.log('🔄 Sidebar fetching user data...')
+        const res = await axiosClient.get('/api/auth/me')
+        this.localUser = res.data?.data || {}
+        console.log('✅ Sidebar user data loaded:', this.localUser)
+      } catch (error) {
+        console.error('❌ Failed to fetch user in sidebar:', error)
+        this.localUser = {
+          name: 'User',
+          email: 'user@example.com',
+          avatar_url: '',
+        }
+      }
+    },
+
     toggleUserMenu() {
       this.showUserMenu = !this.showUserMenu
 
@@ -141,6 +223,7 @@ export default {
         document.removeEventListener('click', this.handleClickOutside)
       }
     },
+
     handleClickOutside(event) {
       const userMenu = this.$el.querySelector('.user-menu')
       const userAccount = this.$el.querySelector('.user-account')
@@ -150,10 +233,12 @@ export default {
         document.removeEventListener('click', this.handleClickOutside)
       }
     },
+
     handleLogout() {
       this.showUserMenu = false
       this.$emit('logout')
     },
+
     navigate(section) {
       this.activeSection = section
       localStorage.setItem('activeSection', section)
@@ -162,11 +247,13 @@ export default {
   },
 }
 </script>
+
 <style scoped>
 .fa-slack {
   font-size: 28px;
   color: #0a1a4d;
 }
+
 .sidebar {
   position: fixed;
   height: 100vh;
@@ -179,6 +266,7 @@ export default {
   transition: all 0.3s ease;
   border-right: 1px solid #e0e0e0;
 }
+
 .brand h2 {
   display: flex;
   align-items: center;
@@ -214,7 +302,9 @@ export default {
   font-weight: 600;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
+  position: relative;
 }
+
 .new-project-btn i {
   position: absolute;
   left: 1.4em;
@@ -240,6 +330,7 @@ export default {
 .navigation li {
   margin-bottom: 8px;
 }
+
 .navigation a {
   display: block;
   padding: 8px 12px;
@@ -273,21 +364,21 @@ export default {
 /* User Account Section */
 .user-account {
   position: absolute;
-  gap: 8px;
+  gap: 12px;
   width: 100%;
   display: flex;
-  padding-top: 12px;
+  padding: 12px;
   bottom: 0;
-  padding-bottom: 12px;
   border-top: 1px solid #e0e0e0;
   align-items: center;
-  justify-content: left;
+  justify-content: flex-start;
   transition: 0.1s ease;
+  cursor: pointer;
+  background: #fff;
 }
 
 .user-account:hover {
-  cursor: pointer;
-  background-color: #efeeee;
+  background-color: #f8f9fa;
 }
 
 .avatar {
@@ -296,34 +387,46 @@ export default {
   min-width: 40px;
   min-height: 40px;
   border-radius: 50%;
-  border: 1px solid #5f5d5d;
-  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  background-color: #f8f9fa;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
   cursor: pointer;
   transition: transform 0.25s ease;
+  overflow: hidden;
 }
+
 .avatar img {
   width: 100%;
   height: 100%;
-  padding: 3px;
-  border-radius: 50%;
   object-fit: cover;
 }
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .user-menu {
   position: absolute;
   bottom: 80px;
-  left: 0;
-  width: 100%;
-  min-height: 100px;
+  left: 10px;
+  right: 10px;
   background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 15px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   z-index: 1000;
-  padding: 10px;
+  padding: 8px 0;
   animation: fadeIn 0.2s ease;
 }
 
@@ -336,18 +439,19 @@ export default {
 .menu-list li {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 10px 16px;
   cursor: pointer;
   transition: background 0.2s ease;
   color: #333;
+  font-size: 14px;
 }
 
 .menu-list li span {
-  font-size: 16px;
-  width: 18px;
+  font-size: 18px;
+  width: 20px;
   text-align: center;
-  color: #444;
+  color: #666;
 }
 
 .menu-list li:hover {
@@ -363,25 +467,23 @@ export default {
 .user-info {
   display: flex;
   flex-direction: column;
-  align-items: left;
+  align-items: flex-start;
   justify-content: center;
-  border-bottom: 1px solid #eee;
-  color: #333;
+  flex: 1;
+  min-width: 0; /* Important for text overflow */
 }
 
 .user-name {
-  display: -webkit-box;
-  -webkit-line-clamp: 1; /* số dòng tối đa */
-  -webkit-box-orient: vertical;
   font-weight: 600;
   font-size: 14px;
-  padding-right: 10px;
   color: #333;
   margin-bottom: 2px;
   pointer-events: none;
   user-select: none;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
 }
 
 .user-email {
@@ -391,24 +493,8 @@ export default {
   user-select: none;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.logout-btn {
-  background: none;
-  border: 1px solid #ddd;
-  padding: 6px 12px;
+  white-space: nowrap;
   width: 100%;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.logout-btn:hover {
-  background-color: #fee2e2;
-  border-color: #fca5a5;
-  color: #991b1b;
 }
 
 /* transition cho user-menu */
@@ -416,10 +502,22 @@ export default {
 .fade-slide-leave-active {
   transition: all 0.25s ease;
 }
+
 .fade-slide-enter-from,
 .fade-slide-leave-to {
   opacity: 0;
   transform: translateY(10px);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Responsive */

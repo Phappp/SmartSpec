@@ -12,6 +12,9 @@ const initUserRoute: (controller: UserController) => express.Router = (
     .route("/update-profile")
     .patch(requireAuthorizedUser, controller.updateProfile.bind(controller));
   router
+    .route("/upload-avatar")
+    .post(requireAuthorizedUser, controller.uploadAvatar.bind(controller));
+  router
     .route("/search")
     .post(
       requireAuthorizedUser,

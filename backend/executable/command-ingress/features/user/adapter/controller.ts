@@ -392,6 +392,57 @@ class UserController extends BaseController {
       }
     );
   }
+  async uploadAvatar(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const userId = req.getSubject();
+        if (!userId) {
+          res.status(StatusCodes.UNAUTHORIZED).json({
+            status: "Error",
+            message: "Unauthorized",
+          });
+          return;
+        }
+
+        // Kiểm tra file upload
+        if (!req.files || !req.files.avatar) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "Avatar file is required",
+          });
+          return;
+        }
+
+        const avatarFile = req.files.avatar;
+
+        // Kiểm tra nếu là multiple files
+        if (Array.isArray(avatarFile)) {
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "Error",
+            message: "Only single file upload is allowed",
+          });
+          return;
+        }
+
+        const serviceResponse = await this.service.uploadAvatar(userId, avatarFile);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Avatar uploaded successfully",
+          data: {
+            avatar_url: serviceResponse
+          },
+        });
+      }
+    );
+  }
 }
 
 export { UserController };

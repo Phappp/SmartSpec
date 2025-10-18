@@ -235,7 +235,12 @@
       @close-during-creation="handleCloseDuringCreation"
       @project-created="handleProjectCreated"
     />
-    <PersonalInfor v-if="showPersonalInfo" :user="user" @close="showPersonalInfo = false" />
+    <PersonalInfor
+      v-if="showPersonalInfo"
+      :user="user"
+      @close="showPersonalInfo = false"
+      @avatar-updated="handleAvatarUpdated"
+    />
     <ProjectSharingModal
       v-if="isShareModalVisible"
       :project-id="selectedProject._id"
@@ -866,7 +871,32 @@ export default {
       console.log('🚪 Logged out')
       await authLogout()
       this.$router.push('/login')
-    }
+    },
+
+    handleAvatarUpdated(avatarData) {
+      console.log('🔄 Avatar updated in PersonalInfo:', avatarData)
+
+      // Cập nhật user data với avatar mới
+      if (this.user && avatarData.avatar_url) {
+        this.user.avatar_url = avatarData.avatar_url
+
+        // 🔥 QUAN TRỌNG: Force update để sidebar re-render
+        this.$forceUpdate()
+
+        // Optional: Có thể fetch lại user data để đảm bảo đồng bộ
+        this.fetchUserData()
+      }
+    },
+
+    async fetchUserData() {
+      try {
+        const userRes = await getCurrentUser()
+        this.user = userRes.data.data
+        console.log('✅ User data refreshed after avatar update')
+      } catch (error) {
+        console.error('❌ Failed to refresh user data:', error)
+      }
+    },
   },
 }
 </script>

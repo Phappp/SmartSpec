@@ -1,3 +1,4 @@
+
 <template>
   <div class="modal-overlay" @click.self="$emit('close')">
     <div class="modal-content">
@@ -22,15 +23,35 @@
       <div class="profile-page">
         <div class="profile-header">
           <div class="avatar-section" @click="handleAvatarClick">
-            <img v-if="localUser.avatar_url" :src="localUser.avatar_url" class="avatar-img" alt="User Avatar" />
-            <span v-else class="avatar-circle large" :style="{ backgroundColor: getAvatarColor(localUser.name || 'U') }">
+            <!-- Hiển thị avatar với base URL -->
+            <img
+              v-if="localUser.avatar_url"
+              :src="getFullAvatarUrl(localUser.avatar_url)"
+              class="avatar-img"
+              alt="User Avatar"
+            />
+            <span
+              v-else
+              class="avatar-circle large"
+              :style="{ backgroundColor: getAvatarColor(localUser.name || 'U') }"
+            >
               {{ localUser.name?.charAt(0).toUpperCase() }}
             </span>
-            <div class="avatar-overlay">
-              <span class="material-symbols-outlined">photo_camera</span>
-              Change
+
+            <!-- Overlay với loading state -->
+            <div class="avatar-overlay" :class="{ uploading: isUploadingAvatar }">
+              <span class="material-symbols-outlined">
+                {{ isUploadingAvatar ? 'progress_activity' : 'photo_camera' }}
+              </span>
+              {{ isUploadingAvatar ? 'Uploading...' : 'Change' }}
             </div>
-            <input type="file" ref="fileInput" @change="handleAvatarUpload" accept="image/*" hidden />
+            <input
+              type="file"
+              ref="fileInput"
+              @change="handleAvatarUpload"
+              accept="image/*"
+              hidden
+            />
           </div>
 
           <div class="user-basic-info grid-layout">
@@ -44,7 +65,13 @@
             </div>
             <div class="form-group">
               <label for="dob">Date of Birth</label>
-              <input id="dob" type="date" class="form-control" v-model="formattedDOB" @change="updateDOB" />
+              <input
+                id="dob"
+                type="date"
+                class="form-control"
+                v-model="formattedDOB"
+                @change="updateDOB"
+              />
             </div>
             <div class="form-group">
               <label for="gender">Gender</label>
@@ -54,9 +81,15 @@
                 <option value="other">Other</option>
               </select>
             </div>
-             <div class="form-group">
+            <div class="form-group">
               <label for="status">Status</label>
-              <input id="status" type="text" class="form-control" v-model="localUser.status" />
+              <input
+                id="status"
+                type="text"
+                class="form-control"
+                v-model="localUser.status"
+                readonly
+              />
             </div>
           </div>
         </div>
@@ -72,12 +105,28 @@
               {{ showPasswordForm ? 'Cancel' : 'Change' }}
             </button>
           </div>
-          
+
           <transition name="fade">
             <div v-if="showPasswordForm" class="password-form">
-              <input type="password" v-model="passwordForm.current" placeholder="Current Password" class="form-control" />
-              <input type="password" v-model="passwordForm.newPass" placeholder="New Password" class="form-control" />
-              <button class="btn btn-primary sm" @click="savePassword">Save Password</button>
+              <input
+                type="password"
+                v-model="passwordForm.current"
+                placeholder="Current Password"
+                class="form-control"
+              />
+              <input
+                type="password"
+                v-model="passwordForm.newPass"
+                placeholder="New Password"
+                class="form-control"
+              />
+              <button
+                class="btn btn-primary sm"
+                @click="savePassword"
+                :disabled="isChangingPassword"
+              >
+                {{ isChangingPassword ? 'Saving...' : 'Save Password' }}
+              </button>
             </div>
           </transition>
 
@@ -87,11 +136,16 @@
               <p>Add an extra layer of security to your account.</p>
             </div>
             <div class="security-action">
-               <span class="status-tag" :class="twoFAEnabled ? 'enabled' : 'disabled'">
+              <span class="status-tag" :class="twoFAEnabled ? 'enabled' : 'disabled'">
                 {{ twoFAEnabled ? 'Enabled' : 'Disabled' }}
               </span>
-              <button class="btn" :class="twoFAEnabled ? 'btn-danger' : 'btn-primary'" @click="toggle2FA">
-                {{ twoFAEnabled ? 'Disable' : 'Enable' }}
+              <button
+                class="btn"
+                :class="twoFAEnabled ? 'btn-danger' : 'btn-primary'"
+                @click="toggle2FA"
+                :disabled="isToggling2FA"
+              >
+                {{ isToggling2FA ? 'Processing...' : twoFAEnabled ? 'Disable' : 'Enable' }}
               </button>
             </div>
           </div>
@@ -99,8 +153,9 @@
 
         <footer class="form-actions">
           <button class="btn btn-secondary" @click="$emit('close')">Close</button>
-          <button class="btn btn-primary" @click="saveAllChanges">
-            <span class="material-symbols-outlined">save</span> Save Changes
+          <button class="btn btn-primary" @click="saveAllChanges" :disabled="isSavingProfile">
+            <span class="material-symbols-outlined">save</span>
+            {{ isSavingProfile ? 'Saving...' : 'Save Changes' }}
           </button>
         </footer>
       </div>
@@ -127,10 +182,17 @@ export default {
       showPasswordForm: false,
       passwordForm: { current: '', newPass: '' },
       twoFAEnabled: false,
-      // NEW: Notification state
+
+      // Loading states
+      isUploadingAvatar: false,
+      isSavingProfile: false,
+      isChangingPassword: false,
+      isToggling2FA: false,
+
+      // Notification
       notification: {
         show: false,
-        type: 'success', // success, error, warning
+        type: 'success',
         title: '',
         message: '',
       },
@@ -138,51 +200,73 @@ export default {
     }
   },
   computed: {
-    // NEW: Computed property for notification icon
     notificationIcon() {
       switch (this.notification.type) {
-        case 'error': return 'error';
-        case 'warning': return 'warning';
+        case 'error':
+          return 'error'
+        case 'warning':
+          return 'warning'
         case 'success':
         default:
-          return 'check_circle';
+          return 'check_circle'
       }
     },
   },
   async mounted() {
     await this.fetchUser()
+
+    // Debug sau khi fetch user
+    console.log('🔍 After fetchUser:', {
+      avatar_url: this.localUser.avatar_url,
+      fullUrl: this.getFullAvatarUrl(this.localUser.avatar_url),
+    })
   },
   methods: {
-    // NEW: Method to show notification
-    showNotification(payload) {
-      this.notification.type = payload.type;
-      this.notification.title = payload.title;
-      this.notification.message = payload.message;
-      this.notification.show = true;
+    // Lấy full URL cho avatar
+    getFullAvatarUrl(avatarUrl) {
+      console.log('🖼️ Original avatar_url from DB:', avatarUrl)
 
-      // Clear previous timeout if it exists
+      if (!avatarUrl) return ''
+      if (avatarUrl.startsWith('http')) return avatarUrl
+      if (avatarUrl.startsWith('blob:')) return avatarUrl
+
+      // Đảm bảo giữ nguyên toàn bộ URL, không xử lý gì thêm
+      const cleanUrl = avatarUrl.startsWith('/') ? avatarUrl : `/${avatarUrl}`
+      const baseUrl = 'http://localhost:8000'
+      const fullUrl = `${baseUrl}${cleanUrl}`
+
+      console.log('🔗 Constructed avatar URL:', fullUrl)
+      return fullUrl
+    },
+
+    // Hiển thị notification
+    showNotification(payload) {
+      this.notification.type = payload.type
+      this.notification.title = payload.title
+      this.notification.message = payload.message
+      this.notification.show = true
+
       if (this.notificationTimeout) {
-        clearTimeout(this.notificationTimeout);
+        clearTimeout(this.notificationTimeout)
       }
 
-      // Hide notification after 2 seconds
       this.notificationTimeout = setTimeout(() => {
-        this.notification.show = false;
-      }, 2000); // 2000ms = 2s
+        this.notification.show = false
+      }, 3000)
     },
-    
+
     async fetchUser() {
       try {
-        const res = await axiosClient.get('/api/auth/me');
-        const user = res.data?.data;
-        if (!user) return;
-        
-        // ... (rest of the fetch logic is the same)
+        const res = await axiosClient.get('/api/auth/me')
+        const user = res.data?.data
+        if (!user) return
+
         let formatted = ''
         if (user.dob) {
           const d = new Date(user.dob)
           formatted = d.toISOString().split('T')[0]
         }
+
         this.localUser = {
           name: user.name || '',
           email: user.email || '',
@@ -197,12 +281,15 @@ export default {
               }
             : { day: '', month: '', year: '' },
         }
-        this.formattedDOB = formatted;
-        this.twoFAEnabled = user.isTwoFactorEnabled || false;
+        this.formattedDOB = formatted
+        this.twoFAEnabled = user.isTwoFactorEnabled || false
       } catch (err) {
-        console.error('Error fetching user:', err.response?.data || err.message);
-        // MODIFIED: Use local notification
-        this.showNotification({ type: 'error', title: 'Error', message: 'Could not load user information.' });
+        console.error('Error fetching user:', err.response?.data || err.message)
+        this.showNotification({
+          type: 'error',
+          title: 'Error',
+          message: 'Could not load user information.',
+        })
       }
     },
 
@@ -211,26 +298,106 @@ export default {
       const [year, month, day] = this.formattedDOB.split('-').map(Number)
       this.localUser.dob = { day, month, year }
     },
-    
-    async toggle2FA() {
+
+    // UPLOAD AVATAR - FUNCTION MỚI
+    handleAvatarClick() {
+      this.$refs.fileInput.click()
+    },
+
+    async handleAvatarUpload(e) {
+      const file = e.target.files[0]
+      if (!file) return
+
+      // Validate file
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+      if (!allowedTypes.includes(file.type)) {
+        this.showNotification({
+          type: 'error',
+          title: 'Invalid File',
+          message: 'Only JPEG, PNG, GIF, and WebP images are allowed.',
+        })
+        return
+      }
+
+      // Validate file size (5MB)
+      const maxSize = 5 * 1024 * 1024
+      if (file.size > maxSize) {
+        this.showNotification({
+          type: 'error',
+          title: 'File Too Large',
+          message: 'File size must be less than 5MB.',
+        })
+        return
+      }
+
+      this.isUploadingAvatar = true
+
       try {
-        const enable = !this.twoFAEnabled;
-        await axiosClient.post('/api/auth/toggle-2fa', { enable });
-        this.twoFAEnabled = enable;
-        // MODIFIED: Use local notification
+        // Tạo FormData
+        const formData = new FormData()
+        formData.append('avatar', file)
+
+        // Gọi API upload
+        const response = await axiosClient.post('/api/users/upload-avatar', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+
+        // Cập nhật avatar_url từ response
+        const newAvatarUrl = response.data.data.avatar_url
+        this.localUser.avatar_url = newAvatarUrl
+
+        // 🔥 QUAN TRỌNG: Emit event để thông báo avatar đã thay đổi
+        this.$emit('avatar-updated', {
+          avatar_url: newAvatarUrl,
+          user: this.localUser,
+        })
+
+        this.showNotification({
+          type: 'success',
+          title: 'Success',
+          message: 'Avatar uploaded successfully!',
+        })
+      } catch (err) {
+        console.error('Error uploading avatar:', err.response?.data || err.message)
+        this.showNotification({
+          type: 'error',
+          title: 'Upload Failed',
+          message: err.response?.data?.message || 'Failed to upload avatar.',
+        })
+      } finally {
+        this.isUploadingAvatar = false
+        // Reset file input
+        this.$refs.fileInput.value = ''
+      }
+    },
+
+    async toggle2FA() {
+      this.isToggling2FA = true
+      try {
+        const enable = !this.twoFAEnabled
+        await axiosClient.post('/api/auth/toggle-2fa', { enable })
+        this.twoFAEnabled = enable
         this.showNotification({
           type: 'success',
           title: 'Success',
           message: `2FA ${enable ? 'enabled' : 'disabled'} successfully!`,
-        });
+        })
       } catch (err) {
-        console.error(err);
-        // MODIFIED: Use local notification
-        this.showNotification({ type: 'error', title: 'Error', message: 'Failed to toggle 2FA.' });
+        console.error(err)
+        this.showNotification({
+          type: 'error',
+          title: 'Error',
+          message: 'Failed to toggle 2FA.',
+        })
+      } finally {
+        this.isToggling2FA = false
       }
     },
 
     async saveAllChanges() {
+      this.isSavingProfile = true
       try {
         const payload = {
           email: this.localUser.email,
@@ -238,57 +405,63 @@ export default {
           dob: this.localUser.dob.year ? this.localUser.dob : null,
           gender: this.localUser.gender?.toLowerCase(),
           status: this.localUser.status?.toUpperCase(),
-          avatar_url: this.localUser.avatar_url?.startsWith('blob:') ? null : this.localUser.avatar_url,
-        };
-        
-        await axiosClient.patch('/api/users/update-profile', payload);
-        // MODIFIED: Use local notification
-        this.showNotification({ type: 'success', title: 'Success', message: 'Profile updated successfully!' });
-        
-        // Optionally close modal after a short delay
-        setTimeout(() => this.$emit('close'), 1000);
+          // KHÔNG gửi avatar_url ở đây vì đã upload riêng
+        }
+
+        await axiosClient.patch('/api/users/update-profile', payload)
+        this.showNotification({
+          type: 'success',
+          title: 'Success',
+          message: 'Profile updated successfully!',
+        })
+
+        setTimeout(() => this.$emit('close'), 1000)
       } catch (err) {
-        console.error('Error updating profile:', err.response?.data || err.message);
-        // MODIFIED: Use local notification
+        console.error('Error updating profile:', err.response?.data || err.message)
         this.showNotification({
           type: 'error',
           title: 'Error',
           message: err.response?.data?.message || 'Update failed.',
-        });
+        })
+      } finally {
+        this.isSavingProfile = false
       }
     },
 
     async savePassword() {
+      this.isChangingPassword = true
       try {
-        const { current, newPass } = this.passwordForm;
+        const { current, newPass } = this.passwordForm
         if (!current || !newPass) {
-          // MODIFIED: Use local notification
-          this.showNotification({ type: 'warning', title: 'Warning', message: 'Please fill in all password fields.' });
-          return;
+          this.showNotification({
+            type: 'warning',
+            title: 'Warning',
+            message: 'Please fill in all password fields.',
+          })
+          return
         }
+
         await axiosClient.post('/api/users/change-password', {
           oldPassword: current,
           newPassword: newPass,
-        });
-        this.showPasswordForm = false;
-        this.passwordForm = { current: '', newPass: '' };
-        // MODIFIED: Use local notification
-        this.showNotification({ type: 'success', title: 'Success', message: 'Password changed successfully!' });
+        })
+
+        this.showPasswordForm = false
+        this.passwordForm = { current: '', newPass: '' }
+        this.showNotification({
+          type: 'success',
+          title: 'Success',
+          message: 'Password changed successfully!',
+        })
       } catch (err) {
-        console.error(err);
-        // MODIFIED: Use local notification
-        this.showNotification({ type: 'error', title: 'Error', message: 'Failed to change password.' });
-      }
-    },
-
-    handleAvatarClick() {
-      this.$refs.fileInput.click()
-    },
-
-    handleAvatarUpload(e) {
-      const file = e.target.files[0]
-      if (file) {
-        this.localUser.avatar_url = URL.createObjectURL(file)
+        console.error(err)
+        this.showNotification({
+          type: 'error',
+          title: 'Error',
+          message: err.response?.data?.message || 'Failed to change password.',
+        })
+      } finally {
+        this.isChangingPassword = false
       }
     },
 
@@ -340,8 +513,12 @@ export default {
 
 /* ===== NEW: Notification Styles ===== */
 @keyframes progressBar {
-  from { width: 100%; }
-  to { width: 0%; }
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
 }
 
 .toast-notification {
@@ -449,7 +626,7 @@ export default {
   height: 110px;
   border-radius: 50%;
   border: 3px solid #fff;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   object-fit: cover;
   background: #e2e8f0;
   font-size: 42px;
@@ -477,7 +654,7 @@ export default {
   opacity: 1;
 }
 .avatar-overlay .material-symbols-outlined {
-    margin-bottom: 2px;
+  margin-bottom: 2px;
 }
 .user-basic-info.grid-layout {
   display: grid;
@@ -526,7 +703,7 @@ export default {
   padding: 12px 0;
 }
 .security-item + .security-item {
-    border-top: 1px solid #f3f4f6;
+  border-top: 1px solid #f3f4f6;
 }
 .security-info h4 {
   font-size: 15px;
@@ -559,15 +736,15 @@ export default {
   color: #565f6b;
 }
 .password-form {
-    background-color: #f9fafb;
-    padding: 12px;
-    border-radius: var(--border-radius-md);
-    margin-top: -4px;
-    margin-bottom: 8px;
-    display: grid;
-    grid-template-columns: 1fr 1fr auto;
-    gap: 10px;
-    align-items: center;
+  background-color: #f9fafb;
+  padding: 12px;
+  border-radius: var(--border-radius-md);
+  margin-top: -4px;
+  margin-bottom: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  align-items: center;
 }
 .btn {
   display: inline-flex;
@@ -606,7 +783,7 @@ export default {
   color: #fff;
 }
 .btn-danger:hover {
-    background-color: var(--danger-hover-color);
+  background-color: var(--danger-hover-color);
 }
 .form-actions {
   margin-top: 24px;
@@ -622,5 +799,21 @@ export default {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+.avatar-overlay.uploading {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.avatar-overlay.uploading .material-symbols-outlined {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

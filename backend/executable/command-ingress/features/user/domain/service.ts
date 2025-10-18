@@ -1,4 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
+import path from "path";
+import fs from "fs";
 import {
   UserResponse,
   UserService,
@@ -9,7 +11,6 @@ import User from "../../../../../internal/model/user";
 import Session from "../../../../../internal/model/session";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-
 import { generateJwt, generateJwtOTP } from "../../../services/jwtService";
 import mailService from "../../../services/sendMail.service";
 import { faker } from "@faker-js/faker";
@@ -225,5 +226,57 @@ export class UserServiceImpl implements UserService {
       gender: user.gender,
       isTwoFactorEnabled: user.isTwoFactorEnabled,
     }));
+  }
+  async uploadAvatar(userId: string, avatarFile: any): Promise<string> {
+    const user = await User.findOne({ _id: userId });
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Kiểm tra file
+    if (!avatarFile) {
+      throw new Error("Avatar file is required");
+    }
+
+    // Kiểm tra định dạng file
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedMimeTypes.includes(avatarFile.mimetype)) {
+      throw new Error("Only JPEG, PNG, GIF, and WebP images are allowed");
+    }
+
+    // Kiểm tra kích thước file (max 5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (avatarFile.size > maxSize) {
+      throw new Error("File size must be less than 5MB");
+    }
+
+    // Tạo thư mục uploads nếu chưa tồn tại
+    const uploadDir = path.join(process.cwd(), 'uploads', 'avatars');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    // Xóa avatar cũ nếu tồn tại
+    if (user.avatar_url && user.avatar_url.includes('/uploads/avatars/')) {
+      const oldAvatarPath = path.join(process.cwd(), user.avatar_url);
+      if (fs.existsSync(oldAvatarPath)) {
+        fs.unlinkSync(oldAvatarPath);
+      }
+    }
+
+    // Tạo tên file mới
+    const fileExtension = path.extname(avatarFile.name);
+    const fileName = `avatar_${userId}_${Date.now()}${fileExtension}`;
+    const filePath = path.join(uploadDir, fileName);
+
+    // Lưu file
+    fs.writeFileSync(filePath, avatarFile.data);
+
+    // Cập nhật avatar_url trong database
+    const avatarUrl = `/uploads/avatars/${fileName}`;
+    user.avatar_url = avatarUrl;
+    await user.save();
+
+    return avatarUrl;
   }
 }
