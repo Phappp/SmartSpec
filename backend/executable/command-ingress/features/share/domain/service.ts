@@ -99,7 +99,7 @@ export class ShareProjectService {
           project_id: projectId,
           user_id: subId,
           action: "invite_member",
-          target_id: existingMember._id.toString(),
+          target_id: existingMember.user_id.toString(),
           target_type: "member",
           level: "info",
           details: {message: `${sender.name} re-invited ${user.name} as ${role}`}
@@ -165,7 +165,7 @@ export class ShareProjectService {
           project_id: projectId,
           user_id: subId,
           action: "invite_member",
-          target_id: existingMember._id.toString(),
+          target_id: existingMember.user_id.toString(),
           target_type: "member",
           level: "info",
           details: {message: `${sender.name} re-invited ${user.name} as ${role}`}
@@ -530,7 +530,7 @@ export class ShareProjectService {
       project_id: projectId,
       user_id: userId,
       action: "accept_invite",
-      target_id: member._id.toString(),
+      target_id: member.user_id.toString(),
       target_type: "member",
       level: "info",
       details: {  message: `User ${recipient.name} (${recipient.email}) accepted invitation to project ${project.name}` }
@@ -635,7 +635,7 @@ export class ShareProjectService {
       project_id: projectId,
       user_id: userId,
       action: "reject_invite",
-      target_id: member._id.toString(),
+      target_id: member.user_id.toString(),
       target_type: "member",
       level: "info",
       details: {message: `User ${recipient.name} (${recipient.email}) rejected invitation to project ${project.name}`}
@@ -743,7 +743,7 @@ export class ShareProjectService {
       project_id: projectId,
       user_id: userId.toString(),
       action: "cancel_invite",
-      target_id: member._id.toString(),
+      target_id: member.user_id.toString(),
       target_type: "member",
       level: "info",
       details: { message: `User ${sender.name} (${sender.email}) canceled invitation for ${recipient.name} (${recipient.email}) in project ${project.name}` }
