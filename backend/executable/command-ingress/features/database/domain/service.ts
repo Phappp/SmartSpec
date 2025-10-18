@@ -2,7 +2,7 @@
 
 import DatabaseModel from "../../../../../internal/model/database";
 import VersionModel from "../../../../../internal/model/version";
-import { GeminiService } from "../../../features/orchestrator/domain/GeminiService";
+import { DatabaseGeminiService } from "../domain/GeminiService";
 
 interface GenerateDatabasePayload {
     versionId: string;
@@ -16,10 +16,10 @@ interface TablePositionUpdate {
 }
 
 export class DatabaseService {
-    private geminiService: GeminiService;
+    private geminiService: DatabaseGeminiService;
 
     constructor() {
-        this.geminiService = new GeminiService();
+        this.geminiService = new DatabaseGeminiService();
     }
 
     /**
