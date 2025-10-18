@@ -857,13 +857,13 @@ export default {
         const diagramX = (mouseX - this.diagramOffset.x) / this.zoomLevel
         const diagramY = (mouseY - this.diagramOffset.y) / this.zoomLevel
 
-        const zoomFactor = 0.1
-        const oldZoom = this.zoomLevel
+        // Rất chậm - chỉ 2% mỗi lần scroll (giảm từ 0.1 xuống 0.02)
+        const zoomFactor = 0.02
+        const zoomDirection = event.deltaY > 0 ? -1 : 1
 
-        this.zoomLevel = Math.max(
-          0.1,
-          Math.min(3, this.zoomLevel + (event.deltaY > 0 ? -zoomFactor : zoomFactor))
-        )
+        const newZoom = this.zoomLevel + zoomDirection * zoomFactor
+
+        this.zoomLevel = Math.max(0.1, Math.min(3, newZoom))
 
         this.diagramOffset.x = mouseX - diagramX * this.zoomLevel
         this.diagramOffset.y = mouseY - diagramY * this.zoomLevel
@@ -874,12 +874,14 @@ export default {
     updateDiagramTransform() {
       const transform = `translate(${this.diagramOffset.x}px, ${this.diagramOffset.y}px) scale(${this.zoomLevel})`
 
+      // Áp dụng transform cho tables-container
       const tablesContainer = this.$el.querySelector('.tables-container')
       if (tablesContainer) {
         tablesContainer.style.transform = transform
         tablesContainer.style.transformOrigin = '0 0'
       }
 
+      // Áp dụng transform cho relationships layers
       const relationshipLayers = this.$el.querySelectorAll('.relationships-layer')
       relationshipLayers.forEach((layer) => {
         layer.style.transform = transform
@@ -892,13 +894,50 @@ export default {
       }
     },
     zoomIn() {
-      this.zoomLevel = Math.min(3, this.zoomLevel + 0.1)
+      const container = this.$refs.diagramContainer ? this.$refs.diagramContainer.$el : null
+      if (!container) return
+
+      const rect = container.getBoundingClientRect()
+      const centerX = rect.width / 2
+      const centerY = rect.height / 2
+
+      const diagramX = (centerX - this.diagramOffset.x) / this.zoomLevel
+      const diagramY = (centerY - this.diagramOffset.y) / this.zoomLevel
+
+      // Giảm từ 0.1 xuống 0.05 cho nút zoom
+      this.zoomLevel = Math.min(3, this.zoomLevel + 0.05)
+
+      this.diagramOffset.x = centerX - diagramX * this.zoomLevel
+      this.diagramOffset.y = centerY - diagramY * this.zoomLevel
+
+      this.updateDiagramTransform()
     },
+
     zoomOut() {
-      this.zoomLevel = Math.max(0.1, this.zoomLevel - 0.1)
+      const container = this.$refs.diagramContainer ? this.$refs.diagramContainer.$el : null
+      if (!container) return
+
+      const rect = container.getBoundingClientRect()
+      const centerX = rect.width / 2
+      const centerY = rect.height / 2
+
+      const diagramX = (centerX - this.diagramOffset.x) / this.zoomLevel
+      const diagramY = (centerY - this.diagramOffset.y) / this.zoomLevel
+
+      // Giảm từ 0.1 xuống 0.05 cho nút zoom
+      this.zoomLevel = Math.max(0.1, this.zoomLevel - 0.05)
+
+      this.diagramOffset.x = centerX - diagramX * this.zoomLevel
+      this.diagramOffset.y = centerY - diagramY * this.zoomLevel
+
+      this.updateDiagramTransform()
     },
+
     resetZoom() {
       this.zoomLevel = 0.5
+      this.diagramOffset.x = 0
+      this.diagramOffset.y = 0
+      this.updateDiagramTransform()
     },
     fitToScreen() {
       const container = this.$refs.diagramContainer ? this.$refs.diagramContainer.$el : null
@@ -912,6 +951,12 @@ export default {
       const scaleY = rect.height / contentHeight
 
       this.zoomLevel = Math.min(scaleX, scaleY, 1)
+
+      // Center the diagram after fitting
+      this.diagramOffset.x = (rect.width - contentWidth * this.zoomLevel) / 2
+      this.diagramOffset.y = (rect.height - contentHeight * this.zoomLevel) / 2
+
+      this.updateDiagramTransform()
     },
     selectTable(table) {
       this.selectedTable = table.name
