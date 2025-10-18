@@ -510,10 +510,10 @@ export default {
 
       if (!creationData.pollingData?.versionId) {
         console.error('❌ No versionId provided for polling')
-        // this.showNotification('Error','Cannot track project creation progress. Please check the project later.')`Project "${realProject.name}" created successfully!`
+        // this.showNotification('Error','Cannot track project creation progress. Please check the project later.')`Project created successfully!`
         this.toast.error(
           `Cannot track project creation progress. Please check the project later!`
-        )`Project "${realProject.name}" created successfully!`
+        )`Project created successfully!`
         this.isNewProjectModalVisible = false
         return
       }
@@ -694,8 +694,8 @@ export default {
         this.creatingProjects.splice(projectIndex, 1)
         this.myProjects.unshift(realProject)
         this.recentProjects.unshift(realProject)
-        // this.showNotification('Success', `Project "${realProject.name}" created successfully!`)
-        this.toast.success(`Project "${realProject.name}" created successfully!`)
+        // this.showNotification('Success', `Project created successfully!`)
+        this.toast.success(`Project created successfully!`)
       }
     },
 
@@ -740,7 +740,7 @@ export default {
       try {
         await updateProject(projectId, data)
         // this.showNotification('Success', 'Project updated successfully!')
-        this.toast.success(`Project "${realProject.name}" updated successfully!`)
+        this.toast.success(`Project updated successfully!`)
         this.updateProjectInLists(projectId, data)
       } catch (err) {
         console.error('Update project error', err)
@@ -821,7 +821,7 @@ export default {
       try {
         await deleteProject(projectId)
         // this.showNotification('Success', 'Project moved to trash successfully!')
-        this.toast.success(`Project "${realProject.name}" trashed successfully!`)
+        this.toast.success(`Project trashed successfully!`)
         this.fetchInitialData()
       } catch (err) {
         console.error('Move to trash error', err)
@@ -834,7 +834,7 @@ export default {
       try {
         await apiRestoreProject(projectId)
         // this.showNotification('Success', 'Project restored successfully.')
-        this.toast.success(`Project "${realProject.name}" restored successfully!`)
+        this.toast.success(`Project restored successfully!`)
         this.fetchInitialData()
       } catch (err) {
         console.error('Restore error', err)
@@ -855,7 +855,7 @@ export default {
       try {
         await deleteProject(projectId)
         // this.showNotification('Success', 'Project permanently deleted!')
-        this.toast.success(`Project "${realProject.name}" deleted successfully!`)
+        this.toast.success(`Project deleted successfully!`)
         this.fetchInitialData()
       } catch (err) {
         console.error('Permanent delete error', err)

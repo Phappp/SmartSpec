@@ -10,6 +10,7 @@
       @version-selected="handleVersionSelect"
       @retry-analysis="handleRetry"
       @go-back="goBack"
+      @show-sharing="showSharingModal = true"
     />
 
     <!-- Navigation Tabs -->
@@ -97,6 +98,13 @@
       @close="showConflictDetailModal = false"
       @skip-conflict="skipCurrentConflict"
     />
+
+    <!-- Sharing Modal -->
+    <ProjectSharingModal
+      v-if="showSharingModal"
+      :project-id="project._id"
+      @close="showSharingModal = false"
+    />
   </div>
 </template>
 
@@ -122,6 +130,7 @@ import HandleConflict from '@/components/HandleConflict.vue'
 import ConflictDetailModal from '@/components/ConflictDetailModal.vue'
 import AddInputModal from '@/components/AddInputModal.vue'
 import IncrementalAnalysis from '@/components/IncrementalAnalysis.vue'
+import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
 
 export default {
   name: 'ProjectDetailView',
@@ -134,6 +143,7 @@ export default {
     ConflictDetailModal,
     AddInputModal,
     IncrementalAnalysis,
+    ProjectSharingModal,
   },
   data() {
     return {
@@ -142,6 +152,7 @@ export default {
       inputs: [],
       useCases: [],
       selectedVersionId: null,
+      showSharingModal: false,
 
       // ========== RETRY STATE ==========
       isRetrying: false,

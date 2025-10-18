@@ -70,7 +70,7 @@
           <div class="stage-description">{{ getStageDescription(currentStage) }}</div>
         </div>
 
-        <button class="members-btn">
+        <button class="members-btn" @click="showSharingModal">
           <span class="material-symbols-outlined">group</span>
           {{ project.members ? project.members.length : 0 }}
         </button>
@@ -150,6 +150,9 @@ export default {
         Completed: 'Analysis completed successfully!',
       }
       return descriptions[stage] || 'Processing your request...'
+    },
+    showSharingModal() {
+      this.$emit('show-sharing')
     },
   },
 }
