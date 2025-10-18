@@ -148,7 +148,7 @@ export class AuthServiceImpl implements AuthService {
       target_id: sub?.toString(),
       action: "logout",
       target_type: "system",
-      details: { message: "User logged out" },
+      details: { message: `🚪 User "${sub}" logged out successfully (Session ID: ${sid}).` },
       level: "info",
       ip: ip,
       user_agent: userAgent
@@ -255,7 +255,7 @@ export class AuthServiceImpl implements AuthService {
       target_id: user._id.toString(),
       action: "create_user",
       target_type: "system",
-      details: { message: `User registered: ${email}` },
+      details: { message: `User "${email}" registered successfully (ID: ${user._id}) via local registration.` },
       level: "info",
       ip: ip,
       user_agent: userAgent
@@ -290,7 +290,7 @@ export class AuthServiceImpl implements AuthService {
         target_id: undefined,
         action: "failed_login",
         target_type: "system",
-        details: { message: `Login failed: user ${email} not found` },
+        details: { message: `Failed login attempt for "${email}" — reason: "User not found"` },
         level: "warning",
         ip: ip,
         user_agent: userAgent
@@ -304,7 +304,7 @@ export class AuthServiceImpl implements AuthService {
         target_id: undefined,
         action: "failed_login",
         target_type: "system",
-        details: { message: `Login failed: invalid password for ${email}` },
+       details: { message: `Failed login attempt for "${email}" — reason: "Invalid password"` },
         level: "warning",
         ip: ip,
         user_agent: userAgent
@@ -345,7 +345,7 @@ export class AuthServiceImpl implements AuthService {
       target_id: user._id.toString(),
       action: "login",
       target_type: "system",
-      details: { message: `User logged in: ${email}` },
+      details: { message: `User "${email}" logged in successfully (Session ID: ${sessionID}).` },
       level: "info",
       ip: ip,
       user_agent: userAgent
@@ -447,7 +447,7 @@ export class AuthServiceImpl implements AuthService {
       target_id: user?._id?.toString(),
       action: "update_user",
       target_type: "system",
-      details: { message: `User requested password reset for ${email}` },
+      details: { message: `Password reset requested by "${email}" — verification email sent.` },
       level: "info",
       ip,
       user_agent: userAgent
@@ -477,10 +477,10 @@ export class AuthServiceImpl implements AuthService {
         target_id: user._id.toString(),
         action: "update_user",
         target_type: "system",
-        details: {
+        details: { 
           before: { password: oldPasswordHash.slice(0, 10) + "..." },
           after: { password: hashedPassword.slice(0, 10) + "..." },
-          message: `User reset password for ${user.email}`,
+          message: `User "${user.email}" reset password successfully (User ID: ${user._id}).` 
         },
         level: "info",
         ip: ip,
@@ -506,10 +506,10 @@ export class AuthServiceImpl implements AuthService {
         target_id: userId,
         action: "update_user",
         target_type: "system",
-        details: {
+        details: { 
           before: { isTwoFactorEnabled: oldValue },
           after: { isTwoFactorEnabled: enable },
-          message: `User ${enable ? "enabled" : "disabled"} 2FA`,
+          message: `User "${user.email}" ${enable ? "enabled" : "disabled"} Two-Factor Authentication (2FA).` 
         },
         level: "info",
         ip: ip,

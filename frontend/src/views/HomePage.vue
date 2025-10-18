@@ -859,17 +859,14 @@ export default {
       }
     },
 
-    logout() {
-      this.cleanupAllPolling()
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('userId')
-      localStorage.removeItem('email')
-      console.log('🚪 Logging out...')
-      authLogout()
-
+    async logout() {
+      // localStorage.removeItem('accessToken')
+      // localStorage.removeItem('adminToken')
+      // localStorage.removeItem('refreshToken')
+      console.log('🚪 Logged out')
+      await authLogout()
       this.$router.push('/login')
-    },
+    }
   },
 }
 </script>
