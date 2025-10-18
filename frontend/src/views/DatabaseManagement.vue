@@ -159,11 +159,23 @@
           />
         </div>
 
-        <!-- SQL Preview -->
+        <!-- SQL Preview với multiple dialects -->
         <div class="sql-preview-section">
           <div class="section-header">
             <h3>SQL Preview</h3>
             <div class="sql-actions">
+              <!-- SQL Dialect Selector -->
+              <div class="sql-dialect-selector">
+                <label>SQL Dialect:</label>
+                <select v-model="selectedSQLDialect" class="dialect-select">
+                  <option value="mysql">MySQL</option>
+                  <option value="sqlserver">SQL Server</option>
+                  <option value="postgresql">PostgreSQL</option>
+                  <option value="oracle">Oracle</option>
+                  <option value="sqlite">SQLite</option>
+                </select>
+              </div>
+
               <button class="btn-secondary" @click="copySQL">
                 <span class="material-symbols-outlined">content_copy</span>
                 Copy SQL
@@ -175,13 +187,16 @@
             </div>
           </div>
           <div class="sql-preview">
+            <div class="sql-header">
+              <span class="dialect-badge">{{ getDialectName(selectedSQLDialect) }}</span>
+            </div>
             <pre><code>{{ generatedSQL }}</code></pre>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Create/Edit Table Modal -->
+    <!-- Modals (giữ nguyên) -->
     <TableModal
       v-if="showCreateTableModal || editingTable"
       :table="editingTable"
@@ -191,7 +206,6 @@
       @close="closeModal"
     />
 
-    <!-- Composite Key Management Modal -->
     <CompositeKeyModal
       v-if="showCompositeKeyModal"
       :tables="databaseTables"
@@ -200,7 +214,6 @@
       @close="showCompositeKeyModal = false"
     />
 
-    <!-- Relationship Management Modal -->
     <RelationshipModal
       v-if="showRelationshipModal"
       :relationships="relationships"
@@ -210,7 +223,6 @@
       @close="showRelationshipModal = false"
     />
 
-    <!-- Table Details Modal -->
     <TableDetailsModal
       v-if="selectedTable"
       :table="selectedTable"
@@ -218,7 +230,6 @@
       @close="selectedTable = null"
     />
 
-    <!-- Composite Key Details Modal -->
     <CompositeKeyDetailsModal
       v-if="selectedCompositeKeyTable"
       :table="selectedCompositeKeyTable"
@@ -296,6 +307,7 @@ export default {
       },
 
       viewMode: 'diagram',
+      selectedSQLDialect: 'mysql', // Mặc định là MySQL
 
       showCreateTableModal: false,
       showRelationshipModal: false,
@@ -330,6 +342,23 @@ export default {
           return null
         })
         .filter(Boolean)
+    },
+  },
+  watch: {
+    selectedSQLDialect() {
+      this.generateSQL()
+    },
+    databaseTables: {
+      deep: true,
+      handler() {
+        this.generateSQL()
+      },
+    },
+    relationships: {
+      deep: true,
+      handler() {
+        this.generateSQL()
+      },
     },
   },
   async created() {
@@ -464,6 +493,477 @@ export default {
       } finally {
         this.generatingSchema = false
       }
+    },
+
+    // SQL Generation với multiple dialects
+    generateSQL() {
+      if (!this.databaseTables || this.databaseTables.length === 0) {
+        this.generatedSQL = '-- No tables to generate SQL for'
+        return
+      }
+
+      switch (this.selectedSQLDialect) {
+        case 'mysql':
+          this.generatedSQL = this.generateMySQLSQL()
+          break
+        case 'sqlserver':
+          this.generatedSQL = this.generateSQLServerSQL()
+          break
+        case 'postgresql':
+          this.generatedSQL = this.generatePostgreSQLSQL()
+          break
+        case 'oracle':
+          this.generatedSQL = this.generateOracleSQL()
+          break
+        case 'sqlite':
+          this.generatedSQL = this.generateSQLiteSQL()
+          break
+        default:
+          this.generatedSQL = this.generateMySQLSQL()
+      }
+    },
+
+    generateMySQLSQL() {
+      const sqlStatements = this.databaseTables
+        .map((table) => {
+          const primaryKeys = table.columns?.filter((col) => col.is_primary_key) || []
+          const hasPK = primaryKeys.length > 0
+
+          const columns = (table.columns || [])
+            .map((col) => {
+              let columnDef = `\`${col.name}\` ${col.type}`
+
+              if (col.length) columnDef += `(${col.length})`
+              if (!col.nullable) columnDef += ' NOT NULL'
+              if (col.unique && !col.is_primary_key) columnDef += ' UNIQUE'
+
+              if (col.is_primary_key && col.type.includes('INT')) {
+                columnDef += ' AUTO_INCREMENT'
+              }
+
+              if (col.default) {
+                columnDef += this.formatDefaultValue(col.default, col.type, 'mysql')
+              }
+
+              return `  ${columnDef}`
+            })
+            .join(',\n')
+
+          let constraints = []
+
+          if (hasPK) {
+            const pkColumnNames = primaryKeys
+              .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0))
+              .map((col) => `\`${col.name}\``)
+              .join(', ')
+            constraints.push(`  PRIMARY KEY (${pkColumnNames})`)
+          }
+
+          const foreignKeys = (table.columns || [])
+            .filter((col) => col.is_foreign_key && col.references)
+            .map((col) => {
+              const referencedTable = this.databaseTables.find((t) => t.name === col.references)
+              const referencedPKs = referencedTable?.columns?.filter((c) => c.is_primary_key) || []
+              const pkColumnName = referencedPKs.length === 1 ? referencedPKs[0].name : 'id'
+              return `  FOREIGN KEY (\`${col.name}\`) REFERENCES \`${col.references}\`(\`${pkColumnName}\`)`
+            })
+
+          constraints = [...constraints, ...foreignKeys]
+
+          let sql = `CREATE TABLE \`${table.name}\` (\n${columns}`
+          if (constraints.length > 0) {
+            sql += `,\n${constraints.join(',\n')}`
+          }
+          sql += '\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;'
+          return sql
+        })
+        .join('\n\n')
+
+      return sqlStatements
+    },
+
+    generateSQLServerSQL() {
+      const sqlStatements = this.databaseTables
+        .map((table) => {
+          const primaryKeys = table.columns?.filter((col) => col.is_primary_key) || []
+          const hasPK = primaryKeys.length > 0
+
+          const columns = (table.columns || [])
+            .map((col) => {
+              let columnDef = `[${col.name}] ${this.mapDataType(col.type, 'sqlserver')}`
+
+              if (col.length) columnDef += `(${col.length})`
+              if (!col.nullable) columnDef += ' NOT NULL'
+              if (col.unique && !col.is_primary_key) columnDef += ' UNIQUE'
+
+              if (col.is_primary_key && col.type.includes('INT')) {
+                columnDef += ' IDENTITY(1,1)'
+              }
+
+              if (col.default) {
+                columnDef += this.formatDefaultValue(col.default, col.type, 'sqlserver')
+              }
+
+              return `  ${columnDef}`
+            })
+            .join(',\n')
+
+          let constraints = []
+
+          if (hasPK) {
+            const pkColumnNames = primaryKeys
+              .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0))
+              .map((col) => `[${col.name}]`)
+              .join(', ')
+            constraints.push(`  CONSTRAINT PK_${table.name} PRIMARY KEY (${pkColumnNames})`)
+          }
+
+          const foreignKeys = (table.columns || [])
+            .filter((col) => col.is_foreign_key && col.references)
+            .map((col) => {
+              const referencedTable = this.databaseTables.find((t) => t.name === col.references)
+              const referencedPKs = referencedTable?.columns?.filter((c) => c.is_primary_key) || []
+              const pkColumnName = referencedPKs.length === 1 ? referencedPKs[0].name : 'id'
+              return `  CONSTRAINT FK_${table.name}_${col.name} FOREIGN KEY ([${col.name}]) REFERENCES [${col.references}]([${pkColumnName}])`
+            })
+
+          constraints = [...constraints, ...foreignKeys]
+
+          let sql = `CREATE TABLE [${table.name}] (\n${columns}`
+          if (constraints.length > 0) {
+            sql += `,\n${constraints.join(',\n')}`
+          }
+          sql += '\n);'
+          return sql
+        })
+        .join('\n\n')
+
+      return sqlStatements
+    },
+
+    generatePostgreSQLSQL() {
+      const sqlStatements = this.databaseTables
+        .map((table) => {
+          const primaryKeys = table.columns?.filter((col) => col.is_primary_key) || []
+          const hasPK = primaryKeys.length > 0
+
+          const columns = (table.columns || [])
+            .map((col) => {
+              let columnDef = `"${col.name}" ${this.mapDataType(col.type, 'postgresql')}`
+
+              if (col.length) columnDef += `(${col.length})`
+              if (!col.nullable) columnDef += ' NOT NULL'
+              if (col.unique && !col.is_primary_key) columnDef += ' UNIQUE'
+
+              if (col.is_primary_key && col.type.includes('SERIAL')) {
+                columnDef = `"${col.name}" SERIAL`
+              }
+
+              if (col.default) {
+                columnDef += this.formatDefaultValue(col.default, col.type, 'postgresql')
+              }
+
+              return `  ${columnDef}`
+            })
+            .join(',\n')
+
+          let constraints = []
+
+          if (hasPK) {
+            const pkColumnNames = primaryKeys
+              .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0))
+              .map((col) => `"${col.name}"`)
+              .join(', ')
+            constraints.push(`  PRIMARY KEY (${pkColumnNames})`)
+          }
+
+          const foreignKeys = (table.columns || [])
+            .filter((col) => col.is_foreign_key && col.references)
+            .map((col) => {
+              const referencedTable = this.databaseTables.find((t) => t.name === col.references)
+              const referencedPKs = referencedTable?.columns?.filter((c) => c.is_primary_key) || []
+              const pkColumnName = referencedPKs.length === 1 ? referencedPKs[0].name : 'id'
+              return `  FOREIGN KEY ("${col.name}") REFERENCES "${col.references}"("${pkColumnName}")`
+            })
+
+          constraints = [...constraints, ...foreignKeys]
+
+          let sql = `CREATE TABLE "${table.name}" (\n${columns}`
+          if (constraints.length > 0) {
+            sql += `,\n${constraints.join(',\n')}`
+          }
+          sql += '\n);'
+          return sql
+        })
+        .join('\n\n')
+
+      return sqlStatements
+    },
+
+    generateOracleSQL() {
+      const sqlStatements = this.databaseTables
+        .map((table) => {
+          const primaryKeys = table.columns?.filter((col) => col.is_primary_key) || []
+          const hasPK = primaryKeys.length > 0
+
+          const columns = (table.columns || [])
+            .map((col) => {
+              let columnDef = `"${col.name}" ${this.mapDataType(col.type, 'oracle')}`
+
+              if (col.length) columnDef += `(${col.length})`
+              if (!col.nullable) columnDef += ' NOT NULL'
+              if (col.unique && !col.is_primary_key) columnDef += ' UNIQUE'
+
+              if (col.default) {
+                columnDef += this.formatDefaultValue(col.default, col.type, 'oracle')
+              }
+
+              return `  ${columnDef}`
+            })
+            .join(',\n')
+
+          let constraints = []
+
+          if (hasPK) {
+            const pkColumnNames = primaryKeys
+              .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0))
+              .map((col) => `"${col.name}"`)
+              .join(', ')
+            constraints.push(`  CONSTRAINT PK_${table.name} PRIMARY KEY (${pkColumnNames})`)
+          }
+
+          const foreignKeys = (table.columns || [])
+            .filter((col) => col.is_foreign_key && col.references)
+            .map((col) => {
+              const referencedTable = this.databaseTables.find((t) => t.name === col.references)
+              const referencedPKs = referencedTable?.columns?.filter((c) => c.is_primary_key) || []
+              const pkColumnName = referencedPKs.length === 1 ? referencedPKs[0].name : 'id'
+              return `  CONSTRAINT FK_${table.name}_${col.name} FOREIGN KEY ("${col.name}") REFERENCES "${col.references}"("${pkColumnName}")`
+            })
+
+          constraints = [...constraints, ...foreignKeys]
+
+          let sql = `CREATE TABLE "${table.name}" (\n${columns}`
+          if (constraints.length > 0) {
+            sql += `,\n${constraints.join(',\n')}`
+          }
+          sql += '\n);'
+          return sql
+        })
+        .join('\n\n')
+
+      return sqlStatements
+    },
+
+    generateSQLiteSQL() {
+      const sqlStatements = this.databaseTables
+        .map((table) => {
+          const primaryKeys = table.columns?.filter((col) => col.is_primary_key) || []
+          const hasPK = primaryKeys.length > 0
+
+          const columns = (table.columns || [])
+            .map((col) => {
+              let columnDef = `"${col.name}" ${this.mapDataType(col.type, 'sqlite')}`
+
+              if (!col.nullable) columnDef += ' NOT NULL'
+              if (col.unique && !col.is_primary_key) columnDef += ' UNIQUE'
+
+              if (col.is_primary_key) {
+                columnDef += ' PRIMARY KEY'
+                if (col.type.includes('INT')) {
+                  columnDef += ' AUTOINCREMENT'
+                }
+              }
+
+              if (col.default) {
+                columnDef += this.formatDefaultValue(col.default, col.type, 'sqlite')
+              }
+
+              return `  ${columnDef}`
+            })
+            .join(',\n')
+
+          let sql = `CREATE TABLE "${table.name}" (\n${columns}`
+
+          // SQLite doesn't support named foreign key constraints in column definitions
+          const foreignKeys = (table.columns || [])
+            .filter((col) => col.is_foreign_key && col.references && !col.is_primary_key)
+            .map((col) => {
+              const referencedTable = this.databaseTables.find((t) => t.name === col.references)
+              const referencedPKs = referencedTable?.columns?.filter((c) => c.is_primary_key) || []
+              const pkColumnName = referencedPKs.length === 1 ? referencedPKs[0].name : 'id'
+              return `  FOREIGN KEY ("${col.name}") REFERENCES "${col.references}"("${pkColumnName}")`
+            })
+
+          if (foreignKeys.length > 0) {
+            sql += `,\n${foreignKeys.join(',\n')}`
+          }
+
+          sql += '\n);'
+          return sql
+        })
+        .join('\n\n')
+
+      return sqlStatements
+    },
+
+    mapDataType(originalType, dialect) {
+      const typeMap = {
+        mysql: {
+          VARCHAR: 'VARCHAR',
+          INT: 'INT',
+          BIGINT: 'BIGINT',
+          TEXT: 'TEXT',
+          DATETIME: 'DATETIME',
+          TIMESTAMP: 'TIMESTAMP',
+          BOOLEAN: 'TINYINT(1)',
+          DECIMAL: 'DECIMAL',
+        },
+        sqlserver: {
+          VARCHAR: 'VARCHAR',
+          INT: 'INT',
+          BIGINT: 'BIGINT',
+          TEXT: 'TEXT',
+          DATETIME: 'DATETIME2',
+          TIMESTAMP: 'DATETIME2',
+          BOOLEAN: 'BIT',
+          DECIMAL: 'DECIMAL',
+        },
+        postgresql: {
+          VARCHAR: 'VARCHAR',
+          INT: 'INTEGER',
+          BIGINT: 'BIGINT',
+          TEXT: 'TEXT',
+          DATETIME: 'TIMESTAMP',
+          TIMESTAMP: 'TIMESTAMP',
+          BOOLEAN: 'BOOLEAN',
+          DECIMAL: 'DECIMAL',
+        },
+        oracle: {
+          VARCHAR: 'VARCHAR2',
+          INT: 'NUMBER',
+          BIGINT: 'NUMBER',
+          TEXT: 'CLOB',
+          DATETIME: 'DATE',
+          TIMESTAMP: 'TIMESTAMP',
+          BOOLEAN: 'NUMBER(1)',
+          DECIMAL: 'NUMBER',
+        },
+        sqlite: {
+          VARCHAR: 'TEXT',
+          INT: 'INTEGER',
+          BIGINT: 'INTEGER',
+          TEXT: 'TEXT',
+          DATETIME: 'TEXT',
+          TIMESTAMP: 'TEXT',
+          BOOLEAN: 'INTEGER',
+          DECIMAL: 'REAL',
+        },
+      }
+
+      return typeMap[dialect]?.[originalType?.toUpperCase()] || originalType
+    },
+
+    formatDefaultValue(defaultValue, columnType, dialect) {
+      if (!defaultValue) return ''
+
+      const upperType = columnType?.toUpperCase() || ''
+
+      if (['VARCHAR', 'CHAR', 'TEXT', 'LONGTEXT'].some((t) => upperType.includes(t))) {
+        if (defaultValue === 'CURRENT_TIMESTAMP') {
+          if (dialect === 'mysql') return ' DEFAULT CURRENT_TIMESTAMP'
+          if (dialect === 'postgresql') return ' DEFAULT NOW()'
+          if (dialect === 'sqlserver') return ' DEFAULT GETDATE()'
+          if (dialect === 'oracle') return ' DEFAULT SYSDATE'
+          if (dialect === 'sqlite') return ' DEFAULT CURRENT_TIMESTAMP'
+        }
+
+        if (defaultValue.startsWith("'") && defaultValue.endsWith("'")) {
+          return ` DEFAULT ${defaultValue}`
+        }
+        return ` DEFAULT '${defaultValue}'`
+      }
+
+      if (defaultValue === 'CURRENT_TIMESTAMP') {
+        if (dialect === 'mysql') return ' DEFAULT CURRENT_TIMESTAMP'
+        if (dialect === 'postgresql') return ' DEFAULT NOW()'
+        if (dialect === 'sqlserver') return ' DEFAULT GETDATE()'
+        if (dialect === 'oracle') return ' DEFAULT SYSDATE'
+        if (dialect === 'sqlite') return ' DEFAULT CURRENT_TIMESTAMP'
+      }
+
+      return ` DEFAULT ${defaultValue}`
+    },
+
+    getDialectName(dialect) {
+      const names = {
+        mysql: 'MySQL',
+        sqlserver: 'SQL Server',
+        postgresql: 'PostgreSQL',
+        oracle: 'Oracle',
+        sqlite: 'SQLite',
+      }
+      return names[dialect] || 'MySQL'
+    },
+
+    async copySQL() {
+      try {
+        await navigator.clipboard.writeText(this.generatedSQL)
+        this.toast.success('SQL copied to clipboard!')
+      } catch (err) {
+        console.error('Failed to copy SQL:', err)
+        this.toast.error('Failed to copy SQL')
+      }
+    },
+
+    downloadSQL() {
+      const blob = new Blob([this.generatedSQL], { type: 'text/sql' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${this.database?.name || 'database'}-schema-${this.selectedSQLDialect}.sql`
+      link.click()
+      URL.revokeObjectURL(url)
+    },
+
+    async exportSQL() {
+      try {
+        const { data: sqlData } = await exportDatabaseSQL(this.database._id)
+        const sql = sqlData.data?.sql || sqlData.sql || sqlData
+
+        const blob = new Blob([sql], { type: 'text/sql' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `${this.database?.name || 'database'}-schema-export.sql`
+        link.click()
+        URL.revokeObjectURL(url)
+
+        this.toast.success('SQL exported successfully')
+      } catch (error) {
+        console.error('Failed to export SQL:', error)
+        this.toast.error('Failed to export SQL')
+      }
+    },
+
+    exportSchema() {
+      const schemaData = {
+        database: this.database,
+        tables: this.databaseTables,
+        relationships: this.relationships,
+        generatedSQL: this.generatedSQL,
+        sqlDialect: this.selectedSQLDialect,
+        exportDate: new Date().toISOString(),
+      }
+
+      const dataStr = JSON.stringify(schemaData, null, 2)
+      const dataBlob = new Blob([dataStr], { type: 'application/json' })
+      const url = URL.createObjectURL(dataBlob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${this.database?.name || 'database'}-schema-${new Date().getTime()}.json`
+      link.click()
+      URL.revokeObjectURL(url)
     },
 
     // Composite Key methods
@@ -763,155 +1263,6 @@ export default {
       this.availableTables = []
     },
 
-    // SQL Generation & Export
-    // TÌM VÀ THAY THẾ HÀM generateSQL() HIỆN TẠI BẰNG CODE NÀY:
-
-    generateSQL() {
-      if (!this.databaseTables || this.databaseTables.length === 0) {
-        this.generatedSQL = '-- No tables to generate SQL for'
-        return
-      }
-
-      const sqlStatements = this.databaseTables
-        .map((table) => {
-          // Lấy danh sách primary keys
-          const primaryKeys = table.columns?.filter((col) => col.is_primary_key) || []
-          const hasPK = primaryKeys.length > 0
-
-          // Tạo column definitions (KHÔNG thêm PRIMARY KEY ở đây)
-          const columns = (table.columns || [])
-            .map((col) => {
-              let columnDef = `${col.name} ${col.type}`
-
-              // Thêm length nếu có
-              if (col.length) columnDef += `(${col.length})`
-
-              // Thêm NOT NULL
-              if (!col.nullable) columnDef += ' NOT NULL'
-
-              // Thêm UNIQUE (chỉ nếu không phải PK)
-              if (col.unique && !col.is_primary_key) columnDef += ' UNIQUE'
-
-              // THÊM AUTO_INCREMENT cho INT primary keys
-              if (col.is_primary_key && col.type.includes('INT')) {
-                columnDef += ' AUTO_INCREMENT'
-              }
-
-              // Thêm DEFAULT value
-              if (col.default) {
-                if (['VARCHAR', 'CHAR', 'TEXT', 'LONGTEXT'].includes(col.type)) {
-                  const formattedDefault =
-                    col.default.startsWith("'") && col.default.endsWith("'")
-                      ? col.default
-                      : `'${col.default}'`
-                  columnDef += ` DEFAULT ${formattedDefault}`
-                } else {
-                  columnDef += ` DEFAULT ${col.default}`
-                }
-              }
-
-              return `  ${columnDef}`
-            })
-            .join(',\n')
-
-          // Xử lý constraints
-          let constraints = []
-
-          // LUÔN thêm PRIMARY KEY constraint ở cuối (cả single và composite)
-          if (hasPK) {
-            const pkColumnNames = primaryKeys
-              .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0))
-              .map((col) => col.name)
-              .join(', ')
-            constraints.push(`  PRIMARY KEY (${pkColumnNames})`)
-          }
-
-          // Xử lý foreign keys
-          const foreignKeys = (table.columns || [])
-            .filter((col) => col.is_foreign_key && col.references)
-            .map((col) => {
-              const referencedTable = this.databaseTables.find((t) => t.name === col.references)
-              const referencedPKs = referencedTable?.columns?.filter((c) => c.is_primary_key) || []
-              const pkColumnName = referencedPKs.length === 1 ? referencedPKs[0].name : 'id'
-              return `  FOREIGN KEY (${col.name}) REFERENCES ${col.references}(${pkColumnName})`
-            })
-
-          constraints = [...constraints, ...foreignKeys]
-
-          // Kết hợp tất cả các phần
-          let sql = `CREATE TABLE ${table.name} (\n${columns}`
-
-          if (constraints.length > 0) {
-            sql += `,\n${constraints.join(',\n')}`
-          }
-
-          sql += '\n);'
-          return sql
-        })
-        .join('\n\n')
-
-      this.generatedSQL = sqlStatements
-    },
-
-    async copySQL() {
-      try {
-        await navigator.clipboard.writeText(this.generatedSQL)
-        this.toast.success('SQL copied to clipboard!')
-      } catch (err) {
-        console.error('Failed to copy SQL:', err)
-        this.toast.error('Failed to copy SQL')
-      }
-    },
-
-    downloadSQL() {
-      const blob = new Blob([this.generatedSQL], { type: 'text/sql' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${this.database?.name || 'database'}-schema.sql`
-      link.click()
-      URL.revokeObjectURL(url)
-    },
-
-    async exportSQL() {
-      try {
-        const { data: sqlData } = await exportDatabaseSQL(this.database._id)
-        const sql = sqlData.data?.sql || sqlData.sql || sqlData
-
-        const blob = new Blob([sql], { type: 'text/sql' })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `${this.database?.name || 'database'}-schema-export.sql`
-        link.click()
-        URL.revokeObjectURL(url)
-
-        this.toast.success('SQL exported successfully')
-      } catch (error) {
-        console.error('Failed to export SQL:', error)
-        this.toast.error('Failed to export SQL')
-      }
-    },
-
-    exportSchema() {
-      const schemaData = {
-        database: this.database,
-        tables: this.databaseTables,
-        relationships: this.relationships,
-        generatedSQL: this.generatedSQL,
-        exportDate: new Date().toISOString(),
-      }
-
-      const dataStr = JSON.stringify(schemaData, null, 2)
-      const dataBlob = new Blob([dataStr], { type: 'application/json' })
-      const url = URL.createObjectURL(dataBlob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${this.database?.name || 'database'}-schema-${new Date().getTime()}.json`
-      link.click()
-      URL.revokeObjectURL(url)
-    },
-
     // Position handling
     async handleSavePositions({ databaseId, positionUpdates }, callback) {
       console.log('✅✅✅ HÀM HANDLE_SAVE_POSITIONS ĐÃ ĐƯỢC GỌI ✅✅✅')
@@ -1057,6 +1408,57 @@ export default {
 
 .btn-secondary:hover {
   background: #e5e7eb;
+}
+
+/* SQL Dialect Selector */
+.sql-dialect-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 16px;
+}
+
+.sql-dialect-selector label {
+  font-size: 0.9rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.dialect-select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.dialect-select:focus {
+  outline: none;
+  border-color: #1a365d;
+  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
+}
+
+/* SQL Preview Header */
+.sql-header {
+  padding: 12px 20px;
+  background: #374151;
+  border-bottom: 1px solid #4b5563;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dialect-badge {
+  background: #1a365d;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Quick Actions Panel */
@@ -1316,7 +1718,7 @@ export default {
 }
 
 .sql-preview {
-  padding: 20px;
+  padding: 0;
   background: #1f2937;
   border-radius: 0 0 12px 12px;
   max-height: 400px;
@@ -1329,11 +1731,13 @@ export default {
   font-family: 'Courier New', monospace;
   font-size: 0.875rem;
   line-height: 1.5;
+  padding: 20px;
 }
 
 .sql-actions {
   display: flex;
   gap: 12px;
+  align-items: center;
 }
 
 /* Navigation Tabs */
