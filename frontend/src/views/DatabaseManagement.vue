@@ -305,7 +305,7 @@ import {
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
 import DatabaseStats from '@/components/database/DatabaseStats.vue'
-import DatabaseDiagram from '@/components/database/DatabaseDiagram.vue'
+import DatabaseDiagram from '@/components/database/DatabaseDiagram/DatabaseDiagram.vue'
 import DatabaseList from '@/components/database/DatabaseList.vue'
 import TableModal from '@/components/database/TableModal.vue'
 import RelationshipModal from '@/components/database/RelationshipModal.vue'
