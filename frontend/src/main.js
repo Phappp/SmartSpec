@@ -8,7 +8,6 @@ import Toast from 'vue-toastification';
 import 'vue-toastification/dist/index.css'; // Đảm bảo import CSS của toast
 import './assets/main.css'; // Đảm bảo import CSS của toast
 
-
 const app = createApp(App);
 
 // Thiết lập Pinia
