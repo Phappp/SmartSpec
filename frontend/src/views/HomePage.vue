@@ -306,8 +306,6 @@ import {
   leaveProject,
 } from '@/api/project'
 import { getUserInfo, logout as authLogout } from '@/utils/authGuard'
-import axiosClient from '@/utils/axiosClient'
-import { socket } from "@/utils/socket";
 
 export default {
   name: 'Homepage',
@@ -320,30 +318,6 @@ export default {
     ProjectSharingModal,
     InvitationsModal,
   },
-  mounted() {
-      socket.on("notification", (data) => {
-        console.log("📩 Realtime notification received:", data);
-
-        // Cho phép HTML render đúng
-        this.toast.info(`${data.title}: ${data.message}`, {
-          dangerouslyHTMLString: true,
-        });
-
-        // Cập nhật danh sách realtime
-        if (data.type === "invitation" || data.title?.includes("Request to join")) {
-          this.fetchMyInvitationsRealtime();
-        }
-
-        if (
-          data.title?.includes("Joined") ||
-          data.title?.includes("Declined") ||
-          data.title?.includes("Left")
-        ) {
-          this.fetchInitialData();
-        }
-      });
-  },
-
   data() {
     return {
       isNewProjectModalVisible: false,
@@ -379,12 +353,9 @@ export default {
     }
   },
   computed: {
-    // ✨ NEW: Computed property for notification count
     notificationCount() {
       return this.myInvitations.length
     },
-  },
-  computed: {
     currentProjects() {
       switch (this.currentView) {
         case 'recent-projects':
@@ -397,7 +368,6 @@ export default {
           return []
       }
     },
-
     languageLabel() {
       const labels = {
         'vi-VN': 'Vietnamese',
@@ -439,11 +409,6 @@ export default {
   },
   beforeUnmount() {
     this.cleanupAllPolling()
-  // Gỡ bỏ listener socket khi component bị unmount
-    if (socket) {
-    socket.off("notification");
-    console.log("🧹 Socket listener removed on unmount");
-  }
   },
   methods: {
     // --- Dọn dẹp polling ---
@@ -454,7 +419,7 @@ export default {
       this.pollingIntervals = {}
     },
 
-    async fetchMyInvitationsRealtime() {
+    async fetchInitialData() {
       try {
         const [userRes, myRes, sharedRes, recentRes, trashedRes, invRes] = await Promise.all([
           getCurrentUser(),
@@ -462,7 +427,7 @@ export default {
           getSharedProjects(),
           getRecentProjects(),
           getTrashedProjects(),
-          getMyInvitations(), // Using the new API function
+          getMyInvitations(),
         ])
 
         this.user = userRes.data.data
@@ -471,7 +436,7 @@ export default {
         this.recentProjects = recentRes.data?.data || []
         this.trashedProjects = trashedRes.data?.data || []
 
-        // ✨ NEW: Populate invitations data
+        // 🔥 FIXED: Đảm bảo lấy đúng token từ API response
         this.myInvitations = (invRes.data?.data || []).map((inv) => ({
           id: inv._id || inv.invite_id,
           project_id: inv.project_id,
@@ -480,7 +445,25 @@ export default {
           invitedBy: inv.inviter?.name || 'Unknown',
           date: inv.created_at,
           invitee: inv.invitee,
+          invite_token: inv.invite_token, // 🔥 QUAN TRỌNG: Đảm bảo có token
         }))
+
+        console.log(
+          '📥 Loaded invitations:',
+          this.myInvitations.map((inv) => ({
+            id: inv.id,
+            project: inv.projectName,
+            hasToken: !!inv.invite_token,
+          }))
+        )
+
+        // Load sent invitations
+        this.loadSentInvitations()
+
+        // Khôi phục retry processes
+        this.$nextTick(() => {
+          this.restoreRetryProcesses()
+        })
       } catch (err) {
         console.error('Failed to fetch initial data:', err)
         if (err.response?.status === 401 || err.response?.status === 400) {
@@ -488,7 +471,6 @@ export default {
         }
       }
     },
-
 
     // Trong methods của HomePage.vue
     async handleLeaveProject(projectId) {
@@ -522,10 +504,25 @@ export default {
     },
 
     async handleAcceptInvitation(inv) {
-      const userId = inv.invitee?._id
-      if (!userId) return this.showNotification('Error', 'Invitee user ID not found.')
       try {
-        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/accept`)
+        console.log('🎯 Accepting invitation:', {
+          id: inv.id,
+          project_id: inv.project_id,
+          memberId: inv.invitee?._id,
+          token: inv.invite_token ? '***' : 'MISSING',
+        })
+
+        // 🔥 FIXED: Kiểm tra kỹ dữ liệu trước khi gọi API
+        if (!inv.project_id || !inv.invitee?._id) {
+          console.error('❌ Missing required data for acceptance:', inv)
+          this.toast.error('Invalid invitation data - missing project or member ID')
+          return
+        }
+
+        // 🔥 FIXED: Sử dụng API đã sửa
+        await acceptInvite(inv.project_id, inv.invitee._id, inv.invite_token)
+
+        // Cập nhật UI ngay lập tức
         this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
         this.toast.success(`You have joined the project: ${inv.projectName}`)
 
@@ -555,10 +552,25 @@ export default {
     },
 
     async handleRejectInvitation(inv) {
-      const userId = inv.invitee?._id
-      if (!userId) return this.showNotification('Error', 'Invitee user ID not found.')
       try {
-        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/reject`)
+        console.log('🎯 Rejecting invitation:', {
+          id: inv.id,
+          project_id: inv.project_id,
+          memberId: inv.invitee?._id,
+          token: inv.invite_token ? '***' : 'MISSING',
+        })
+
+        // 🔥 FIXED: Kiểm tra kỹ dữ liệu trước khi gọi API
+        if (!inv.project_id || !inv.invitee?._id) {
+          console.error('❌ Missing required data for rejection:', inv)
+          this.toast.error('Invalid invitation data - missing project or member ID')
+          return
+        }
+
+        // 🔥 FIXED: Sử dụng API đã sửa
+        await rejectInvite(inv.project_id, inv.invitee._id, inv.invite_token)
+
+        // Cập nhật UI ngay lập tức
         this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
         this.toast.info('You have declined the invitation.')
       } catch (err) {
@@ -881,35 +893,6 @@ export default {
       updateProjectInArray(this.creatingProjects)
     },
 
-    async fetchInitialData() {
-      try {
-        this.cleanupOldCreatingProjects()
-        // Load user info from token first
-        const [userRes, myRes, sharedRes, recentRes, trashedRes] = await Promise.all([
-          getCurrentUser(),
-          getMyProjects(),
-          getSharedProjects(),
-          getRecentProjects(),
-          getTrashedProjects(),
-        ])
-        this.user = userRes.data.data
-        this.myProjects = myRes.data?.data || []
-        this.sharedProjects = sharedRes.data?.data || []
-        this.recentProjects = recentRes.data?.data || []
-        this.trashedProjects = trashedRes.data?.data || []
-
-        // Khôi phục retry processes sau khi fetch data
-        this.$nextTick(() => {
-          this.restoreRetryProcesses()
-        })
-      } catch (err) {
-        console.error('Failed to fetch initial data:', err)
-        if (err.response?.status === 401 || err.response?.status === 400) {
-          this.logout()
-        }
-      }
-    },
-
     cleanupOldCreatingProjects() {
       const now = new Date().getTime()
       this.creatingProjects = this.creatingProjects.filter((p) => {
@@ -976,15 +959,9 @@ export default {
       }
     },
 
-    logout() {
-      this.cleanupAllPolling()
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('userId')
-      localStorage.removeItem('email')
-      console.log('🚪 Logging out...')
-      authLogout()
-
+    async logout() {
+      console.log('🚪 Logged out')
+      await authLogout()
       this.$router.push('/login')
     },
 
