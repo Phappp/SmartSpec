@@ -91,7 +91,7 @@ Ví dụ output:
   ["UC1", "UC5", "UC12"],
   ["UC2", "UC8"]
 ]
-`,
+`
 
     },
     'en-US': {
@@ -179,9 +179,10 @@ Example output:
   ["UC1", "UC5", "UC12"],
   ["UC2", "UC8"]
 ]
-`,
-    }
+`
 
+
+    }
 };
 
 
@@ -192,14 +193,12 @@ export class GeminiService {
     private readonly MAX_BATCHES = 100;
     private readonly MAX_ATTEMPTS_PER_OFFSET = 3;
 
-
     private cleanJsonString(text: string): string {
         const pattern = /```(?:json)?\s*([\s\S]*?)\s*```/g;
         const match = pattern.exec(text.trim());
         // Nếu tìm thấy khối mã, trả về nội dung bên trong, nếu không, trả về chuỗi gốc
         return match ? match[1].trim() : text.trim();
     }
-
 
     private tryParseWhole(text: string): any[] | null {
         try {
@@ -345,56 +344,6 @@ export class GeminiService {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const schemaDescription = prompts[lang].schemaDescription(batchSize, offset);
         return `${schemaDescription}\n\nVăn bản nguồn (Source text):\n${cleanText}`;
-    }
-
-    /**
-     * Một hàm chung để gửi prompt tới Gemini và trả về kết quả dạng chuỗi JSON đã được làm sạch.
-     * Hàm này đóng gói logic lặp lại: lấy key, thử lại, xử lý lỗi.
-     * @param prompt - Chuỗi prompt để gửi cho Gemini.
-     * @returns Một Promise chứa chuỗi JSON trả về từ API.
-     */
-    async generateJsonContent(prompt: string): Promise<string> {
-        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-        if (!keys || keys.length === 0) {
-            throw new Error("No active Gemini API key found.");
-        }
-
-        let lastError: any;
-        for (const k of keys) {
-            try {
-                console.log(`🔑 Trying Gemini key for generic content: ${k.key_value.slice(0, 12)}...`);
-                const { GoogleGenerativeAI } = await import("@google/generative-ai");
-                const client = new GoogleGenerativeAI(k.key_value);
-                const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
-
-                const resp: any = await model.generateContent({
-                    contents: [{ role: "user", parts: [{ text: prompt }] }],
-                });
-
-                const text: string = resp?.response?.text?.() || "";
-
-                // ✅ SỬA: Dùng cleanJsonString thay vì cleanJsonStringDatabase
-                return this.cleanJsonString(text);
-
-            } catch (err: any) {
-                lastError = err;
-                const msg = (err?.message || "").toLowerCase();
-                console.error(`❌ Gemini key ${k._id} failed during generic content generation:`, err?.message || err);
-
-                // Vô hiệu hóa key nếu nó không hợp lệ
-                if (msg.includes("invalid") || msg.includes("unauthorized")) {
-                    try {
-                        await this.apiKeyService.disableKey(k._id);
-                        console.warn(`⚠️ Disabled invalid Gemini key: ${k._id}`);
-                    } catch { /* Bỏ qua lỗi khi disable key */ }
-                }
-                // Thử key tiếp theo
-                continue;
-            }
-        }
-
-        // Nếu tất cả các key đều thất bại
-        throw lastError || new Error("All Gemini API keys failed during generic content generation.");
     }
 
     async addRelatedUseCases(

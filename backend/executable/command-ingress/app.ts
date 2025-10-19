@@ -119,7 +119,8 @@ const createHttpServer = (redisClient: any) => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(fileUpload());
-  app.use('/uploads', express.static('E:/SmartSpec/backend/uploads'));
+  const uploadsDir = path.resolve(env.UPLOADS_PATH)
+  app.use('/uploads', express.static(uploadsDir))
   app.use(
     cors({
       origin: "http://localhost:5173", // FE URL

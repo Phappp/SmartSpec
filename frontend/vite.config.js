@@ -6,8 +6,6 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
-  const ngrokHost = env.VITE_NGROK_HOST
-
   return {
     plugins: [vue(), vueDevTools()],
     resolve: {
@@ -16,18 +14,13 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      host: '0.0.0.0',
+      host: '0.0.0.0', // cho phép truy cập từ các thiết bị khác
       port: 5173,
       strictPort: true,
-      allowedHosts: ['4a3483b2d9b4.ngrok-free.app', 'localhost'],
-      hmr: {
-        protocol: 'wss',
-        host: '4a3483b2d9b4.ngrok-free.app',
-        clientPort: 443,
-      },
+      allowedHosts: ['localhost', '192.168.1.15'],
       proxy: {
         '/api': {
-          target: 'http://localhost:8000',
+          target: 'http://192.168.1.15:8000', // backend nội bộ
           changeOrigin: true,
           rewrite: path => path.replace(/^\/api/, ''),
         },
