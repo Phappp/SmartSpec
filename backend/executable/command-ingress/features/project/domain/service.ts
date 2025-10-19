@@ -11,15 +11,16 @@ import { CreateProjectDto, UpdateProjectDto } from '../adapter/dto';
 import { InputService } from '../../orchestrator/domain/InputService';
 import { LogService } from '../../log/domain/service';
 import User from '../../../../../internal/model/user'
-// import { GeminiService } from "../../../features/orchestrator/domain/GeminiService";
 
 export class ProjectService {
   private logService: LogService;
-  // THAY ĐỔI: Sử dụng Dependency Injection cho OrchestratorService
+
   constructor(
     private orchestratorService: OrchestratorService,
     private inputService: InputService
-  ) { this.logService = new LogService()}
+  ) {
+    this.logService = new LogService();
+  }
 
   async createProject(
     data: CreateProjectDto,
@@ -33,10 +34,17 @@ export class ProjectService {
       session.startTransaction();
 
       const newProjectData = {
-        name, description, owner_id: ownerId, language: language || 'vi-VN',
+        name,
+        description,
+        owner_id: ownerId,
+        language: language || 'vi-VN',
         members: [{
-          user_id: ownerId, role: 'owner', status: 'accepted',
-          invited_by: ownerId, invited_at: new Date(), responded_at: new Date(),
+          user_id: ownerId,
+          role: 'owner',
+          status: 'accepted',
+          invited_by: ownerId,
+          invited_at: new Date(),
+          responded_at: new Date(),
           history: [{ action: 'accepted', by: ownerId, at: new Date() }]
         }]
       };
@@ -44,7 +52,11 @@ export class ProjectService {
       const createdProjects = await Project.create([newProjectData], { session });
       const newProject = createdProjects[0];
 
-      const newVersionData = { project_id: newProject._id, version_number: 1, created_by: ownerId };
+      const newVersionData = {
+        project_id: newProject._id,
+        version_number: 1,
+        created_by: ownerId
+      };
       const createdVersions = await Version.create([newVersionData], { session });
       const newVersion = createdVersions[0];
 
@@ -53,14 +65,19 @@ export class ProjectService {
 
       await session.commitTransaction();
 
+      // Xử lý nền
       this.orchestratorService.run(
-        newProject._id.toString(), newVersion._id.toString(),
-        { files, rawText, mode: "full" }, newProject.language
+        newProject._id.toString(),
+        newVersion._id.toString(),
+        { files, rawText, mode: "full" },
+        newProject.language
       ).catch(async (err) => {
         const errorMessage = `Lỗi xử lý nền: ${err.message || 'Lỗi không xác định'}`;
         console.error(`[SERVICE] ${errorMessage} cho version ${newVersion._id}`);
         await Version.findByIdAndUpdate(newVersion._id, { $push: { processing_errors: errorMessage } });
       });
+
+      // Log action
       const owner = await User.findById(ownerId).select("email").lean();
       const userEmail = owner?.email || ownerId;
 
@@ -80,6 +97,7 @@ export class ProjectService {
         },
         level: "info",
       });
+
       return new ServiceResponse(ResponseStatus.Success, 'Project created successfully', newProject, 201);
     } catch (error: any) {
       await session.abortTransaction();
@@ -93,32 +111,48 @@ export class ProjectService {
   async getMyProjects(userId: string): Promise<ServiceResponse<any>> {
     const projects = await Project.find({
       owner_id: new Types.ObjectId(userId),
-      'status.is_trashed': { $ne: true }
-    }).populate('owner_id', 'full_name email avatar_url')
+      'status.is_trashed': { $ne: true },
+      // RÀNG BUỘC MỚI: Chỉ lấy projects mà user có status accepted
+      'members': {
+        $elemMatch: {
+          user_id: new Types.ObjectId(userId),
+          status: 'accepted'
+        }
+      }
+    })
+      .populate('owner_id', 'full_name email avatar_url')
       .populate('members.user_id', 'full_name email avatar_url')
       .sort({ last_accessed_at: -1, updated_at: -1 })
       .lean();
+
     return new ServiceResponse(ResponseStatus.Success, 'OK', projects, 200);
   }
 
   async updateProject(projectId: string, userId: string, data: UpdateProjectDto): Promise<ServiceResponse<any>> {
+    // THÊM RÀNG BUỘC: Kiểm tra user có status accepted trong project
     const project = await Project.findOne({
       _id: new Types.ObjectId(projectId),
-      owner_id: new Types.ObjectId(userId),
-      'status.is_trashed': { $ne: true }
+      'status.is_trashed': { $ne: true },
+      'members': {
+        $elemMatch: {
+          user_id: new Types.ObjectId(userId),
+          status: 'accepted'
+        }
+      }
     });
 
     if (!project) {
       return new ServiceResponse(ResponseStatus.Failed, 'Project not found or access denied', null, 404);
     }
+
     const before = {
       name: project.name,
       description: project.description,
       language: project.language,
     };
-    // ... (logic update project không đổi)
+
     const { members, ...otherData } = data;
-    Object.assign(project, otherData); // Cách gán an toàn hơn
+    Object.assign(project, otherData);
 
     const updatedProject = await project.save();
     const after = {
@@ -126,8 +160,10 @@ export class ProjectService {
       description: updatedProject.description,
       language: updatedProject.language,
     };
+
     const user = await User.findById(userId).select("email").lean();
     const userEmail = user?.email || userId;
+
     await this.logService.createLog({
       user_id: userId,
       project_id: projectId,
@@ -137,13 +173,21 @@ export class ProjectService {
       details: { before, after, message: `User ${userEmail} updated project ${project.name}` },
       level: "info",
     });
+
     return new ServiceResponse(ResponseStatus.Success, 'Project updated successfully', updatedProject, 200);
   }
 
   async deleteProject(projectId: string, userId: string) {
+    // THÊM RÀNG BUỘC: Chỉ owner có status accepted mới được xóa
     const project = await Project.findOne({
       _id: projectId,
-      owner_id: new Types.ObjectId(userId)
+      owner_id: new Types.ObjectId(userId),
+      'members': {
+        $elemMatch: {
+          user_id: new Types.ObjectId(userId),
+          status: 'accepted'
+        }
+      }
     });
 
     if (!project) return null;
@@ -161,8 +205,10 @@ export class ProjectService {
       }
 
       await project.save();
+
       const user = await User.findById(userId).select("email").lean();
       const userEmail = user?.email || userId;
+
       await this.logService.createLog({
         user_id: userId,
         project_id: projectId,
@@ -172,8 +218,10 @@ export class ProjectService {
         details: { message: `User ${userEmail} deleted project ${project.name}` },
         level: "info",
       });
+
       return true;
     }
+
     await Promise.all([
       Input.deleteMany({ project_id: project._id }),
       Output.deleteMany({ project_id: project._id }),
@@ -181,30 +229,38 @@ export class ProjectService {
       ProjectLog.deleteMany({ project_id: project._id }),
       Project.deleteOne({ _id: project._id }),
     ]);
+
     return true;
   }
 
   async restoreProject(projectId: string, userId: string): Promise<ServiceResponse<null>> {
+    // THÊM RÀNG BUỘC: Chỉ owner có status accepted mới được restore
     const project = await Project.findOne({
       _id: new Types.ObjectId(projectId),
       owner_id: new Types.ObjectId(userId),
       'status.is_trashed': true,
+      'members': {
+        $elemMatch: {
+          user_id: new Types.ObjectId(userId),
+          status: 'accepted'
+        }
+      }
     });
 
     if (!project) {
       return new ServiceResponse(ResponseStatus.Failed, 'Project not found, not trashed, or access denied', null, 404);
     }
 
-    // THAY ĐỔI Ở ĐÂY: Sửa trực tiếp các thuộc tính của sub-document
-    // Truy vấn `findOne` đã đảm bảo `project.status` tồn tại và `is_trashed` là true
     if (project.status) {
       project.status.is_trashed = false;
       project.status.trashed_at = null;
     }
 
     await project.save();
+
     const user = await User.findById(userId).select("email").lean();
     const userEmail = user?.email || userId;
+
     await this.logService.createLog({
       user_id: userId,
       project_id: projectId,
@@ -214,36 +270,41 @@ export class ProjectService {
       details: { message: `User ${userEmail} restored project ${project.name}` },
       level: "info",
     });
+
     return new ServiceResponse(ResponseStatus.Success, 'Project restored successfully', null, 200);
   }
 
   async getRecentProjects(userId: string): Promise<ServiceResponse<any>> {
     const projects = await Project.find({
-      $or: [
-        { owner_id: new Types.ObjectId(userId) },
-        { 'members.user_id': new Types.ObjectId(userId), 'members.status': 'accepted' }
-      ],
-      'status.is_trashed': { $ne: true }
-    }).sort({ last_accessed_at: -1 }).limit(5).lean();
-    return new ServiceResponse(ResponseStatus.Success, 'OK', projects, 200);
-  }
-
-  async getSharedProjects(userId: string): Promise<ServiceResponse<any>> {
-    const projects = await Project.find({
-      owner_id: { $ne: new Types.ObjectId(userId) }, // Người dùng không phải là chủ sở hữu
-      'status.is_trashed': { $ne: true },            // Dự án không ở trong thùng rác
-
-      // ✨ THAY ĐỔI QUAN TRỌNG Ở ĐÂY ✨
-      // Tìm các dự án mà trong mảng `members` có một phần tử
-      // khớp với CẢ hai điều kiện dưới đây.
-      members: {
+      'status.is_trashed': { $ne: true },
+      // RÀNG BUỘC MỚI: Chỉ lấy projects mà user có status accepted
+      'members': {
         $elemMatch: {
           user_id: new Types.ObjectId(userId),
           status: 'accepted'
         }
       }
     })
-      .populate('owner_id', 'full_name email avatar_url') // Thêm populate để lấy đủ thông tin
+      .sort({ last_accessed_at: -1 })
+      .limit(5)
+      .lean();
+
+    return new ServiceResponse(ResponseStatus.Success, 'OK', projects, 200);
+  }
+
+  async getSharedProjects(userId: string): Promise<ServiceResponse<any>> {
+    const projects = await Project.find({
+      owner_id: { $ne: new Types.ObjectId(userId) },
+      'status.is_trashed': { $ne: true },
+      // RÀNG BUỘC MỚI: Chỉ lấy projects mà user có status accepted
+      'members': {
+        $elemMatch: {
+          user_id: new Types.ObjectId(userId),
+          status: 'accepted'
+        }
+      }
+    })
+      .populate('owner_id', 'full_name email avatar_url')
       .populate('members.user_id', 'full_name email avatar_url')
       .sort({ last_accessed_at: -1 })
       .lean();
@@ -253,7 +314,8 @@ export class ProjectService {
 
   async getVersionStatus(versionId: string): Promise<ServiceResponse<any>> {
     const version = await Version.findById(versionId).lean();
-    const project = await Project.findById(version.project_id).lean();
+    const project = await Project.findById(version?.project_id).lean();
+
     if (!version) {
       return new ServiceResponse(ResponseStatus.Failed, 'Version not found', null, 404);
     }
@@ -276,12 +338,14 @@ export class ProjectService {
       return new ServiceResponse(ResponseStatus.Failed, 'Project not found', null, 404);
     }
 
-    const isOwner = project.owner_id._id.toString() === userId;
-    const isMember = project.members.some(
-      (m: any) => m.user_id._id.toString() === userId && m.status === "accepted"
+    // THÊM RÀNG BUỘC: Kiểm tra user có status accepted trong project
+    const userMember = project.members.find((m: any) =>
+      (m.user_id._id.toString() === userId || m.user_id.toString() === userId) &&
+      m.status === "accepted"
     );
-    if (!isOwner && !isMember) {
-      throw { status: 403, message: "You do not have access to this project."};
+
+    if (!userMember) {
+      throw { status: 403, message: "You do not have access to this project." };
     }
 
     // Nếu chưa có version => tạo Version 1
@@ -296,6 +360,7 @@ export class ProjectService {
         pending_conflicts: [],
         processing_errors: [],
       });
+
       project.current_version = newVersion._id;
       await project.save();
 
@@ -322,6 +387,7 @@ export class ProjectService {
 
     let inputs: any[] = [];
     let outputs: any[] = [];
+
     if (currentVersion) {
       [inputs, outputs] = await Promise.all([
         Input.find({ version_id: currentVersion._id }).sort({ created_at: 1 }).lean(),
@@ -374,45 +440,58 @@ export class ProjectService {
     try {
       const projects = await Project.find({
         owner_id: new Types.ObjectId(userId),
-        'status.is_trashed': true // Lấy các project có is_trashed = true
+        'status.is_trashed': true,
+        // RÀNG BUỘC MỚI: Chỉ lấy projects mà user có status accepted
+        'members': {
+          $elemMatch: {
+            user_id: new Types.ObjectId(userId),
+            status: 'accepted'
+          }
+        }
       })
         .populate('owner_id', 'full_name email avatar_url')
         .populate('members.user_id', 'full_name email avatar_url')
-        .sort({ 'status.trashed_at': -1 }) // Sắp xếp theo ngày xóa gần nhất
+        .sort({ 'status.trashed_at': -1 })
         .lean();
 
       return new ServiceResponse(ResponseStatus.Success, 'Fetched trashed projects successfully', projects, 200);
     } catch (error) {
-      // Ném lỗi để controller có thể bắt và xử lý
       throw error;
     }
   }
 
-  /**
-  * Thêm một hoặc nhiều input (files/rawText) vào một version cụ thể của dự án.
-  * Các input này sẽ được đánh dấu là chưa xử lý (is_processed: false).
-  */
   async addInputsToVersion(
     versionId: string,
     userId: string,
     files: UploadedFile[] | undefined,
     rawText: string | undefined
   ): Promise<ServiceResponse<any>> {
-    // 1. Kiểm tra sự tồn tại của Version
     const version = await Version.findById(versionId);
     if (!version) {
       return new ServiceResponse(ResponseStatus.Failed, 'Version not found', null, 404);
     }
 
-    // 2. (Tùy chọn) Kiểm tra xem version có đang trong quá trình xử lý không
+    // THÊM RÀNG BUỘC: Kiểm tra user có status accepted trong project
+    const project = await Project.findOne({
+      _id: version.project_id,
+      'members': {
+        $elemMatch: {
+          user_id: new Types.ObjectId(userId),
+          status: 'accepted'
+        }
+      }
+    });
+
+    if (!project) {
+      return new ServiceResponse(ResponseStatus.Failed, 'Access denied to project', null, 403);
+    }
+
     if (version.status === 'processing') {
-      return new ServiceResponse(ResponseStatus.Failed, 'Cannot add inputs while the version is being processed', null, 409); // 409 Conflict
+      return new ServiceResponse(ResponseStatus.Failed, 'Cannot add inputs while the version is being processed', null, 409);
     }
 
     const projectId = version.project_id.toString();
 
-    // 3. Tái sử dụng InputService để xử lý và lưu các input mới
-    // handleInputs đã tự động kiểm tra trùng lặp và tạo input mới trong DB
     const { newFilesCount, newTextProvided } = await this.inputService.handleInputs(
       files,
       rawText,
@@ -420,7 +499,6 @@ export class ProjectService {
       versionId
     );
 
-    // 4. Nếu không có input mới nào được thêm (do trùng lặp), chỉ cần trả về thông báo
     if (newFilesCount === 0 && !newTextProvided) {
       return new ServiceResponse(ResponseStatus.Success, 'No new inputs were added. All provided inputs were duplicates.', {
         added_files: 0,
@@ -428,51 +506,42 @@ export class ProjectService {
       }, 200);
     }
 
-    // 5. Nếu có input mới, cập nhật trạng thái của Version
-    // Đánh dấu `affects_requirement` = true để báo hiệu rằng model hiện tại có thể đã lỗi thời
     version.affects_requirement = true;
     version.updated_at = new Date();
-    // (Tùy chọn) bạn có thể đổi status về 'processing' nếu muốn giao diện hiển thị trạng thái "cần xử lý lại"
-    // version.status = 'processing'; 
     await version.save();
 
-    // (Tùy chọn) Ghi log hành động
-    // await ProjectLog.create({
-    //   project_id: projectId,
-    //   version_id: versionId,
-    //   user_id: userId,
-    //   action: "add_inputs",
-    //   details: { message: `User added ${newFilesCount} new file(s) and/or new raw text.` },
-    // });
-
-    // 6. Trả về kết quả thành công
     return new ServiceResponse(ResponseStatus.Success, 'New inputs added successfully. Ready for processing.', {
       added_files: newFilesCount,
       added_text: newTextProvided
     }, 201);
   }
 
-  /**
-   * Xóa tất cả các input chưa được xử lý (is_processed: false) khỏi một version cụ thể.
-   * Chỉ chủ sở hữu dự án mới có quyền thực hiện hành động này.
-   */
   public async deleteUnprocessedInputs(versionId: string, userId: string): Promise<ServiceResponse<any>> {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      // 1. Kiểm tra version và quyền của người dùng
       const version = await Version.findById(versionId).session(session);
       if (!version) {
         throw new Error("Version not found");
       }
 
-      const project = await Project.findById(version.project_id).session(session);
-      if (!project || project.owner_id.toString() !== userId) {
+      // THÊM RÀNG BUỘC: Kiểm tra user có status accepted và là owner
+      const project = await Project.findOne({
+        _id: version.project_id,
+        owner_id: new Types.ObjectId(userId),
+        'members': {
+          $elemMatch: {
+            user_id: new Types.ObjectId(userId),
+            status: 'accepted'
+          }
+        }
+      }).session(session);
+
+      if (!project) {
         return new ServiceResponse(ResponseStatus.Failed, "Access denied or project not found", null, 403);
       }
 
-      // 2. Tìm tất cả các input cần xóa
       const inputsToDelete = await Input.find({
         version_id: versionId,
         is_processed: false
@@ -485,12 +554,10 @@ export class ProjectService {
 
       const idsToDelete = inputsToDelete.map(input => input._id);
 
-      // 3. Thực hiện xóa các Input
       const deleteResult = await Input.deleteMany({
         _id: { $in: idsToDelete }
       }).session(session);
 
-      // 4. Gỡ bỏ các ID đã xóa khỏi mảng 'inputs' trong document Version
       await Version.updateOne(
         { _id: versionId },
         { $pull: { inputs: { $in: idsToDelete } } }
@@ -504,55 +571,51 @@ export class ProjectService {
 
     } catch (error: any) {
       await session.abortTransaction();
-      // throw error; // Chuyển tiếp lỗi để controller xử lý
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     } finally {
       session.endSession();
     }
   }
 
-  /**
-   * Xóa một input cụ thể dựa vào ID của nó.
-   */
   public async deleteSpecificInput(versionId: string, inputId: string, userId: string): Promise<ServiceResponse<any>> {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      // 1. Tìm input cần xóa
       const input = await Input.findById(inputId).session(session);
       if (!input) {
         throw new Error("Input not found");
       }
 
-      // 2. Xác thực input thuộc đúng version
       if (input.version_id.toString() !== versionId) {
         throw new Error("Input does not belong to the specified version");
       }
 
-      // 3. Lấy version và project
       const version = await Version.findById(versionId).session(session);
       if (!version) {
         await session.abortTransaction();
         return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
       }
 
-      const project = await Project.findById(version.project_id).session(session);
-      if (!project) {
-        await session.abortTransaction();
-        return new ServiceResponse(ResponseStatus.Failed, "Project not found", null, 404);
-      }
+      // THÊM RÀNG BUỘC: Kiểm tra user có status accepted và là owner
+      const project = await Project.findOne({
+        _id: version.project_id,
+        owner_id: new Types.ObjectId(userId),
+        'members': {
+          $elemMatch: {
+            user_id: new Types.ObjectId(userId),
+            status: 'accepted'
+          }
+        }
+      }).session(session);
 
-      // 4. Kiểm tra quyền sở hữu
-      if (project.owner_id.toString() !== userId) {
+      if (!project) {
         await session.abortTransaction();
         return new ServiceResponse(ResponseStatus.Failed, "Access denied", null, 403);
       }
 
-      // 5. Xóa Input
       await Input.findByIdAndDelete(inputId).session(session);
 
-      // 6. Gỡ input khỏi version
       await Version.findByIdAndUpdate(
         versionId,
         { $pull: { inputs: inputId } },
@@ -560,6 +623,7 @@ export class ProjectService {
       );
 
       await session.commitTransaction();
+
       return new ServiceResponse(
         ResponseStatus.Success,
         "Input deleted successfully.",
@@ -575,19 +639,14 @@ export class ProjectService {
     }
   }
 
-  /**
-  * Lấy toàn bộ dự án cho admin (dashboard, thống kê, quản lý hệ thống)
-  */
   async getAllProjectsForAdmin(): Promise<ServiceResponse<any>> {
     try {
-      // Lấy tất cả project (kể cả đã bị xóa nếu bạn muốn quản trị toàn bộ)
       const projects = await Project.find()
         .populate('owner_id', 'full_name email avatar_url')
         .populate('members.user_id', 'full_name email avatar_url')
         .sort({ updated_at: -1 })
         .lean();
 
-      // Biến đổi dữ liệu gọn gàng hơn cho dashboard admin
       const formattedProjects = projects.map((project: any) => ({
         id: project._id,
         name: project.name,
@@ -624,55 +683,4 @@ export class ProjectService {
       );
     }
   }
-
-
-  // async suggestRelations(versionId: string): Promise<ServiceResponse<null>> {
-  //   // Chạy tác vụ nặng trong nền và trả về response ngay
-  //   this._backgroundSuggestRelations(versionId).catch(err => {
-  //     console.error(`[SUGGEST_RELATIONS] Failed for version ${versionId}:`, err);
-  //     Version.findByIdAndUpdate(versionId, {
-  //       $set: { status: 'failed' },
-  //       $push: { processing_errors: `Relation suggestion failed: ${err.message}` }
-  //     });
-  //   });
-
-  //   // Trả về 202 Accepted để báo cho FE biết yêu cầu đã được chấp nhận
-  //   return new ServiceResponse(ResponseStatus.Success, "Relation suggestion process started.", null, 202);
-  // }
-
-  // private async _backgroundSuggestRelations(versionId: string): Promise<void> {
-  //   const version = await Version.findById(versionId);
-  //   const project = await Project.findById(version?.project_id);
-  //   if (!version || !version.requirement_model || version.requirement_model.length <= 1) {
-  //     console.log("Not enough requirements to suggest relations. Marking as complete.");
-  //     await Version.findByIdAndUpdate(versionId, { $set: { status: 'completed' } });
-  //     return;
-  //   }
-
-  //   // Cập nhật trạng thái 'processing'
-  //   version.status = 'processing';
-  //   await version.save();
-
-  //   try {
-  //     const gemini = new GeminiService(); // Giả định bạn có thể tạo instance mới
-  //     const requirementsWithRelations = await gemini.addRelatedUseCases(
-  //       version.requirement_model,
-  //       { incremental: false },
-  //       project.language
-  //     );
-
-  //     version.set('requirement_model', requirementsWithRelations);
-  //     version.status = 'completed'; 
-
-  //     await version.save();
-  //     console.log(`✅ Successfully suggested relations for version ${versionId}`);
-
-  //   } catch (error: any) {
-  //     console.error("Error during relation suggestion:", error);
-  //     version.status = 'failed';
-  //     version.processing_errors.push(`Relation suggestion failed: ${error.message}`);
-  //     await version.save();
-  //   }
-  // }
-
 }

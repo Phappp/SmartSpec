@@ -1,4 +1,4 @@
-// 🔥 CẬP NHẬT project.js HOÀN CHỈNH - WITH COMPOSITE KEY SUPPORT
+// 🔥 SỬA HOÀN TOÀN project.js - FIXED INVITATION APIS
 import axiosClient from "./../utils/axiosClient";
 
 // Projects
@@ -18,25 +18,54 @@ export const retryProjectAnalysis = (projectId, versionId) => {
   });
 };
 
-//Usecase
+// ========== SHARE - COMPLETELY FIXED APIS ====================
+export const getProjectInvites = (projectId) => {
+  return axiosClient.get(`/api/projects/${projectId}/members/invites`);
+};
+
+export const cancelInvite = (projectId, memberId) => {
+  return axiosClient.delete(`/api/projects/${projectId}/members/${memberId}/cancel`);
+};
+
+// 🔥 FIXED: Sửa hoàn toàn cách gọi API accept và reject
+export const acceptInvite = (projectId, memberId, token = null) => {
+  // Gửi token trong request body
+  const data = token ? { token } : {};
+  return axiosClient.post(`/api/projects/${projectId}/members/${memberId}/accept`, data);
+};
+
+export const rejectInvite = (projectId, memberId, token = null) => {
+  // Gửi token trong request body  
+  const data = token ? { token } : {};
+  return axiosClient.post(`/api/projects/${projectId}/members/${memberId}/reject`, data);
+};
+
+export const removeMember = (projectId, memberId) => {
+  return axiosClient.delete(`/api/projects/${projectId}/members/${memberId}`);
+};
+
+export const leaveProject = (projectId) => {
+  return axiosClient.post(`/api/projects/${projectId}/leave`);
+};
+
+export const inviteMember = (projectId, email, role) => {
+  return axiosClient.post(`/api/projects/${projectId}/members/invite`, {
+    email,
+    role
+  });
+};
+
+// ================== USECASE MANAGEMENT ============================
 export const usecaseApi = {
-  // GET /versions/:versionId/usecases
   getUsecases: (versionId) => axiosClient.get(`/api/usecaseManagement/versions/${versionId}/usecases`),
-
-  // POST /versions/:versionId/usecases
   createUsecase: (versionId, data) => axiosClient.post(`/api/usecaseManagement/versions/${versionId}/usecases`, data),
-
-  // PUT /versions/:versionId/usecases/:usecaseId
   updateUsecase: (versionId, usecaseId, data) =>
     axiosClient.put(`/api/usecaseManagement/versions/${versionId}/usecases/${usecaseId}`, data),
-
-  // DELETE /versions/:versionId/usecases/:usecaseId
   deleteUsecase: (versionId, usecaseId) =>
     axiosClient.delete(`/api/usecaseManagement/versions/${versionId}/usecases/${usecaseId}`)
 };
 
 // DATABASE
-// 🔥 THÊM API MỚI ĐỂ SINH DATABASE
 export const generateDatabaseSchema = (versionId) => {
   return axiosClient.post(`/api/databases/versions/${versionId}/generate-database`);
 };
@@ -49,7 +78,6 @@ export const getDatabaseById = (databaseId) => {
   return axiosClient.get(`/api/databases/${databaseId}`);
 };
 
-// 🔥 THÊM API MỚI CHO REFERENCES
 export const getDatabaseWithReferences = (databaseId) => {
   return axiosClient.get(`/api/databases/${databaseId}/with-references`);
 };
@@ -75,7 +103,7 @@ export const deleteDatabase = (databaseId) => {
   return axiosClient.delete(`/api/databases/${databaseId}`);
 };
 
-// --- CRUD cho từng Bảng (trong một Schema) ---
+// --- CRUD cho từng Bảng ---
 export const addTableToDatabase = (databaseId, tableData) => {
   return axiosClient.post(`/api/databases/${databaseId}/tables`, tableData);
 };
@@ -96,25 +124,20 @@ export const updateTablePosition = (databaseId, tableName, position) => {
 };
 
 export const updateMultipleTablePositions = (databaseId, positionUpdates) => {
-  // Gửi trực tiếp mảng positionUpdates làm body, không gói trong object
   return axiosClient.put(`/api/databases/${databaseId}/tables/positions`, positionUpdates);
 };
 
 // === 🔥 COMPOSITE KEY MANAGEMENT APIs ===
-
-// [R] Lấy thông tin composite key của một bảng
 export const getCompositeKeyInfo = (databaseId, tableName) => {
   return axiosClient.get(`/api/databases/${databaseId}/tables/${tableName}/composite-key`);
 };
 
-// [U] Tạo composite key mới
 export const createCompositeKey = (databaseId, tableName, columnNames) => {
   return axiosClient.post(`/api/databases/${databaseId}/tables/${tableName}/composite-key`, {
     columnNames
   });
 };
 
-// [U] Chuyển từ composite key sang single key
 export const convertToSingleKey = (databaseId, tableName, primaryKeyColumnName) => {
   return axiosClient.post(`/api/databases/${databaseId}/tables/${tableName}/convert-to-single-key`, {
     primaryKeyColumnName
@@ -122,18 +145,14 @@ export const convertToSingleKey = (databaseId, tableName, primaryKeyColumnName) 
 };
 
 // === 🔥 UTILITY APIs ===
-
-// [R] Lấy thống kê database
 export const getDatabaseStats = (databaseId) => {
   return axiosClient.get(`/api/databases/${databaseId}/stats`);
 };
 
-// [R] Export database schema thành SQL
 export const exportDatabaseSQL = (databaseId) => {
   return axiosClient.get(`/api/databases/${databaseId}/export-sql`);
 };
 
-// [U] Validate table structure
 export const validateTableStructure = (databaseId, tableData) => {
   return axiosClient.post(`/api/databases/${databaseId}/validate-table`, tableData);
 };
@@ -179,10 +198,36 @@ export function getCurrentUser() {
 // Documentation generation
 export const generateDocumentation = (projectId, payload = {}) =>
   axiosClient.post(`/api/projects/${projectId}/generate`, payload);
+
 // Invitations
 export const getMyInvitations = () => {
   return axiosClient.get('/api/users/me/invites');
 }
+
+// 🔥 THÊM DEBUG FUNCTION ĐỂ KIỂM TRA API CALLS
+export const debugInvitationAPI = async (action, projectId, memberId, token = null) => {
+  console.log(`🔍 DEBUG ${action}:`, {
+    projectId,
+    memberId,
+    token,
+    endpoint: `/api/projects/${projectId}/members/${memberId}/${action}`
+  });
+
+  try {
+    const data = token ? { token } : {};
+    const response = await axiosClient.post(`/api/projects/${projectId}/members/${memberId}/${action}`, data);
+    console.log(`✅ ${action} SUCCESS:`, response.data);
+    return response;
+  } catch (error) {
+    console.error(`❌ ${action} ERROR:`, {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    throw error;
+  }
+};
+
 export default {
   getMyProjects,
   getSharedProjects,
@@ -225,4 +270,17 @@ export default {
   getDatabaseStats,
   exportDatabaseSQL,
   validateTableStructure,
+
+  // SHARE - COMPLETELY FIXED APIS
+  getProjectInvites,
+  cancelInvite,
+  acceptInvite,
+  rejectInvite,
+  removeMember,
+  leaveProject,
+  inviteMember,
+  getMyInvitations,
+
+  // 🔥 DEBUG FUNCTION
+  debugInvitationAPI
 };

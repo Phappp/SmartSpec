@@ -13,6 +13,13 @@
         <header class="page-header">
           <h1>HOME PAGE</h1>
           <div class="header-actions">
+            <button @click="openInvitationsModal" class="btn-icon invitations-btn">
+              <span class="material-symbols-outlined">group</span>
+              <span v-if="sentInvitations.length > 0" class="invitation-badge">
+                {{ sentInvitations.length }}
+              </span>
+            </button>
+
             <div class="notifications-container">
               <button @click="toggleNotifications" class="btn-icon notifications-btn">
                 <span class="material-symbols-outlined">notifications</span>
@@ -105,6 +112,7 @@
                 :is-creating="true"
                 @open="openProject"
                 @retry-creation="retryCreatingProject"
+                @leave="handleLeaveProject"
               />
             </div>
           </div>
@@ -125,6 +133,7 @@
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
                 @share="openShareModal"
+                @leave="handleLeaveProject"
               />
             </div>
             <div v-else class="empty-state">
@@ -156,6 +165,7 @@
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
                 @share="openShareModal"
+                @leave="handleLeaveProject"
               />
             </div>
             <div v-else class="empty-state">
@@ -187,6 +197,7 @@
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
                 @share="openShareModal"
+                @leave="handleLeaveProject"
               />
             </div>
             <div v-else class="empty-state">
@@ -214,6 +225,7 @@
                 @restore="restoreProject"
                 @delete-permanently="confirmDeletePermanently"
                 @share="openShareModal"
+                @leave="handleLeaveProject"
               />
             </div>
             <div v-else class="empty-state">
@@ -254,6 +266,16 @@
       :is-confirmation="modalContent.isConfirmation"
       @confirm="modalContent.onConfirm"
     />
+    <!-- Modal xem invitations -->
+    <InvitationsModal
+      v-if="isInvitationsModalVisible"
+      :sent-invitations="sentInvitations"
+      :received-invitations="myInvitations"
+      @close="closeInvitationsModal"
+      @cancel-invite="handleCancelInvite"
+      @accept-invite="handleAcceptInvitation"
+      @reject-invite="handleRejectInvitation"
+    />
   </div>
 </template>
 
@@ -265,6 +287,7 @@ import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
 import NewProjectModal from '@/components/NewProjectForm.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
 import AppModal from '@/components/AppModal.vue'
+import InvitationsModal from '@/components/InvitationsModal.vue'
 import {
   getMyProjects,
   getSharedProjects,
@@ -276,6 +299,11 @@ import {
   updateProject,
   getVersionStatus,
   getMyInvitations,
+  getProjectInvites,
+  cancelInvite,
+  acceptInvite,
+  rejectInvite,
+  leaveProject,
 } from '@/api/project'
 import { getUserInfo, logout as authLogout } from '@/utils/authGuard'
 
@@ -288,12 +316,14 @@ export default {
     AppModal,
     PersonalInfor,
     ProjectSharingModal,
+    InvitationsModal,
   },
   data() {
     return {
       isNewProjectModalVisible: false,
       showPersonalInfo: false,
       isShareModalVisible: false,
+      isInvitationsModalVisible: false,
       selectedProject: null,
       creationSuccess: false,
       currentView: 'recent-projects',
@@ -319,15 +349,13 @@ export default {
       sortBy: 'updatedAt',
       isNotificationsVisible: false,
       myInvitations: [],
+      sentInvitations: [],
     }
   },
   computed: {
-    // ✨ NEW: Computed property for notification count
     notificationCount() {
       return this.myInvitations.length
     },
-  },
-  computed: {
     currentProjects() {
       switch (this.currentView) {
         case 'recent-projects':
@@ -340,7 +368,6 @@ export default {
           return []
       }
     },
-
     languageLabel() {
       const labels = {
         'vi-VN': 'Vietnamese',
@@ -348,13 +375,11 @@ export default {
       }
       return labels[this.languageFilter] || this.languageFilter
     },
-
     filteredCreatingProjects() {
       return this.creatingProjects.filter((project) =>
         project.name.toLowerCase().includes(this.searchQuery.toLowerCase())
       )
     },
-
     filteredProjects() {
       let filtered = this.currentProjects.filter(
         (project) =>
@@ -402,7 +427,7 @@ export default {
           getSharedProjects(),
           getRecentProjects(),
           getTrashedProjects(),
-          getMyInvitations(), // Using the new API function
+          getMyInvitations(),
         ])
 
         this.user = userRes.data.data
@@ -411,16 +436,34 @@ export default {
         this.recentProjects = recentRes.data?.data || []
         this.trashedProjects = trashedRes.data?.data || []
 
-        // ✨ NEW: Populate invitations data
+        // 🔥 FIXED: Đảm bảo lấy đúng token từ API response
         this.myInvitations = (invRes.data?.data || []).map((inv) => ({
-          id: inv._id,
+          id: inv._id || inv.invite_id,
           project_id: inv.project_id,
           projectName: inv.project_name || 'Unnamed Project',
           role: inv.role,
           invitedBy: inv.inviter?.name || 'Unknown',
           date: inv.created_at,
           invitee: inv.invitee,
+          invite_token: inv.invite_token, // 🔥 QUAN TRỌNG: Đảm bảo có token
         }))
+
+        console.log(
+          '📥 Loaded invitations:',
+          this.myInvitations.map((inv) => ({
+            id: inv.id,
+            project: inv.projectName,
+            hasToken: !!inv.invite_token,
+          }))
+        )
+
+        // Load sent invitations
+        this.loadSentInvitations()
+
+        // Khôi phục retry processes
+        this.$nextTick(() => {
+          this.restoreRetryProcesses()
+        })
       } catch (err) {
         console.error('Failed to fetch initial data:', err)
         if (err.response?.status === 401 || err.response?.status === 400) {
@@ -429,48 +472,142 @@ export default {
       }
     },
 
-    // --- ✨ NEW: Notification Methods ---
+    // Trong methods của HomePage.vue
+    async handleLeaveProject(projectId) {
+      try {
+        console.log('Leaving project:', projectId)
+
+        // Gọi API leave project
+        await leaveProject(projectId)
+
+        this.toast.success('You have left the project successfully.')
+
+        // Refresh data
+        this.fetchInitialData()
+      } catch (err) {
+        console.error('Leave project error:', err)
+
+        if (err.response?.status === 403) {
+          this.toast.error('You cannot leave a project you own. Please transfer ownership first.')
+        } else if (err.response?.status === 404) {
+          this.toast.error('Project not found or you are not a member.')
+          this.fetchInitialData() // Refresh anyway
+        } else {
+          this.toast.error('Failed to leave project. Please try again.')
+        }
+      }
+    },
+
+    // --- ✨ NOTIFICATION METHODS ---
     toggleNotifications() {
       this.isNotificationsVisible = !this.isNotificationsVisible
     },
+
     async handleAcceptInvitation(inv) {
-      const userId = inv.invitee?._id
-      if (!userId) return this.showNotification('Error', 'Invitee user ID not found.')
       try {
-        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/accept`)
+        console.log('🎯 Accepting invitation:', {
+          id: inv.id,
+          project_id: inv.project_id,
+          memberId: inv.invitee?._id,
+          token: inv.invite_token ? '***' : 'MISSING',
+        })
+
+        // 🔥 FIXED: Kiểm tra kỹ dữ liệu trước khi gọi API
+        if (!inv.project_id || !inv.invitee?._id) {
+          console.error('❌ Missing required data for acceptance:', inv)
+          this.toast.error('Invalid invitation data - missing project or member ID')
+          return
+        }
+
+        // 🔥 FIXED: Sử dụng API đã sửa
+        await acceptInvite(inv.project_id, inv.invitee._id, inv.invite_token)
+
+        // Cập nhật UI ngay lập tức
         this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
-        this.showNotification('Success', `You have joined the project: ${inv.projectName}`)
-        // Optionally, refresh project lists
+        this.toast.success(`You have joined the project: ${inv.projectName}`)
+
+        // Refresh project lists
         this.fetchInitialData()
       } catch (err) {
-        console.error(err)
-        this.showNotification('Error', 'Failed to accept the invitation.')
+        console.error('❌ Accept invitation error:', {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message,
+        })
+
+        if (err.response?.status === 400) {
+          const errorMsg = err.response?.data?.message || 'Invalid request'
+          this.toast.error(`Failed to accept: ${errorMsg}`)
+        } else if (err.response?.status === 404) {
+          this.toast.error('Invitation not found or already processed.')
+          // Xóa invitation khỏi danh sách nếu không tìm thấy
+          this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
+        } else if (err.response?.status === 403) {
+          this.toast.error('Invalid or expired token.')
+          this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
+        } else {
+          this.toast.error('Failed to accept the invitation. Please try again.')
+        }
       }
     },
+
     async handleRejectInvitation(inv) {
-      const userId = inv.invitee?._id
-      if (!userId) return this.showNotification('Error', 'Invitee user ID not found.')
       try {
-        await axiosClient.post(`/api/projects/${inv.project_id}/members/${userId}/reject`)
+        console.log('🎯 Rejecting invitation:', {
+          id: inv.id,
+          project_id: inv.project_id,
+          memberId: inv.invitee?._id,
+          token: inv.invite_token ? '***' : 'MISSING',
+        })
+
+        // 🔥 FIXED: Kiểm tra kỹ dữ liệu trước khi gọi API
+        if (!inv.project_id || !inv.invitee?._id) {
+          console.error('❌ Missing required data for rejection:', inv)
+          this.toast.error('Invalid invitation data - missing project or member ID')
+          return
+        }
+
+        // 🔥 FIXED: Sử dụng API đã sửa
+        await rejectInvite(inv.project_id, inv.invitee._id, inv.invite_token)
+
+        // Cập nhật UI ngay lập tức
         this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
-        this.showNotification('Info', 'You have declined the invitation.')
+        this.toast.info('You have declined the invitation.')
       } catch (err) {
-        console.error(err)
-        this.showNotification('Error', 'Failed to decline the invitation.')
+        console.error('❌ Reject invitation error:', {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message,
+        })
+
+        if (err.response?.status === 400) {
+          const errorMsg = err.response?.data?.message || 'Invalid request'
+          this.toast.error(`Failed to decline: ${errorMsg}`)
+        } else if (err.response?.status === 404) {
+          this.toast.error('Invitation not found or already processed.')
+          this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
+        } else if (err.response?.status === 403) {
+          this.toast.error('Invalid or expired token.')
+          this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
+        } else {
+          this.toast.error('Failed to decline the invitation. Please try again.')
+        }
       }
     },
-    // --- Modal Methods ---
+
+    // --- MODAL METHODS ---
     openPersonalInfo() {
       this.showPersonalInfo = true
     },
-    // --- Project Sharing Methods ---
+
     openShareModal(project) {
       this.selectedProject = project
       this.isShareModalVisible = true
     },
+
     closeShareModal() {
       this.isShareModalVisible = false
-      this.fetchInitialData() // Reload data in case the user left a project from the modal
+      this.fetchInitialData()
     },
 
     showNotification(title, message) {
@@ -492,7 +629,7 @@ export default {
       this.isAppModalVisible = true
     },
 
-    // --- Methods mới cho creating projects ---
+    // --- PROJECT CREATION METHODS ---
     openNewProjectModal() {
       this.isNewProjectModalVisible = true
     },
@@ -510,10 +647,7 @@ export default {
 
       if (!creationData.pollingData?.versionId) {
         console.error('❌ No versionId provided for polling')
-        // this.showNotification('Error','Cannot track project creation progress. Please check the project later.')`Project created successfully!`
-        this.toast.error(
-          `Cannot track project creation progress. Please check the project later!`
-        )`Project created successfully!`
+        this.toast.error('Cannot track project creation progress. Please check the project later!')
         this.isNewProjectModalVisible = false
         return
       }
@@ -543,7 +677,7 @@ export default {
       }
     },
 
-    // PHƯƠNG THỨC MỚI: Khôi phục retry processes từ localStorage
+    // Khôi phục retry processes từ localStorage
     restoreRetryProcesses() {
       const retryKeys = Object.keys(localStorage).filter((key) => key.startsWith('retry_'))
 
@@ -553,7 +687,6 @@ export default {
           if (retryState && retryState.type === 'retry') {
             console.log('🔄 Restoring retry process:', retryState)
 
-            // Kiểm tra xem retry process này đã tồn tại chưa
             const existingIndex = this.creatingProjects.findIndex(
               (p) => p.pollingData?.projectId === retryState.projectId && p.isRetry
             )
@@ -563,12 +696,12 @@ export default {
                 _id: `retry-${Date.now()}`,
                 name: retryState.projectName,
                 description: retryState.projectDescription,
-                status: 'retrying', // THAY ĐỔI: từ 'creating' thành 'retrying'
+                status: 'retrying',
                 processingProgress: retryState.processingProgress || 0,
                 currentStage: retryState.currentStage || 'Initializing...',
                 creationStatus: 'polling',
                 isTemp: true,
-                isRetry: true, // QUAN TRỌNG: đánh dấu đây là retry
+                isRetry: true,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 members: [],
@@ -694,7 +827,6 @@ export default {
         this.creatingProjects.splice(projectIndex, 1)
         this.myProjects.unshift(realProject)
         this.recentProjects.unshift(realProject)
-        // this.showNotification('Success', `Project created successfully!`)
         this.toast.success(`Project created successfully!`)
       }
     },
@@ -739,12 +871,10 @@ export default {
     async handleEditProject({ projectId, data }) {
       try {
         await updateProject(projectId, data)
-        // this.showNotification('Success', 'Project updated successfully!')
         this.toast.success(`Project updated successfully!`)
         this.updateProjectInLists(projectId, data)
       } catch (err) {
         console.error('Update project error', err)
-        // this.showNotification('Error', 'Failed to update project!')
         this.toast.error(`Failed to update project!`)
       }
     },
@@ -761,35 +891,6 @@ export default {
       updateProjectInArray(this.myProjects)
       updateProjectInArray(this.sharedProjects)
       updateProjectInArray(this.creatingProjects)
-    },
-
-    async fetchInitialData() {
-      try {
-        this.cleanupOldCreatingProjects()
-        // Load user info from token first
-        const [userRes, myRes, sharedRes, recentRes, trashedRes] = await Promise.all([
-          getCurrentUser(),
-          getMyProjects(),
-          getSharedProjects(),
-          getRecentProjects(),
-          getTrashedProjects(),
-        ])
-        this.user = userRes.data.data
-        this.myProjects = myRes.data?.data || []
-        this.sharedProjects = sharedRes.data?.data || []
-        this.recentProjects = recentRes.data?.data || []
-        this.trashedProjects = trashedRes.data?.data || []
-
-        // Khôi phục retry processes sau khi fetch data
-        this.$nextTick(() => {
-          this.restoreRetryProcesses()
-        })
-      } catch (err) {
-        console.error('Failed to fetch initial data:', err)
-        if (err.response?.status === 401 || err.response?.status === 400) {
-          this.logout()
-        }
-      }
     },
 
     cleanupOldCreatingProjects() {
@@ -820,12 +921,10 @@ export default {
     async moveToTrash(projectId) {
       try {
         await deleteProject(projectId)
-        // this.showNotification('Success', 'Project moved to trash successfully!')
         this.toast.success(`Project trashed successfully!`)
         this.fetchInitialData()
       } catch (err) {
         console.error('Move to trash error', err)
-        // this.showNotification('Error', 'Failed to move project to trash!')
         this.toast.error(`Failed to trash project!`)
       }
     },
@@ -833,12 +932,10 @@ export default {
     async restoreProject(projectId) {
       try {
         await apiRestoreProject(projectId)
-        // this.showNotification('Success', 'Project restored successfully.')
         this.toast.success(`Project restored successfully!`)
         this.fetchInitialData()
       } catch (err) {
         console.error('Restore error', err)
-        // this.showNotification('Error', 'Failed to restore project!')
         this.toast.error(`Failed to restore project!`)
       }
     },
@@ -854,20 +951,15 @@ export default {
     async deleteProjectPermanently(projectId) {
       try {
         await deleteProject(projectId)
-        // this.showNotification('Success', 'Project permanently deleted!')
         this.toast.success(`Project deleted successfully!`)
         this.fetchInitialData()
       } catch (err) {
         console.error('Permanent delete error', err)
-        // this.showNotification('Error', 'Failed to permanently delete project!')
         this.toast.error(`Failed to permanently delete project!`)
       }
     },
 
     async logout() {
-      // localStorage.removeItem('accessToken')
-      // localStorage.removeItem('adminToken')
-      // localStorage.removeItem('refreshToken')
       console.log('🚪 Logged out')
       await authLogout()
       this.$router.push('/login')
@@ -876,14 +968,9 @@ export default {
     handleAvatarUpdated(avatarData) {
       console.log('🔄 Avatar updated in PersonalInfo:', avatarData)
 
-      // Cập nhật user data với avatar mới
       if (this.user && avatarData.avatar_url) {
         this.user.avatar_url = avatarData.avatar_url
-
-        // 🔥 QUAN TRỌNG: Force update để sidebar re-render
         this.$forceUpdate()
-
-        // Optional: Có thể fetch lại user data để đảm bảo đồng bộ
         this.fetchUserData()
       }
     },
@@ -897,6 +984,81 @@ export default {
         console.error('❌ Failed to refresh user data:', error)
       }
     },
+
+    // INVITATION MODAL METHODS
+    openInvitationsModal() {
+      this.isInvitationsModalVisible = true
+      this.loadSentInvitations()
+    },
+
+    closeInvitationsModal() {
+      this.isInvitationsModalVisible = false
+    },
+
+    async loadSentInvitations() {
+      try {
+        const myProjects = await getMyProjects()
+        let allSentInvites = []
+
+        for (const project of myProjects.data.data) {
+          try {
+            const response = await getProjectInvites(project._id)
+            if (response.data && response.data.data) {
+              const projectInvites = response.data.data.map((invite) => ({
+                ...invite,
+                projectName: project.name,
+                projectId: project._id,
+              }))
+              allSentInvites = [...allSentInvites, ...projectInvites]
+            }
+          } catch (error) {
+            console.warn(`Cannot get invites for project ${project._id}:`, error.message)
+            // Fallback: lấy từ members có status pending
+            const pendingMembers = project.members?.filter((m) => m.status === 'pending') || []
+            const projectInvites = pendingMembers.map((member) => ({
+              invite_id: member._id || `temp-${Date.now()}`,
+              project_id: project._id,
+              projectName: project.name,
+              role: member.role,
+              status: member.status,
+              created_at: member.invited_at,
+              invitee: {
+                _id: member.user_id?._id || member.user_id,
+                name: member.user_id?.name || 'Unknown',
+                email: member.user_id?.email || 'No email',
+              },
+              inviter: {
+                _id: member.invited_by?._id || member.invited_by,
+                name: member.invited_by?.name || 'Unknown',
+                email: member.invited_by?.email || 'No email',
+              },
+            }))
+            allSentInvites = [...allSentInvites, ...projectInvites]
+          }
+        }
+
+        this.sentInvitations = allSentInvites
+      } catch (error) {
+        console.error('Error loading sent invitations:', error)
+        this.toast.error('Failed to load sent invitations')
+      }
+    },
+
+    async handleCancelInvite(invitation) {
+      try {
+        await cancelInvite(invitation.project_id, invitation.invitee._id)
+        this.toast.success('Invitation canceled successfully')
+
+        this.sentInvitations = this.sentInvitations.filter(
+          (inv) => inv.invite_id !== invitation.invite_id
+        )
+
+        this.fetchInitialData()
+      } catch (error) {
+        console.error('Error canceling invitation:', error)
+        this.toast.error('Failed to cancel invitation')
+      }
+    },
   },
 }
 </script>
@@ -907,6 +1069,7 @@ export default {
   background-color: #f9fafb;
   min-height: 100vh;
 }
+
 /* ✨ NEW: Styles for Notifications Dropdown */
 .page-header {
   display: flex;
@@ -926,7 +1089,7 @@ export default {
   position: absolute;
   top: -5px;
   right: -8px;
-  background-color: #ef4444; /* red-500 */
+  background-color: #ef4444;
   color: white;
   border-radius: 50%;
   width: 20px;
@@ -946,7 +1109,7 @@ export default {
   background-color: white;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e5e7eb; /* gray-200 */
+  border: 1px solid #e5e7eb;
   z-index: 100;
   overflow: hidden;
 }
@@ -974,7 +1137,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #f3f4f6; /* gray-100 */
+  border-bottom: 1px solid #f3f4f6;
 }
 
 .invitation-item:last-child {
@@ -985,8 +1148,9 @@ export default {
   margin: 0;
   font-weight: 500;
 }
+
 .invitation-details small {
-  color: #6b7280; /* gray-500 */
+  color: #6b7280;
 }
 
 .invitation-actions {
@@ -998,13 +1162,14 @@ export default {
 .empty-invitations {
   padding: 24px;
   text-align: center;
-  color: #6b7280; /* gray-500 */
+  color: #6b7280;
 }
 
 .btn-sm {
   padding: 4px 10px;
   font-size: 0.8rem;
 }
+
 .app-container {
   display: flex;
   min-height: 100vh;
@@ -1306,5 +1471,35 @@ export default {
   .content-area {
     padding: 0 16px 16px;
   }
+}
+
+.invitations-btn {
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background-color 0.3s;
+}
+
+.invitations-btn:hover {
+  background-color: #f3f4f6;
+}
+
+.invitation-badge {
+  position: absolute;
+  top: -5px;
+  right: -8px;
+  background-color: #3b82f6;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
 }
 </style>
