@@ -306,7 +306,8 @@ import {
   leaveProject,
 } from '@/api/project'
 import { getUserInfo, logout as authLogout } from '@/utils/authGuard'
-
+import axiosClient from '@/utils/axiosClient'
+import { socket } from '@/utils/socket'
 export default {
   name: 'Homepage',
   components: {
@@ -351,6 +352,26 @@ export default {
       myInvitations: [],
       sentInvitations: [],
     }
+  },
+  mounted() {
+    socket.on('notification', (data) => {
+      console.log('📩 Realtime notification received:', data)
+      // Cho phép HTML render đúng
+      this.toast.info(`${data.title}: ${data.message}`, {
+        dangerouslyHTMLString: true,
+      })
+      // Cập nhật danh sách realtime
+      if (data.type === 'invitation' || data.title?.includes('Request to join')) {
+        this.fetchMyInvitationsRealtime()
+      }
+      if (
+        data.title?.includes('Joined') ||
+        data.title?.includes('Declined') ||
+        data.title?.includes('Left')
+      ) {
+        this.fetchInitialData()
+      }
+    })
   },
   computed: {
     notificationCount() {
@@ -409,6 +430,10 @@ export default {
   },
   beforeUnmount() {
     this.cleanupAllPolling()
+    if (socket) {
+      socket.off('notification')
+      console.log('🧹 Socket listener removed on unmount')
+    }
   },
   methods: {
     // --- Dọn dẹp polling ---
@@ -418,7 +443,24 @@ export default {
       })
       this.pollingIntervals = {}
     },
-
+    async fetchMyInvitationsRealtime() {
+      try {
+        const invRes = await getMyInvitations()
+        this.myInvitations = (invRes.data?.data || []).map((inv) => ({
+          id: inv._id,
+          project_id: inv.project_id,
+          projectName: inv.project_name || 'Unnamed Project',
+          role: inv.role,
+          invitedBy: inv.inviter?.name || 'Unknown',
+          date: inv.created_at,
+          invitee: inv.invitee,
+          invite_token: inv.invite_token,
+        }))
+        console.log('🔄 Invitations updated via realtime socket')
+      } catch (error) {
+        console.error('❌ Failed to fetch invitations via socket:', error)
+      }
+    },
     async fetchInitialData() {
       try {
         const [userRes, myRes, sharedRes, recentRes, trashedRes, invRes] = await Promise.all([
@@ -961,6 +1003,10 @@ export default {
 
     async logout() {
       console.log('🚪 Logged out')
+      if (socket && socket.connected) {
+        socket.disconnect()
+        console.log('🔌 Socket disconnected on logout')
+      }
       await authLogout()
       this.$router.push('/login')
     },
