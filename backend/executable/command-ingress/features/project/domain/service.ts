@@ -600,11 +600,11 @@ export class ProjectService {
       // THÊM RÀNG BUỘC: Kiểm tra user có status accepted và là owner
       const project = await Project.findOne({
         _id: version.project_id,
-        owner_id: new Types.ObjectId(userId),
         'members': {
           $elemMatch: {
             user_id: new Types.ObjectId(userId),
-            status: 'accepted'
+            status: 'accepted',
+            role: { $in: ['owner', 'editor'] }
           }
         }
       }).session(session);
