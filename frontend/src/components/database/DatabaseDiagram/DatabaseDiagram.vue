@@ -62,6 +62,7 @@
         :tables="localTables"
         :zoomLevel="zoomLevel"
         :diagramOffset="diagramOffset"
+        :highlightedColumn="highlightedColumn"
         layer="under"
         @relationship-click="selectRelationship"
         @relationship-enter="highlightRelationship"
@@ -101,6 +102,7 @@
         :tables="localTables"
         :zoomLevel="zoomLevel"
         :diagramOffset="diagramOffset"
+        :highlightedColumn="highlightedColumn"
         layer="over"
         @relationship-click="selectRelationship"
         @relationship-enter="highlightRelationship"
@@ -608,13 +610,18 @@ export default {
       this.historyIndex--
       const snapshot = this.history[this.historyIndex]
       this.applyHistorySnapshot(snapshot)
+      // Có thể thêm dòng này nếu muốn lưu undo operation vào history
+      // this.saveToHistory('Undo')
     },
+
     redo() {
       if (!this.canRedo) return
 
       this.historyIndex++
       const snapshot = this.history[this.historyIndex]
       this.applyHistorySnapshot(snapshot)
+      // Có thể thêm dòng này nếu muốn lưu redo operation vào history
+      // this.saveToHistory('Redo')
     },
     applyHistorySnapshot(snapshot) {
       this.localTables.forEach((table, index) => {
@@ -628,6 +635,9 @@ export default {
 
       this.$emit('tables-updated', this.localTables)
       this.$emit('relationships-updated', this.manualRelationships)
+
+      // THÊM DÒNG NÀY để kích hoạt auto save
+      this.scheduleAutoSave()
     },
     scheduleAutoSave: debounce(function () {
       if (!this.autoSaveEnabled || !this.databaseId) return

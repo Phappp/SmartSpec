@@ -58,13 +58,17 @@ export default {
     tables: Array,
     zoomLevel: Number,
     diagramOffset: Object,
+
     layer: {
       type: String,
       default: 'over',
       validator: (value) => ['over', 'under'].includes(value),
     },
     highlightedRelationship: Object,
-    highlightedColumn: Object,
+    highlightedColumn: {
+      type: Object,
+      default: null,
+    },
     selectedRelationship: Object,
     focusedTable: Object,
   },
