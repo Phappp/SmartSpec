@@ -64,11 +64,15 @@
         @updateUsecase="handleUpdateUsecase"
         @deleteUsecase="handleDeleteUsecase"
       />
+      <!-- Trong template của UsecaseManagement.vue -->
       <InputSidebar
         :inputs="inputs"
         :is-deleting-input="isDeletingInput"
         @add-input-click="showAddInputModal = true"
         @delete-input="openDeleteSpecificModal"
+        @input-added="handleInputAdded"
+        @input-deleted="handleInputDeleted"
+        @inputs-reloaded="handleInputsReloaded"
       />
     </div>
 
@@ -280,7 +284,11 @@ export default {
         console.log('❌ Disconnected from socket server')
       })
 
+      // Existing usecase events
       socket.on('usecase_event', this.handleUsecaseEvent)
+
+      // 🔥 THÊM: Input events
+      socket.on('input_event', this.handleInputEvent)
 
       // Join project room if already connected
       if (socket.connected) {
@@ -300,12 +308,60 @@ export default {
         socket.off('connect')
         socket.off('disconnect')
         socket.off('usecase_event', this.handleUsecaseEvent)
+        socket.off('input_event', this.handleInputEvent) // THÊM
 
         // Leave project room
         if (this.project._id) {
           socket.emit('leave_project', this.project._id)
         }
       }
+    },
+
+    handleInputEvent(event) {
+      console.log('📩 Realtime input event received:', event)
+
+      // Bỏ qua events từ chính mình
+      if (event.userId === this.currentUserId) {
+        return
+      }
+
+      switch (event.type) {
+        case 'INPUT_CREATED':
+          this.handleRemoteInputCreated(event)
+          break
+        case 'INPUT_DELETED':
+          this.handleRemoteInputDeleted(event)
+          break
+        case 'INPUTS_RELOAD':
+          this.handleRemoteInputsReload(event)
+          break
+        default:
+          console.warn('Unknown input event type:', event.type)
+      }
+    },
+
+    handleRemoteInputCreated(event) {
+      this.toast.info(`New input added by team`)
+
+      // Thêm input mới vào danh sách
+      if (!this.inputs.find((input) => input._id === event.input._id)) {
+        this.inputs.push(event.input)
+        this.$forceUpdate()
+      }
+    },
+
+    handleRemoteInputDeleted(event) {
+      this.toast.info(`Input deleted by team`)
+
+      // Xóa input khỏi danh sách
+      this.inputs = this.inputs.filter((input) => input._id !== event.inputId)
+      this.$forceUpdate()
+    },
+
+    handleRemoteInputsReload(event) {
+      this.toast.info('Inputs updated by team')
+      this.inputs = event.inputs
+      this.$forceUpdate()
     },
 
     handleUsecaseEvent(event) {

@@ -202,6 +202,64 @@ export default {
     this.loadCollapsedState()
   },
   methods: {
+    initSocketListeners() {
+      if (socket) {
+        socket.on('input_event', this.handleInputEvent)
+        console.log('✅ InputSidebar: Socket listeners initialized')
+      }
+    },
+
+    cleanupSocketListeners() {
+      if (socket) {
+        socket.off('input_event', this.handleInputEvent)
+        console.log('🧹 InputSidebar: Socket listeners cleaned up')
+      }
+    },
+    handleInputEvent(event) {
+      console.log('📩 InputSidebar received input event:', event)
+
+      // Bỏ qua events từ chính mình
+      if (event.userId === this.currentUserId) {
+        return
+      }
+
+      switch (event.type) {
+        case 'INPUT_CREATED':
+          this.handleRemoteInputCreated(event)
+          break
+        case 'INPUT_DELETED':
+          this.handleRemoteInputDeleted(event)
+          break
+        case 'INPUTS_RELOAD':
+          this.handleRemoteInputsReload(event)
+          break
+        default:
+          console.warn('Unknown input event type:', event.type)
+      }
+    },
+
+    handleRemoteInputCreated(event) {
+      console.log('➕ Remote input created:', event.input)
+
+      // Thêm input mới vào danh sách nếu chưa có
+      if (!this.inputs.find((input) => input._id === event.input._id)) {
+        this.$emit('input-added', event.input) // Emit event để parent cập nhật
+      }
+    },
+
+    handleRemoteInputDeleted(event) {
+      console.log('➖ Remote input deleted:', event.inputId)
+
+      // Xóa input khỏi danh sách
+      this.$emit('input-deleted', event.inputId) // Emit event để parent cập nhật
+    },
+
+    handleRemoteInputsReload(event) {
+      console.log('🔄 Remote inputs reload:', event.inputs.length)
+
+      // Cập nhật toàn bộ danh sách inputs
+      this.$emit('inputs-reloaded', event.inputs) // Emit event để parent cập nhật
+    },
     toggleCollapse() {
       this.isCollapsed = !this.isCollapsed
       this.expandedInputId = null

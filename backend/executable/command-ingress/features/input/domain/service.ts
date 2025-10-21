@@ -10,6 +10,7 @@ import mongoose, { Types } from 'mongoose';
 import { InputService } from '../../orchestrator/domain/InputService';
 import { LogService } from '../../log/domain/service';
 import User from '../../../../../internal/model/user'
+import { inputSocketService } from '../../input/domain/input.socket.service';
 
 export class InputHandleService {
   private logService: LogService;
@@ -21,6 +22,7 @@ export class InputHandleService {
     this.logService = new LogService();
   }
 
+  // trong ProjectService - sửa addInputsToVersion
   async addInputsToVersion(
     versionId: string,
     userId: string,
@@ -32,7 +34,6 @@ export class InputHandleService {
       return new ServiceResponse(ResponseStatus.Failed, 'Version not found', null, 404);
     }
 
-    // THÊM RÀNG BUỘC: Kiểm tra user có status accepted trong project
     const project = await Project.findOne({
       _id: version.project_id,
       'members': {
@@ -71,6 +72,18 @@ export class InputHandleService {
     version.updated_at = new Date();
     await version.save();
 
+    // 🔥 REALTIME: Broadcast input creation - Lấy inputs mới nhất
+    const updatedInputs = await Input.find({ version_id: versionId }).sort({ created_at: 1 }).lean();
+
+    if (updatedInputs.length > 0) {
+      inputSocketService.emitInputsReload(
+        projectId,
+        versionId,
+        userId,
+        updatedInputs
+      );
+    }
+
     return new ServiceResponse(ResponseStatus.Success, 'New inputs added successfully. Ready for processing.', {
       added_files: newFilesCount,
       added_text: newTextProvided
@@ -97,7 +110,6 @@ export class InputHandleService {
         return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
       }
 
-      // THÊM RÀNG BUỘC: Kiểm tra user có status accepted và là owner
       const project = await Project.findOne({
         _id: version.project_id,
         'members': {
@@ -123,6 +135,14 @@ export class InputHandleService {
       );
 
       await session.commitTransaction();
+
+      // 🔥 REALTIME: Broadcast input deletion
+      inputSocketService.emitInputDeleted(
+        version.project_id.toString(),
+        versionId,
+        userId,
+        inputId
+      );
 
       return new ServiceResponse(
         ResponseStatus.Success,
