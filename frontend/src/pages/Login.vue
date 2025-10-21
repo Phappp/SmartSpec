@@ -90,11 +90,13 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import AppModal from '../components/AppModal.vue'
+import { useToast } from 'vue-toastification'
 export default {
   name: 'LoginView',
   components: { AppModal },
   setup() {
     const router = useRouter()
+    const toast = useToast()
     const email = ref('')
     const password = ref('')
     const passwordVisible = ref(false)
@@ -209,23 +211,26 @@ export default {
           localStorage.setItem('accessToken', data.accessToken)
           localStorage.setItem('refreshToken', data.refreshToken)
           localStorage.setItem('userId', data.sub)
-          
+
           // Kiểm tra nếu là ADMIN thì chuyển vào trang admin
           try {
             const payload = JSON.parse(atob(data.accessToken.split('.')[1]))
             if (payload.system_role === 'ADMIN') {
-              openModal('Log in successfully', 'Login', () => {
-                router.push('/admin')
+              toast.success('Login successfully!', {
+                timeout: 1000,
+                onClose: () => router.push('/admin'),
               })
             } else {
-              openModal('Log in successfully', 'Login', () => {
-                router.push('/dashboard')
+              toast.success('Login successfully!', {
+                timeout: 1000,
+                onClose: () => router.push('/dashboard'),
               })
             }
           } catch (error) {
             console.error('Error parsing token:', error)
-            openModal('Log in successfully', 'Login', () => {
-              router.push('/dashboard')
+            toast.success('Login successfully!', {
+              timeout: 1000,
+              onClose: () => router.push('/dashboard'),
             })
           }
         }
@@ -233,7 +238,7 @@ export default {
         console.error(error)
         const msg = error.response?.data?.message || 'Invalid email or password. Please try again.'
         errorMessage.value = msg
-        openModal(msg, 'Login failed')
+        toast.error(msg)
       } finally {
         loading.value = false
       }

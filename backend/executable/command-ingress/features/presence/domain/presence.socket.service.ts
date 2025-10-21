@@ -38,13 +38,24 @@ export class PresenceSocketService {
      */
     leaveProjectRoom(socket: any, projectId: string): void {
         const activeUser = this.activeUsers.get(socket.id);
+
+        console.log(`🚪 User leaving - Socket ID: ${socket.id}`);
+        console.log(`🚪 Active user found:`, activeUser);
+
         if (activeUser) {
             this.activeUsers.delete(socket.id);
+            console.log(`🚪 After deletion - Total active users: ${this.activeUsers.size}`);
+
+            const remainingUsers = this.getActiveUsersInProject(projectId);
+            console.log(`🚪 Remaining users in project ${projectId}:`, remainingUsers.length);
+            console.log(`🚪 Remaining users details:`, remainingUsers.map(u => ({ userId: u.userId, name: u.userInfo.name })));
+
             this.broadcastUserLeft(projectId, activeUser.userId, activeUser.userInfo);
+        } else {
+            console.log(`🚪 No active user found for socket ${socket.id}`);
         }
 
         socket.leave(`project_${projectId}`);
-        console.log(`🚪 User left project room: project_${projectId}`);
     }
 
     /**
@@ -98,8 +109,19 @@ export class PresenceSocketService {
     private broadcastUserLeft(projectId: string, userId: string, userInfo: any): void {
         const activeUsers = this.getActiveUsersInProject(projectId);
 
-        console.log(`📤 Broadcasting user_left for project ${projectId}`);
-        console.log(`📤 Remaining active users:`, activeUsers.length);
+        console.log(`📤 Broadcasting USER_LEFT for project ${projectId}`);
+        console.log(`📤 User leaving: ${userId} (${userInfo.name})`);
+        console.log(`📤 Remaining active users count: ${activeUsers.length}`);
+        console.log(`📤 Remaining users:`, activeUsers.map(u => u.userId));
+
+        // ✅ ĐẢM BẢO activeUsers chỉ chứa users thực sự còn lại
+        const cleanActiveUsers = activeUsers.map(user => ({
+            userId: user.userId,
+            name: user.userInfo.name,
+            email: user.userInfo.email,
+            avatar: user.userInfo.avatar_url,
+            joinedAt: user.joinedAt
+        }));
 
         io.to(`project_${projectId}`).emit('user_left', {
             type: 'USER_LEFT',
@@ -110,13 +132,7 @@ export class PresenceSocketService {
                 email: userInfo.email,
                 avatar: userInfo.avatar_url
             },
-            activeUsers: activeUsers.map(user => ({
-                userId: user.userId,
-                name: user.userInfo.name,
-                email: user.userInfo.email,
-                avatar: user.userInfo.avatar_url,
-                joinedAt: user.joinedAt
-            })),
+            activeUsers: cleanActiveUsers, // ✅ Danh sách đã được làm sạch
             timestamp: new Date()
         });
     }

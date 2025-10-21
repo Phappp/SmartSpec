@@ -211,7 +211,7 @@ export default {
       const ownerCount = 1
       const acceptedMembers =
         this.project.members?.filter((member) => member.status === 'accepted').length || 0
-      return ownerCount + acceptedMembers
+      return ownerCount + acceptedMembers - 1
     },
   },
   methods: {

@@ -271,7 +271,18 @@ export default {
     this.cleanupSocketConnection()
     document.removeEventListener('click', this.handleClickOutside)
   },
-
+  watch: {
+    activeUsers: {
+      handler(newVal, oldVal) {
+        console.log('🎯 ACTIVE USERS WATCHER TRIGGERED!')
+        console.log('📊 Old length:', oldVal?.length)
+        console.log('📊 New length:', newVal?.length)
+        console.log('📊 New data:', newVal)
+      },
+      immediate: true,
+      deep: true,
+    },
+  },
   methods: {
     // ========== SOCKET & REALTIME METHODS ==========
     initSocketConnection(projectId) {
@@ -340,39 +351,45 @@ export default {
         }
       }
     },
-    handleUserLeft(event) {
-      console.log('👤 User left event received:', event)
-
-      // ✅ LUÔN cập nhật activeUsers
-      this.activeUsers = event.activeUsers || []
-
-      console.log('🔄 After user left - activeUsers:', this.activeUsers)
-
-      // ✅ Chỉ hiện notification cho user khác
-      if (event.userId !== this.currentUserId) {
-        this.toast.info(`${event.userInfo.name} left the project`)
-      }
-    },
     handleUserJoined(event) {
       console.log('👤 User joined event received:', event)
-
-      // ✅ SỬA: VẪN cập nhật activeUsers, chỉ skip notification
-      if (event.userId === this.currentUserId) {
-        console.log('🔕 Skipping notification for own join event')
-        // ❌ ĐỪNG return ở đây - VẪN cần cập nhật activeUsers!
-      }
-
-      console.log('🔄 Before update - activeUsers:', this.activeUsers)
+      console.log('🔄 Current activeUsers before:', this.activeUsers)
       console.log('🔄 New activeUsers from event:', event.activeUsers)
 
-      // ✅ LUÔN cập nhật activeUsers, kể cả là event của chính mình
+      // ✅ LUÔN cập nhật activeUsers với dữ liệu mới nhất từ server
       this.activeUsers = event.activeUsers || []
 
-      console.log('🔄 After update - activeUsers:', this.activeUsers)
+      console.log('🔄 ActiveUsers after update:', this.activeUsers)
+      console.log('🔄 Active users count:', this.activeUsers.length)
 
-      // ✅ Chỉ hiện notification cho user khác
       if (event.userId !== this.currentUserId) {
-        this.toast.info(`${event.userInfo.name} joined the project`)
+        // this.toast.info(`${event.userInfo?.name || 'Someone'} joined the project`)
+      } else {
+        console.log('🔕 Skipped notification for own join event')
+      }
+    },
+
+    handleUserLeft(event) {
+      console.log('👤 User left event received:', event)
+      console.log('🚪 Current activeUsers before:', this.activeUsers)
+      console.log('🚪 New activeUsers from event:', event.activeUsers)
+
+      // ✅ FIX TẠM: Nếu server gửi sai activeUsers, tự filter
+      let updatedActiveUsers = event.activeUsers || []
+
+      // Nếu user left vẫn còn trong activeUsers, tự động remove
+      if (updatedActiveUsers.some((user) => user.userId === event.userId)) {
+        console.log('⚠️ Server sent incorrect activeUsers, filtering manually...')
+        updatedActiveUsers = updatedActiveUsers.filter((user) => user.userId !== event.userId)
+      }
+
+      this.activeUsers = updatedActiveUsers
+
+      console.log('🚪 ActiveUsers after manual fix:', this.activeUsers)
+      console.log('🚪 Active users count:', this.activeUsers.length)
+
+      if (event.userId !== this.currentUserId) {
+        // this.toast.info(`${event.userInfo?.name || 'Someone'} left the project`)
       }
     },
 

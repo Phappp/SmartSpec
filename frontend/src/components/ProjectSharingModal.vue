@@ -98,7 +98,10 @@
 
             <div class="card-actions">
               <button @click="openInviteModal" class="btn btn-primary">Invite</button>
-              <button @click="handleLeaveProject" class="btn btn-danger">Leave</button>
+              <!-- Ẩn nút Leave nếu là owner -->
+              <button v-if="!isOwner" @click="handleLeaveProject" class="btn btn-danger">
+                Leave
+              </button>
             </div>
           </div>
           <div class="table-wrapper">
@@ -160,20 +163,34 @@
           <form @submit.prevent="handleInviteMemberSubmit" class="dialog-content">
             <div class="form-group">
               <label>Email</label>
-              <input v-model="inviteForm.email" type="email" required class="form-input" />
+              <input
+                v-model="inviteForm.email"
+                type="email"
+                required
+                class="form-input"
+                :disabled="isInviteLoading"
+              />
             </div>
             <div class="form-group">
               <label>Role</label>
-              <select v-model="inviteForm.role" class="form-select">
+              <select v-model="inviteForm.role" class="form-select" :disabled="isInviteLoading">
                 <option value="editor">Editor</option>
                 <option value="viewer">Viewer</option>
               </select>
             </div>
             <div class="dialog-actions">
-              <button type="button" @click="closeInviteModal" class="btn btn-secondary">
+              <button
+                type="button"
+                @click="closeInviteModal"
+                class="btn btn-secondary"
+                :disabled="isInviteLoading"
+              >
                 Cancel
               </button>
-              <button type="submit" class="btn btn-primary">Send</button>
+              <button type="submit" class="btn btn-primary" :disabled="isInviteLoading">
+                <span v-if="isInviteLoading" class="loading-spinner"></span>
+                {{ isInviteLoading ? 'Sending...' : 'Send' }}
+              </button>
             </div>
           </form>
         </div>
@@ -207,7 +224,6 @@ const props = defineProps({ projectId: { type: String, required: true } })
 const emit = defineEmits(['close'])
 
 const currentUser = ref({})
-// ✅ CHANGED: `members` and `pendingInvitations` are merged into `participants`
 const participants = ref([])
 const project = ref(null)
 
@@ -216,12 +232,13 @@ const selectedRoleFilter = ref('all')
 
 const inviteForm = reactive({ email: '', role: 'editor' })
 const isInviteModalVisible = ref(false)
+const isInviteLoading = ref(false) // Thêm state loading cho invite
 
 const isConfirmModalVisible = ref(false)
 const confirmModalContent = reactive({
   title: '',
   message: '',
-  onConfirm: () => {}, // This will hold the function to execute
+  onConfirm: () => {},
 })
 
 const toasts = ref([])
@@ -246,14 +263,12 @@ const isOwner = computed(() => {
 
 const userRole = computed(() => {
   if (isOwner.value) return 'owner'
-  // ✅ CHANGED: Find user in the new participants list
   const found = participants.value.find(
     (p) => p.id === currentUser.value?._id && p.status === 'accepted'
   )
   return found?.role || 'viewer'
 })
 
-// ✅ CHANGED: Logic now filters the single `participants` list
 const filteredParticipants = computed(() => {
   const query = searchQuery.value.toLowerCase().trim()
   const roleFilter = selectedRoleFilter.value
@@ -266,7 +281,6 @@ const filteredParticipants = computed(() => {
   })
 })
 
-// ✅ CHANGED: Load data now combines members and pending invites
 async function loadData() {
   try {
     const projectRes = await axiosClient.get(`/api/projects/${props.projectId}`)
@@ -282,17 +296,15 @@ async function loadData() {
       currentUser.value = { _id: storedUserId }
     }
 
-    // ✅ Map all members (accepted and pending) to a unified structure
     let allParticipants = (project.value.members || []).map((m) => ({
       id: m.user_id?._id,
       name: m.user_id?.name || m.user_id?.email?.split('@')[0] || 'Invited User',
       email: m.user_id?.email,
       role: m.role,
       date: m.status === 'accepted' ? m.responded_at : m.invited_at,
-      status: m.status, // 'accepted' or 'pending'
+      status: m.status,
     }))
 
-    // Add the Owner to the list
     const ownerId = project.value.owner_id?._id || project.value.owner_id
     const ownerEmail = project.value.owner_id?.email
     const isOwnerInList = allParticipants.some((p) => p.id === ownerId)
@@ -318,13 +330,15 @@ async function loadData() {
 
 async function handleInviteMemberSubmit() {
   if (!inviteForm.email) return addToast('Please enter an email', 'error')
+
+  isInviteLoading.value = true // Bắt đầu loading
+
   try {
     const res = await axiosClient.post(
       `/api/projects/${props.projectId}/members/invite`,
       inviteForm
     )
 
-    // Add the new pending invitation to our list for immediate UI update
     const newInvitation = {
       id: res.data.user_id?._id,
       name: res.data.user_id?.email?.split('@')[0] || 'Invited User',
@@ -340,18 +354,20 @@ async function handleInviteMemberSubmit() {
   } catch (err) {
     const errorMessage = err.response?.data?.message || 'Failed to send invitation'
     addToast(errorMessage, 'error')
+  } finally {
+    isInviteLoading.value = false // Kết thúc loading
   }
 }
-// ✨ NEW: Helper functions to control the confirmation modal
+
 function openConfirmModal(title, message, onConfirmAction) {
   confirmModalContent.title = title
   confirmModalContent.message = message
   confirmModalContent.onConfirm = onConfirmAction
   isConfirmModalVisible.value = true
 }
+
 function closeConfirmModal() {
   isConfirmModalVisible.value = false
-  // Reset after closing
   confirmModalContent.title = ''
   confirmModalContent.message = ''
   confirmModalContent.onConfirm = () => {}
@@ -363,12 +379,11 @@ function executeConfirm() {
   }
   closeConfirmModal()
 }
-// ✅ UPDATED: This function now WRAPS the original logic
+
 function confirmCancelInvitation(participant) {
   openConfirmModal(
     'Confirm Cancellation',
     `Are you sure you want to cancel the invitation for ${participant.email}?`,
-    // The actual logic is passed as a callback
     async () => {
       const userId = participant.id
       try {
@@ -382,12 +397,10 @@ function confirmCancelInvitation(participant) {
   )
 }
 
-// ✅ UPDATED: This function now WRAPS the original logic
 function confirmRemoveMember(participant) {
   openConfirmModal(
     'Confirm Member Removal',
     `Are you sure you want to remove ${participant.name} from the project? This action cannot be undone.`,
-    // The actual logic is passed as a callback
     async () => {
       const userId = participant.id
       if (isOwner.value && userId === currentUser.value._id) {
@@ -406,7 +419,6 @@ function confirmRemoveMember(participant) {
   )
 }
 
-// ✅ UPDATED: This function now WRAPS the original logic
 function handleLeaveProject() {
   if (isOwner.value) {
     return addToast('Owners must transfer ownership before leaving.', 'error')
@@ -431,15 +443,18 @@ function handleLeaveProject() {
 function openInviteModal() {
   isInviteModalVisible.value = true
 }
+
 function closeInviteModal() {
   isInviteModalVisible.value = false
+  inviteForm.email = ''
+  inviteForm.role = 'editor'
+  isInviteLoading.value = false // Reset loading state khi đóng modal
 }
 
 onMounted(loadData)
 </script>
 
 <style scoped>
-/* ✨ NEW: Style for status badges */
 .status-badge {
   padding: 3px 8px;
   border-radius: 12px;
@@ -448,17 +463,42 @@ onMounted(loadData)
   text-transform: capitalize;
 }
 .status-accepted {
-  background-color: #d1fae5; /* green-100 */
-  color: #065f46; /* green-800 */
+  background-color: #d1fae5;
+  color: #065f46;
 }
 .status-pending {
-  background-color: #feefc3; /* yellow-100 */
-  color: #92400e; /* yellow-800 */
+  background-color: #feefc3;
+  color: #92400e;
+}
+
+/* Thêm style cho loading spinner */
+.loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid #ffffff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>
 
-
-<style >
+<style>
 /* ===== Biến CSS Global ===== */
 :root {
   --primary-color: #4f46e5;
@@ -507,7 +547,7 @@ onMounted(loadData)
   max-height: 90vh;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow-lg);
-  overflow: hidden; /* Không cho modal cuộn toàn bộ */
+  overflow: hidden;
 }
 .toast-container-local {
   position: absolute;
@@ -669,13 +709,13 @@ onMounted(loadData)
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 1rem; /* khoảng cách giữa icon và role */
-  margin-left: auto; /* đẩy toàn bộ nhóm về bên phải */
+  gap: 1rem;
+  margin-left: auto;
 }
 .tab-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between; /* Tab bên trái, actions bên phải */
+  justify-content: space-between;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 0.5rem;
   margin-bottom: 1rem;
@@ -694,7 +734,7 @@ onMounted(loadData)
 .tab-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between; /* Tab bên trái, actions bên phải */
+  justify-content: space-between;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 0.5rem;
   margin-bottom: 1rem;
@@ -853,8 +893,8 @@ onMounted(loadData)
 .btn-icon {
   background: #efefef;
   border: 1px solid rgb(198, 198, 198);
-  padding: 0.5rem; /* Tăng padding một chút cho cân đối */
-  border-radius: 10px; /* Dùng 8px cho mềm mại hơn */
+  padding: 0.5rem;
+  border-radius: 10px;
   cursor: pointer;
   color: #060606;
   font-size: 1.5rem;
@@ -865,21 +905,15 @@ onMounted(loadData)
   flex-direction: row;
 }
 .btn-icon:hover {
-  /* Phóng to nút lên 110% */
   transform: scale(1.1);
-
-  /* Đổi màu nền sang màu có độ bão hòa cao hơn một chút */
   background: #dcdcdc;
-
-  /* Đổi màu icon sang màu chủ đạo */
   color: #be2727;
-
   border-color: #c0c0c0;
 }
 
 /* Hiệu ứng khi nhấn xuống */
 .btn-icon:active {
-  transform: scale(0.95); /* Thu nhỏ lại để tạo cảm giác nhấn */
+  transform: scale(0.95);
   transition-duration: 0.1s;
 }
 /* ===== Dialog ===== */
@@ -915,7 +949,7 @@ onMounted(loadData)
   padding: 1rem 1.5rem;
 }
 .form-group {
-  margin-bottom: 1.25rem; /* Khoảng cách giữa các trường */
+  margin-bottom: 1.25rem;
 }
 .form-group:last-of-type {
   margin-bottom: 0;
@@ -923,7 +957,7 @@ onMounted(loadData)
 
 .form-group label {
   display: block;
-  font-size: 0.875rem; /* 14px */
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-color-medium);
   margin-bottom: 0.5rem;
@@ -936,7 +970,7 @@ onMounted(loadData)
   padding: 0.75rem 1rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  font-size: 1rem; /* 16px */
+  font-size: 1rem;
   color: var(--text-color-dark);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -946,7 +980,7 @@ onMounted(loadData)
 .form-select:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2); /* Tạo vòng sáng (ring) */
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
 }
 /* ===== Animation ===== */
 .fade-in {
