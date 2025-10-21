@@ -179,9 +179,8 @@ export function resolveProjectConflict(projectId, versionId, data) {
 }
 
 // Versions
-export const addInputsToVersion = (versionId, data) => axiosClient.post(`/api/projects/versions/${versionId}/inputs`, data);
-export const deleteUnprocessedInputs = (versionId) => axiosClient.delete(`/api/projects/versions/${versionId}/inputs/unprocessed-inputs`);
-export const deleteSpecificInput = (versionId, inputId) => axiosClient.delete(`/api/projects/versions/${versionId}/inputs/${inputId}`);
+export const addInputsToVersion = (versionId, data) => axiosClient.post(`/api/input/versions/${versionId}/inputs`, data);
+export const deleteSpecificInput = (versionId, inputId) => axiosClient.delete(`/api/input/versions/${versionId}/inputs/${inputId}`);
 export const getVersionStatus = (versionId) => axiosClient.get(`/api/projects/versions/${versionId}/status`);
 
 // Attachments

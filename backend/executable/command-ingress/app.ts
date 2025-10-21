@@ -59,6 +59,10 @@ import { ProjectService } from "./features/project/domain/service";
 import { ProjectController } from "./features/project/adapter/controller";
 import initProjectRoute from "./features/project/adapter/route";
 
+import { InputHandleService } from "./features/input/domain/service";
+import { InputHandleController } from "./features/input/adapter/controller";
+import initInputHandleRoute from "./features/input/adapter/route";
+
 import { ShareProjectService } from "./features/share/domain/service";
 import { ShareProjectController } from "./features/share/adapter/controller";
 import initShareProjectRoute from "./features/share/adapter/route";
@@ -172,13 +176,16 @@ const createHttpServer = (redisClient: any) => {
     env.JWT_OTP_SECRET, // <-- Lấy giá trị mới từ .env
     env.JWT_EMAIL_SECRET // <-- Lấy giá trị mới từ .env
   );
-  // 1. Khởi tạo OrchestratorService trước
+
   const orchestratorService = new OrchestratorService();
   const inputService = new InputService();
-  // 2. Khởi tạo ProjectService và "inject" orchestratorService vào
+
   const projectService = new ProjectService(orchestratorService, inputService);
-  // 3. Khởi tạo ProjectController và inject projectService vào
   const projectController = new ProjectController(projectService);
+
+  const inputHandleService = new InputHandleService(orchestratorService, inputService);
+  const inputHandleController = new InputHandleController(inputHandleService);
+
   const usecaseService = new UsecaseService();
   const usecaseController = new UsecaseController(usecaseService);
 
@@ -187,6 +194,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/auth', initAuthRoute(new AuthController(authService)));
   app.use('/api/orchestrate', initOrchestratorRoute(new OrchestratorController(new OrchestratorService())));
   app.use('/api/projects', initProjectRoute(projectController));
+  app.use('/api/input', initInputHandleRoute(inputHandleController));
   app.use('/api/usecaseManagement', initUsecaseRoute(usecaseController));
   app.use('/api/databases', initDatabaseRoute())
   app.use(

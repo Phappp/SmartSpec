@@ -72,26 +72,6 @@ export default function initProjectRoute(controller: ProjectController) {
       controller.getAllProjectsForAdmin(req as any, res, next)
   );
 
-  // POST /versions/:versionId/inputs -> Thêm input (file/text) vào một version đã có
-  router.post(
-    '/versions/:versionId/inputs',
-    requireAuthorizedUser,
-    (req: Request, res: Response, next: NextFunction) => controller.addInputsToVersion(req as any, res, next)
-  );
-
-  router.delete(
-    '/versions/:versionId/unprocessed-inputs',
-    requireAuthorizedUser,
-    (req: Request, res: Response, next: NextFunction) => controller.deleteUnprocessedInputs(req as any, res, next)
-  );
-
-  // DELETE /versions/:versionId/inputs/:inputId -> Xóa một input cụ thể
-  router.delete(
-    '/versions/:versionId/inputs/:inputId',
-    requireAuthorizedUser,
-    (req: Request, res: Response, next: NextFunction) => controller.deleteSpecificInput(req as any, res, next)
-  );
-
   // router.post('/:versionId/suggest-relations',
   //   requireAuthorizedUser, (req: Request, res: Response, next: NextFunction) => controller.suggestRelations(req as any, res, next));
 
