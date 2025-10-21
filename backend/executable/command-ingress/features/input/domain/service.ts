@@ -60,8 +60,22 @@ export class InputHandleService {
       projectId,
       versionId
     );
-
+    const user = await User.findById(userId).lean();
+    const username = user?.name || "Unknown User";
     if (newFilesCount === 0 && !newTextProvided) {
+      await this.logService.createLog({
+        project_id: projectId,
+        user_id: userId,
+        action: "create_input",
+        target_id: versionId,
+        target_type: "input",
+        version_number: version.version_number,
+        affects_requirement: false,
+        level: "info",
+        details: {
+          message: `${username} tried to add inputs but all were duplicates`
+        }
+      });
       return new ServiceResponse(ResponseStatus.Success, 'No new inputs were added. All provided inputs were duplicates.', {
         added_files: 0,
         added_text: false
@@ -83,7 +97,19 @@ export class InputHandleService {
         updatedInputs
       );
     }
-
+    await this.logService.createLog({
+      project_id: projectId,
+      user_id: userId,
+      action: "create_input",
+      target_id: versionId,
+      target_type: "input",
+      version_number: version.version_number,
+      affects_requirement: true,
+      level: "info",
+      details: {
+        message: `${username} added ${newFilesCount} new file(s) and ${newTextProvided ? 'some text' : 'no text'} to version ${version.version_number}`,
+      }
+    });
     return new ServiceResponse(ResponseStatus.Success, 'New inputs added successfully. Ready for processing.', {
       added_files: newFilesCount,
       added_text: newTextProvided
@@ -125,7 +151,7 @@ export class InputHandleService {
         await session.abortTransaction();
         return new ServiceResponse(ResponseStatus.Failed, "Access denied", null, 403);
       }
-
+      const beforeDelete = await Input.findById(inputId).lean();
       await Input.findByIdAndDelete(inputId).session(session);
 
       await Version.findByIdAndUpdate(
@@ -143,6 +169,23 @@ export class InputHandleService {
         userId,
         inputId
       );
+      const user = await User.findById(userId).lean();
+      const username = user?.name || "Unknown User";
+
+      await this.logService.createLog({
+        project_id: version.project_id.toString(),
+        user_id: userId,
+        action: "delete_input",
+        target_id: versionId,
+        target_type: "input",
+        version_number: version.version_number,
+        affects_requirement: true,
+        level: "warning",
+        details: {
+          before: beforeDelete,
+          message: `${username} deleted input ${inputId} from version ${version.version_number}`
+        }
+      });
 
       return new ServiceResponse(
         ResponseStatus.Success,
@@ -153,6 +196,19 @@ export class InputHandleService {
 
     } catch (error: any) {
       await session.abortTransaction();
+      const user = await User.findById(userId).lean();
+      const username = user?.name || "Unknown User";
+      await this.logService.createLog({
+        project_id: "unknown",
+        user_id: userId,
+        action: "delete_input",
+        target_id: versionId,
+        target_type: "input",
+        version_number: null,
+        affects_requirement: false,
+        level: "error",
+        details: { message: `${username} Failed to delete input: ${error.message}` }
+      });
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     } finally {
       session.endSession();

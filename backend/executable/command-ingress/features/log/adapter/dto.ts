@@ -14,7 +14,7 @@ export interface CreateLogDTO {
   
   target_id?: string;
   target_type: "input" | "output" | "project" | "version" | "system" | "requirement_model" | "member";
-  version_number?: number;
+  version_number?: string;
   affects_requirement?: boolean;
   level: "info" | "warning" | "error";
   performed_by_ai?: boolean;

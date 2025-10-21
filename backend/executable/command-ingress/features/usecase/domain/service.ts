@@ -5,9 +5,12 @@ import Project from "../../../../../internal/model/project";
 import { ServiceResponse, ResponseStatus } from '../../../services/serviceResponse';
 import { CreateUsecaseDto, UpdateUsecaseDto } from '../adapter/dto';
 import { usecaseSocketService } from './usecase.socket.service';
+import { LogService } from "../../../../command-ingress/features/log/domain/service";
+import { VersionService } from "../../../../command-ingress/features/version/domain/service";
 
 export class UsecaseService {
-
+  private logService = new LogService();
+  private versionService = new VersionService();
   /**
    * Thêm usecase mới vào version
    */
@@ -24,6 +27,17 @@ export class UsecaseService {
       const version = await Version.findById(versionId).session(session);
       if (!version) {
         throw new Error("Version not found");
+      }
+
+      if (version.status === "completed" || version.stage === "completed") {
+        const bumped = await this.versionService.bumpVersion(versionId, userId, "minor");
+        versionId = bumped.data._id.toString();
+        // Lấy lại bản mới để thêm usecase
+        const newVersion = await Version.findById(versionId).session(session);
+        if (newVersion) version.set(newVersion);
+      } else {
+        // Nếu chưa hoàn thành → auto bump minor
+        await this.versionService.autoBumpVersionOnChange(versionId, userId, "minor");
       }
 
       // 🔥 THÊM VALIDATION: Kiểm tra các trường bắt buộc
@@ -72,6 +86,20 @@ export class UsecaseService {
       version.affects_requirement = true;
 
       await version.save({ session });
+       await this.logService.createLog({
+        project_id: version.project_id.toString(),
+        user_id: userId,
+        action: "generate_data",
+        target_id: versionId,
+        target_type: "requirement_model",
+        version_number: version.version_number,
+        affects_requirement: true,
+        level: "info",
+        details: {
+          after: newUsecase,
+          message: `${userId} created usecase ${newUsecase.name} in version ${version.version_number}`
+        }
+      });
       await session.commitTransaction();
 
       try {
@@ -191,6 +219,21 @@ export class UsecaseService {
 
       // ✅ 10. Lưu transaction
       await version.save({ session });
+      await this.logService.createLog({
+        project_id: project._id.toString(),
+        user_id: userId,
+        action: "update_data",
+        target_id: versionId,
+        target_type: "requirement_model",
+        version_number: version.version_number,
+        affects_requirement: true,
+        level: "info",
+        details: {
+          before: originalUsecase,
+          after: updatedUsecase,
+          message: `${userId} updated usecase ${originalUsecase.name} in version ${version.version_number}`
+        }
+      });
       await session.commitTransaction();
 
       // Broadcast event đến tất cả thành viên
@@ -236,11 +279,23 @@ export class UsecaseService {
       const version = await Version.findById(versionId).session(session);
       if (!version) throw new Error("Version not found");
 
+      // Nếu version đã hoàn thành → clone sang bản mới
+      if (version.status === "completed" || version.stage === "completed") {
+        const bumped = await this.versionService.bumpVersion(versionId, userId, "minor");
+        versionId = bumped.data._id.toString();
+        const newVersion = await Version.findById(versionId).session(session);
+        if (newVersion) version.set(newVersion);
+      } else {
+        // Nếu version đang active → chỉ bump số minor
+        await this.versionService.autoBumpVersionOnChange(versionId, userId, "minor");
+      }
       // 🔍 Bước 2: Kiểm tra project & quyền truy cập
       const project = await Project.findById(version.project_id).session(session);
       if (!project) throw new Error("Project not found");
       if (!this.hasProjectAccess(project, userId)) throw new Error("Access denied");
 
+      const deletedUsecase = version.requirement_model.find((uc: any) => uc.id === usecaseId);
+      if (!deletedUsecase) throw new Error("Usecase not found");
       // 🔍 Bước 3: Kiểm tra usecase tồn tại
       const usecaseExists = version.requirement_model.some((uc: any) => uc.id === usecaseId);
       if (!usecaseExists) throw new Error("Usecase not found");
@@ -286,6 +341,20 @@ export class UsecaseService {
       version.affects_requirement = true;
 
       await version.save({ session });
+      await this.logService.createLog({
+        project_id: project._id.toString(),
+        user_id: userId,
+        action: "delete_data",
+        target_id: versionId,
+        target_type: "requirement_model",
+        version_number: version.version_number,
+        affects_requirement: true,
+        level: "warning",
+        details: {
+          before: deletedUsecase,
+          message: `${userId} deleted usecase ${deletedUsecase.name} from version ${version.version_number}`
+        }
+      });
       await session.commitTransaction();
 
       // Broadcast event đến tất cả thành viên
