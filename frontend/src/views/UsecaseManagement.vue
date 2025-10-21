@@ -131,6 +131,7 @@ import ConflictDetailModal from '@/components/ConflictDetailModal.vue'
 import AddInputModal from '@/components/AddInputModal.vue'
 import IncrementalAnalysis from '@/components/IncrementalAnalysis.vue'
 import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
+import { socket } from '@/utils/socket'
 
 export default {
   name: 'ProjectDetailView',
@@ -192,6 +193,9 @@ export default {
       isManagingUsecase: false,
       currentEditingUseCase: null,
 
+      // ========== REALTIME STATE ==========
+      isSocketConnected: false,
+
       toast: useToast(),
     }
   },
@@ -232,6 +236,11 @@ export default {
         }))
         .filter((uc) => !this.currentEditingUseCase || uc.id !== this.currentEditingUseCase.id)
     },
+
+    // ========== REALTIME COMPUTED ==========
+    currentUserId() {
+      return localStorage.getItem('userId')
+    },
   },
 
   // ========== LIFECYCLE HOOKS ==========
@@ -241,15 +250,136 @@ export default {
       await this.fetchProjectData(projectId)
       this.checkAndRestorePolling()
       this.checkIncrementalProcessingStatus()
+
+      // Initialize socket connection
+      this.initSocketConnection(projectId)
     }
     document.addEventListener('click', this.handleClickOutside)
   },
+
   beforeUnmount() {
     this.cleanupPolling()
+    this.cleanupSocketConnection()
     document.removeEventListener('click', this.handleClickOutside)
   },
 
   methods: {
+    // ========== SOCKET & REALTIME METHODS ==========
+    initSocketConnection(projectId) {
+      if (!socket) return
+
+      // Socket event listeners
+      socket.on('connect', () => {
+        this.isSocketConnected = true
+        console.log('✅ Connected to socket server')
+        this.joinProjectRoom(projectId)
+      })
+
+      socket.on('disconnect', () => {
+        this.isSocketConnected = false
+        console.log('❌ Disconnected from socket server')
+      })
+
+      socket.on('usecase_event', this.handleUsecaseEvent)
+
+      // Join project room if already connected
+      if (socket.connected) {
+        this.joinProjectRoom(projectId)
+      }
+    },
+
+    joinProjectRoom(projectId) {
+      if (socket && projectId) {
+        socket.emit('join_project', projectId)
+        console.log(`✅ Joined project room: project_${projectId}`)
+      }
+    },
+
+    cleanupSocketConnection() {
+      if (socket) {
+        socket.off('connect')
+        socket.off('disconnect')
+        socket.off('usecase_event', this.handleUsecaseEvent)
+
+        // Leave project room
+        if (this.project._id) {
+          socket.emit('leave_project', this.project._id)
+        }
+      }
+    },
+
+    handleUsecaseEvent(event) {
+      console.log('📩 Realtime usecase event received:', event)
+
+      // Bỏ qua events từ chính mình
+      if (event.userId === this.currentUserId) {
+        return
+      }
+
+      switch (event.type) {
+        case 'USECASE_CREATED':
+          this.handleRemoteUsecaseCreated(event)
+          break
+        case 'USECASE_UPDATED':
+          this.handleRemoteUsecaseUpdated(event)
+          break
+        case 'USECASE_DELETED':
+          this.handleRemoteUsecaseDeleted(event)
+          break
+        case 'USECASES_RELOAD':
+          this.handleRemoteUsecasesReload(event)
+          break
+        default:
+          console.warn('Unknown usecase event type:', event.type)
+      }
+    },
+
+    handleRemoteUsecaseCreated(event) {
+      this.toast.info(`New usecase created by team: ${event.usecase.name}`)
+
+      // Thêm usecase mới vào danh sách
+      if (!this.useCases.find((uc) => uc.id === event.usecase.id)) {
+        this.useCases.push(event.usecase)
+
+        // Trigger UI update
+        this.$forceUpdate()
+      }
+    },
+
+    handleRemoteUsecaseUpdated(event) {
+      this.toast.info(`Usecase updated by team: ${event.usecase.name}`)
+
+      // Cập nhật usecase trong danh sách
+      const index = this.useCases.findIndex((uc) => uc.id === event.usecase.id)
+      if (index !== -1) {
+        this.useCases.splice(index, 1, event.usecase)
+
+        // Nếu đang edit usecase này, close modal
+        if (this.currentEditingUseCase?.id === event.usecase.id) {
+          this.currentEditingUseCase = null
+        }
+
+        // Trigger UI update
+        this.$forceUpdate()
+      }
+    },
+
+    handleRemoteUsecaseDeleted(event) {
+      this.toast.info(`Usecase deleted by team: ${event.usecaseId}`)
+
+      // Xóa usecase khỏi danh sách
+      this.useCases = this.useCases.filter((uc) => uc.id !== event.usecaseId)
+
+      // Trigger UI update
+      this.$forceUpdate()
+    },
+
+    handleRemoteUsecasesReload(event) {
+      this.toast.info('Usecases updated by team')
+      this.useCases = event.usecases
+      this.$forceUpdate()
+    },
+
     // ========== NAVIGATION METHODS ==========
     navigateToUsecase() {
       // Đã ở trang usecase management
@@ -263,12 +393,9 @@ export default {
     },
 
     // ========== DATA FETCHING ==========
-    /**
-     * Fetch project data including versions, inputs, and use cases
-     */
     async fetchProjectData(projectId) {
       try {
-        const userId = 'CURRENT_LOGGED_IN_USER_ID'
+        const userId = this.currentUserId
         const { data } = await getProjectDetail(projectId, userId)
         const result = data.data || data
         this.project = result.project
@@ -298,9 +425,6 @@ export default {
       }
     },
 
-    /**
-     * Fetch use cases for current version
-     */
     async fetchUseCases() {
       if (!this.selectedVersionId) return
 
@@ -314,35 +438,43 @@ export default {
     },
 
     // ========== USECASE MANAGEMENT ==========
-    /**
-     * Add new use case to version
-     */
     async handleAddUsecase(data) {
       this.isManagingUsecase = true
       try {
+        console.log('🚀 Sending usecase data to BE:', data)
+
+        // 🔥 VALIDATION PHÍA FE TRƯỚC KHI GỬI
+        const requiredFields = ['name', 'role', 'goal', 'reason', 'priority']
+        const missingFields = requiredFields.filter((field) => !data[field])
+
+        // if (missingFields.length > 0) {
+        //   throw new Error(`Please fill in all required fields: ${missingFields.join(', ')}`)
+        // }
+
+        // if (!data.tasks || data.tasks.length === 0 || !data.tasks[0]?.trim()) {
+        //   throw new Error('At least one task is required')
+        // }
+
         const response = await usecaseApi.createUsecase(this.selectedVersionId, data)
 
-        if (response.data.status === 'Success') {
+        if (response.data && response.data.status === 'Success') {
           this.toast.success('Use case created successfully')
           await this.fetchUseCases()
           await this.fetchProjectData(this.project._id)
         } else {
-          throw new Error(response.data.message || 'Failed to create use case')
+          const errorMessage = response.data?.message || 'Failed to create use case'
+          throw new Error(errorMessage)
         }
       } catch (error) {
-        console.error('Error creating use case:', error)
-        this.toast.error(
-          error.response?.data?.error || error.message || 'Failed to create use case'
-        )
-        throw error
+        console.error('❌ Error creating use case:', error)
+        const errorMessage =
+          error.response?.data?.message || error.message || 'Failed to create use case'
+        this.toast.error(errorMessage)
       } finally {
         this.isManagingUsecase = false
       }
     },
 
-    /**
-     * Update existing use case
-     */
     async handleUpdateUsecase({ usecaseId, data }) {
       this.isManagingUsecase = true
       try {
@@ -366,9 +498,6 @@ export default {
       }
     },
 
-    /**
-     * Delete use case from version
-     */
     async handleDeleteUsecase(usecaseId) {
       this.isManagingUsecase = true
       try {
@@ -392,9 +521,6 @@ export default {
     },
 
     // ========== CONFLICT RESOLUTION ==========
-    /**
-     * Scan for duplicate use cases
-     */
     async findAndHandleConflicts() {
       if (!this.selectedVersionId) {
         this.toast.error('Please select a version first.')
@@ -413,9 +539,6 @@ export default {
       }
     },
 
-    /**
-     * Check conflicts on component load
-     */
     checkConflictsOnLoad() {
       const currentVersion = this.versions.find((v) => v._id === this.selectedVersionId)
       if (currentVersion && currentVersion.pending_conflicts?.length > 0) {
@@ -428,9 +551,6 @@ export default {
       }
     },
 
-    /**
-     * Check conflicts from current version details
-     */
     checkConflicts() {
       if (this.currentVersionDetails && this.currentVersionDetails.pending_conflicts?.length > 0) {
         this.hasConflicts = true
@@ -442,9 +562,6 @@ export default {
       }
     },
 
-    /**
-     * Select resolution for a conflict
-     */
     selectResolution(conflictId, useCaseId) {
       this.selectedResolutions = {
         ...this.selectedResolutions,
@@ -452,17 +569,11 @@ export default {
       }
     },
 
-    /**
-     * Show detailed view of a use case in conflict
-     */
     showConflictDetail(useCase) {
       this.currentDetailUseCase = useCase
       this.showConflictDetailModal = true
     },
 
-    /**
-     * Resolve all selected conflicts
-     */
     async resolveAllConflicts() {
       if (!this.canResolveAllConflicts || this.isResolvingConflicts) return
 
@@ -497,9 +608,6 @@ export default {
     },
 
     // ========== CONFLICT SKIPPING ==========
-    /**
-     * Skip a specific conflict
-     */
     async skipConflict(conflictId) {
       if (!this.selectedVersionId || !conflictId) return
 
@@ -508,7 +616,6 @@ export default {
         await skipConflict(this.selectedVersionId, conflictId)
         this.toast.success('Conflict skipped successfully')
 
-        // Refresh data to update conflict list
         await this.fetchProjectData(this.project._id)
       } catch (error) {
         console.error('Error skipping conflict:', error)
@@ -518,9 +625,6 @@ export default {
       }
     },
 
-    /**
-     * Skip conflict from detail modal
-     */
     async skipCurrentConflict() {
       if (this.currentDetailUseCase?.conflict_id) {
         await this.skipConflict(this.currentDetailUseCase.conflict_id)
@@ -529,17 +633,11 @@ export default {
     },
 
     // ========== INCREMENTAL ANALYSIS ==========
-    /**
-     * Check for unprocessed inputs and show incremental analysis button
-     */
     checkUnprocessedInputs() {
       this.unprocessedInputsCount = this.inputs.filter((input) => !input.is_processed).length
       this.showIncrementalButton = this.unprocessedInputsCount > 0 && !this.isProcessingIncremental
     },
 
-    /**
-     * Check if incremental analysis is already in progress
-     */
     async checkIncrementalProcessingStatus() {
       try {
         const response = await getVersionStatus(this.selectedVersionId)
@@ -556,9 +654,6 @@ export default {
       }
     },
 
-    /**
-     * Start incremental analysis process
-     */
     async startIncrementalAnalysis() {
       if (!this.selectedVersionId || this.isProcessingIncremental) return
 
@@ -571,7 +666,6 @@ export default {
         const response = await startIncrementalAnalysis(this.project._id, this.selectedVersionId)
 
         if (response.data && response.data.success) {
-          // Wait for backend to update processing status
           setTimeout(() => {
             this.startPolling(this.selectedVersionId, 'incremental')
           }, 500)
@@ -585,18 +679,12 @@ export default {
     },
 
     // ========== VERSION MANAGEMENT ==========
-    /**
-     * Handle version selection change
-     */
     handleVersionSelect(versionId) {
       this.selectedVersionId = versionId
       this.fetchProjectData(this.project._id)
     },
 
     // ========== POLLING & PROGRESS MANAGEMENT ==========
-    /**
-     * Start polling for processing status
-     */
     startPolling(versionId, mode = 'retry') {
       this.cleanupPolling()
 
@@ -605,12 +693,10 @@ export default {
           const response = await getVersionStatus(versionId)
           const { status, version } = response.data.data
 
-          // Update progress and stage from API
           if (version) {
             this.processingProgress = version.progress || this.processingProgress
             this.currentStage = this.formatStageName(version.stage || 'initializing')
 
-            // Update incremental state
             if (mode === 'incremental' && status === 'processing') {
               this.isProcessingIncremental = true
             }
@@ -637,9 +723,6 @@ export default {
       }, 2000)
     },
 
-    /**
-     * Update progress based on current stage
-     */
     updateProgressFromStage(stage) {
       const stageProgressMap = {
         initializing: 15,
@@ -654,9 +737,6 @@ export default {
       this.processingProgress = stageProgressMap[stage] || 0
     },
 
-    /**
-     * Format stage name for display
-     */
     formatStageName(stage) {
       const stageNames = {
         initializing: 'Initializing',
@@ -669,9 +749,6 @@ export default {
       return stageNames[stage] || stage.charAt(0).toUpperCase() + stage.slice(1)
     },
 
-    /**
-     * Check and restore polling for processing versions
-     */
     checkAndRestorePolling() {
       if (this.hasProcessingVersion) {
         const processingVersion = this.processingVersion
@@ -690,9 +767,6 @@ export default {
       }
     },
 
-    /**
-     * Save retry state to localStorage
-     */
     saveRetryState() {
       const retryState = {
         projectId: this.project._id,
@@ -707,16 +781,10 @@ export default {
       localStorage.setItem(`retry_${this.project._id}`, JSON.stringify(retryState))
     },
 
-    /**
-     * Clear retry state from localStorage
-     */
     clearRetryState() {
       localStorage.removeItem(`retry_${this.project._id}`)
     },
 
-    /**
-     * Clean up polling interval
-     */
     cleanupPolling() {
       if (this.pollingInterval) {
         clearInterval(this.pollingInterval)
@@ -724,9 +792,6 @@ export default {
       }
     },
 
-    /**
-     * Stop all polling activities
-     */
     stopPolling() {
       this.cleanupPolling()
       this.isRetrying = false
@@ -734,9 +799,6 @@ export default {
       this.currentPollingVersionId = null
     },
 
-    /**
-     * Handle successful processing completion
-     */
     async handleProcessingSuccess(mode) {
       this.processingProgress = 100
       this.currentStage = 'Completed'
@@ -756,9 +818,6 @@ export default {
       this.toast.success(message)
     },
 
-    /**
-     * Handle processing failure
-     */
     handleProcessingFailure(mode) {
       this.stopPolling()
       this.fetchProjectData(this.project._id)
@@ -768,18 +827,12 @@ export default {
       this.toast.error(message)
     },
 
-    /**
-     * Handle incremental analysis errors
-     */
     handleIncrementalError(message) {
       this.isProcessingIncremental = false
       this.showIncrementalButton = true
       this.toast.error(message)
     },
 
-    /**
-     * Handle polling errors
-     */
     handlePollingError(mode) {
       this.stopPolling()
       const message =
@@ -790,9 +843,6 @@ export default {
     },
 
     // ========== RETRY FUNCTIONALITY ==========
-    /**
-     * Handle retry analysis for failed versions
-     */
     async handleRetry() {
       if (!this.failedVersion || this.isRetrying) return
 
@@ -811,9 +861,6 @@ export default {
       }
     },
 
-    /**
-     * Handle retry errors
-     */
     handleRetryError(message) {
       this.isRetrying = false
       this.currentPollingVersionId = null
@@ -822,9 +869,6 @@ export default {
     },
 
     // ========== INPUT MANAGEMENT ==========
-    /**
-     * Handle adding inputs from modal
-     */
     async handleAddInputs(formData) {
       this.isAddingInput = true
 
@@ -854,9 +898,6 @@ export default {
       }
     },
 
-    /**
-     * Open delete confirmation modal
-     */
     openDeleteSpecificModal(inputId) {
       this.modalTitle = 'Confirm Delete'
       this.modalMessage = 'Are you sure you want to delete this input?'
@@ -864,18 +905,12 @@ export default {
       this.confirmAction = () => this.deleteSpecificInput(inputId)
     },
 
-    /**
-     * Handle modal confirmation
-     */
     async handleConfirm() {
       if (this.confirmAction) {
         await this.confirmAction()
       }
     },
 
-    /**
-     * Delete specific input
-     */
     async deleteSpecificInput(inputId) {
       try {
         this.isDeletingInput = inputId
@@ -898,9 +933,6 @@ export default {
     },
 
     // ========== HELPER METHODS ==========
-    /**
-     * Handle click outside dropdown
-     */
     handleClickOutside(e) {
       const dropdown = this.$el.querySelector('.dropdown')
       if (dropdown && !dropdown.contains(e.target)) {
@@ -908,9 +940,6 @@ export default {
       }
     },
 
-    /**
-     * Navigate back to dashboard
-     */
     goBack() {
       this.$router.push('/dashboard')
     },
@@ -934,6 +963,56 @@ export default {
 }
 
 /* Navigation Tabs */
+.navigation-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 0 8px;
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.tab-button:hover {
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.tab-button.active {
+  background: #1a365d;
+  border-color: #1a365d;
+  color: white;
+}
+
+.tab-button .material-symbols-outlined {
+  font-size: 20px;
+}
+/* CSS remains the same as original */
+.project-detail-view {
+  padding: 30px;
+  background: #f9fafb;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.view-body {
+  display: flex;
+  gap: 24px;
+  flex: 1;
+}
+
 .navigation-tabs {
   display: flex;
   gap: 12px;

@@ -528,7 +528,6 @@ export default {
       return this.useCases.filter((uc) => uc.priority === 'high').length
     },
     completedCount() {
-      // Assuming a use case is completed if it has all required fields
       return this.useCases.filter((uc) => uc.name && uc.goal && uc.tasks && uc.tasks.length > 0)
         .length
     },
@@ -607,11 +606,11 @@ export default {
         version: this.versionId,
         description: this.projectData.description || '',
       }
-      this.showExportModalFlag = true // Sử dụng biến mới
+      this.showExportModalFlag = true
     },
 
     closeExportModal() {
-      this.showExportModalFlag = false // Sử dụng biến mới
+      this.showExportModalFlag = false
       this.selectedUseCases = []
     },
 

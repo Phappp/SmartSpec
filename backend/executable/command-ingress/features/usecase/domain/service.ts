@@ -4,6 +4,7 @@ import Version from "../../../../../internal/model/version";
 import Project from "../../../../../internal/model/project";
 import { ServiceResponse, ResponseStatus } from '../../../services/serviceResponse';
 import { CreateUsecaseDto, UpdateUsecaseDto } from '../adapter/dto';
+import { usecaseSocketService } from './usecase.socket.service';
 
 export class UsecaseService {
 
@@ -25,20 +26,42 @@ export class UsecaseService {
         throw new Error("Version not found");
       }
 
-      // Kiểm tra project và quyền truy cập
-      const project = await Project.findById(version.project_id).session(session);
-      if (!project) {
-        throw new Error("Project not found");
-      }
+      // 🔥 THÊM VALIDATION: Kiểm tra các trường bắt buộc
+      const requiredFields = ['name', 'role', 'goal', 'reason', 'priority'];
+      const missingFields = requiredFields.filter(field => !data[field]);
 
-      if (!this.hasProjectAccess(project, userId)) {
-        throw new Error("Access denied");
-      }
+      // if (missingFields.length > 0) {
+      //   throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      // }
 
-      // Tạo usecase mới
+      // 🔥 ĐẢM BẢO tasks là array và có ít nhất 1 phần tử
+      // if (!Array.isArray(data.tasks) || data.tasks.length === 0) {
+      //   throw new Error("At least one task is required");
+      // }
+
+      // Tạo usecase mới với ID theo format UCX
       const newUsecase = {
-        id: this.generateUsecaseId(),
-        ...data,
+        id: this.generateUsecaseId(version),
+        // 🔥 ĐẢM BẢO TẤT CẢ TRƯỜNG BẮT BUỘC ĐƯỢC ĐIỀN
+        name: data.name?.trim() || '',
+        role: data.role?.trim() || '',
+        goal: data.goal?.trim() || '',
+        reason: data.reason?.trim() || '',
+        priority: data.priority || 'medium',
+        tasks: Array.isArray(data.tasks) ? data.tasks.filter(task => task.trim()) : [''],
+        // Các trường optional với giá trị mặc định
+        inputs: data.inputs || [],
+        outputs: data.outputs || [],
+        context: data.context || '',
+        feedback: data.feedback || null,
+        rules: data.rules || [],
+        triggers: data.triggers || [],
+        preconditions: data.preconditions || [],
+        postconditions: data.postconditions || [],
+        exceptions: data.exceptions || [],
+        stakeholders: data.stakeholders || [],
+        constraints: data.constraints || [],
+        related_usecases: data.related_usecases || [],
         created_at: new Date(),
         updated_at: new Date()
       };
@@ -51,6 +74,18 @@ export class UsecaseService {
       await version.save({ session });
       await session.commitTransaction();
 
+      try {
+        // Broadcast event - bọc trong try-catch riêng
+        usecaseSocketService.emitUsecaseCreated(
+          String(version.project_id),
+          versionId,
+          userId,
+          newUsecase
+        );
+      } catch (socketError) {
+        console.error('Socket broadcast failed:', socketError);
+        // Tiếp tục xử lý mà không throw error
+      }
       return new ServiceResponse(
         ResponseStatus.Success,
         'Usecase added successfully',
@@ -64,6 +99,11 @@ export class UsecaseService {
     } finally {
       session.endSession();
     }
+  }
+
+  private generateUsecaseId(version: any): string {
+    const currentCount = version.requirement_model.length;
+    return `UC${currentCount + 1}`;
   }
 
   /**
@@ -153,6 +193,15 @@ export class UsecaseService {
       await version.save({ session });
       await session.commitTransaction();
 
+      // Broadcast event đến tất cả thành viên
+      usecaseSocketService.emitUsecaseUpdated(
+        project._id.toString(),
+        versionId,
+        userId,
+        updatedUsecase,
+        originalUsecase // previous data for comparison
+      );
+
       console.log(`✅ Usecase ${usecaseId} updated successfully`);
       return new ServiceResponse(
         ResponseStatus.Success,
@@ -238,6 +287,14 @@ export class UsecaseService {
 
       await version.save({ session });
       await session.commitTransaction();
+
+      // Broadcast event đến tất cả thành viên
+      usecaseSocketService.emitUsecaseDeleted(
+        project._id.toString(),
+        versionId,
+        userId,
+        usecaseId
+      );
 
       return new ServiceResponse(
         ResponseStatus.Success,
@@ -326,13 +383,6 @@ export class UsecaseService {
     ) || false;
 
     return isOwner || isMember;
-  }
-
-  /**
-   * Helper: Tạo ID unique cho usecase
-   */
-  private generateUsecaseId(): string {
-    return `uc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   /**

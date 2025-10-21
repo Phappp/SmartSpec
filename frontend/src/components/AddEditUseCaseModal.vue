@@ -699,7 +699,10 @@ export default {
 
       // Clean data
       const cleanedForm = this.cleanFormData()
-
+      if (!this.isEditing) {
+        delete cleanedForm.id
+      }
+      console.log('📤 Data being sent to BE:', JSON.stringify(cleanedForm, null, 2))
       console.log('✅ Submitting form with ID:', cleanedForm.id)
       this.$emit('submit', cleanedForm)
     },
@@ -762,7 +765,7 @@ export default {
     cleanFormData() {
       const cleanedForm = { ...this.localForm }
 
-      // Clean array fields
+      // Clean array fields - đảm bảo luôn là array
       const arrayFields = [
         'tasks',
         'inputs',
@@ -787,19 +790,22 @@ export default {
         }
       })
 
-      // Ensure tasks has at least one item
+      // Đảm bảo tasks có ít nhất một item
       if (cleanedForm.tasks.length === 0) {
         cleanedForm.tasks = ['']
       }
 
-      // Format related use cases
-      //   if (cleanedForm.related_usecases.length > 0) {
-      //     cleanedForm.related_usecases = cleanedForm.related_usecases.map((id) =>
-      //       id.toString().trim().toUpperCase()
-      //     )
-      //   }
+      // Đảm bảo context có giá trị mặc định nếu empty
+      if (!cleanedForm.context || cleanedForm.context.trim() === '') {
+        cleanedForm.context = ''
+      }
 
-      // Ensure valid priority
+      // Đảm bảo feedback có giá trị phù hợp
+      if (!cleanedForm.feedback || cleanedForm.feedback.trim() === '') {
+        cleanedForm.feedback = null // hoặc '' tùy BE xử lý
+      }
+
+      // Đảm bảo priority hợp lệ
       if (!['low', 'medium', 'high'].includes(cleanedForm.priority)) {
         cleanedForm.priority = 'medium'
       }
