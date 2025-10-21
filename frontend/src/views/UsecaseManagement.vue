@@ -1,114 +1,118 @@
 <template>
   <div class="project-detail-view">
-    <ProjectHeader
-      :project="project"
-      :versions="versions"
-      :selected-version-id="selectedVersionId"
-      :is-retrying="isRetrying"
-      :processing-progress="processingProgress"
-      :current-stage="currentStage"
-      @version-selected="handleVersionSelect"
-      @retry-analysis="handleRetry"
-      @go-back="goBack"
-      @show-sharing="showSharingModal = true"
-    />
+    <div class="project-detail-view">
+      <ProjectHeader
+        :project="project"
+        :versions="versions"
+        :selected-version-id="selectedVersionId"
+        :is-retrying="isRetrying"
+        :processing-progress="processingProgress"
+        :current-stage="currentStage"
+        :active-users="activeUsers"
+        @version-selected="handleVersionSelect"
+        @retry-analysis="handleRetry"
+        @go-back="goBack"
+        @show-sharing="showSharingModal = true"
+        @activeUsersUpdate="handleActiveUsersUpdate"
+      />
 
-    <!-- Navigation Tabs -->
-    <div class="navigation-tabs">
-      <button class="tab-button active" @click="navigateToUsecase">
-        <span class="material-symbols-outlined">list_alt</span>
-        Use Cases Management
-      </button>
-      <button class="tab-button" @click="navigateToOutput">
-        <span class="material-symbols-outlined">output</span>
-        Output Management
-      </button>
-    </div>
+      <!-- Navigation Tabs -->
+      <div class="navigation-tabs">
+        <button class="tab-button active" @click="navigateToUsecase">
+          <span class="material-symbols-outlined">list_alt</span>
+          Use Cases Management
+        </button>
+        <button class="tab-button" @click="navigateToOutput">
+          <span class="material-symbols-outlined">output</span>
+          Output Management
+        </button>
+      </div>
 
-    <!-- Incremental Analysis Component -->
-    <IncrementalAnalysis
-      :is-processing-incremental="isProcessingIncremental"
-      :show-incremental-button="showIncrementalButton"
-      :unprocessed-inputs-count="unprocessedInputsCount"
-      :processing-progress="processingProgress"
-      :current-stage="currentStage"
-      @start-incremental-analysis="startIncrementalAnalysis"
-    />
+      <!-- Incremental Analysis Component -->
+      <IncrementalAnalysis
+        :is-processing-incremental="isProcessingIncremental"
+        :show-incremental-button="showIncrementalButton"
+        :unprocessed-inputs-count="unprocessedInputsCount"
+        :processing-progress="processingProgress"
+        :current-stage="currentStage"
+        @start-incremental-analysis="startIncrementalAnalysis"
+      />
 
-    <!-- Conflict Resolution Section -->
-    <HandleConflict
-      :has-conflicts="hasConflicts"
-      :pending-conflicts="pendingConflicts"
-      :selected-resolutions="selectedResolutions"
-      :is-finding-conflicts="isFindingConflicts"
-      :is-resolving-conflicts="isResolvingConflicts"
-      :is-skipping-conflict="isSkippingConflict"
-      :can-resolve-all-conflicts="canResolveAllConflicts"
-      :resolved-conflicts-count="resolvedConflictsCount"
-      @find-conflicts="findAndHandleConflicts"
-      @select-resolution="selectResolution"
-      @resolve-all="resolveAllConflicts"
-      @show-detail="showConflictDetail"
-      @skip-conflict="skipConflict"
-    />
+      <!-- Conflict Resolution Section -->
+      <HandleConflict
+        :has-conflicts="hasConflicts"
+        :pending-conflicts="pendingConflicts"
+        :selected-resolutions="selectedResolutions"
+        :is-finding-conflicts="isFindingConflicts"
+        :is-resolving-conflicts="isResolvingConflicts"
+        :is-skipping-conflict="isSkippingConflict"
+        :can-resolve-all-conflicts="canResolveAllConflicts"
+        :resolved-conflicts-count="resolvedConflictsCount"
+        @find-conflicts="findAndHandleConflicts"
+        @select-resolution="selectResolution"
+        @resolve-all="resolveAllConflicts"
+        @show-detail="showConflictDetail"
+        @skip-conflict="skipConflict"
+      />
 
-    <div class="view-body">
-      <UseCaseMainContent
-        :use-cases="useCases"
+      <div class="view-body">
+        <UseCaseMainContent
+          :use-cases="useCases"
+          :project-id="project._id"
+          :version-id="selectedVersionId"
+          :loading="isManagingUsecase"
+          :available-use-cases="availableUseCases"
+          :project-data="project"
+          @addUsecase="handleAddUsecase"
+          @updateUsecase="handleUpdateUsecase"
+          @deleteUsecase="handleDeleteUsecase"
+        />
+        <!-- Trong template của UsecaseManagement.vue -->
+        <InputSidebar
+          :inputs="inputs"
+          :is-deleting-input="isDeletingInput"
+          @add-input-click="showAddInputModal = true"
+          @delete-input="openDeleteSpecificModal"
+          @input-added="handleInputAdded"
+          @input-deleted="handleInputDeleted"
+          @inputs-reloaded="handleInputsReloaded"
+        />
+      </div>
+
+      <!-- Modals -->
+      <AppModal
+        v-model="showModal"
+        :title="modalTitle"
+        :message="modalMessage"
+        :isConfirmation="true"
+        @confirm="handleConfirm"
+      />
+
+      <!-- Add Input Modal Component -->
+      <AddInputModal
+        v-if="showAddInputModal"
+        :is-adding-input="isAddingInput"
+        @close="showAddInputModal = false"
+        @add-inputs="handleAddInputs"
+      />
+
+      <!-- Conflict Detail Modal -->
+      <ConflictDetailModal
+        v-if="showConflictDetailModal"
+        :use-case="currentDetailUseCase"
+        :show-skip-button="true"
+        :is-skipping="isSkippingConflict"
+        @close="showConflictDetailModal = false"
+        @skip-conflict="skipCurrentConflict"
+      />
+
+      <!-- Sharing Modal -->
+      <ProjectSharingModal
+        v-if="showSharingModal"
         :project-id="project._id"
-        :version-id="selectedVersionId"
-        :loading="isManagingUsecase"
-        :available-use-cases="availableUseCases"
-        :project-data="project"
-        @addUsecase="handleAddUsecase"
-        @updateUsecase="handleUpdateUsecase"
-        @deleteUsecase="handleDeleteUsecase"
-      />
-      <!-- Trong template của UsecaseManagement.vue -->
-      <InputSidebar
-        :inputs="inputs"
-        :is-deleting-input="isDeletingInput"
-        @add-input-click="showAddInputModal = true"
-        @delete-input="openDeleteSpecificModal"
-        @input-added="handleInputAdded"
-        @input-deleted="handleInputDeleted"
-        @inputs-reloaded="handleInputsReloaded"
+        @close="showSharingModal = false"
       />
     </div>
-
-    <!-- Modals -->
-    <AppModal
-      v-model="showModal"
-      :title="modalTitle"
-      :message="modalMessage"
-      :isConfirmation="true"
-      @confirm="handleConfirm"
-    />
-
-    <!-- Add Input Modal Component -->
-    <AddInputModal
-      v-if="showAddInputModal"
-      :is-adding-input="isAddingInput"
-      @close="showAddInputModal = false"
-      @add-inputs="handleAddInputs"
-    />
-
-    <!-- Conflict Detail Modal -->
-    <ConflictDetailModal
-      v-if="showConflictDetailModal"
-      :use-case="currentDetailUseCase"
-      :show-skip-button="true"
-      :is-skipping="isSkippingConflict"
-      @close="showConflictDetailModal = false"
-      @skip-conflict="skipCurrentConflict"
-    />
-
-    <!-- Sharing Modal -->
-    <ProjectSharingModal
-      v-if="showSharingModal"
-      :project-id="project._id"
-      @close="showSharingModal = false"
-    />
   </div>
 </template>
 
@@ -158,6 +162,7 @@ export default {
       useCases: [],
       selectedVersionId: null,
       showSharingModal: false,
+      activeUsers: [],
 
       // ========== RETRY STATE ==========
       isRetrying: false,
@@ -272,10 +277,15 @@ export default {
     initSocketConnection(projectId) {
       if (!socket) return
 
+      // ✅ NÊN đặt auth TRƯỚC KHI có event listeners
+      // Socket auth chỉ có tác dụng khi kết nối/reconnect
+      socket.auth = { userId: this.currentUserId }
+
       // Socket event listeners
       socket.on('connect', () => {
         this.isSocketConnected = true
         console.log('✅ Connected to socket server')
+        console.log('🔐 Socket auth userId:', this.currentUserId) // Debug
         this.joinProjectRoom(projectId)
       })
 
@@ -287,12 +297,22 @@ export default {
       // Existing usecase events
       socket.on('usecase_event', this.handleUsecaseEvent)
 
-      // 🔥 THÊM: Input events
+      // Input events
       socket.on('input_event', this.handleInputEvent)
+
+      // ✅ THÊM: Presence events - Active users tracking
+      socket.on('user_joined', this.handleUserJoined)
+      socket.on('user_left', this.handleUserLeft)
 
       // Join project room if already connected
       if (socket.connected) {
+        console.log('🔐 Already connected, auth userId:', this.currentUserId) // Debug
         this.joinProjectRoom(projectId)
+      }
+
+      // ✅ THÊM: Force reconnect để áp dụng auth mới (nếu cần)
+      if (!socket.connected) {
+        socket.connect()
       }
     },
 
@@ -308,12 +328,51 @@ export default {
         socket.off('connect')
         socket.off('disconnect')
         socket.off('usecase_event', this.handleUsecaseEvent)
-        socket.off('input_event', this.handleInputEvent) // THÊM
+        socket.off('input_event', this.handleInputEvent)
+
+        // ✅ THÊM: Presence cleanup
+        socket.off('user_joined', this.handleUserJoined)
+        socket.off('user_left', this.handleUserLeft)
 
         // Leave project room
         if (this.project._id) {
           socket.emit('leave_project', this.project._id)
         }
+      }
+    },
+    handleUserLeft(event) {
+      console.log('👤 User left event received:', event)
+
+      // ✅ LUÔN cập nhật activeUsers
+      this.activeUsers = event.activeUsers || []
+
+      console.log('🔄 After user left - activeUsers:', this.activeUsers)
+
+      // ✅ Chỉ hiện notification cho user khác
+      if (event.userId !== this.currentUserId) {
+        this.toast.info(`${event.userInfo.name} left the project`)
+      }
+    },
+    handleUserJoined(event) {
+      console.log('👤 User joined event received:', event)
+
+      // ✅ SỬA: VẪN cập nhật activeUsers, chỉ skip notification
+      if (event.userId === this.currentUserId) {
+        console.log('🔕 Skipping notification for own join event')
+        // ❌ ĐỪNG return ở đây - VẪN cần cập nhật activeUsers!
+      }
+
+      console.log('🔄 Before update - activeUsers:', this.activeUsers)
+      console.log('🔄 New activeUsers from event:', event.activeUsers)
+
+      // ✅ LUÔN cập nhật activeUsers, kể cả là event của chính mình
+      this.activeUsers = event.activeUsers || []
+
+      console.log('🔄 After update - activeUsers:', this.activeUsers)
+
+      // ✅ Chỉ hiện notification cho user khác
+      if (event.userId !== this.currentUserId) {
+        this.toast.info(`${event.userInfo.name} joined the project`)
       }
     },
 
@@ -998,6 +1057,10 @@ export default {
 
     goBack() {
       this.$router.push('/dashboard')
+    },
+    handleActiveUsersUpdate(activeUsers) {
+      console.log('🔄 Active users updated in parent:', activeUsers)
+      this.activeUsers = activeUsers
     },
   },
 }
