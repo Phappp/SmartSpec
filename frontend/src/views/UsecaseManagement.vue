@@ -1240,7 +1240,7 @@ export default {
         )
 
         if (response.data && response.data.success) {
-          this.toast.success('Retrying incremental analysis...')
+          // this.toast.success('Retrying incremental analysis...')
           setTimeout(() => {
             this.startPolling(this.selectedVersionId, 'incremental')
           }, 500)

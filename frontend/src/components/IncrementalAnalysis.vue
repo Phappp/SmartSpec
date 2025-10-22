@@ -124,6 +124,9 @@ export default {
   align-items: center;
   color: white;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .banner-content {

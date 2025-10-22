@@ -748,6 +748,9 @@ onMounted(loadData)
   border: none;
   cursor: pointer;
   transition: 0.2s;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 .tab-btn:hover {
   color: var(--text-color-medium);

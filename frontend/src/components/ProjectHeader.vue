@@ -5,7 +5,11 @@
       <div class="header-left">
         <button class="back-btn" @click="goBack">
           <span class="material-symbols-outlined">arrow_back</span>
-          <span class="btn-text">Back to Projects</span>
+          <span
+            class="btn-text"
+            style="-webkit-user-select: none; -moz-user-select: none; -ms-user-select: none"
+            >Back to Projects</span
+          >
         </button>
 
         <div class="project-info">
@@ -995,6 +999,9 @@ export default {
   cursor: pointer;
   transition: all 0.3s ease;
   font-weight: 500;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .members-btn:hover {

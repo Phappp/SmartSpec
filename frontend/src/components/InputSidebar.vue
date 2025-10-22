@@ -445,6 +445,9 @@ export default {
   font-weight: 600;
   cursor: pointer;
   transition: background 0.3s ease;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .btn-primary:hover {

@@ -748,10 +748,16 @@ export default {
 .header-actions {
   display: flex;
   gap: 12px;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .btn-primary:hover {
   background: #2d4a8a;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 /* Stats Grid */
