@@ -11,6 +11,7 @@ import { InputService } from '../../orchestrator/domain/InputService';
 import { LogService } from '../../log/domain/service';
 import User from '../../../../../internal/model/user'
 import { inputSocketService } from '../../input/domain/input.socket.service';
+import { io } from '../../../socket';
 
 export class InputHandleService {
   private logService: LogService;
@@ -22,7 +23,6 @@ export class InputHandleService {
     this.logService = new LogService();
   }
 
-  // trong ProjectService - sửa addInputsToVersion
   async addInputsToVersion(
     versionId: string,
     userId: string,
@@ -72,13 +72,14 @@ export class InputHandleService {
     version.updated_at = new Date();
     await version.save();
 
-    // 🔥 REALTIME: Broadcast input creation - Lấy inputs mới nhất
+    // 🔥 REALTIME: Lấy dữ liệu mới nhất
     const updatedInputs = await Input.find({ version_id: versionId }).sort({ created_at: 1 }).lean();
     const unprocessedInputs = await Input.find({
       version_id: versionId,
       is_processed: false
     }).lean();
 
+    // Trong addInputsToVersion method
     if (updatedInputs.length > 0) {
       // 1. Broadcast reload all inputs
       inputSocketService.emitInputsReload(
@@ -96,22 +97,30 @@ export class InputHandleService {
         unprocessedInputs.length
       );
 
-      // 3. Broadcast individual created events for new inputs
-      const newInputs = updatedInputs.slice(-newFilesCount); // Get the newly added inputs
-      for (const input of newInputs) {
-        inputSocketService.emitInputCreated(
+      // 3. 🚀 FIX: Tính toán đúng số inputs mới thực sự
+      // Lấy tổng số inputs trước khi thêm
+      const previousInputsCount = updatedInputs.length - newFilesCount - (newTextProvided ? 1 : 0);
+
+      // Chỉ emit summary nếu có inputs mới
+      if (newFilesCount > 0 || newTextProvided) {
+        const summaryEvent = {
+          type: 'INPUTS_ADDED_SUMMARY',
           projectId,
           versionId,
           userId,
-          input
-        );
+          newInputsCount: newFilesCount + (newTextProvided ? 1 : 0), // Chính xác số inputs mới
+          totalInputs: updatedInputs.length,
+          unprocessedCount: unprocessedInputs.length,
+          timestamp: new Date()
+        };
+
+        io.to(`project_${projectId}`).emit('input_event', summaryEvent);
+
+        console.log(`📢 Broadcast inputs summary: ${summaryEvent.newInputsCount} new inputs added`);
       }
 
-      console.log(`📢 Broadcast ${newInputs.length} new inputs and ${unprocessedInputs.length} unprocessed inputs`);
+      console.log(`📢 Broadcast completed: ${newFilesCount} new files, ${newTextProvided ? '1 new text' : 'no new text'} and ${unprocessedInputs.length} unprocessed inputs`);
     }
-    // 🔥 REALTIME: Broadcast multiple events
-
-
 
     return new ServiceResponse(ResponseStatus.Success, 'New inputs added successfully. Ready for processing.', {
       added_files: newFilesCount,
@@ -165,38 +174,30 @@ export class InputHandleService {
 
       await session.commitTransaction();
 
-      // 🔥 REALTIME: Broadcast multiple events
+      // 🔥 REALTIME: Lấy dữ liệu mới nhất sau khi xóa
       const updatedInputs = await Input.find({ version_id: versionId }).sort({ created_at: 1 }).lean();
       const unprocessedInputs = await Input.find({
         version_id: versionId,
         is_processed: false
       }).lean();
 
-      // 1. Broadcast input deletion
-      inputSocketService.emitInputDeleted(
-        version.project_id.toString(),
+      const projectId = version.project_id.toString();
+
+      // 🚀 THAY ĐỔI QUAN TRỌNG: Chỉ emit 1 event tổng hợp thay vì 3 events
+      const deleteSummaryEvent = {
+        type: 'INPUT_DELETED_SUMMARY',
+        projectId,
         versionId,
         userId,
-        inputId
-      );
+        deletedInputId: inputId,
+        totalInputs: updatedInputs.length,
+        unprocessedCount: unprocessedInputs.length,
+        timestamp: new Date()
+      };
 
-      // 2. Broadcast updated inputs list
-      inputSocketService.emitInputsReload(
-        version.project_id.toString(),
-        versionId,
-        userId,
-        updatedInputs
-      );
+      io.to(`project_${projectId}`).emit('input_event', deleteSummaryEvent);
 
-      // 3. Broadcast unprocessed count update (QUAN TRỌNG!)
-      inputSocketService.emitInputsUpdated(
-        version.project_id.toString(),
-        versionId,
-        userId,
-        unprocessedInputs.length
-      );
-
-      console.log(`🗑️ Broadcast input deletion and ${unprocessedInputs.length} unprocessed inputs remaining`);
+      console.log(`🗑️ Broadcast input deletion summary: ${inputId} deleted, ${unprocessedInputs.length} unprocessed inputs remaining`);
 
       return new ServiceResponse(
         ResponseStatus.Success,

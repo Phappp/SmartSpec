@@ -199,7 +199,7 @@ export default {
   },
   mounted() {
     // Load trạng thái từ localStorage khi component được mount
-    this.loadCollapsedState()
+    // this.loadCollapsedState()
   },
   methods: {
     initSocketListeners() {

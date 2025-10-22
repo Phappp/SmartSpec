@@ -6,7 +6,8 @@ import {
     InputDeletedEvent,
     InputsUpdatedEvent,
     InputsReloadEvent,
-    IncrementalProgressEvent
+    IncrementalProgressEvent,
+    InputsAddedSummaryEvent
 } from '../events/input.events';
 
 export class InputSocketService {
@@ -16,7 +17,7 @@ export class InputSocketService {
      */
     broadcastToProject(
         projectId: string,
-        event: InputCreatedEvent | InputDeletedEvent | InputsUpdatedEvent | InputsReloadEvent | IncrementalProgressEvent
+        event: InputCreatedEvent | InputDeletedEvent | InputsUpdatedEvent | InputsReloadEvent | IncrementalProgressEvent | InputsAddedSummaryEvent
     ): void {
         io.to(`project_${projectId}`).emit('input_event', event);
         console.log(`📢 Broadcast input event to project ${projectId}:`, event.type);
@@ -83,6 +84,27 @@ export class InputSocketService {
             versionId,
             userId,
             inputs,
+            timestamp: new Date()
+        };
+        this.broadcastToProject(projectId, event);
+    }
+
+    emitInputsAddedSummary(
+        projectId: string,
+        versionId: string,
+        userId: string,
+        newInputsCount: number,
+        totalInputs: number,
+        unprocessedCount: number
+    ): void {
+        const event: InputsAddedSummaryEvent = {
+            type: 'INPUTS_ADDED_SUMMARY',
+            projectId,
+            versionId,
+            userId,
+            newInputsCount,
+            totalInputs,
+            unprocessedCount,
             timestamp: new Date()
         };
         this.broadcastToProject(projectId, event);

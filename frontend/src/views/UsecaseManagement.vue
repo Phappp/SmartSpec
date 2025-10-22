@@ -435,6 +435,8 @@ export default {
       }
     },
 
+    // Trong UsecaseManagement.vue - handleInputEvent
+    // Trong UsecaseManagement.vue - handleInputEvent
     handleInputEvent(event) {
       console.log('📩 Realtime input event received:', event)
 
@@ -445,17 +447,29 @@ export default {
 
       switch (event.type) {
         case 'INPUT_CREATED':
+          this.toast.info(`New input added by team`)
           this.handleRemoteInputCreated(event)
           break
+        case 'INPUTS_ADDED_SUMMARY':
+          if (event.newInputsCount > 0) {
+            this.toast.info(`${event.newInputsCount} new input(s) added by team`)
+          }
+          this.fetchProjectData(this.project._id)
+          break
         case 'INPUT_DELETED':
+          // 🚫 GIỜ SẼ KHÔNG CÓ EVENT NÀY NỮA
+          this.toast.info(`Input deleted by team`)
           this.handleRemoteInputDeleted(event)
           break
+        case 'INPUT_DELETED_SUMMARY':
+          // ✅ EVENT XÓA MỚI - CHỈ 1 TOAST
+          this.toast.info(`Input deleted by team`)
+          this.fetchProjectData(this.project._id) // Refresh data
+          break
         case 'INPUTS_RELOAD':
-          // 🚫 KHÔNG hiển thị toast cho reload (vì đã có CREATE/DELETE)
           this.handleRemoteInputsReload(event)
           break
         case 'INPUTS_UPDATED':
-          // 🚫 KHÔNG hiển thị toast (chỉ cập nhật UI)
           this.handleInputsUpdated(event)
           break
         default:
@@ -464,10 +478,7 @@ export default {
     },
 
     handleRemoteInputCreated(event) {
-      // ✅ CHỈ HIỂN THỊ 1 TOAST cho việc tạo mới
-      this.toast.info(`New input added by team`)
-
-      // Thêm input mới vào danh sách
+      // 🚫 ĐÃ CHUYỂN TOAST LÊN TRÊN - chỉ xử lý data
       if (!this.inputs.find((input) => input._id === event.input._id)) {
         this.inputs.push(event.input)
         this.$forceUpdate()
@@ -475,10 +486,7 @@ export default {
     },
 
     handleRemoteInputDeleted(event) {
-      // ✅ CHỈ HIỂN THỊ 1 TOAST cho việc xóa
-      this.toast.info(`Input deleted by team`)
-
-      // Xóa input khỏi danh sách
+      // 🚫 ĐÃ CHUYỂN TOAST LÊN TRÊN - chỉ xử lý data
       this.inputs = this.inputs.filter((input) => input._id !== event.inputId)
       this.$forceUpdate()
     },
@@ -503,6 +511,7 @@ export default {
       this.showIncrementalButton = this.unprocessedInputsCount > 0 && !this.isProcessingIncremental
 
       // 🚫 COMMENT LẠI - KHÔNG HIỂN THỊ TOAST Ở ĐÂY
+      // this.toast.info(`Inputs updated - ${event.unprocessedCount} unprocessed`);
 
       console.log(`📊 Updated unprocessed inputs: ${event.unprocessedCount}`)
     },
