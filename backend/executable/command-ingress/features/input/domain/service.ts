@@ -11,15 +11,18 @@ import { InputService } from '../../orchestrator/domain/InputService';
 import { LogService } from '../../log/domain/service';
 import User from '../../../../../internal/model/user'
 import { inputSocketService } from '../../input/domain/input.socket.service';
+import { VersionService } from "../../version/domain/service";
 
 export class InputHandleService {
   private logService: LogService;
+  private versionService: VersionService; 
 
   constructor(
     private orchestratorService: OrchestratorService,
     private inputService: InputService
   ) {
     this.logService = new LogService();
+    this.versionService = new VersionService();
   }
 
   // trong ProjectService - sửa addInputsToVersion
@@ -53,7 +56,14 @@ export class InputHandleService {
     }
 
     const projectId = version.project_id.toString();
+    const bumpResult = await this.versionService.bumpVersion(version._id.toString(), userId, "minor");
 
+    if (!bumpResult || !bumpResult.data) {
+      console.error("[addInputsToVersion] bumpVersion failed:", bumpResult);
+      return new ServiceResponse(ResponseStatus.Failed, "Failed to bump version", null, 500);
+    }
+    const newVersion = bumpResult.data;
+    versionId = newVersion._id;
     const { newFilesCount, newTextProvided } = await this.inputService.handleInputs(
       files,
       rawText,
@@ -135,7 +145,7 @@ export class InputHandleService {
         await session.abortTransaction();
         return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
       }
-
+      
       const project = await Project.findOne({
         _id: version.project_id,
         'members': {
@@ -151,6 +161,18 @@ export class InputHandleService {
         await session.abortTransaction();
         return new ServiceResponse(ResponseStatus.Failed, "Access denied", null, 403);
       }
+      // ⚙️ Tạo version mới trước khi xóa input
+      const bumpResult = await this.versionService.bumpVersion(versionId, userId, "minor");
+
+      if (!bumpResult || !bumpResult.data) {
+        console.error("[deleteSpecificInput] bumpVersion failed:", bumpResult);
+        await session.abortTransaction();
+        return new ServiceResponse(ResponseStatus.Failed, "Failed to bump version before deleting input", null, 500);
+      }
+
+      const newVersion = bumpResult.data;
+      versionId = newVersion._id.toString(); // cập nhật versionId để xóa trên version mới
+
       const beforeDelete = await Input.findById(inputId).lean();
       await Input.findByIdAndDelete(inputId).session(session);
 

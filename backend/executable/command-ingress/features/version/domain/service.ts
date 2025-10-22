@@ -36,8 +36,8 @@ export class VersionService {
         processing_errors: JSON.parse(JSON.stringify(baseVersion.processing_errors || [])),
         affects_requirement: baseVersion.affects_requirement || false,
         progress: baseVersion.progress || 0,
-        stage: "complete",
-        status: "complete",
+        stage: "completed",
+        status: "completed",
         created_at: new Date(),
         updated_at: new Date(),
       });

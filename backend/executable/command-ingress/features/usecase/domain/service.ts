@@ -24,20 +24,9 @@ export class UsecaseService {
 
     try {
       // Kiểm tra version tồn tại
-      const version = await Version.findById(versionId).session(session);
+      const  version = await Version.findById(versionId).session(session);
       if (!version) {
         throw new Error("Version not found");
-      }
-
-      if (version.status === "completed" || version.stage === "completed") {
-        const bumped = await this.versionService.bumpVersion(versionId, userId, "minor");
-        versionId = bumped.data._id.toString();
-        // Lấy lại bản mới để thêm usecase
-        const newVersion = await Version.findById(versionId).session(session);
-        if (newVersion) version.set(newVersion);
-      } else {
-        // Nếu chưa hoàn thành → auto bump minor
-        await this.versionService.autoBumpVersionOnChange(versionId, userId, "minor");
       }
 
       // 🔥 THÊM VALIDATION: Kiểm tra các trường bắt buộc
@@ -276,19 +265,9 @@ export class UsecaseService {
 
     try {
       // 🔍 Bước 1: Kiểm tra version tồn tại
-      const version = await Version.findById(versionId).session(session);
+      let version = await Version.findById(versionId).session(session);
       if (!version) throw new Error("Version not found");
 
-      // Nếu version đã hoàn thành → clone sang bản mới
-      if (version.status === "completed" || version.stage === "completed") {
-        const bumped = await this.versionService.bumpVersion(versionId, userId, "minor");
-        versionId = bumped.data._id.toString();
-        const newVersion = await Version.findById(versionId).session(session);
-        if (newVersion) version.set(newVersion);
-      } else {
-        // Nếu version đang active → chỉ bump số minor
-        await this.versionService.autoBumpVersionOnChange(versionId, userId, "minor");
-      }
       // 🔍 Bước 2: Kiểm tra project & quyền truy cập
       const project = await Project.findById(version.project_id).session(session);
       if (!project) throw new Error("Project not found");
