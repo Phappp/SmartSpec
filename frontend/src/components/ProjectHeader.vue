@@ -114,7 +114,12 @@
               <span>Active Users</span>
             </div>
             <div class="active-users-list">
-              <div v-for="user in activeUsers" :key="user.userId" class="active-user-item">
+              <div
+                v-for="user in activeUsers"
+                :key="user.userId"
+                class="active-user-item"
+                :class="{ 'current-user': user.userId === currentUserId }"
+              >
                 <div class="user-avatar">
                   <img
                     v-if="user.avatar"
@@ -127,7 +132,9 @@
                   </div>
                 </div>
                 <div class="user-info">
-                  <span class="user-name">{{ user.name }}</span>
+                  <span class="user-name">
+                    {{ user.userId === currentUserId ? 'You' : user.name }}
+                  </span>
                   <span class="user-email">{{ user.email }}</span>
                 </div>
                 <div class="online-status"></div>
@@ -212,6 +219,15 @@ export default {
       const acceptedMembers =
         this.project.members?.filter((member) => member.status === 'accepted').length || 0
       return ownerCount + acceptedMembers - 1
+    },
+    currentUserId() {
+      // CÁCH 1: Nếu dùng Vuex store
+      // return this.$store.state.user?.id || this.$store.getters.userId
+
+      // CÁCH 2: Nếu dùng localStorage (hiện tại)
+      const userId = localStorage.getItem('userId')
+      console.log('🔍 Current User ID from localStorage:', userId)
+      return userId
     },
   },
   methods: {
@@ -813,11 +829,70 @@ export default {
   padding: 10px;
   border-radius: 8px;
   transition: background-color 0.3s ease;
+  position: relative;
 }
 
 .active-user-item:hover {
   background: #f0f4f8;
 }
+/* Hiệu ứng live pulse cho online status */
+.online-status {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #38a169;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Hiệu ứng live pulse animation */
+.online-status::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: #38a169;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+  opacity: 0.6;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+}
+
+/* Highlight user hiện tại */
+.active-user-item.current-user {
+  background: #f0f7ff;
+  border: 1px solid #bee3f8;
+}
+
+.active-user-item.current-user .user-name {
+  color: #2b6cb0;
+  font-weight: 600;
+}
+
+.active-user-item.current-user .online-status {
+  background: #3182ce;
+}
+
+.active-user-item.current-user .online-status::before {
+  background: #3182ce;
+}
+
 .user-avatar {
   width: 36px;
   height: 36px;
