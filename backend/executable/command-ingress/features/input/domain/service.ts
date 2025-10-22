@@ -74,15 +74,44 @@ export class InputHandleService {
 
     // 🔥 REALTIME: Broadcast input creation - Lấy inputs mới nhất
     const updatedInputs = await Input.find({ version_id: versionId }).sort({ created_at: 1 }).lean();
+    const unprocessedInputs = await Input.find({
+      version_id: versionId,
+      is_processed: false
+    }).lean();
 
     if (updatedInputs.length > 0) {
+      // 1. Broadcast reload all inputs
       inputSocketService.emitInputsReload(
         projectId,
         versionId,
         userId,
         updatedInputs
       );
+
+      // 2. Broadcast unprocessed count for incremental analysis
+      inputSocketService.emitInputsUpdated(
+        projectId,
+        versionId,
+        userId,
+        unprocessedInputs.length
+      );
+
+      // 3. Broadcast individual created events for new inputs
+      const newInputs = updatedInputs.slice(-newFilesCount); // Get the newly added inputs
+      for (const input of newInputs) {
+        inputSocketService.emitInputCreated(
+          projectId,
+          versionId,
+          userId,
+          input
+        );
+      }
+
+      console.log(`📢 Broadcast ${newInputs.length} new inputs and ${unprocessedInputs.length} unprocessed inputs`);
     }
+    // 🔥 REALTIME: Broadcast multiple events
+
+
 
     return new ServiceResponse(ResponseStatus.Success, 'New inputs added successfully. Ready for processing.', {
       added_files: newFilesCount,
@@ -136,7 +165,14 @@ export class InputHandleService {
 
       await session.commitTransaction();
 
-      // 🔥 REALTIME: Broadcast input deletion
+      // 🔥 REALTIME: Broadcast multiple events
+      const updatedInputs = await Input.find({ version_id: versionId }).sort({ created_at: 1 }).lean();
+      const unprocessedInputs = await Input.find({
+        version_id: versionId,
+        is_processed: false
+      }).lean();
+
+      // 1. Broadcast input deletion
       inputSocketService.emitInputDeleted(
         version.project_id.toString(),
         versionId,
@@ -144,10 +180,32 @@ export class InputHandleService {
         inputId
       );
 
+      // 2. Broadcast updated inputs list
+      inputSocketService.emitInputsReload(
+        version.project_id.toString(),
+        versionId,
+        userId,
+        updatedInputs
+      );
+
+      // 3. Broadcast unprocessed count update (QUAN TRỌNG!)
+      inputSocketService.emitInputsUpdated(
+        version.project_id.toString(),
+        versionId,
+        userId,
+        unprocessedInputs.length
+      );
+
+      console.log(`🗑️ Broadcast input deletion and ${unprocessedInputs.length} unprocessed inputs remaining`);
+
       return new ServiceResponse(
         ResponseStatus.Success,
         "Input deleted successfully.",
-        { deleted_id: inputId },
+        {
+          deleted_id: inputId,
+          total_inputs: updatedInputs.length,
+          unprocessed_inputs: unprocessedInputs.length
+        },
         200
       );
 

@@ -95,6 +95,17 @@ export default {
       default: false,
     },
   },
+  watch: {
+    unprocessedInputsCount: {
+      handler(newCount, oldCount) {
+        // Tự động cập nhật hiển thị nút khi số lượng thay đổi
+        if (newCount > 0 && !this.isProcessingIncremental && !this.isProcessingFailed) {
+          this.$emit('update-button-visibility', true)
+        }
+      },
+      immediate: true,
+    },
+  },
   emits: ['start-incremental-analysis', 'retry-incremental'],
 }
 </script>

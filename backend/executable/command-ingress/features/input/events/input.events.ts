@@ -16,6 +16,12 @@ export interface InputDeletedEvent extends InputEventData {
     inputId: string;
 }
 
+export interface InputsUpdatedEvent extends InputEventData {
+    type: 'INPUTS_UPDATED';
+    unprocessedCount: number;
+}
+
+
 export interface InputsReloadEvent extends InputEventData {
     type: 'INPUTS_RELOAD';
     inputs: any[];
@@ -32,4 +38,6 @@ export interface IncrementalProgressEvent extends InputEventData {
 export type InputEvent =
     | InputCreatedEvent
     | InputDeletedEvent
-    | InputsReloadEvent;
+    | InputsReloadEvent
+    | InputsUpdatedEvent
+    | IncrementalProgressEvent;

@@ -344,12 +344,14 @@ export default {
       // Existing usecase events
       socket.on('usecase_event', this.handleUsecaseEvent)
 
-      // ✅ CẬP NHẬT: Input events - thêm incremental progress
+      // ✅ CẬP NHẬT: Input events - xử lý tất cả input events trong 1 handler
       socket.on('input_event', (event) => {
+        console.log('📩 Raw input event received:', event.type)
+
         if (event.type === 'INCREMENTAL_PROGRESS') {
           this.handleIncrementalProgress(event)
         } else {
-          this.handleInputEvent(event) // existing handler
+          this.handleInputEvent(event) // Tất cả input events khác qua đây
         }
       })
 
@@ -449,7 +451,12 @@ export default {
           this.handleRemoteInputDeleted(event)
           break
         case 'INPUTS_RELOAD':
+          // 🚫 KHÔNG hiển thị toast cho reload (vì đã có CREATE/DELETE)
           this.handleRemoteInputsReload(event)
+          break
+        case 'INPUTS_UPDATED':
+          // 🚫 KHÔNG hiển thị toast (chỉ cập nhật UI)
+          this.handleInputsUpdated(event)
           break
         default:
           console.warn('Unknown input event type:', event.type)
@@ -457,6 +464,7 @@ export default {
     },
 
     handleRemoteInputCreated(event) {
+      // ✅ CHỈ HIỂN THỊ 1 TOAST cho việc tạo mới
       this.toast.info(`New input added by team`)
 
       // Thêm input mới vào danh sách
@@ -467,6 +475,7 @@ export default {
     },
 
     handleRemoteInputDeleted(event) {
+      // ✅ CHỈ HIỂN THỊ 1 TOAST cho việc xóa
       this.toast.info(`Input deleted by team`)
 
       // Xóa input khỏi danh sách
@@ -475,9 +484,27 @@ export default {
     },
 
     handleRemoteInputsReload(event) {
-      this.toast.info('Inputs updated by team')
+      // 🚫 KHÔNG hiển thị toast - chỉ cập nhật data
+      console.log('🔄 Reloading inputs list (no toast)')
       this.inputs = event.inputs
       this.$forceUpdate()
+    },
+
+    handleInputsUpdated(event) {
+      console.log('📊 Received inputs updated event:', event)
+
+      // Bỏ qua events từ chính mình
+      if (event.userId === this.currentUserId) {
+        return
+      }
+
+      // Cập nhật số lượng unprocessed inputs
+      this.unprocessedInputsCount = event.unprocessedCount
+      this.showIncrementalButton = this.unprocessedInputsCount > 0 && !this.isProcessingIncremental
+
+      // 🚫 COMMENT LẠI - KHÔNG HIỂN THỊ TOAST Ở ĐÂY
+
+      console.log(`📊 Updated unprocessed inputs: ${event.unprocessedCount}`)
     },
 
     handleUsecaseEvent(event) {
@@ -519,7 +546,7 @@ export default {
     },
 
     handleRemoteUsecaseUpdated(event) {
-      this.toast.info(`Usecase updated by team: ${event.usecase.name}`)
+      this.toast.info(`Usecase updated by team - ${event.usecase.id}`)
 
       // Cập nhật usecase trong danh sách
       const index = this.useCases.findIndex((uc) => uc.id === event.usecase.id)
