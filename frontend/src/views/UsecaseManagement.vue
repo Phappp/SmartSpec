@@ -980,7 +980,8 @@ export default {
     },
 
     // ========== RETRY FUNCTIONALITY ==========
-    async handleRetry() {
+    async handleRetry(userId) {
+      // NHẬN userId từ ProjectHeader
       if (!this.failedVersion || this.isRetrying) return
 
       this.isRetrying = true
@@ -990,7 +991,14 @@ export default {
 
       try {
         this.saveRetryState()
-        await retryProjectAnalysis(this.project._id, this.failedVersion._id)
+
+        // TRUYỀN userId vào API call
+        await retryProjectAnalysis(
+          this.project._id,
+          this.failedVersion._id,
+          userId // truyền userId
+        )
+
         this.startPolling(this.failedVersion._id, 'retry')
       } catch (error) {
         console.error('Error retrying analysis:', error)

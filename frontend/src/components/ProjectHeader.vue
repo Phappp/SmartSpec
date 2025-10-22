@@ -245,7 +245,13 @@ export default {
       this.isOpen = false
     },
     handleRetry() {
-      this.$emit('retry-analysis')
+      const userId = this.currentUserId // LẤY userId từ computed
+      if (!userId) {
+        console.error('❌ User ID not found for retry operation')
+        return
+      }
+
+      this.$emit('retry-analysis', userId) // TRUYỀN userId lên component cha
     },
     goBack() {
       this.$emit('go-back')

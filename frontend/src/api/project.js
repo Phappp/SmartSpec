@@ -12,10 +12,20 @@ export const createProject = (data) => axiosClient.post(`/api/projects`, data);
 export const updateProject = (id, data) => axiosClient.put(`/api/projects/${id}`, data);
 export const deleteProject = (id) => axiosClient.delete(`/api/projects/${id}`);
 export const restoreProject = (id) => axiosClient.post(`/api/projects/${id}/restore`);
-export const retryProjectAnalysis = (projectId, versionId) => {
+// Trong file api/project.js
+export const retryProjectAnalysis = (projectId, versionId, userId) => {
+  console.log('🔍 Retry API call with:', { projectId, versionId, userId }); // THÊM LOG
+
   return axiosClient.post(`/api/orchestrate/projects/${projectId}/versions/${versionId}/retry`, {
-    mode: 'full'
-  });
+    mode: 'incremental',
+    files: [],
+    rawText: ""
+  },
+    {
+      headers: {
+        'x-user-id': userId
+      }
+    });
 };
 
 // ========== SHARE - COMPLETELY FIXED APIS ====================

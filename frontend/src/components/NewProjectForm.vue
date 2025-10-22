@@ -639,6 +639,7 @@ export default {
 
       const projectId = finalProjectData.value._id
       const versionId = failedVersionId.value
+      const userId = localStorage.getItem('userId') // THÊM DÒNG NÀY
 
       isRetrying.value = true
       loadingMessage.value = 'Retrying analysis...'
@@ -648,7 +649,7 @@ export default {
       creationStatus.value = 'polling'
 
       try {
-        await retryProjectAnalysis(projectId, versionId)
+        await retryProjectAnalysis(projectId, versionId, userId) // THÊM userId
         startPolling(projectId, versionId)
       } catch (error) {
         console.error('Error retrying processing:', error)

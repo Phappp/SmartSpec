@@ -1105,6 +1105,40 @@ export default {
         this.toast.error('Failed to cancel invitation')
       }
     },
+    async retryCreatingProject(projectData) {
+      try {
+        const userId = localStorage.getItem('userId') // LẤY userId
+        if (!userId) {
+          console.error('❌ User ID not found for retry')
+          this.toast.error('User identification required for retry')
+          return
+        }
+
+        console.log('🔄 Retrying project creation:', projectData)
+
+        // Gọi API retry với userId
+        await retryProjectAnalysis(
+          projectData.pollingData.projectId,
+          projectData.pollingData.versionId,
+          userId // TRUYỀN userId
+        )
+
+        // Cập nhật trạng thái project đang tạo
+        this.updateCreatingProjectProgress(projectData._id, {
+          processingProgress: 0,
+          currentStage: 'Initializing...',
+          creationStatus: 'polling',
+        })
+
+        // Bắt đầu polling lại
+        this.startPollingForProject(projectData._id, projectData.pollingData)
+
+        this.toast.success('Retry started successfully!')
+      } catch (error) {
+        console.error('❌ Retry error:', error)
+        this.toast.error('Failed to start retry process')
+      }
+    },
   },
 }
 </script>

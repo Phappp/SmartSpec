@@ -23,7 +23,7 @@ export class OrchestratorService {
     ) {
         // Hàm để tạo độ trễ ngẫu nhiên
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-        const randomDelay = Math.floor(Math.random() * (3000 - 2000 + 1)) + 2000;
+        const randomDelay = 2000;
 
         // 🟢 Bắt đầu: clear lỗi cũ
         console.log(`[SERVICE] Clearing previous errors for version ${versionId} before running...`);
@@ -32,7 +32,7 @@ export class OrchestratorService {
                 status: "processing",
                 processing_errors: [],
                 stage: "initializing",
-                progress: 15,
+                progress: 5,
                 is_processing: true
             }
         });
