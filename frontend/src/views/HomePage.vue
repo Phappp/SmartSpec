@@ -404,9 +404,9 @@ export default {
     filteredProjects() {
       let filtered = this.currentProjects.filter(
         (project) =>
-          project.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-          (project.description &&
-            project.description.toLowerCase().includes(this.searchQuery.toLowerCase()))
+          project.name?.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+          project.description?.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+          false
       )
 
       // Filter by language
@@ -417,9 +417,12 @@ export default {
       // Sort projects
       filtered.sort((a, b) => {
         if (this.sortBy === 'name') {
-          return a.name.localeCompare(b.name)
+          return a.name?.localeCompare(b.name || '') || 0
         }
-        return new Date(b[this.sortBy]) - new Date(a[this.sortBy])
+
+        const dateA = new Date(a[this.sortBy] || 0)
+        const dateB = new Date(b[this.sortBy] || 0)
+        return dateB - dateA
       })
 
       return filtered
