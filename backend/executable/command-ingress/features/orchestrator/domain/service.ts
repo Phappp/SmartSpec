@@ -6,6 +6,7 @@ import { InputService } from "./InputService";
 import { GeminiService } from "./GeminiService";
 import { RequirementService } from "./RequirementService";
 import { UtilService } from "./UtilService";
+import { inputSocketService } from '../../input/domain/input.socket.service';
 
 export class OrchestratorService {
     private inputService = new InputService();
@@ -17,25 +18,34 @@ export class OrchestratorService {
         projectId: string,
         versionId: string,
         opts: { files: UploadedFile[]; rawText?: string; mode?: "full" | "incremental" },
-        language: string
+        language: string,
+        userId: string // ✅ THÊM: userId để broadcast
     ) {
         // Hàm để tạo độ trễ ngẫu nhiên
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-        // Độ trễ ngẫu nhiên từ 2000ms (2 giây) đến 3000ms (3 giây)
         const randomDelay = Math.floor(Math.random() * (3000 - 2000 + 1)) + 2000;
-        
+
         // 🟢 Bắt đầu: clear lỗi cũ
         console.log(`[SERVICE] Clearing previous errors for version ${versionId} before running...`);
         await Version.findByIdAndUpdate(versionId, {
             $set: {
-                status: "processing", // QUAN TRỌNG: Set status thành processing
+                status: "processing",
                 processing_errors: [],
                 stage: "initializing",
                 progress: 15,
-                is_processing: true // Nếu có field này
+                is_processing: true
             }
         });
+
+        // ✅ BROADCAST: Initializing stage
+        inputSocketService.emitIncrementalProgress(
+            projectId,
+            versionId,
+            userId,
+            15,
+            "initializing",
+            true
+        );
 
         const version = await Version.findById(versionId).lean();
         if (!version) throw new Error("Version not found");
@@ -64,10 +74,29 @@ export class OrchestratorService {
 
         await Version.findByIdAndUpdate(versionId, { $set: { stage: "input", progress: 25 } });
 
+        // ✅ BROADCAST: Input processing stage
+        inputSocketService.emitIncrementalProgress(
+            projectId,
+            versionId,
+            userId,
+            25,
+            "input",
+            true
+        );
+
         // 2️⃣ Nếu incremental mà không có gì mới → return luôn (trừ khi retry)
         if (opts.mode === "incremental" && newFilesCount === 0 && !newTextProvided) {
             const isRetry = (!opts.files || opts.files.length === 0) && !opts.rawText;
             if (!isRetry) {
+                // ✅ BROADCAST: Analysis completed (no new inputs)
+                inputSocketService.emitIncrementalProgress(
+                    projectId,
+                    versionId,
+                    userId,
+                    100,
+                    "completed",
+                    false
+                );
                 return this.inputService.returnIncremental(versionId);
             }
         }
@@ -83,11 +112,8 @@ export class OrchestratorService {
             }).lean();
         } else {
             if (targetIds.length > 0) {
-                // Có input mới -> chỉ lấy những input mới
                 inputs = await this.util.waitForInputsCompletionByIds(targetIds);
             } else {
-                // Retry hoặc incremental không có input mới
-                // ❗ Chỉ lấy input chưa được processed
                 inputs = await Input.find({
                     version_id: versionId,
                     processing_status: "completed",
@@ -98,6 +124,15 @@ export class OrchestratorService {
 
         if (!inputs || inputs.length === 0) {
             console.warn("Không có input hợp lệ để xử lý. Trả về trạng thái hiện tại.");
+            // ✅ BROADCAST: No inputs to process
+            inputSocketService.emitIncrementalProgress(
+                projectId,
+                versionId,
+                userId,
+                100,
+                "completed",
+                false
+            );
             return {
                 version_id: versionId,
                 inputs_count: 0,
@@ -106,25 +141,45 @@ export class OrchestratorService {
             };
         }
 
-        // Debug log
-        console.log(`[RUN MODE] Final mode resolved: ${opts.mode}`);
-        console.log("Language:", language);
-        console.log(
-            "Inputs to process:",
-            inputs.map((i) => ({ id: i._id, status: i.processing_status, is_processed: i.is_processed }))
-        );
-
-        await delay(randomDelay);
-
         // 4️⃣ Phân tích requirement
         await Version.findByIdAndUpdate(versionId, { $set: { stage: "analyzing", progress: 40 } });
+
+        // ✅ BROADCAST: Analyzing stage
+        inputSocketService.emitIncrementalProgress(
+            projectId,
+            versionId,
+            userId,
+            40,
+            "analyzing",
+            true
+        );
         await delay(randomDelay);
 
         await Version.findByIdAndUpdate(versionId, { $set: { stage: "normalization", progress: 70 } });
+
+        // ✅ BROADCAST: Normalization stage
+        inputSocketService.emitIncrementalProgress(
+            projectId,
+            versionId,
+            userId,
+            70,
+            "normalization",
+            true
+        );
         await delay(randomDelay);
 
         // 5️⃣ Finalizing
         await Version.findByIdAndUpdate(versionId, { $set: { stage: "finalizing", progress: 90 } });
+
+        // ✅ BROADCAST: Finalizing stage
+        inputSocketService.emitIncrementalProgress(
+            projectId,
+            versionId,
+            userId,
+            90,
+            "finalizing",
+            true
+        );
 
         const result = await this.requirementService.finalize(
             versionId,
@@ -138,6 +193,16 @@ export class OrchestratorService {
         await Version.findByIdAndUpdate(versionId, {
             $set: { stage: "completed", progress: 100 }
         });
+
+        // ✅ BROADCAST: Completed
+        inputSocketService.emitIncrementalProgress(
+            projectId,
+            versionId,
+            userId,
+            100,
+            "completed",
+            false
+        );
 
         return result;
     }

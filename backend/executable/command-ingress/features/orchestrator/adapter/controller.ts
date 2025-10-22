@@ -10,9 +10,13 @@ export class OrchestratorController {
         const project_id = req.params.project_id || (req.query.project_id as string) || (req.body.project_id as string) || (req.headers['x-project-id'] as string);
         const version_id = req.params.version_id || (req.query.version_id as string) || (req.body.version_id as string) || (req.headers['x-version-id'] as string);
         const mode = (req.query.mode === 'incremental' ? 'incremental' : 'full') as 'full' | 'incremental';
+        const userId = (req as any).user?.id || req.headers['x-user-id'] as string;
 
         if (!project_id || !version_id) {
             return res.status(400).json({ success: false, error: 'Missing project_id or version_id' });
+        }
+        if (!userId) {
+            return res.status(400).json({ success: false, error: 'Missing user identification' });
         }
 
         const project = await Project.findById(project_id).lean();
@@ -44,8 +48,7 @@ export class OrchestratorController {
                 files,
                 rawText,
                 mode
-            },
-                language);
+            }, language, userId);
 
             // Trả về response ngay lập tức để không bắt người dùng chờ
             return res.status(202).json({ success: true, message: 'Processing started. Check status for results.' });
@@ -57,11 +60,14 @@ export class OrchestratorController {
     async retryProjectAnalysis(req: Request, res: Response) {
         try {
             const { project_id, version_id } = req.params;
+            const userId = (req as any).user?.id || req.headers['x-user-id'] as string;
 
             if (!project_id || !version_id) {
                 return res.status(400).json({ success: false, error: 'Missing project_id or version_id' });
             }
-
+            if (!userId) {
+                return res.status(400).json({ success: false, error: 'Missing user identification' });
+            }
             const project = await Project.findById(project_id).lean();
             if (!project) {
                 return res.status(404).json({ success: false, error: 'Project not found' });
@@ -84,8 +90,9 @@ export class OrchestratorController {
             this.service.run(
                 project_id,
                 version_id,
-                { files: [], rawText: '', mode: 'full' }, // Luôn là 'full' và không có dữ liệu mới
-                language
+                { files: [], rawText: '', mode: 'full' },
+                language,
+                userId 
             );
 
             return res.status(202).json({ success: true, message: 'Retry process started.' });

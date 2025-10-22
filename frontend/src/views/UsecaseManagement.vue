@@ -288,15 +288,12 @@ export default {
     initSocketConnection(projectId) {
       if (!socket) return
 
-      // ✅ NÊN đặt auth TRƯỚC KHI có event listeners
-      // Socket auth chỉ có tác dụng khi kết nối/reconnect
       socket.auth = { userId: this.currentUserId }
 
       // Socket event listeners
       socket.on('connect', () => {
         this.isSocketConnected = true
         console.log('✅ Connected to socket server')
-        console.log('🔐 Socket auth userId:', this.currentUserId) // Debug
         this.joinProjectRoom(projectId)
       })
 
@@ -308,20 +305,24 @@ export default {
       // Existing usecase events
       socket.on('usecase_event', this.handleUsecaseEvent)
 
-      // Input events
-      socket.on('input_event', this.handleInputEvent)
+      // ✅ CẬP NHẬT: Input events - thêm incremental progress
+      socket.on('input_event', (event) => {
+        if (event.type === 'INCREMENTAL_PROGRESS') {
+          this.handleIncrementalProgress(event)
+        } else {
+          this.handleInputEvent(event) // existing handler
+        }
+      })
 
-      // ✅ THÊM: Presence events - Active users tracking
+      // Presence events
       socket.on('user_joined', this.handleUserJoined)
       socket.on('user_left', this.handleUserLeft)
 
       // Join project room if already connected
       if (socket.connected) {
-        console.log('🔐 Already connected, auth userId:', this.currentUserId) // Debug
         this.joinProjectRoom(projectId)
       }
 
-      // ✅ THÊM: Force reconnect để áp dụng auth mới (nếu cần)
       if (!socket.connected) {
         socket.connect()
       }
@@ -795,7 +796,11 @@ export default {
       this.showIncrementalButton = false
 
       try {
-        const response = await startIncrementalAnalysis(this.project._id, this.selectedVersionId)
+        const response = await startIncrementalAnalysis(
+          this.project._id,
+          this.selectedVersionId,
+          this.currentUserId
+        )
 
         if (response.data && response.data.success) {
           setTimeout(() => {
@@ -1078,6 +1083,35 @@ export default {
     handleActiveUsersUpdate(activeUsers) {
       console.log('🔄 Active users updated in parent:', activeUsers)
       this.activeUsers = activeUsers
+    },
+    handleIncrementalProgress(event) {
+      console.log('📊 Received incremental progress event:', event)
+
+      // Chỉ xử lý nếu cùng versionId
+      if (event.versionId !== this.selectedVersionId) {
+        return
+      }
+
+      // Bỏ qua events từ chính mình (đã có polling)
+      if (event.userId === this.currentUserId) {
+        console.log('🔕 Skipping own progress event')
+        return
+      }
+
+      // Cập nhật UI state
+      this.processingProgress = event.progress
+      this.currentStage = this.formatStageName(event.stage)
+      this.isProcessingIncremental = event.isProcessing
+
+      console.log(`🔄 Updated progress from realtime: ${event.progress}% - ${event.stage}`)
+
+      // Nếu hoàn thành, refresh data sau 1 giây
+      if (event.progress === 100 && !event.isProcessing) {
+        console.log('✅ Incremental analysis completed via realtime, refreshing data...')
+        setTimeout(() => {
+          this.fetchProjectData(this.project._id)
+        }, 1000)
+      }
     },
   },
 }

@@ -163,11 +163,22 @@ export const skipConflict = (versionId, conflictId) => {
 };
 
 // 🔥 THÊM API MỚI CHO INCREMENTAL ANALYSIS
-export const startIncrementalAnalysis = (projectId, versionId) => {
-  return axiosClient.post(`/api/orchestrate/projects/${projectId}/versions/${versionId}/process`, {
-    mode: 'incremental'
-  });
+export const startIncrementalAnalysis = (projectId, versionId, userId) => {
+  return axiosClient.post(
+    `/api/orchestrate/projects/${projectId}/versions/${versionId}/process`,
+    {
+      mode: 'incremental',
+      files: [],
+      rawText: ""
+    },
+    {
+      headers: {
+        'x-user-id': userId
+      }
+    }
+  );
 };
+
 
 // 🔥 THÊM API CHO CONFLICT RESOLUTION
 export function findProjectConflicts(projectId, versionId) {

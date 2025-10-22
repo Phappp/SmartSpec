@@ -70,7 +70,8 @@ export class ProjectService {
         newProject._id.toString(),
         newVersion._id.toString(),
         { files, rawText, mode: "full" },
-        newProject.language
+        newProject.language,
+        ownerId
       ).catch(async (err) => {
         const errorMessage = `Lỗi xử lý nền: ${err.message || 'Lỗi không xác định'}`;
         console.error(`[SERVICE] ${errorMessage} cho version ${newVersion._id}`);

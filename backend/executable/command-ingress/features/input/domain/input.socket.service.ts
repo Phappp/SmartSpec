@@ -4,7 +4,8 @@ import {
     InputEvent,
     InputCreatedEvent,
     InputDeletedEvent,
-    InputsReloadEvent
+    InputsReloadEvent,
+    IncrementalProgressEvent
 } from '../events/input.events';
 
 export class InputSocketService {
@@ -12,7 +13,10 @@ export class InputSocketService {
     /**
      * Gửi event đến tất cả thành viên trong project
      */
-    broadcastToProject(projectId: string, event: InputEvent): void {
+    broadcastToProject(
+        projectId: string,
+        event: InputCreatedEvent | InputDeletedEvent | InputsReloadEvent | IncrementalProgressEvent
+    ): void {
         io.to(`project_${projectId}`).emit('input_event', event);
         console.log(`📢 Broadcast input event to project ${projectId}:`, event.type);
     }
@@ -68,6 +72,28 @@ export class InputSocketService {
             timestamp: new Date()
         };
         this.broadcastToProject(projectId, event);
+    }
+
+    emitIncrementalProgress(
+        projectId: string,
+        versionId: string,
+        userId: string,
+        progress: number,
+        stage: string,
+        isProcessing: boolean
+    ): void {
+        const event: IncrementalProgressEvent = {
+            type: 'INCREMENTAL_PROGRESS',
+            projectId,
+            versionId,
+            userId,
+            progress,
+            stage,
+            isProcessing,
+            timestamp: new Date()
+        };
+        this.broadcastToProject(projectId, event);
+        console.log(`📊 Broadcast incremental progress: ${progress}% - ${stage}`);
     }
 }
 

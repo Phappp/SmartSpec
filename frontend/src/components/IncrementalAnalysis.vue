@@ -7,6 +7,9 @@
         <div class="progress-text">
           <h4>Incremental Analysis in Progress</h4>
           <p>{{ currentStage }} - {{ processingProgress }}%</p>
+          <small v-if="isRemoteProgress" class="remote-indicator">
+            🔄 Updated from team member
+          </small>
         </div>
         <div class="progress-bar-small">
           <div class="progress-fill" :style="{ width: processingProgress + '%' }"></div>
@@ -66,6 +69,10 @@ export default {
     currentStage: {
       type: String,
       default: 'Initializing...',
+    },
+    isRemoteProgress: {
+      type: Boolean,
+      default: false,
     },
   },
   emits: ['start-incremental-analysis'],
@@ -192,7 +199,11 @@ export default {
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
-
+.remote-indicator {
+  opacity: 0.7;
+  font-size: 0.75rem;
+  margin-top: 4px;
+}
 @keyframes spin {
   to {
     transform: rotate(360deg);

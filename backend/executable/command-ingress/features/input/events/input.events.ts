@@ -21,7 +21,15 @@ export interface InputsReloadEvent extends InputEventData {
     inputs: any[];
 }
 
-export type InputEvent = 
+export interface IncrementalProgressEvent extends InputEventData {
+    type: 'INCREMENTAL_PROGRESS';
+    progress: number;
+    stage: string;
+    isProcessing: boolean;
+}
+
+
+export type InputEvent =
     | InputCreatedEvent
     | InputDeletedEvent
     | InputsReloadEvent;
