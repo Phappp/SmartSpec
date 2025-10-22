@@ -5,7 +5,7 @@
         :project="project"
         :versions="versions"
         :selected-version-id="selectedVersionId"
-        :is-retrying="isRetrying"
+        :is-retrying="effectiveProcessingState.isRetrying"
         :processing-progress="processingProgress"
         :current-stage="currentStage"
         :active-users="activeUsers"
@@ -30,12 +30,14 @@
 
       <!-- Incremental Analysis Component -->
       <IncrementalAnalysis
-        :is-processing-incremental="isProcessingIncremental"
+        :is-processing-incremental="effectiveProcessingState.isProcessingIncremental"
+        :is-processing-failed="isProcessingFailed"
         :show-incremental-button="showIncrementalButton"
         :unprocessed-inputs-count="unprocessedInputsCount"
         :processing-progress="processingProgress"
         :current-stage="currentStage"
         @start-incremental-analysis="startIncrementalAnalysis"
+        @retry-incremental="retryIncrementalAnalysis"
       />
 
       <!-- Conflict Resolution Section -->
@@ -163,6 +165,7 @@ export default {
       selectedVersionId: null,
       showSharingModal: false,
       activeUsers: [],
+      isProcessingFailed: false,
 
       // ========== RETRY STATE ==========
       isRetrying: false,
@@ -245,7 +248,36 @@ export default {
         }))
         .filter((uc) => !this.currentEditingUseCase || uc.id !== this.currentEditingUseCase.id)
     },
+    // Đảm bảo chỉ một state được active
+    effectiveProcessingState() {
+      if (this.isProcessingIncremental && this.isRetrying) {
+        // Nếu cả hai đều true, ưu tiên incremental
+        console.warn('⚠️ Both states active, prioritizing incremental')
+        return { isProcessingIncremental: true, isRetrying: false }
+      }
+      return {
+        isProcessingIncremental: this.isProcessingIncremental,
+        isRetrying: this.isRetrying,
+      }
+    },
+    hasProcessingFailed() {
+      const currentVersion = this.versions.find((v) => v._id === this.selectedVersionId)
+      console.log('🔍 Checking failed state:', {
+        versionStatus: currentVersion?.status,
+        progress: this.processingProgress,
+        isProcessing: this.isProcessingIncremental,
+        isRetrying: this.isRetrying,
+      })
 
+      return (
+        currentVersion &&
+        currentVersion.status === 'failed' &&
+        this.processingProgress >= 95 &&
+        // CHO PHÉP hiển thị ngay cả khi isRetrying là true (vì có thể cả 2 process cùng chạy)
+        !this.isProcessingIncremental
+        // BỎ: !this.isRetrying
+      )
+    },
     // ========== REALTIME COMPUTED ==========
     currentUserId() {
       return localStorage.getItem('userId')
@@ -281,6 +313,13 @@ export default {
       },
       immediate: true,
       deep: true,
+    },
+    hasProcessingFailed: {
+      handler(newVal, oldVal) {
+        console.log('🔄 Failed state changed:', { old: oldVal, new: newVal })
+        this.isProcessingFailed = newVal
+      },
+      immediate: true,
     },
   },
   methods: {
@@ -777,10 +816,13 @@ export default {
         const { status, version } = response.data.data
 
         if (status === 'processing' && version.is_processing) {
-          this.isProcessingIncremental = true
-          this.processingProgress = version.progress || 0
-          this.currentStage = this.formatStageName(version.stage || 'initializing')
-          this.startPolling(this.selectedVersionId, 'incremental')
+          // QUAN TRỌNG: Chỉ set incremental nếu KHÔNG có retry đang chạy
+          if (!this.isRetrying) {
+            this.isProcessingIncremental = true
+            this.processingProgress = version.progress || 0
+            this.currentStage = this.formatStageName(version.stage || 'initializing')
+            this.startPolling(this.selectedVersionId, 'incremental')
+          }
         }
       } catch (error) {
         console.error('Error checking processing status:', error)
@@ -791,6 +833,7 @@ export default {
       if (!this.selectedVersionId || this.isProcessingIncremental) return
 
       this.isProcessingIncremental = true
+      this.isProcessingFailed = false
       this.processingProgress = 0
       this.currentStage = 'Initializing...'
       this.showIncrementalButton = false
@@ -886,14 +929,24 @@ export default {
       return stageNames[stage] || stage.charAt(0).toUpperCase() + stage.slice(1)
     },
 
-    checkAndRestorePolling() {
+    async checkAndRestorePolling() {
       if (this.hasProcessingVersion) {
         const processingVersion = this.processingVersion
         console.log('🔄 Found processing version, restoring polling:', processingVersion._id)
 
-        this.isRetrying = true
+        // QUAN TRỌNG: Xác định mode dựa trên version details
+        const isIncremental =
+          processingVersion.is_incremental ||
+          (processingVersion.progress > 0 && processingVersion.progress < 100)
+
+        if (isIncremental) {
+          this.isProcessingIncremental = true
+        } else {
+          this.isRetrying = true
+        }
+
         this.currentPollingVersionId = processingVersion._id
-        this.startPolling(processingVersion._id)
+        this.startPolling(processingVersion._id, isIncremental ? 'incremental' : 'retry')
 
         if (processingVersion.progress) {
           this.processingProgress = processingVersion.progress
@@ -940,9 +993,9 @@ export default {
       this.processingProgress = 100
       this.currentStage = 'Completed'
       this.stopPolling()
+      this.isProcessingFailed = false // Reset failed state
 
       const fetchSuccess = await this.fetchProjectData(this.project._id)
-
       const currentVersion = this.versions.find((v) => v._id === this.selectedVersionId)
       const finalStatus = currentVersion ? currentVersion.status : 'completed'
 
@@ -957,6 +1010,17 @@ export default {
 
     handleProcessingFailure(mode) {
       this.stopPolling()
+
+      // QUAN TRỌNG: Đảm bảo reset states đúng cách
+      if (mode === 'incremental') {
+        this.isProcessingIncremental = false
+        this.isProcessingFailed = true
+        this.processingProgress = 100 // Force 100% để hiển thị error banner
+      } else {
+        this.isRetrying = false
+        this.isProcessingFailed = false
+      }
+
       this.fetchProjectData(this.project._id)
 
       const message =
@@ -985,6 +1049,7 @@ export default {
       if (!this.failedVersion || this.isRetrying) return
 
       this.isRetrying = true
+      this.isProcessingFailed = false
       this.processingProgress = 0
       this.currentStage = 'Initializing...'
       this.currentPollingVersionId = this.failedVersion._id
@@ -1119,6 +1184,47 @@ export default {
         setTimeout(() => {
           this.fetchProjectData(this.project._id)
         }, 1000)
+      }
+    },
+    stopPolling() {
+      this.cleanupPolling()
+      this.isRetrying = false
+      this.isProcessingIncremental = false
+      this.currentPollingVersionId = null
+    },
+    async retryIncrementalAnalysis() {
+      console.log('🔄 Retry incremental analysis triggered')
+
+      if (this.isProcessingIncremental || this.isRetrying) {
+        this.toast.warning('Analysis is already in progress')
+        return
+      }
+
+      this.isProcessingFailed = false
+      this.isProcessingIncremental = true
+      this.processingProgress = 0
+      this.currentStage = 'Initializing...'
+
+      try {
+        const response = await startIncrementalAnalysis(
+          this.project._id,
+          this.selectedVersionId,
+          this.currentUserId
+        )
+
+        if (response.data && response.data.success) {
+          this.toast.success('Retrying incremental analysis...')
+          setTimeout(() => {
+            this.startPolling(this.selectedVersionId, 'incremental')
+          }, 500)
+        } else {
+          throw new Error(response.data?.message || 'Failed to retry incremental analysis')
+        }
+      } catch (error) {
+        console.error('Error retrying incremental analysis:', error)
+        this.isProcessingFailed = true
+        this.isProcessingIncremental = false
+        this.toast.error(error.message || 'Failed to retry incremental analysis')
       }
     },
   },

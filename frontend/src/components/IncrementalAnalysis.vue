@@ -1,5 +1,21 @@
 <template>
   <div>
+    <div v-if="isProcessingFailed" class="error-banner">
+      <div class="error-content">
+        <span class="material-symbols-outlined error-icon">error</span>
+        <div class="error-text">
+          <h4>Incremental Analysis Failed</h4>
+          <p>Analysis completed with errors. Please check and retry.</p>
+          <small v-if="isRemoteProgress" class="remote-indicator">
+            ⚠️ Failed from team member
+          </small>
+        </div>
+        <button class="retry-btn-small" @click="$emit('retry-incremental')">
+          <span class="material-symbols-outlined">refresh</span>
+          Retry
+        </button>
+      </div>
+    </div>
     <!-- Incremental Analysis Progress -->
     <div v-if="isProcessingIncremental" class="processing-banner">
       <div class="progress-content">
@@ -19,7 +35,7 @@
 
     <!-- Incremental Analysis Button -->
     <div
-      v-if="showIncrementalButton && !isProcessingIncremental"
+      v-if="showIncrementalButton && !isProcessingIncremental && !isProcessingFailed"
       class="incremental-analysis-section"
     >
       <div class="incremental-banner">
@@ -54,6 +70,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    isProcessingFailed: {
+      type: Boolean,
+      default: false,
+    },
     showIncrementalButton: {
       type: Boolean,
       default: false,
@@ -75,7 +95,7 @@ export default {
       default: false,
     },
   },
-  emits: ['start-incremental-analysis'],
+  emits: ['start-incremental-analysis', 'retry-incremental'],
 }
 </script>
 
@@ -208,5 +228,68 @@ export default {
   to {
     transform: rotate(360deg);
   }
+}
+.error-banner {
+  background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  color: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.error-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.error-icon {
+  font-size: 28px;
+}
+
+.error-text {
+  flex: 1;
+}
+
+.error-text h4 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.error-text p {
+  margin: 0;
+  opacity: 0.9;
+  font-size: 14px;
+}
+
+.retry-btn-small {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  padding: 8px 16px;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+}
+
+.retry-btn-small:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Update processing banner for consistency */
+.processing-banner {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  color: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 </style>

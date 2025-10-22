@@ -32,7 +32,7 @@ export class OrchestratorService {
                 status: "processing",
                 processing_errors: [],
                 stage: "initializing",
-                progress: 5,
+                progress: 15,
                 is_processing: true
             }
         });

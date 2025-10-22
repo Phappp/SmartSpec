@@ -69,12 +69,9 @@ export class RequirementService {
     }
 
     /**
-     * Finalize: gom text từ inputs, phân tích Gemini, merge kết quả
-     */
-    /**
-     * Finalize: Phân tích input và cập nhật requirement model.
-     * Phiên bản này đã được dọn dẹp và tối ưu, chỉ thực hiện một nhiệm vụ duy nhất.
-     */
+    * Finalize: Phân tích input và cập nhật requirement model.
+    * Phiên bản này đã được dọn dẹp và tối ưu, chỉ thực hiện một nhiệm vụ duy nhất.
+    */
     async finalize(
         versionId: string,
         mode: "full" | "incremental",
@@ -96,10 +93,7 @@ export class RequirementService {
             .join("\n\n");
 
         if (!mergedText || mergedText.trim().length === 0) {
-            if (markAsProcessed.length > 0) {
-                await Input.updateMany({ _id: { $in: markAsProcessed } }, { $set: { is_processed: true } });
-            }
-            // Trả về trạng thái hiện tại nếu không có gì để xử lý
+            // KHÔNG đánh dấu is_processed nếu không có text để xử lý
             return { version_id: versionId, requirement_model: previousRequirements };
         }
 
@@ -127,30 +121,48 @@ export class RequirementService {
                 },
                 500
             );
-            newRequirements = results.flat(); // Sử dụng flat() để làm phẳng mảng kết quả
+            newRequirements = results.flat();
         } catch (error: any) {
             processingErrors.push(`Process error: ${error.message}`);
         }
 
-        // 4. Dọn dẹp và gộp kết quả
-        // 4a. Xóa các UC trùng lặp trong bộ kết quả mới
-        newRequirements = this.mergeUseCasesDedup(newRequirements);
+        // 4. KIỂM TRA LỖI: Nếu có lỗi thì KHÔNG đánh dấu is_processed và KHÔNG cập nhật version
+        if (processingErrors.length > 0) {
+            console.error("❌ Có lỗi trong quá trình xử lý, giữ nguyên trạng thái:");
+            console.error(processingErrors);
 
-        // 4b. BƯỚC SỬA LỖI QUAN TRỌNG: Lọc lại để chắc chắn không có UC rỗng nào được tạo ra
+            // KHÔNG gọi: Input.updateMany({ is_processed: true })
+            // KHÔNG cập nhật version status
+            await Version.findByIdAndUpdate(versionId, {
+                $set: {
+                    status: "failed",
+                    stage: "failed",
+                    progress: 100, // Đảm bảo progress là 100%
+                    processing_errors: processingErrors
+                }
+            });
+            return {
+                version_id: versionId,
+                requirement_model: previousRequirements,
+                errors: processingErrors
+            };
+        }
+
+        // 5. Nếu KHÔNG có lỗi: tiếp tục xử lý bình thường
+        // Dọn dẹp và gộp kết quả
+        newRequirements = this.mergeUseCasesDedup(newRequirements);
         newRequirements = newRequirements.filter(uc =>
             uc && typeof uc === 'object' &&
             ((uc.name && uc.name.trim() !== "") || (uc.goal && uc.goal.trim() !== ""))
         );
 
-        // 4c. Logic gộp đơn giản: không còn phát hiện conflict ở đây
         const finalRequirements = mode === 'full'
             ? newRequirements
             : [...previousRequirements, ...newRequirements];
 
-        // 4d. Chuẩn hóa lại ID cho toàn bộ danh sách
         const normalizedRequirements = this.normalizeUseCaseIds(finalRequirements, "UC");
 
-        // 5. Làm giàu dữ liệu: Bổ sung "related_usecases"
+        // 6. Làm giàu dữ liệu: Bổ sung "related_usecases"
         let requirementsWithRelations = normalizedRequirements;
         if (requirementsWithRelations.length > 1) {
             try {
@@ -161,29 +173,23 @@ export class RequirementService {
                 );
             } catch (err: any) {
                 console.error("⚠️ Lỗi khi bổ sung related_usecases:", err.message);
-                // Không ném lỗi ở đây để tiến trình vẫn tiếp tục
+                // Vẫn tiếp tục với dữ liệu hiện có
             }
         }
 
-        // 6. Cập nhật cơ sở dữ liệu và trả về kết quả
+        // 7. CHỈ KHI THÀNH CÔNG: đánh dấu input đã xử lý và cập nhật version
         if (markAsProcessed.length > 0) {
             await Input.updateMany({ _id: { $in: markAsProcessed } }, { $set: { is_processed: true } });
         }
 
-        const updatePayload: any = {
+        await Version.findByIdAndUpdate(versionId, {
             $set: {
                 requirement_model: requirementsWithRelations,
                 affects_requirement: true,
-                status: processingErrors.length > 0 ? "failed" : "completed",
-                stage: processingErrors.length > 0 ? "failed" : "completed",
+                status: "completed", // Luôn là completed khi thành công
+                stage: "completed",
             }
-        };
-
-        if (processingErrors.length > 0) {
-            updatePayload.$push = { processing_errors: { $each: processingErrors } };
-        }
-
-        await Version.findByIdAndUpdate(versionId, updatePayload);
+        });
 
         return {
             version_id: versionId,

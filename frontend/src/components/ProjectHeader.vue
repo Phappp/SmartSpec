@@ -71,7 +71,7 @@
             </div>
           </div>
 
-          <button
+          <!-- <button
             v-if="hasFailedVersion && !isRetrying"
             class="retry-btn"
             @click="handleRetry"
@@ -79,11 +79,11 @@
           >
             <span class="material-symbols-outlined">refresh</span>
             <span class="btn-text">Retry Failed</span>
-          </button>
+          </button> -->
         </div>
 
         <!-- Progress Indicator -->
-        <div v-if="isRetrying" class="progress-indicator">
+        <!-- <div v-if="isRetrying" class="progress-indicator">
           <div class="progress-header">
             <span class="stage-name">{{ currentStage }}</span>
             <span class="progress-percentage">{{ processingProgress }}%</span>
@@ -92,7 +92,7 @@
             <div class="progress-fill" :style="{ width: processingProgress + '%' }"></div>
           </div>
           <div class="stage-description">{{ getStageDescription(currentStage) }}</div>
-        </div>
+        </div> -->
 
         <!-- Active Users Indicator -->
         <div class="active-users-indicator" ref="activeUsersIndicator">
