@@ -4,6 +4,7 @@
       :project="project"
       :versions="versions"
       :selected-version-id="selectedVersionId"
+      :active-users="activeUsers"
       @version-selected="handleVersionSelect"
       @go-back="goBack"
     />
@@ -273,11 +274,20 @@
 import { getProjectDetail } from '@/api/project'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
+import { useActiveMembers } from '@/utils/useActiveMembers'
 
 export default {
   name: 'UmlManagement',
   components: {
     ProjectHeader,
+  },
+  setup() {
+    const { activeUsers, initSocketConnection, cleanupSocketConnection } = useActiveMembers()
+    return {
+      activeUsers,
+      initSocketConnection,
+      cleanupSocketConnection,
+    }
   },
   data() {
     return {
@@ -327,7 +337,16 @@ export default {
     const projectId = this.$route.params.id
     if (projectId) {
       await this.fetchProjectData(projectId)
-      this.loadDiagrams()
+      this.loadDiagrams() // ✅ TÍNH NĂNG HIỆN TẠI - GIỮ NGUYÊN
+
+      // ✅ THÊM: Init socket connection cho active members
+      this.initSocketConnection(projectId)
+    }
+  },
+  beforeUnmount() {
+    // ✅ THÊM: Cleanup socket connection
+    if (this.project._id) {
+      this.cleanupSocketConnection(this.project._id)
     }
   },
   methods: {

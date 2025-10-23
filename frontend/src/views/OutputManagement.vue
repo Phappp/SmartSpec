@@ -7,6 +7,7 @@
       :is-retrying="isRetrying"
       :processing-progress="processingProgress"
       :current-stage="currentStage"
+      :active-users="activeUsers"
       @version-selected="handleVersionSelect"
       @retry-analysis="handleRetry"
       @go-back="goBack"
@@ -131,11 +132,19 @@
 import { getProjectDetail } from '@/api/project'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
-
+import { useActiveMembers } from '@/utils/useActiveMembers'
 export default {
   name: 'OutputManagement',
   components: {
     ProjectHeader,
+  },
+  setup() {
+    const { activeUsers, initSocketConnection, cleanupSocketConnection } = useActiveMembers()
+    return {
+      activeUsers,
+      initSocketConnection,
+      cleanupSocketConnection,
+    }
   },
   data() {
     return {
@@ -188,6 +197,14 @@ export default {
     const projectId = this.$route.params.id
     if (projectId) {
       await this.fetchProjectData(projectId)
+      // ✅ GỌI initSocketConnection với projectId
+      this.initSocketConnection(projectId)
+    }
+  },
+  beforeUnmount() {
+    // ✅ GỌI cleanupSocketConnection với projectId
+    if (this.project._id) {
+      this.cleanupSocketConnection(this.project._id)
     }
   },
   methods: {
@@ -227,7 +244,7 @@ export default {
     // Data fetching
     async fetchProjectData(projectId) {
       try {
-        const userId = 'CURRENT_LOGGED_IN_USER_ID'
+        const userId = localStorage.getItem('userId') // ✅ SỬA: dùng real userId
         const { data } = await getProjectDetail(projectId, userId)
         const result = data.data || data
         this.project = result.project
@@ -237,7 +254,6 @@ export default {
           this.selectedVersionId = this.versions[0]._id
         }
 
-        // Load mock stats (in real app, these would come from API)
         this.loadOutputStats()
       } catch (err) {
         console.error('Error fetching project details:', err)
