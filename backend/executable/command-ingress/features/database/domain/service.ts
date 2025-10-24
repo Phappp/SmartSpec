@@ -3,6 +3,7 @@
 import DatabaseModel from "../../../../../internal/model/database";
 import VersionModel from "../../../../../internal/model/version";
 import { DatabaseGeminiService } from "../domain/GeminiService";
+import { LogService } from "../../log/domain/service";
 
 interface GenerateDatabasePayload {
     versionId: string;
@@ -17,9 +18,10 @@ interface TablePositionUpdate {
 
 export class DatabaseService {
     private geminiService: DatabaseGeminiService;
-
+    private logService: LogService;
     constructor() {
         this.geminiService = new DatabaseGeminiService();
+        this.logService = new LogService();
     }
 
     /**
@@ -569,6 +571,26 @@ export class DatabaseService {
             }
         }
 
+        try {
+            const version = await VersionModel.findOne({ _id: database.version_id });
+            if (version) {
+                await this.logService.createLog({
+                    project_id: version.project_id.toString(),
+                    user_id: databaseId, // có thể thay bằng user thực sau này
+                    action: "create_table",
+                    target_id: databaseId,
+                    target_type: "databases",
+                    version_number: version.version_number,
+                    affects_requirement: false,
+                    level: "info",
+                    details: {
+                        message: `Created new table '${tableData.name}' in database '${database.name}' (version ${version.version_number})`
+                    }
+                });
+            }
+        } catch (logError) {
+            console.error("⚠️ Failed to log table creation:", logError);
+        }
         return DatabaseModel.findByIdAndUpdate(
             databaseId,
             { $push: { tables: tableData } },
@@ -625,6 +647,26 @@ export class DatabaseService {
                 );
             }
         }
+        try {
+            const version = await VersionModel.findOne({ _id: database.version_id });
+            if (version) {
+                await this.logService.createLog({
+                project_id: version.project_id.toString(),
+                user_id: "system", // có thể thay bằng user thực
+                action: "update_table",
+                target_id: databaseId,
+                target_type: "databases",
+                version_number: version.version_number,
+                affects_requirement: false,
+                level: "info",
+                details: {
+                    message: `Updated table '${tableName}' in database '${database.name}' (version ${version.version_number})`
+                }
+                });
+            }
+            } catch (logError) {
+            console.error("⚠️ Failed to log database update:", logError);
+            }
 
         // 7. Sync FK changes SAU KHI tất cả validation passed
         await this.syncForeignKeyTypesForPKChanges(

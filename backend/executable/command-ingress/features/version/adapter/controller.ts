@@ -85,18 +85,26 @@ export class VersionController extends BaseController {
   /**
    * 📘 Lấy chi tiết version
    */
-  public getVersionDetail = async (req: HttpRequest, res: Response, next: NextFunction) => {
+  public setCurrentVersion = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
       const userId = req.getSubject();
       if (!userId) {
-        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
-            return;
-        }
-      const versionId = req.params.versionId;
-      // const result = await this.service.getVersionDetail(versionId);
-      //handleServiceResponse(result, res);
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
+        return;
+      }
+
+      const { projectId, versionId } = req.params;
+      if (!projectId || !versionId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Project ID and Version ID are required', null, 400), res);
+        return;
+      }
+
+      // Gọi xuống service để thực hiện cập nhật
+      const result = await this.service.setCurrentVersion(projectId, versionId, userId);
+      handleServiceResponse(result, res);
     });
   };
+
 
   /**
    * ✅ Đánh dấu version là ổn định

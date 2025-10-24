@@ -10,10 +10,12 @@ export interface CreateLogDTO {
     | "update_user"
     | "generate_data" | "update_data" | "delete_data" | "resolve_conflict"
     | "invite_member" | "accept_invite" | "reject_invite" | "cancel_invite"
-    | "remove_member" | "leave_project" | "change_member_role";
+    | "remove_member" | "leave_project" | "change_member_role"
+    | "create_table" | "update_table" | "delete_table" | "create_column" | "update_column"
+    | "delete_column" | "create_relation" | "update_relation" | "delete_relation"
   
   target_id?: string;
-  target_type: "input" | "output" | "project" | "version" | "system" | "requirement_model" | "member";
+  target_type: "input" | "output" | "project" | "version" | "system" | "requirement_model" | "member" | "databases" | "testcases" | "activity_diagrams" | "usecase_diagrams" | "sequence_diagrams" ;
   version_number?: string;
   affects_requirement?: boolean;
   level: "info" | "warning" | "error";

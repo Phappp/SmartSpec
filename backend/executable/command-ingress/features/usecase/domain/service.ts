@@ -75,7 +75,7 @@ export class UsecaseService {
       version.affects_requirement = true;
 
       await version.save({ session });
-       await this.logService.createLog({
+      await this.logService.createLog({
         project_id: version.project_id.toString(),
         user_id: userId,
         action: "generate_data",

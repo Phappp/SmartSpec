@@ -6,6 +6,7 @@ import { CreateLogDTO } from "../adapter/dto";
 import { ServiceResponse, ResponseStatus } from "../../../services/serviceResponse";
 import ProjectModel from "../../../../../internal/model/project";
 import UserModel from "../../../../../internal/model/user";
+import { logSocketService } from "./log.socket.service";
 
 export class LogService {
   async createLog(dto: CreateLogDTO) {
@@ -33,6 +34,15 @@ export class LogService {
 
       const doc = await LogModel.create(docData);
       console.log("✅ [createLog] Created log:", doc._id);
+
+      // 🔔 Emit socket event cho project & user
+      if (dto.project_id) {
+        logSocketService.emitLogCreated(
+          String(dto.project_id),
+          String(dto.user_id),
+          doc
+        );
+      }
 
       // 🚨 Gửi cảnh báo bảo mật nếu là lỗi đăng nhập
       if (["failed_login"].includes(dto.action)) {
@@ -412,8 +422,22 @@ export class LogService {
 
     try {
       console.log("🟡 [LogRetention] Deleting logs older than:", cutoffDate);
-      const result = await LogModel.deleteMany({ created_at: { $lt: cutoffDate } });
-      console.log(`✅ [LogRetention] Deleted ${result.deletedCount} logs older than ${days} days`);
+
+      // Lấy danh sách project có log
+      const projectIds = await LogModel.distinct("projectId");
+
+      for (const projectId of projectIds) {
+        const result = await LogModel.deleteMany({
+          projectId,
+          created_at: { $lt: cutoffDate },
+        });
+
+        console.log(`✅ [LogRetention] Deleted ${result.deletedCount} logs for project ${projectId}`);
+
+        if (result.deletedCount && result.deletedCount > 0) {
+          logSocketService.emitLogsPurged(projectId.toString(), result.deletedCount, cutoffDate);
+        }
+      }
     } catch (err: any) {
       console.error("❌ [LogRetention] Error:", err);
     }

@@ -1,10 +1,12 @@
-import mongoose from "mongoose";
+import mongoose, { Types } from 'mongoose';
 import Version from "../../../../../internal/model/version";
 import User from '../../../../../internal/model/user';
 import Input from "../../../../../internal/model/input";
 import Output from "../../../../../internal/model/output";
+import Project from "../../../../../internal/model/project";
 import { LogService } from "../../../../command-ingress/features/log/domain/service";
 import { ServiceResponse, ResponseStatus } from "../../../services/serviceResponse";
+import { versionSocketService } from "./version.socket.service";
 
 export class VersionService {
   private logService = new LogService();
@@ -22,7 +24,7 @@ export class VersionService {
       if (!baseVersion)
         return new ServiceResponse(ResponseStatus.Failed, "Base version not found", null, 404);
 
-      // 🔢 Sinh số version mới (theo toàn project, tránh trùng)
+      // 🔢 Sinh số version mới
       const { major, minor } = await this.getNextVersion(baseVersion.project_id, baseVersion, changeType);
 
       // 📦 Clone version cũ
@@ -49,7 +51,7 @@ export class VersionService {
         _id: new mongoose.Types.ObjectId(),
         version_id: newVersion._id,
         created_at: new Date(),
-        updated_at: new Date()
+        updated_at: new Date(),
       }));
 
       const oldOutputs = await Output.find({ version_id: baseVersionId });
@@ -58,7 +60,7 @@ export class VersionService {
         _id: new mongoose.Types.ObjectId(),
         version_id: newVersion._id,
         created_at: new Date(),
-        updated_at: new Date()
+        updated_at: new Date(),
       }));
 
       await Input.insertMany(clonedInputs);
@@ -69,7 +71,13 @@ export class VersionService {
 
       await newVersion.save();
 
+      // 🟩 Cập nhật current version trong Project
+      await Project.findByIdAndUpdate(baseVersion.project_id, {
+        current_version: newVersion._id,
+      });
+
       const user = await User.findById(userId).select("name email").lean();
+
       await this.logService.createLog({
         project_id: baseVersion.project_id.toString(),
         user_id: userId,
@@ -80,9 +88,17 @@ export class VersionService {
         affects_requirement: false,
         level: "info",
         details: {
-          message: `${user.name} created a ${changeType} version ${newVersion.version_number} from ${baseVersion.version_number}`
+          message: `${user.name} created a ${changeType} version ${newVersion.version_number} from ${baseVersion.version_number}`,
         },
       });
+
+      // 🔔 Gửi realtime thông báo đến các client khác trong project
+      await versionSocketService.emitVersionCreated(
+        baseVersion.project_id.toString(),
+        newVersion._id.toString(),
+        userId,
+        newVersion
+      );
 
       return new ServiceResponse(ResponseStatus.Success, "Version created successfully", newVersion, 201);
     } catch (error: any) {
@@ -91,7 +107,47 @@ export class VersionService {
   }
 
   /**
-   * ⚙️ Tự động tạo version mới khi có thay đổi lớn/nhỏ
+   * ⚙️ Đổi current version của Project (người khác thấy ngay)
+   */
+  async setCurrentVersion(
+    projectId: string,
+    versionId: string,
+    userId: string
+  ): Promise<ServiceResponse<any>> {
+    try {
+      const version = await Version.findOne({ _id: versionId, project_id: projectId });
+      if (!version)
+        return new ServiceResponse(ResponseStatus.Failed, "Version not found in this project", null, 404);
+      const project = await Project.findById(projectId);
+      if (!project) {
+        return new ServiceResponse(ResponseStatus.Failed, "Project not found", null, 404);
+      }
+
+      const oldVersionId = project.current_version?.toString();
+
+      // 👉 Cập nhật current version mới
+      project.current_version = new mongoose.Types.ObjectId(versionId);
+
+      await project.save();
+
+      const user = await User.findById(userId).select("name email").lean();
+
+      // 🔔 Gửi realtime đến các user khác đang ở cùng project
+      await versionSocketService.emitVersionSwitched(
+        projectId.toString(),
+        userId,
+        versionId,
+        oldVersionId || ""
+      );
+
+      return new ServiceResponse(ResponseStatus.Success, "Current version updated", project, 200);
+    } catch (error: any) {
+      return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
+    }
+  }
+
+  /**
+   * ⚙️ Tự động tạo version mới khi có thay đổi
    */
   async autoBumpVersionOnChange(
     versionId: string,
@@ -103,20 +159,18 @@ export class VersionService {
       if (!currentVersion)
         return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
 
-      // Nếu version đã completed → không chỉnh sửa mà phải bump mới
       if (currentVersion.status === "completed") {
         return this.bumpVersion(versionId, userId, changeLevel);
       }
 
-      // Nếu đang “processing”, chỉ cập nhật minor number
       const { major, minor } = await this.getNextVersion(currentVersion.project_id, currentVersion, changeLevel);
-
       currentVersion.version_major = major;
       currentVersion.version_minor = minor;
       currentVersion.updated_at = new Date();
-
       await currentVersion.save();
+
       const user = await User.findById(userId).select("name email").lean();
+
       await this.logService.createLog({
         project_id: currentVersion.project_id.toString(),
         user_id: userId,
@@ -126,9 +180,12 @@ export class VersionService {
         version_number: currentVersion.version_number,
         level: "info",
         details: {
-          message: `${user.name} auto-bumped version to ${currentVersion.version_number} (${changeLevel} change).`
+          message: `${user.name} auto-bumped version to ${currentVersion.version_number} (${changeLevel} change).`,
         },
       });
+
+      // 🔔 Realtime update khi có thay đổi
+      
 
       return new ServiceResponse(ResponseStatus.Success, "Auto bump version done", currentVersion, 200);
     } catch (error: any) {
@@ -136,10 +193,8 @@ export class VersionService {
     }
   }
 
-  /**
-   * 🧮 Xác định version kế tiếp trong toàn project
-   */
- private async getNextVersion(
+  /** 🧮 Xác định version kế tiếp */
+  private async getNextVersion(
     projectId: any,
     baseVersion: any,
     type: "major" | "minor"
@@ -151,18 +206,13 @@ export class VersionService {
     let nextMajor = baseVersion.version_major;
     let nextMinor = baseVersion.version_minor;
 
-    if (!latest) {
-      // 🔰 Chưa có version nào trong project
-      return type === "major"
-        ? { major: 1, minor: 0 }
-        : { major: 0, minor: 1 };
-    }
+    if (!latest)
+      return type === "major" ? { major: 1, minor: 0 } : { major: 0, minor: 1 };
 
     if (type === "major") {
       nextMajor = latest.version_major + 1;
       nextMinor = 0;
     } else {
-      // 🔄 Nếu base version cũ hơn version mới nhất
       if (baseVersion.version_major < latest.version_major) {
         nextMajor = latest.version_major;
         nextMinor = latest.version_minor + 1;
@@ -170,7 +220,6 @@ export class VersionService {
         nextMinor = latest.version_minor + 1;
       }
 
-      // ⚙️ Nếu minor >= 10 ⇒ tự động tăng major, reset minor
       if (nextMinor >= 10) {
         nextMajor += 1;
         nextMinor = 0;
@@ -180,24 +229,30 @@ export class VersionService {
     return { major: nextMajor, minor: nextMinor };
   }
 
-  /** * 📄 Lấy toàn bộ version của project */ 
-  async getVersionsByProject(projectId: string): Promise<ServiceResponse<any>> { 
-    try { 
-      const versions = await Version
-      .find({ project_id: projectId }) 
-      .sort({ created_at: -1 }) 
-      .select([ "version_major", "version_minor", 
-       "version_number", "created_by", "created_at", 
-       "updated_at", "stage", "status", ]) 
-      .populate("created_by", "name email"); 
-      return new ServiceResponse(ResponseStatus.Success, "Versions retrieved", versions, 200); } 
-    catch (error: any) { 
-      return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500); 
-    } 
+  /** 📄 Lấy toàn bộ version của project */
+  async getVersionsByProject(projectId: string): Promise<ServiceResponse<any>> {
+    try {
+      const versions = await Version.find({ project_id: projectId })
+        .sort({ created_at: -1 })
+        .select([
+          "version_major",
+          "version_minor",
+          "version_number",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "stage",
+          "status",
+        ])
+        .populate("created_by", "name email");
+
+      return new ServiceResponse(ResponseStatus.Success, "Versions retrieved", versions, 200);
+    } catch (error: any) {
+      return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
+    }
   }
-  /**
-   * 🔬 So sánh requirement_model giữa 2 version
-   */
+
+  /** 🔬 So sánh requirement_model */
   private diffRequirementModels(modelA: any[], modelB: any[]) {
     const added = modelB.filter(b => !modelA.some(a => a.id === b.id));
     const removed = modelA.filter(a => !modelB.some(b => b.id === a.id));

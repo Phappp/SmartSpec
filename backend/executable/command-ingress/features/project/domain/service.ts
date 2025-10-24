@@ -375,7 +375,7 @@ export class ProjectService {
     // Lấy danh sách versions (metadata)
     const versions = await Version.find({ project_id: project._id })
       .select("_id version_number status created_at updated_at")
-      .sort({ version_number: 1 })
+      .sort({ version_number: -1 })
       .lean();
 
     // Lấy current version (đầy đủ tất cả field)

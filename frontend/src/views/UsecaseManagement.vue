@@ -124,6 +124,7 @@ import {
   resolveProjectConflict,
   skipConflict,
   usecaseApi,
+  switchCurrentVersion,
 } from '@/api/project'
 import { useToast } from 'vue-toastification'
 import AppModal from '@/components/AppModal.vue'
@@ -290,6 +291,9 @@ export default {
       // 🔥 THÊM: Input events
       socket.on('input_event', this.handleInputEvent)
 
+      // cho version events
+      socket.on('version_event', this.handleVersionEvent);
+
       // Join project room if already connected
       if (socket.connected) {
         this.joinProjectRoom(projectId)
@@ -309,12 +313,89 @@ export default {
         socket.off('disconnect')
         socket.off('usecase_event', this.handleUsecaseEvent)
         socket.off('input_event', this.handleInputEvent) // THÊM
-
+        socket.off('version_event', this.handleVersionEvent)
         // Leave project room
         if (this.project._id) {
           socket.emit('leave_project', this.project._id)
         }
       }
+    },
+
+    handleVersionEvent(event) {
+      console.log('📩 Realtime version event received:', event)
+
+      // Bỏ qua events từ chính mình
+      if (event.userId === this.currentUserId) return
+
+      switch (event.type) {
+        case 'VERSION_BUMPED':
+          this.handleRemoteVersionCreated(event)
+          break
+        case 'VERSION_UPDATED':
+          this.handleRemoteVersionUpdated(event)
+          break
+        case 'VERSION_DELETED':
+          this.handleRemoteVersionDeleted(event)
+          break
+        case 'VERSION_SWITCHED':
+          this.handleSwitchedVersion(event)
+          break
+        case 'VERSION_CREATED':
+          this.handleRemoteVersionBumped(event)
+          break
+        default:
+          console.warn('Unknown version event type:', event.type)
+      }
+    },
+
+    handleRemoteVersionCreated(event) {
+      
+    },
+
+    async handleRemoteVersionBumped(event) {
+      const version = event.version
+      if (!version) return
+      this.toast.info(`New version created: ${version.version_number || version._id}`)
+      // Thêm version mới nếu chưa có
+      const exists = this.versions.find(v => v._id === version._id)
+      if (!exists) this.versions.push(version)
+
+      // Chọn version mới
+      this.selectedVersionId = version._id
+      this.currentVersionDetails = version
+      await this.fetchProjectData(this.project._id);
+      this.$forceUpdate()
+      // Fetch dữ liệu inputs đầy đủ từ BE
+      try {
+        const response = await getProjectDetail(this.project._id)
+      } catch (err) {
+        console.error('Failed to fetch version details:', err)
+      }
+    },
+
+    async handleSwitchedVersion(event){
+      const versionId = event.versionId || event.toVersionId;
+      if (!versionId) return;
+
+      // Tìm trong versions hiện tại
+      let version = this.versions.find(v => v._id === versionId);
+
+      // Nếu chưa có version, fetch lại project data
+      if (!version) {
+        version = this.versions.find(v => v._id === versionId);
+      }
+
+      if (!version) return;
+      await this.fetchProjectData(this.project._id);
+      this.selectedVersionId = version._id;
+      this.currentVersionDetails = version;
+
+      this.toast.info(`Switched to version: ${version.version_number || version._id}`);
+      this.$forceUpdate();
+    },
+
+    handleRemoteVersionUpdated(event) {
+      
     },
 
     handleInputEvent(event) {
@@ -735,11 +816,34 @@ export default {
     },
 
     // ========== VERSION MANAGEMENT ==========
-    handleVersionSelect(versionId) {
-      this.selectedVersionId = versionId
-      this.fetchProjectData(this.project._id)
-    },
+    // handleVersionSelect(versionId) {
+    //   this.selectedVersionId = versionId
+    //   this.fetchProjectData(this.project._id)
+    // },
+    async handleVersionSelect(versionId) {
+      try {
+        if (!versionId) {
+          this.toast.warning('Please select a valid version');
+          return;
+        }
 
+        const res = await switchCurrentVersion(this.project._id, versionId);
+
+        if (!res?.data) throw new Error('No response from server');
+        if (res.data.status !== 'Success') {
+          throw new Error(res.data.message || 'Failed to switch version');
+        }
+
+        this.selectedVersionId = versionId;
+
+        await this.fetchProjectData(this.project._id);
+        this.$forceUpdate();
+        this.toast.success('Switched to new working version');
+      } catch (error) {
+        console.warn('⚠️ Version switch failed:', error?.message || error);
+        this.toast.error('Failed to switch version');
+      }
+    },
     // ========== POLLING & PROGRESS MANAGEMENT ==========
     startPolling(versionId, mode = 'retry') {
       this.cleanupPolling()

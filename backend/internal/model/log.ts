@@ -40,6 +40,8 @@ const projectLogSchema = new Schema({
 
             "invite_member", "accept_invite", "reject_invite","cancel_invite", 
             "remove_member", "leave_project","change_member_role", // target_type member in project
+
+            "create_table","update_table","delete_table","create_column","update_column","delete_column","create_relation","update_relation","delete_relation"
         ],
         required: true
     },

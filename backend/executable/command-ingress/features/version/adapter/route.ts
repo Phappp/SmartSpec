@@ -32,11 +32,11 @@ export default function initVersionRoute(controller: VersionController) {
     (req: Request, res: Response, next: NextFunction) =>controller.getVersionsByProject(req as any, res, next));
 
   // 📘 Lấy chi tiết 1 version
-  router.get(
-    "/:versionId",
+  router.patch(
+    "/projects/:projectId/current-version/:versionId",
     requireAuthorizedUser,
-    (req: Request, res: Response, next: NextFunction) =>controller.getVersionDetail(req as any, res, next));
-
+    (req, res, next) => controller.setCurrentVersion(req as any, res, next)
+  );
   // ✅ Đánh dấu version ổn định (stable)
   router.post(
     "/mark-stable",
