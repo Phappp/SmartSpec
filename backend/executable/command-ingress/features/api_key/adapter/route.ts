@@ -10,37 +10,71 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
   //
   router
     .route("/search")
-    .get(requireAuthorizedUser, controller.searchAPIKeys.bind(controller));
+    .get(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.searchAPIKeys.bind(controller)
+    );
 
-    //
-  router.route("/filter")
-  .get(requireAuthorizedUser, controller.filterAPIKeys.bind(controller));
+  //
+  router
+    .route("/filter")
+    .get(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.filterAPIKeys.bind(controller)
+    );
 
-  router.route("/statistics")
-  .get(requireAuthorizedUser, requireRole("ADMIN"), controller.getAPIKeyStatistics.bind(controller));
-  
+  router
+    .route("/statistics")
+    .get(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.getAPIKeyStatistics.bind(controller)
+    );
+
   //
   router
     .route("")
-    .post(requireAuthorizedUser, controller.createAPIKey.bind(controller));
+    .post(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.createAPIKey.bind(controller)
+    );
 
   //
   router
     .route("")
-    .get(requireAuthorizedUser, controller.getAllAPIKey.bind(controller));
+    .get(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.getAllAPIKey.bind(controller)
+    );
   //
   router
     .route("/:id")
-    .get(requireAuthorizedUser, controller.getAPIKeyById.bind(controller));
+    .get(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.getAPIKeyById.bind(controller)
+    );
   //
   router
     .route("/:id")
-    .patch(requireAuthorizedUser, controller.updateAPIKey.bind(controller));
+    .patch(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.updateAPIKey.bind(controller)
+    );
 
   //
   router
     .route("/:id")
-    .delete(requireAuthorizedUser, controller.deleteAPIKey.bind(controller));
+    .delete(
+      requireAuthorizedUser,
+      requireRole("ADMIN"),
+      controller.deleteAPIKey.bind(controller)
+    );
   return router;
 };
 
