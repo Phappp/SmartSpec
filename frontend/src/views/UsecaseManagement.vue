@@ -328,9 +328,6 @@ export default {
       if (event.userId === this.currentUserId) return
 
       switch (event.type) {
-        case 'VERSION_BUMPED':
-          this.handleRemoteVersionCreated(event)
-          break
         case 'VERSION_UPDATED':
           this.handleRemoteVersionUpdated(event)
           break
@@ -348,39 +345,22 @@ export default {
       }
     },
 
-    handleRemoteVersionCreated(event) {
-      
-    },
-
     async handleRemoteVersionBumped(event) {
       const version = event.version
       if (!version) return
       this.toast.info(`New version created: ${version.version_number || version._id}`)
-      // Thêm version mới nếu chưa có
       const exists = this.versions.find(v => v._id === version._id)
       if (!exists) this.versions.push(version)
-
-      // Chọn version mới
       this.selectedVersionId = version._id
       this.currentVersionDetails = version
       await this.fetchProjectData(this.project._id);
       this.$forceUpdate()
-      // Fetch dữ liệu inputs đầy đủ từ BE
-      try {
-        const response = await getProjectDetail(this.project._id)
-      } catch (err) {
-        console.error('Failed to fetch version details:', err)
-      }
     },
 
     async handleSwitchedVersion(event){
       const versionId = event.versionId || event.toVersionId;
       if (!versionId) return;
-
-      // Tìm trong versions hiện tại
       let version = this.versions.find(v => v._id === versionId);
-
-      // Nếu chưa có version, fetch lại project data
       if (!version) {
         version = this.versions.find(v => v._id === versionId);
       }

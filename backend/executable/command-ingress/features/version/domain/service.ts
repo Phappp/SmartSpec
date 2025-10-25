@@ -93,7 +93,7 @@ export class VersionService {
       });
 
       // 🔔 Gửi realtime thông báo đến các client khác trong project
-      await versionSocketService.emitVersionCreated(
+      versionSocketService.emitVersionCreated(
         baseVersion.project_id.toString(),
         newVersion._id.toString(),
         userId,
@@ -133,7 +133,7 @@ export class VersionService {
       const user = await User.findById(userId).select("name email").lean();
 
       // 🔔 Gửi realtime đến các user khác đang ở cùng project
-      await versionSocketService.emitVersionSwitched(
+      versionSocketService.emitVersionSwitched(
         projectId.toString(),
         userId,
         versionId,
