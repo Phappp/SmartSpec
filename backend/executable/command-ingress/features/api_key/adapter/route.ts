@@ -7,7 +7,6 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
 ) => {
   const router = express.Router();
 
-  //
   router
     .route("/search")
     .get(
@@ -16,7 +15,6 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
       controller.searchAPIKeys.bind(controller)
     );
 
-  //
   router
     .route("/filter")
     .get(
@@ -33,7 +31,6 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
       controller.getAPIKeyStatistics.bind(controller)
     );
 
-  //
   router
     .route("")
     .post(
@@ -42,7 +39,6 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
       controller.createAPIKey.bind(controller)
     );
 
-  //
   router
     .route("")
     .get(
@@ -50,7 +46,7 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
       requireRole("ADMIN"),
       controller.getAllAPIKey.bind(controller)
     );
-  //
+
   router
     .route("/:id")
     .get(
@@ -58,7 +54,7 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
       requireRole("ADMIN"),
       controller.getAPIKeyById.bind(controller)
     );
-  //
+
   router
     .route("/:id")
     .patch(
@@ -67,7 +63,6 @@ const initApiKeyRoute: (controller: ApiKeyController) => express.Router = (
       controller.updateAPIKey.bind(controller)
     );
 
-  //
   router
     .route("/:id")
     .delete(

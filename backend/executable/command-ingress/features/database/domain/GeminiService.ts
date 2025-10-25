@@ -487,7 +487,7 @@ export class DatabaseGeminiService {
     async generateDatabaseSchema(requirements: any[], language: string): Promise<any> {
         try {
             if (requirements.length <= this.DB_GEN_BATCH_SIZE) {
-                // Nếu ít requirements, xử lý một lần
+                // Nếu ít requirements, xử lý một l ần
                 return await this.generateDatabaseSchemaBatch(requirements, language);
             } else {
                 // Nhiều requirements, chia thành các batch và merge
@@ -509,7 +509,7 @@ export class DatabaseGeminiService {
     /**
      * Generate schema cho một batch requirements
      */
-    private async generateDatabaseSchemaBatch(requirements: any[], language: string): Promise<any> {
+    private async   generateDatabaseSchemaBatch(requirements: any[], language: string): Promise<any> {
         const simplifiedRequirements = requirements.map(r => ({
             id: r.id,
             name: r.name,
