@@ -33,6 +33,7 @@ export class VersionService {
         version_major: major,
         version_minor: minor,
         created_by: userId,
+        parent_version_id: baseVersionId,
         requirement_model: JSON.parse(JSON.stringify(baseVersion.requirement_model || [])),
         pending_conflicts: JSON.parse(JSON.stringify(baseVersion.pending_conflicts || [])),
         processing_errors: JSON.parse(JSON.stringify(baseVersion.processing_errors || [])),
@@ -77,6 +78,7 @@ export class VersionService {
       });
 
       const user = await User.findById(userId).select("name email").lean();
+      const userName = user?.name || "System";
 
       await this.logService.createLog({
         project_id: baseVersion.project_id.toString(),
@@ -88,7 +90,7 @@ export class VersionService {
         affects_requirement: false,
         level: "info",
         details: {
-          message: `${user.name} created a ${changeType} version ${newVersion.version_number} from ${baseVersion.version_number}`,
+          message: `${userName} created a ${changeType} version ${newVersion.version_number} from ${baseVersion.version_number}`,
         },
       });
 

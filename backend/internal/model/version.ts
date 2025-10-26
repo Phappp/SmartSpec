@@ -44,6 +44,7 @@ const versionSchema = new Schema({
     created_by: { type: Schema.Types.ObjectId, ref: "users", required: true },
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now },
+    parent_version_id: { type: Schema.Types.ObjectId, ref: "versions", default: null },
     inputs: [{ type: Schema.Types.ObjectId, ref: "inputs" }],
     outputs: [{ type: Schema.Types.ObjectId, ref: "outputs" }],
     progress: { type: Number, default: 0 }, // %

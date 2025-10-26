@@ -1,12 +1,14 @@
 import { Request, Response } from 'express';
+import { HttpRequest } from "../../../types";
 import { OrchestratorService } from '../domain/service';
 import Project from "../../../../../internal/model/project";
 import Version from '../../../../../internal/model/version';
+import User from '../../../../../internal/model/user';
 
 export class OrchestratorController {
     constructor(private readonly service: OrchestratorService) { }
 
-    async run(req: Request, res: Response) {
+    async run(req: HttpRequest, res: Response) {
         const project_id = req.params.project_id || (req.query.project_id as string) || (req.body.project_id as string) || (req.headers['x-project-id'] as string);
         const version_id = req.params.version_id || (req.query.version_id as string) || (req.body.version_id as string) || (req.headers['x-version-id'] as string);
         const mode = (req.query.mode === 'incremental' ? 'incremental' : 'full') as 'full' | 'incremental';
@@ -37,7 +39,7 @@ export class OrchestratorController {
         if (!['full', 'incremental'].includes(mode)) {
             return res.status(400).json({ success: false, error: 'Mode phải là full hoặc incremental' });
         }
-
+        const userId = req.getSubject();
         try {
             // Không `await` ở đây để nó chạy nền và trả về response ngay lập tức
             this.service.run(project_id, version_id, {
@@ -45,7 +47,8 @@ export class OrchestratorController {
                 rawText,
                 mode
             },
-                language);
+                language,
+                userId);
 
             // Trả về response ngay lập tức để không bắt người dùng chờ
             return res.status(202).json({ success: true, message: 'Processing started. Check status for results.' });
@@ -54,7 +57,7 @@ export class OrchestratorController {
         }
     }
     // Hàm RETRY chuyên dụng
-    async retryProjectAnalysis(req: Request, res: Response) {
+    async retryProjectAnalysis(req: HttpRequest, res: Response) {
         try {
             const { project_id, version_id } = req.params;
 
@@ -68,6 +71,7 @@ export class OrchestratorController {
             }
 
             const language = project.language;
+            const userId = req.getSubject();
             await Version.findByIdAndUpdate(version_id, {
                 $set: {
                     status: "processing",
@@ -85,7 +89,8 @@ export class OrchestratorController {
                 project_id,
                 version_id,
                 { files: [], rawText: '', mode: 'full' }, // Luôn là 'full' và không có dữ liệu mới
-                language
+                language,
+                userId
             );
 
             return res.status(202).json({ success: true, message: 'Retry process started.' });

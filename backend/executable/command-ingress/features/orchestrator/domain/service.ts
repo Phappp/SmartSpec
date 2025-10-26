@@ -19,7 +19,8 @@ export class OrchestratorService {
         projectId: string,
         versionId: string,
         opts: { files: UploadedFile[]; rawText?: string; mode?: "full" | "incremental" },
-        language: string
+        language: string,
+        userId: string
     ) {
         // Hàm để tạo độ trễ ngẫu nhiên
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -36,7 +37,7 @@ export class OrchestratorService {
             console.log(`[SERVICE] Current version ${versiontmp.version_number} is completed → bumping new version...`);
             const bumpResult = await this.versionService.bumpVersion(
                 versionId,
-                versiontmp.created_by?.toString() || "system",
+                userId,
                 "minor"
             );
 
