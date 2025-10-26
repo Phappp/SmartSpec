@@ -1,55 +1,102 @@
 import { Schema, model, InferSchemaType } from "mongoose";
 
 const testcaseSchema = new Schema({
-    // --- Liên kết ---
-    project_id: { type: Schema.Types.ObjectId, ref: "projects", required: true },
-    version_id: { type: Schema.Types.ObjectId, ref: "versions", required: true },
-    database_id: { type: Schema.Types.ObjectId, ref: "databases" }, // database cha (tùy chọn)
-    table_refs: [{
-        table_name: { type: String, required: true },
-        column_names: [{ type: String }] // các cột liên quan
-    }],
-    source_requirement_ids: [{ type: String }], // mapping với requirement_model.id
+    // === LIÊN KẾT DỰ ÁN ===
+    project_id: {
+        type: Schema.Types.ObjectId,
+        ref: "projects",
+        required: true,
+        index: true
+    },
+    version_id: {
+        type: Schema.Types.ObjectId,
+        ref: "versions",
+        required: true,
+        index: true
+    },
 
-    // --- Thông tin chính ---
-    title: { type: String, required: true },
-    description: { type: String },
-    steps: [{ type: String, required: true }],
-    expected_result: { type: String },
-    actual_result: { type: String },
+    // === PHÂN LOẠI ===
+    test_type: {
+        type: String,
+        enum: ["unit", "integration", "api", "ui", "performance", "security"],
+        default: "integration",
+        index: true
+    },
+    source_requirement_ids: [{ type: String }],
+
+    // 🆕 LIÊN KẾT VỚI DATABASE SCHEMA
+    database_tables: [{
+        type: String,
+        trim: true,
+        index: true
+    }],
+    database_operations: [{
+        type: String,
+        enum: ["select", "insert", "update", "delete", "create", "alter"],
+        default: "select"
+    }],
+
+    // === THÔNG TIN CHÍNH ===
+    title: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    description: {
+        type: String,
+        trim: true
+    },
+    steps: [{
+        type: String,
+        required: true,
+        trim: true
+    }],
+    expected_result: {
+        type: String,
+        trim: true
+    },
+    actual_result: {
+        type: String,
+        trim: true
+    },
+
+    // === TRẠNG THÁI & ƯU TIÊN ===
     status: {
         type: String,
         enum: ["passed", "failed", "blocked", "not_executed", "in_progress"],
-        default: "not_executed"
+        default: "not_executed",
+        index: true
     },
     priority: {
         type: String,
         enum: ["low", "medium", "high", "critical"],
-        default: "medium"
+        default: "medium",
+        index: true
     },
 
-    // --- Test Data (Input/Output) ---
-    test_data: {
-        type: [{
-            name: { type: String }, // tên test data (tùy chọn)
-            inputs: { type: Schema.Types.Mixed, default: {} },   // dữ liệu đầu vào
-            expected_outputs: { type: Schema.Types.Mixed, default: {} }, // dữ liệu mong đợi
-            actual_outputs: { type: Schema.Types.Mixed, default: {} }, // dữ liệu thực tế
-        }],
-        default: []
-    },
+    // === TEST DATA ===
+    test_data: [{
+        name: { type: String },
+        inputs: { type: Schema.Types.Mixed, default: {} },
+        expected_outputs: { type: Schema.Types.Mixed, default: {} },
+        actual_outputs: { type: Schema.Types.Mixed, default: {} }
+    }],
 
-    // --- Exception & Error Handling ---
+    // === XỬ LÝ LỖI ===
     exceptions: [{
         message: { type: String },
-        type: { type: String, enum: ["validation", "runtime", "assertion", "system", "other"], default: "other" },
-        occurred_at_step: { type: Number }, // chỉ ra lỗi ở bước nào
+        type: {
+            type: String,
+            enum: ["validation", "runtime", "assertion", "system", "other"],
+            default: "other"
+        },
+        occurred_at_step: { type: Number },
         resolved: { type: Boolean, default: false },
         resolved_by: { type: Schema.Types.ObjectId, ref: "users" },
         resolved_at: { type: Date }
     }],
 
-    // --- Thông tin chạy test ---
+    // === THÔNG TIN THỰC THI ===
     environment: {
         os: String,
         browser: String,
@@ -57,11 +104,17 @@ const testcaseSchema = new Schema({
         url: String,
         device: String
     },
-    executed_by: { type: Schema.Types.ObjectId, ref: "users" },
-    executed_at: { type: Date },
+    executed_by: {
+        type: Schema.Types.ObjectId,
+        ref: "users"
+    },
+    executed_at: {
+        type: Date,
+        index: true
+    },
     execution_logs: [{ type: String }],
 
-    // --- Tự động hóa ---
+    // === TỰ ĐỘNG HÓA ===
     automation: {
         is_automated: { type: Boolean, default: false },
         script_path: { type: String },
@@ -69,11 +122,27 @@ const testcaseSchema = new Schema({
         last_run_duration: { type: Number }
     },
 
-    // --- Tracking ---
-    created_by: { type: Schema.Types.ObjectId, ref: "users" },
-    updated_by: { type: Schema.Types.ObjectId, ref: "users" },
+    // === TRACKING ===
+    created_by: {
+        type: Schema.Types.ObjectId,
+        ref: "users"
+    },
+    updated_by: {
+        type: Schema.Types.ObjectId,
+        ref: "users"
+    }
 
-}, { timestamps: true });
+}, {
+    timestamps: true
+});
+
+// === INDEXES FOR PERFORMANCE ===
+testcaseSchema.index({ project_id: 1, status: 1 });
+testcaseSchema.index({ project_id: 1, test_type: 1 });
+testcaseSchema.index({ project_id: 1, priority: 1 });
+testcaseSchema.index({ project_id: 1, database_tables: 1 });
+testcaseSchema.index({ database_tables: 1 });
+testcaseSchema.index({ database_operations: 1 });
 
 type TestcaseSchemaInferType = InferSchemaType<typeof testcaseSchema>;
 export default model<TestcaseSchemaInferType>("testcases", testcaseSchema);

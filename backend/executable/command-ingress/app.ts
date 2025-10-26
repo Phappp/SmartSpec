@@ -79,6 +79,10 @@ import { LogController } from "../command-ingress/features/log/adapter/controlle
 import initDatabaseRoute from './features/database/adapter/route';
 import { InputService } from "./features/orchestrator/domain/InputService";
 
+import initTestcaseRoute from './features/testcase/adapter/route';
+import { TestcaseController } from './features/testcase/adapter/controller';
+import { TestcaseService } from './features/testcase/domain/service';
+
 // import initOcrRoute from "./features/handle_image/adapter/route";
 // import { OcrController } from "./features/handle_image/adapter/controller";
 // import { OcrService } from "./features/handle_image/domain/service";
@@ -189,6 +193,8 @@ const createHttpServer = (redisClient: any) => {
   const usecaseService = new UsecaseService();
   const usecaseController = new UsecaseController(usecaseService);
 
+  const testcaseService = new TestcaseService();
+  const testcaseController = new TestcaseController();
   // Setup route
 
   app.use('/api/auth', initAuthRoute(new AuthController(authService)));
@@ -197,6 +203,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/input', initInputHandleRoute(inputHandleController));
   app.use('/api/usecaseManagement', initUsecaseRoute(usecaseController));
   app.use('/api/databases', initDatabaseRoute())
+  app.use('/api/testcases', initTestcaseRoute()); 
   app.use(
     "/api/keys",
     initApiKeyRoute(new ApiKeyController(new ApiKeyServiceImpl()))
