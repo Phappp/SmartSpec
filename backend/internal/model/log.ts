@@ -63,7 +63,7 @@ const projectLogSchema = new Schema({
         required: true
     },
     version_number: {
-        type: Number,
+        type: String,
         default: null
     },
     affects_requirement: {

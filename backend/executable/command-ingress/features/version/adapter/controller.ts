@@ -158,4 +158,26 @@ export class VersionController extends BaseController {
       handleServiceResponse(result, res);
     });
   };
+    /**
+   * 🗑️ Xóa version và các version con của nó
+   */
+  public deleteVersion = async (req: HttpRequest, res: Response, next: NextFunction) => {
+    await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
+      const userId = req.getSubject();
+      const { versionId } = req.params;
+
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401),res);
+        return;
+      }
+
+      if (!versionId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing versionId", null, 400),res);
+        return;
+      }
+
+      const result = await this.service.deleteVersion(versionId, userId);
+      handleServiceResponse(result, res);
+    });
+  };
 } 

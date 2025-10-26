@@ -27,31 +27,6 @@ export class OrchestratorService {
 
         // Độ trễ ngẫu nhiên từ 2000ms (2 giây) đến 3000ms (3 giây)
         const randomDelay = Math.floor(Math.random() * (3000 - 2000 + 1)) + 2000;
-        let versiontmp = await Version.findById(versionId).lean();
-        if (!versiontmp) throw new Error("Version not found");
-
-        console.log(`[SERVICE] Clearing previous errors for version ${versionId} before running...`);
-
-        // 🧠 CHỈ bump version nếu version hiện tại ĐÃ HOÀN TẤT
-        if (versiontmp.stage === "completed") {
-            console.log(`[SERVICE] Current version ${versiontmp.version_number} is completed → bumping new version...`);
-            const bumpResult = await this.versionService.bumpVersion(
-                versionId,
-                userId,
-                "minor"
-            );
-
-            if (!bumpResult.data) {
-                throw new Error("Failed to bump version: " + bumpResult.message);
-            }
-
-            const newVersion = bumpResult.data;
-            versionId = newVersion._id.toString();
-
-            console.log(`[SERVICE] ✅ Bumped new version: ${newVersion.version_number}`);
-        } else {
-            console.log(`⏩ Skip bump version — current version (${versiontmp.version_number}) not completed.`);
-        }
 
         await Version.findByIdAndUpdate(versionId, {
             $set: {
@@ -164,7 +139,11 @@ export class OrchestratorService {
         await Version.findByIdAndUpdate(versionId, {
             $set: { stage: "completed", progress: 100 }
         });
-
+        const bumpResult = await this.versionService.bumpVersion(
+            versionId,
+            userId,
+            "minor"
+        );
         return result;
     }
 

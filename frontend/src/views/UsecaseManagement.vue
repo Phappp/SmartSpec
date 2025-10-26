@@ -374,6 +374,33 @@ export default {
       this.$forceUpdate();
     },
 
+    async handleRemoteVersionDeleted(event) {
+      const deletedId = event.versionId
+      if (!deletedId) return
+
+      // Xóa khỏi danh sách version
+      this.versions = this.versions.filter(v => v._id !== deletedId)
+
+      // Nếu version hiện tại bị xóa
+      if (this.selectedVersionId === deletedId) {
+        // Chọn version đầu tiên còn lại (nếu có)
+        if (this.versions.length > 0) {
+          this.selectedVersionId = this.versions[0]._id
+          await this.fetchProjectData(this.project._id)
+          this.toast.info(`Current version was deleted. Switched to latest version.`)
+        } else {
+          // Không còn version nào
+          this.selectedVersionId = null
+          this.useCases = []
+          this.inputs = []
+          this.toast.info(`All versions deleted by team.`)
+        }
+      } else {
+        this.toast.info(`A version was deleted by team.`)
+      }
+
+      this.$forceUpdate()
+    },
     handleRemoteVersionUpdated(event) {
       
     },
