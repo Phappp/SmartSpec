@@ -73,8 +73,12 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     return savedDocument.toObject({ getters: true }) as UseCaseDiagramResponse;
   }
 
-  public async getUsecaseDiagrams(versionId: string): Promise<UseCaseDiagramResponse[]> {
-    const ucds = await UsecaseDiagramSchema.find({ version_id: versionId }).lean();
+  public async getUsecaseDiagrams(
+    versionId: string
+  ): Promise<UseCaseDiagramResponse[]> {
+    const ucds = await UsecaseDiagramSchema.find({
+      version_id: versionId,
+    }).lean();
     return ucds.map((ucd: any) => ({
       id: ucd._id?.toString(),
       name: ucd.name,
@@ -91,9 +95,25 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
   }
 
   public async getUsecaseDiagramsById(
-    ucId: string,
+    ucId: string
   ): Promise<UseCaseDiagramResponse> {
-    throw new Error("Method not implemented.");
+    const ucd: any = await UsecaseDiagramSchema.findOne({ _id: ucId }).lean();
+    if (!ucd) {
+      throw new Error("Usecase Diagram not found");
+    }
+    return {
+      id: ucd._id?.toString(),
+      name: ucd.name,
+      description: ucd.description,
+      actors: ucd.actors,
+      usecases: ucd.usecases,
+      associations: ucd.associations,
+      relationships: ucd.relationships,
+      diagram_svg: ucd.diagram_svg,
+      related_requirements: ucd.related_requirements,
+      linked_testcases: ucd.linked_testcases,
+      created_by: ucd.created_by,
+    };
   }
   public async editActorById(
     ucId: string,
@@ -103,10 +123,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     throw new Error("Method not implemented.");
   }
 
-  public async deleteActorById(
-    ucId: string,
-    actorId: string
-  ): Promise<void> {
+  public async deleteActorById(ucId: string, actorId: string): Promise<void> {
     throw new Error("Method not implemented.");
   }
   public async editUsecaseById(

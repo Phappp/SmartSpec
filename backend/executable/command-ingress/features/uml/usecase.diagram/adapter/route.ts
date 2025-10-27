@@ -16,10 +16,12 @@ const initUsecaseDiagramRoute: (
       controller.generateUsecaseDiagram.bind(controller)
     );
 
+  //done
   router
     .route("/versions/:versionId/")
     .get(requireAuthorizedUser, controller.getUsecaseDiagrams.bind(controller));
-
+  
+  //progressing
   router
     .route("/:ucId")
     .get(
