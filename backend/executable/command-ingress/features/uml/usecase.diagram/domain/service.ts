@@ -72,4 +72,77 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
 
     return savedDocument.toObject({ getters: true }) as UseCaseDiagramResponse;
   }
+
+  public async getUsecaseDiagrams(): Promise<UseCaseDiagramResponse[]> {
+    throw new Error("Method not implemented.");
+  }
+
+  public async getUsecaseDiagramsById(
+    ucId: string,
+    versionId: string
+  ): Promise<UseCaseDiagramResponse> {
+    throw new Error("Method not implemented.");
+  }
+  public async editActorById(
+    ucId: string,
+    versionId: string,
+    actorId: string,
+    data: any
+  ): Promise<UseCaseDiagramResponse> {
+    throw new Error("Method not implemented.");
+  }
+
+  public async deleteActorById(
+    ucId: string,
+    versionId: string,
+    actorId: string
+  ): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+  public async editUsecaseById(
+    ucId: string,
+    versionId: string,
+    usecaseId: string,
+    data: any
+  ): Promise<UseCaseDiagramResponse> {
+    throw new Error("Method not implemented.");
+  }
+
+  public async deleteUsecaseById(
+    ucId: string,
+    versionId: string,
+    usecaseId: string
+  ): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+  public async editRelationshipById(
+    ucId: string,
+    versionId: string,
+    relationshipId: string,
+    data: any
+  ): Promise<UseCaseDiagramResponse> {
+    throw new Error("Method not implemented.");
+  }
+  public async deleteRelationshipById(
+    ucId: string,
+    versionId: string,
+    relationshipId: string
+  ): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+  public async editAssociationById(
+    ucId: string,
+    versionId: string,
+    associationId: string,
+    data: any
+  ): Promise<UseCaseDiagramResponse> {
+    throw new Error("Method not implemented.");
+  }
+  public async deleteAssociationById(
+    ucId: string,
+    versionId: string,
+    associationId: string
+  ): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
 }

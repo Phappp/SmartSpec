@@ -7,7 +7,7 @@ const actorSchema = new Schema(
     name: { type: String, required: true, trim: true },
     description: String,
   },
-  { _id: false }
+  { _id: true }
 );
 
 // Chỉ lưu thông tin Usecase
@@ -17,7 +17,7 @@ const usecaseItemSchema = new Schema(
     description: String,
     // ĐÃ LOẠI BỎ 'relationships' khỏi đây để tránh nhầm lẫn
   },
-  { _id: false }
+  { _id: true }
 );
 
 // SỬA LẠI: Chỉ lưu quan hệ Actor -> Usecase (type 'association')
@@ -26,7 +26,7 @@ const associationSchema = new Schema(
     actor_name: { type: String, required: true },
     usecase_title: { type: String, required: true },
   },
-  { _id: false }
+  { _id: true }
 );
 
 // MỚI: Dùng để lưu các quan hệ Usecase <-> Usecase hoặc Actor <-> Actor
@@ -40,7 +40,7 @@ const relationshipSchema = new Schema(
       required: true,
     },
   },
-  { _id: false }
+  { _id: true }
 );
 
 // Schema chính đã được cập nhật
@@ -51,6 +51,12 @@ const usecaseDiagramSchema = new Schema(
       ref: "projects",
       required: true,
     },
+    version_id: {
+      type: Schema.Types.ObjectId,
+      ref: "versions",
+      required: true,
+    },
+
     name: { type: String, required: true },
     description: String,
 

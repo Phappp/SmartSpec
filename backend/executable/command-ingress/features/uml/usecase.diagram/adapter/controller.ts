@@ -54,13 +54,13 @@ export class UsecaseDiagramController extends BaseController {
           versionId: version._id.toString(),
           projectId: version.project_id.toString(),
           requirements: version.requirement_model,
-          lang: lang
+          lang: lang,
         };
 
         const newDatabase =
           await this.usecaseDiagramService.generateSchemaFromRequirements(
             payload,
-            userId, 
+            userId
           );
 
         res.status(StatusCodes.OK).json({
@@ -68,6 +68,159 @@ export class UsecaseDiagramController extends BaseController {
           message: "Created Usecase diagram Successfully",
           data: newDatabase,
         });
+      }
+    );
+  }
+
+  async getUsecaseDiagrams(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        throw new Error("Method not implemented.");
+      }
+    );
+  }
+
+  async getUsecaseDiagramsById(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        throw new Error("Method not implemented.");
+      }
+    );
+  }
+
+  //actor
+  async editActorById(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        throw new Error("Method not implemented.");
+      }
+    );
+  }
+
+  async deleteActorById(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        throw new Error("Method not implemented.");
+      }
+    );
+  }
+
+  //usecase
+  async editUsecaseById(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        throw new Error("Method not implemented.");
+      }
+    );
+  }
+  async deleteUsecaseById(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        throw new Error("Method not implemented.");
+      }
+    );
+  }
+
+  //association
+  async editAssociationById(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        throw new Error("Method not implemented.");
+      }
+    );
+  }
+
+  async deleteAssociationById(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        throw new Error("Method not implemented.");
+      }
+    );
+  }
+
+  //relationship
+  async editRelationshipById(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        throw new Error("Method not implemented.");
+      }
+    );
+  }
+
+  async deleteRelationshipById(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        throw new Error("Method not implemented.");
       }
     );
   }
