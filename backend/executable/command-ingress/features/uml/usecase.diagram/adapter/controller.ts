@@ -82,7 +82,19 @@ export class UsecaseDiagramController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const versionId = req.params.versionId;
+        if (!versionId) {
+          res.status(400).json({ message: "VersionId is required." });
+          return;
+        }
+        const responseData =
+          await this.usecaseDiagramService.getUsecaseDiagrams(versionId);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Get all Usecase diagram Successfully",
+          data: responseData,
+        });
       }
     );
   }

@@ -73,19 +73,30 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     return savedDocument.toObject({ getters: true }) as UseCaseDiagramResponse;
   }
 
-  public async getUsecaseDiagrams(): Promise<UseCaseDiagramResponse[]> {
-    throw new Error("Method not implemented.");
+  public async getUsecaseDiagrams(versionId: string): Promise<UseCaseDiagramResponse[]> {
+    const ucds = await UsecaseDiagramSchema.find({ version_id: versionId }).lean();
+    return ucds.map((ucd: any) => ({
+      id: ucd._id?.toString(),
+      name: ucd.name,
+      description: ucd.description,
+      actors: ucd.actors,
+      usecases: ucd.usecases,
+      associations: ucd.associations,
+      relationships: ucd.relationships,
+      diagram_svg: ucd.diagram_svg,
+      related_requirements: ucd.related_requirements,
+      linked_testcases: ucd.linked_testcases,
+      created_by: ucd.created_by,
+    }));
   }
 
   public async getUsecaseDiagramsById(
     ucId: string,
-    versionId: string
   ): Promise<UseCaseDiagramResponse> {
     throw new Error("Method not implemented.");
   }
   public async editActorById(
     ucId: string,
-    versionId: string,
     actorId: string,
     data: any
   ): Promise<UseCaseDiagramResponse> {
@@ -94,14 +105,12 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
 
   public async deleteActorById(
     ucId: string,
-    versionId: string,
     actorId: string
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }
   public async editUsecaseById(
     ucId: string,
-    versionId: string,
     usecaseId: string,
     data: any
   ): Promise<UseCaseDiagramResponse> {
@@ -110,14 +119,12 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
 
   public async deleteUsecaseById(
     ucId: string,
-    versionId: string,
     usecaseId: string
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }
   public async editRelationshipById(
     ucId: string,
-    versionId: string,
     relationshipId: string,
     data: any
   ): Promise<UseCaseDiagramResponse> {
@@ -125,14 +132,12 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
   }
   public async deleteRelationshipById(
     ucId: string,
-    versionId: string,
     relationshipId: string
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }
   public async editAssociationById(
     ucId: string,
-    versionId: string,
     associationId: string,
     data: any
   ): Promise<UseCaseDiagramResponse> {
@@ -140,7 +145,6 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
   }
   public async deleteAssociationById(
     ucId: string,
-    versionId: string,
     associationId: string
   ): Promise<void> {
     throw new Error("Method not implemented.");

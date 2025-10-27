@@ -8,6 +8,7 @@ const initUsecaseDiagramRoute: (
 ) => express.Router = (controller) => {
   const router = express.Router();
 
+  //UCD
   router
     .route("/versions/:versionId/generate-usecase-diagram")
     .post(
@@ -16,11 +17,11 @@ const initUsecaseDiagramRoute: (
     );
 
   router
-    .route("versions/:versionId/")
+    .route("/versions/:versionId/")
     .get(requireAuthorizedUser, controller.getUsecaseDiagrams.bind(controller));
 
   router
-    .route("/:ucId/versions/:versionId/")
+    .route("/:ucId")
     .get(
       requireAuthorizedUser,
       controller.getUsecaseDiagramsById.bind(controller)
@@ -28,18 +29,18 @@ const initUsecaseDiagramRoute: (
 
   //actor
   router
-    .route("/:ucId/versions/:versionId/actors/:actorId")
+    .route("/:ucId/actors/:actorId")
     .patch(requireAuthorizedUser, controller.editActorById.bind(controller));
   router
-    .route("/:ucId/versions/:versionId/actors/:actorId")
+    .route("/:ucId/actors/:actorId")
     .delete(requireAuthorizedUser, controller.deleteActorById.bind(controller));
 
   //usecase
   router
-    .route("/:ucId/versions/:versionId/usecase/:usecaseId")
+    .route("/:ucId/usecase/:usecaseId")
     .patch(requireAuthorizedUser, controller.editUsecaseById.bind(controller));
   router
-    .route("/:ucId/versions/:versionId/usecase/:usecaseId")
+    .route("/:ucId/usecase/:usecaseId")
     .delete(
       requireAuthorizedUser,
       controller.deleteUsecaseById.bind(controller)
@@ -47,13 +48,13 @@ const initUsecaseDiagramRoute: (
 
   //relationship
   router
-    .route("/:ucId/versions/:versionId/relationships/:relationshipId")
+    .route("/:ucId/relationships/:relationshipId")
     .patch(
       requireAuthorizedUser,
       controller.editRelationshipById.bind(controller)
     );
   router
-    .route("/:ucId/versions/:versionId/relationships/:relationshipId")
+    .route("/:ucId/relationships/:relationshipId")
     .delete(
       requireAuthorizedUser,
       controller.deleteRelationshipById.bind(controller)
@@ -61,13 +62,13 @@ const initUsecaseDiagramRoute: (
 
   //association
   router
-    .route("/:ucId/versions/:versionId/associations/:associationId")
+    .route("/:ucId/associations/:associationId")
     .patch(
       requireAuthorizedUser,
       controller.editAssociationById.bind(controller)
     );
   router
-    .route("/:ucId/versions/:versionId/associations/:associationId")
+    .route("/:ucId/associations/:associationId")
     .patch(
       requireAuthorizedUser,
       controller.deleteAssociationById.bind(controller)
