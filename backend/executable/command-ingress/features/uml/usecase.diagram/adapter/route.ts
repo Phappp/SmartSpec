@@ -52,6 +52,7 @@ const initUsecaseDiagramRoute: (
     );
 
   //relationship
+  //progressing
   router
     .route("/:ucId/relationships/:relationshipId")
     .patch(

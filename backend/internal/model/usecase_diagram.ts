@@ -1,7 +1,5 @@
-// models/usecaseDiagram.model.ts
 import { Schema, model, InferSchemaType } from "mongoose";
 
-// Chỉ lưu thông tin Actor
 const actorSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -10,40 +8,35 @@ const actorSchema = new Schema(
   { _id: true }
 );
 
-// Chỉ lưu thông tin Usecase
 const usecaseItemSchema = new Schema(
   {
     title: { type: String, required: true, trim: true },
     description: String,
-    // ĐÃ LOẠI BỎ 'relationships' khỏi đây để tránh nhầm lẫn
   },
   { _id: true }
 );
 
-// SỬA LẠI: Chỉ lưu quan hệ Actor -> Usecase (type 'association')
 const associationSchema = new Schema(
   {
-    actor_name: { type: String, required: true },
-    usecase_title: { type: String, required: true },
+    actor_id: { type: Schema.Types.ObjectId, required: true },
+    usecase_id: { type: Schema.Types.ObjectId, required: true },
   },
   { _id: true }
 );
 
-// MỚI: Dùng để lưu các quan hệ Usecase <-> Usecase hoặc Actor <-> Actor
 const relationshipSchema = new Schema(
   {
-    source: { type: String, required: true }, // Có thể là actor 'name' hoặc usecase 'title'
-    target: { type: String, required: true }, // Tương tự, là 'name' hoặc 'title'
+    source: { type: Schema.Types.ObjectId, required: true },
+    target: { type: Schema.Types.ObjectId, required: true },
     type: {
       type: String,
-      enum: ["include", "extend", "generalization"], // 'generalization' cho kế thừa
+      enum: ["include", "extend", "generalization"],
       required: true,
     },
   },
   { _id: true }
 );
 
-// Schema chính đã được cập nhật
 const usecaseDiagramSchema = new Schema(
   {
     project_id: {
@@ -60,18 +53,18 @@ const usecaseDiagramSchema = new Schema(
     name: { type: String, required: true },
     description: String,
 
-    actors: [actorSchema], // Danh sách các actor
-    usecases: [usecaseItemSchema], // Danh sách các use case
+    actors: [actorSchema],
+    usecases: [usecaseItemSchema],
 
-    associations: [associationSchema], // Quan hệ Actor -> Usecase
-    relationships: [relationshipSchema], // Quan hệ Usecase <-> Usecase, Actor <-> Actor
+    associations: [associationSchema],
+    relationships: [relationshipSchema],
 
     diagram_svg: String,
     related_requirements: [String],
     linked_testcases: [{ type: Schema.Types.ObjectId, ref: "testcases" }],
     created_by: { type: Schema.Types.ObjectId, ref: "users" },
   },
-  { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } } // Đổi lại cho nhất quán
+  { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } }
 );
 
 type UsecaseDiagramInferType = InferSchemaType<typeof usecaseDiagramSchema>;

@@ -1,9 +1,6 @@
-// UsecaseDiagramGeminiService.ts
 import { ApiKeyService } from "../../../orchestrator/domain/ApiKeyService";
-// Giả định ApiKeyService được import từ đúng đường dẫn
-// import { ApiKeyService } from "../../orchestrator/domain/ApiKeyService";
+import { ObjectId } from "mongodb"; // <-- THÊM MỚI: Cần thiết để tạo ID
 
-// PROMPTS MỚI - YÊU CẦU TRẢ VỀ ĐÚNG FORMAT MONGO SCHEMA
 type PromptEntry = {
   diagramDesign: (requirementsJson: string) => string;
 };
@@ -58,13 +55,21 @@ ${requirementsJson}
 4.  **usecases**: Liệt kê TẤT CẢ các chức năng (goal) duy nhất. 'title' phải là duy nhất.
 5.  **associations**: Chỉ tạo các liên kết giữa 'actor' và 'usecase'. Giá trị 'actor_name' và 'usecase_title' phải khớp 100% với 'name' và 'title' đã định nghĩa ở trên.
 6.  **relationships**: Chỉ tạo các liên kết 'include', 'extend', hoặc 'generalization'. 'source' và 'target' phải khớp 100% với 'name' (của actor) hoặc 'title' (của usecase).
-
+7. TỰ SUY LUẬN QUAN HỆ (QUAN TRỌNG NHẤT): Bạn BẮT BUỘC phải phân tích logic nghiệp vụ của các use case đã liệt kê để điền vào mảng relationships.
+  - Sử dụng "include" khi một use case bắt buộc phải chứa (gọi) một use case khác.
+    +Ví dụ: "Tiến hành thanh toán" phải include "Nhập thông tin giao hàng".
+    +Ví dụ: "Tiến hành thanh toán" phải include "Chọn phương thức thanh toán".
+  - Sử dụng "extend" khi một use case là một phần mở rộng tùy chọn của use case khác.
+    +Ví dụ: "Xem danh sách sản phẩm" có thể được extend bởi "Lọc sản phẩm".
+    +Ví dụ: "Xem danh sách sản phẩm" có thể được extend bởi "Tìm kiếm sản phẩm".
+  Phân tích kỹ toàn bộ danh sách để tìm tất cả các mối quan hệ include và extend hợp lý.
 Hãy phân tích kỹ và trả về ĐÚNG đối tượng JSON này.
 `,
   },
   "en-US": {
-    diagramDesign: (requirementsJson: string) => `
-YOU ARE A SENIOR BUSINESS ANALYST AND SYSTEM ARCHITECT.
+    diagramDesign: (
+      requirementsJson: string
+    ) => `YOU ARE A SENIOR BUSINESS ANALYST AND SYSTEM ARCHITECT.
 
 Your task is to analyze the following list of use cases and generate a SINGLE JSON object.
 
@@ -111,9 +116,15 @@ The JSON object MUST strictly follow this Mongoose Schema structure:
 4.  **usecases**: List ALL unique functions (goals). 'title' must be unique.
 5.  **associations**: Only create links between 'actor' and 'usecase'. 'actor_name' and 'usecase_title' must 100% match the 'name' and 'title' defined above.
 6.  **relationships**: Only create 'include', 'extend', or 'generalization' links. 'source' and 'target' must 100% match an actor 'name' or usecase 'title'.
-
-Analyze carefully and return ONLY this JSON object.
-`,
+7. RELATIONSHIP REASONING (MOST IMPORTANT): You MUST analyze the business logic of the listed use cases to fill in the relationships array.
+  - Use "include" when a use case must contain (call) another use case.
+    +For example: "Proceed to checkout" must include "Enter shipping information".
+    +For example: "Proceed to checkout" must include "Select payment method".
+  - Use "extend" when a use case is an optional extension of another use case.
+    +For example: "View product list" can be extended by "Filter products".
+    +For example: "View product list" can be extended by "Search products".
+  Examine the entire list to find all the logical include and extend relationships.
+Analyze carefully and return ONLY this JSON object.`,
   },
 };
 
@@ -128,13 +139,12 @@ export class UsecaseDiagramGeminiService {
     language: string
   ): Promise<any> {
     try {
-      // Đơn giản hóa requirements để gửi cho Gemini
       const simplifiedRequirements = requirements.map((r) => ({
         id: r.id,
         name: r.name,
-        role: r.role, // Quan trọng để xác định actors
-        goal: r.goal, // Quan trọng để xác định usecases
-        tasks: r.tasks, // Giúp xác định 'include'
+        role: r.role,
+        goal: r.goal,
+        tasks: r.tasks,
       }));
 
       const requirementsJson = JSON.stringify(simplifiedRequirements, null, 2);
@@ -147,7 +157,7 @@ export class UsecaseDiagramGeminiService {
         `📊 Generating use case diagram for ${requirements.length} use cases`
       );
 
-      // 1. Gọi Gemini và lấy chuỗi JSON đã được làm sạch
+      // 1. Gọi Gemini và lấy chuỗi JSON (dùng TÊN string)
       const generatedJsonString = await this.generateJsonContent(prompt);
 
       if (!generatedJsonString) {
@@ -156,19 +166,27 @@ export class UsecaseDiagramGeminiService {
 
       console.log(`📄 Raw response length: ${generatedJsonString.length}`);
 
-      // 2. Parse và validate cấu trúc JSON mới (theo format Mongoose)
-      const diagramJson = this.validateAndParseDiagramJson(generatedJsonString);
+      // 2. Parse và validate cấu trúc JSON (vẫn dùng TÊN string)
+      // <-- THAY ĐỔI: Đổi tên biến để rõ nghĩa
+      const diagramJsonWithStringNames =
+        this.validateAndParseDiagramJson(generatedJsonString);
+
+      // 3. Dịch TÊN (string) sang ID (ObjectId)
+      console.log("🔄 Translating string names to ObjectIds...");
+      const finalDiagramJsonWithIds = this.translateNamesToIds(
+        diagramJsonWithStringNames
+      );
 
       console.log(
-        `🎉 Final diagram JSON: ${diagramJson.actors.length} actors, ${diagramJson.usecases.length} usecases`
+        `🎉 Final diagram JSON: ${finalDiagramJsonWithIds.actors.length} actors, ${finalDiagramJsonWithIds.usecases.length} usecases`
       );
-      return diagramJson;
+      return finalDiagramJsonWithIds;
     } catch (error) {
       console.error("❌ Error in generateUsecaseDiagram:", error);
 
-      // Fallback: Trả về cấu trúc rỗng khớp với schema
       return {
         name: "Generation Failed",
+        description: `Error: ${error.message || "Unknown error"}`,
         actors: [],
         usecases: [],
         associations: [],
@@ -177,11 +195,101 @@ export class UsecaseDiagramGeminiService {
     }
   }
 
+  // <-- THÊM MỚI: Hàm dịch tên (string) sang ID (ObjectId)
+  /**
+   * Dịch JSON từ LLM (dùng tên) sang JSON chuẩn hóa (dùng ID)
+   * để lưu vào DB, đảm bảo toàn vẹn tham chiếu.
+   */
+  private translateNamesToIds(diagramJson: any): any {
+    const actorNameMap = new Map<string, ObjectId>();
+    const usecaseTitleMap = new Map<string, ObjectId>();
+
+    // Bước 1: Tạo ID và Map cho Actors
+    const actorsWithIds = diagramJson.actors.map((actor: any) => {
+      const newId = new ObjectId(); // Tạo ID thật
+      actorNameMap.set(actor.name, newId);
+      return {
+        ...actor,
+        _id: newId, // Gán ID vào object
+      };
+    });
+
+    // Bước 2: Tạo ID và Map cho Usecases
+    const usecasesWithIds = diagramJson.usecases.map((usecase: any) => {
+      const newId = new ObjectId(); // Tạo ID thật
+      usecaseTitleMap.set(usecase.title, newId);
+      return {
+        ...usecase,
+        _id: newId, // Gán ID vào object
+      };
+    });
+
+    // Bước 3: Dịch mảng `associations` (dùng tên sang ID)
+    const newAssociations = (diagramJson.associations || [])
+      .map((assoc: any) => {
+        const actorId = actorNameMap.get(assoc.actor_name);
+        const usecaseId = usecaseTitleMap.get(assoc.usecase_title);
+
+        // Chỉ thêm nếu cả hai đều hợp lệ
+        if (actorId && usecaseId) {
+          return {
+            _id: new ObjectId(),
+            actor_id: actorId, // Dùng ID
+            usecase_id: usecaseId, // Dùng ID
+          };
+        }
+        console.warn(
+          `[DATA_WARN] Bỏ qua association bị lỗi (không tìm thấy tên): ${assoc.actor_name} -> ${assoc.usecase_title}`
+        );
+        return null;
+      })
+      .filter((a: any) => a !== null); // Lọc bỏ các giá trị null (bị lỗi)
+
+    // Bước 4: Dịch mảng `relationships` (dùng tên sang ID)
+    const newRelationships = (diagramJson.relationships || [])
+      .map((rel: any) => {
+        // Source và Target có thể là Actor hoặc Usecase
+        // Ưu tiên tìm trong Actor Map trước, sau đó đến Usecase Map
+        const sourceId =
+          actorNameMap.get(rel.source) || usecaseTitleMap.get(rel.source);
+        const targetId =
+          actorNameMap.get(rel.target) || usecaseTitleMap.get(rel.target);
+
+        if (sourceId && targetId) {
+          return {
+            _id: new ObjectId(),
+            source: sourceId, // Dùng ID
+            target: targetId, // Dùng ID
+            type: rel.type,
+          };
+        }
+        console.warn(
+          `[DATA_WARN] Bỏ qua relationship bị lỗi (không tìm thấy tên): ${rel.source} -> ${rel.target}`
+        );
+        return null;
+      })
+      .filter((r: any) => r !== null);
+
+    // Bước 5: Trả về đối tượng JSON hoàn chỉnh, đã được chuẩn hóa
+    return {
+      name: diagramJson.name,
+      description: diagramJson.description,
+      actors: actorsWithIds,
+      usecases: usecasesWithIds,
+      associations: newAssociations,
+      relationships: newRelationships,
+      // Đảm bảo trả về các trường khác nếu có
+      ...(diagramJson.diagram_svg && {
+        diagram_svg: diagramJson.diagram_svg,
+      }),
+    };
+  }
+
   /**
    * CẬP NHẬT: Parse và validate JSON theo Mongoose Schema
+   * (Hàm này giữ nguyên, vì nó validate JSON thô từ LLM)
    */
   private validateAndParseDiagramJson(jsonStr: string): any {
-    // Log chuỗi thô để debug (rất quan trọng)
     console.log("--- RAW STRING TO PARSE ---");
     console.log(jsonStr);
     console.log("--- END RAW STRING ---");
@@ -202,18 +310,16 @@ export class UsecaseDiagramGeminiService {
       }
     }
 
-    // Validate: Đảm bảo cấu trúc cơ bản mà Schema cần
     if (
       parsedResponse &&
-      parsedResponse.name && // Phải có 'name'
+      parsedResponse.name &&
       typeof parsedResponse.name === "string" &&
       parsedResponse.description &&
       typeof parsedResponse.description === "string" &&
-      Array.isArray(parsedResponse.actors) && // Phải có 'actors'
-      Array.isArray(parsedResponse.usecases) // Phải có 'usecases'
-      // associations và relationships có thể là mảng rỗng (hoặc undefined)
+      Array.isArray(parsedResponse.actors) &&
+      Array.isArray(parsedResponse.usecases)
     ) {
-      console.log("✅ JSON structure is VALID (matches Mongoose schema)");
+      console.log("✅ JSON structure is VALID (matches Mongoose schema input)");
       return parsedResponse;
     }
 
@@ -225,14 +331,13 @@ export class UsecaseDiagramGeminiService {
   }
 
   /**
-   * Sửa chữa JSON bị cắt ngắn (Giữ nguyên từ file cũ)
+   * Sửa chữa JSON bị cắt ngắn
    */
   private repairTruncatedJson(jsonStr: string): string {
     let balance = 0;
     let inString = false;
     let escapeNext = false;
 
-    // Đếm balance hiện tại
     for (let i = 0; i < jsonStr.length; i++) {
       const char = jsonStr[i];
       if (escapeNext) {
@@ -253,17 +358,15 @@ export class UsecaseDiagramGeminiService {
       }
     }
 
-    // Đóng tất cả các mở ngoặc còn thiếu
     let repaired = jsonStr;
     while (balance > 0) {
       if (repaired.trim().endsWith(",")) {
-        repaired = repaired.slice(0, -1); // Remove trailing comma
+        repaired = repaired.slice(0, -1);
       }
-      repaired += "}"; // Ưu tiên đóng '}' vì chúng ta mong đợi một object
+      repaired += "}";
       balance--;
     }
 
-    // Đảm bảo kết thúc đúng
     if (repaired.startsWith("[") && !repaired.endsWith("]")) {
       repaired += "]";
     } else if (repaired.startsWith("{") && !repaired.endsWith("}")) {
@@ -274,6 +377,7 @@ export class UsecaseDiagramGeminiService {
 
   /**
    * Một hàm chung để gửi prompt tới Gemini và trả về kết quả dạng chuỗi JSON đã được làm sạch.
+   * (Giữ nguyên toàn bộ nội dung hàm này)
    */
   private async generateJsonContent(prompt: string): Promise<string> {
     const keys = await this.apiKeyService.getAllActiveKeys("gemini");
@@ -303,7 +407,6 @@ export class UsecaseDiagramGeminiService {
 
         const text: string = resp?.response?.text?.() || "";
 
-        // Trả về ngay sau khi thành công (sử dụng hàm clean nâng cấp)
         return this.cleanJsonString(text);
       } catch (err: any) {
         lastError = err;
@@ -332,44 +435,36 @@ export class UsecaseDiagramGeminiService {
   }
 
   /**
-   * CẬP NHẬT: Hàm Clean JSON mạnh mẽ hơn, ưu tiên tìm markdown
+   * Hàm Clean JSON mạnh mẽ hơn, ưu tiên tìm markdown
    */
   private cleanJsonString(text: string): string {
     if (!text) return "";
     let cleanedText = text.trim();
 
-    // Bước 1: Tìm khối JSON được bọc trong markdown ```json ... ```
-    // Dùng regex non-greedy ([\s\S]*?) để tìm khối JSON
-    const markdownMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    const markdownMatch = cleanedText.match(/```(?:json)?\s*([\sS]*?)\s*```/);
     if (markdownMatch && markdownMatch[1]) {
       cleanedText = markdownMatch[1];
     }
 
-    // Bước 2: Nếu không có markdown, tìm JSON object đầu tiên
-    // Chúng ta chỉ tìm kiếm object '{...}' vì đó là yêu cầu BẮT BUỘC
     const jsonStart = cleanedText.indexOf("{");
     const jsonEnd = cleanedText.lastIndexOf("}");
 
     if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
       cleanedText = cleanedText.substring(jsonStart, jsonEnd + 1);
     } else {
-      // Nếu không tìm thấy object, có thể là lỗi
       console.warn(
         "⚠️ cleanJsonString: Could not find a JSON object {}. Returning raw trimmed text for parsing."
       );
-      // Trả về text đã trim để validateAndParse có thể thấy lỗi
       return cleanedText;
     }
 
-    // Bước 3: Thử parse để kiểm tra
     try {
       JSON.parse(cleanedText);
-      return cleanedText; // JSON hợp lệ
+      return cleanedText;
     } catch (e) {
       console.warn(
         "⚠️ cleanJsonString: Could not parse cleaned JSON, falling back to repair."
       );
-      // Gửi nó đến hàm repair để thử sửa (ví dụ: đóng ngoặc bị thiếu)
       return this.repairTruncatedJson(cleanedText);
     }
   }

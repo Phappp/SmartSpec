@@ -301,7 +301,35 @@ export class UsecaseDiagramController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const ucId = req.params.ucId;
+        const relationshipId = req.params.relationshipId;
+        const data = req.body;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+        if (!relationshipId) {
+          res.status(400).json({ message: "RelationshipId is required." });
+          return;
+        }
+        if (!data) {
+          res.status(400).json({ message: "Data is required." });
+          return;
+        }
+
+        const responseData =
+          await this.usecaseDiagramService.editRelationshipById(
+            ucId,
+            relationshipId,
+            data
+          );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Edit Relationship by Id Successfully",
+          data: responseData,
+        });
       }
     );
   }

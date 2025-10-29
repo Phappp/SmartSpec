@@ -151,7 +151,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
   public async editUsecaseById(
     ucId: string,
     usecaseId: string,
-    data: any
+    data: {title: string; description?: string;}
   ): Promise<UseCaseDiagramResponse> {
     const uc = await UsecaseDiagramSchema.findOne({ _id: ucId });
     if (!uc) {
