@@ -37,6 +37,11 @@
             <span class="material-symbols-outlined">auto_awesome</span>
             Generate Test Cases
           </button>
+          <!-- 🆕 THÊM NÚT ENHANCE -->
+          <!-- <button class="btn-secondary" @click="showEnhanceModal = true">
+            <span class="material-symbols-outlined">blur_medium</span>
+            Enhance Test Cases
+          </button> -->
           <button class="btn-primary" @click="showCreateModal = true">
             <span class="material-symbols-outlined">add</span>
             Create Manual
@@ -407,6 +412,17 @@
       @generate="handleGenerateTestCases"
     />
 
+    <!-- 🆕 ENHANCE TEST CASES MODAL -->
+    <EnhanceTestcaseModal
+      v-if="showEnhanceModal"
+      :project-id="project._id"
+      :version-id="selectedVersionId"
+      :requirements="requirements"
+      :existing-test-cases="testCases"
+      @close="showEnhanceModal = false"
+      @enhance="handleEnhanceTestCases"
+    />
+
     <!-- Create/Edit Test Case Modal -->
     <TestcaseFormModal
       v-if="showCreateModal || editingTestcase"
@@ -443,6 +459,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
 import GenerateTestcaseModal from '@/components/testcase/GenerateTestcaseModal.vue'
+import EnhanceTestcaseModal from '@/components/testcase/EnhanceTestcaseModal.vue' // 🆕 IMPORT MODAL MỚI
 import TestcaseFormModal from '@/components/testcase/TestcaseFormModal.vue'
 import TestcaseDetailModal from '@/components/testcase/TestcaseDetailModal.vue'
 import TestcaseExecutionModal from '@/components/testcase/TestcaseExecutionModal.vue'
@@ -455,22 +472,10 @@ export default {
   components: {
     ProjectHeader,
     GenerateTestcaseModal,
+    EnhanceTestcaseModal, // 🆕 THÊM COMPONENT MỚI
     TestcaseFormModal,
     TestcaseDetailModal,
     TestcaseExecutionModal,
-  },
-  async created() {
-    const projectId = this.$route.params.id
-    if (projectId) {
-      await this.fetchProjectData(projectId)
-      this.initSocketConnection(projectId) // ✅ THÊM DÒNG NÀY
-    }
-  },
-  beforeUnmount() {
-    // ✅ THÊM: Cleanup socket connection
-    if (this.project?._id) {
-      this.cleanupSocketConnection(this.project._id)
-    }
   },
   setup() {
     const route = useRoute()
@@ -488,8 +493,9 @@ export default {
     const loading = ref(false)
     const tableContainer = ref(null)
 
-    // UI states
+    // UI states - 🆕 THÊM showEnhanceModal
     const showGenerateModal = ref(false)
+    const showEnhanceModal = ref(false) // 🆕 STATE MỚI
     const showCreateModal = ref(false)
     const editingTestcase = ref(null)
     const viewingTestcase = ref(null)
@@ -797,6 +803,36 @@ export default {
         console.error('❌ Error saving generated test cases:', error)
         const errorMessage = error.response?.data?.message || error.message
         toast.error(`Failed to save test cases: ${errorMessage}`)
+      }
+    }
+
+    // 🆕 HANDLE ENHANCE TEST CASES
+    const handleEnhanceTestCases = async (enhancementData) => {
+      if (!project.value._id || !selectedVersionId.value) {
+        toast.error('Project and version must be selected')
+        return
+      }
+
+      try {
+        console.log(
+          '🔄 Enhancing test cases with new requirements:',
+          enhancementData.newRequirementIds
+        )
+        const { data } = await testcaseApi.enhanceTestCases(
+          project.value._id,
+          selectedVersionId.value,
+          enhancementData
+        )
+
+        toast.success(
+          `Successfully enhanced test cases! Added ${data.summary?.added || 0} new test cases`
+        )
+        await loadTestCases() // Reload để cập nhật statistics
+        showEnhanceModal.value = false
+      } catch (error) {
+        console.error('❌ Error enhancing test cases:', error)
+        const errorMessage = error.response?.data?.message || error.message
+        toast.error(`Failed to enhance test cases: ${errorMessage}`)
       }
     }
 
@@ -1113,8 +1149,9 @@ export default {
       hasMoreData,
       activeUsers,
 
-      // UI states
+      // UI states - 🆕 THÊM showEnhanceModal
       showGenerateModal,
+      showEnhanceModal,
       showCreateModal,
       editingTestcase,
       viewingTestcase,
@@ -1142,6 +1179,7 @@ export default {
       navigateToOutput,
       goBack,
       handleGenerateTestCases,
+      handleEnhanceTestCases, // 🆕 THÊM METHOD MỚI
       handleSaveTestcase,
       executeTestcase,
       handleExecuteTestcase,
@@ -1925,5 +1963,138 @@ td {
   .bulk-buttons {
     justify-content: center;
   }
+}
+/* 🆕 CSS MỚI CHO NÚT ENHANCE */
+.btn-secondary.success {
+  background: var(--success-light);
+  color: var(--success-color);
+  border: 1px solid var(--success-color);
+}
+
+.btn-secondary.success:hover {
+  background: var(--success-color);
+  color: white;
+}
+
+/* 🆕 CSS CHO BULK ACTIONS FIXED */
+.bulk-actions {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border: 2px solid #1a365d;
+  width: 70%;
+  max-width: 800px;
+  z-index: 1000;
+}
+
+.bulk-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #1a365d;
+  font-weight: 500;
+}
+
+.bulk-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* 🆕 RESPONSIVE CHO BULK ACTIONS */
+@media (max-width: 768px) {
+  .bulk-actions {
+    width: 90%;
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .bulk-buttons {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
+/* 🆕 HEADER ACTIONS SPACING */
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* 🆕 ENHANCE BUTTON SPECIFIC STYLES */
+.btn-secondary.success .material-symbols-outlined {
+  font-size: 1.1rem;
+}
+
+/* Giữ nguyên các style cũ khác */
+.testcase-management-view {
+  padding: 30px;
+  min-height: 100vh;
+  background: var(--background-color);
+}
+
+.navigation-tabs {
+  display: flex;
+  background: white;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 2rem;
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+  color: #1a365d;
+  background: var(--background-color);
+}
+
+.tab-button.active {
+  color: #1a365d;
+  border-bottom-color: #1a365d;
+}
+
+.testcase-content {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.action-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+}
+
+.header-left h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem 0;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  margin: 0;
 }
 </style>

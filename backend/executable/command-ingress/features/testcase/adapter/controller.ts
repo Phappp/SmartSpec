@@ -313,64 +313,64 @@ export class TestcaseController {
     /**
      * Enhance existing test cases với requirements mới theo Enterprise standard
      */
-    public enhanceTestCases = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
-        try {
-            const { projectId, versionId } = req.params;
-            const {
-                newRequirementIds,
-                language = 'vi-VN'
-            } = req.body;
+    // public enhanceTestCases = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
+    //     try {
+    //         const { projectId, versionId } = req.params;
+    //         const {
+    //             newRequirementIds,
+    //             language = 'vi-VN'
+    //         } = req.body;
 
-            if (!projectId || !versionId) {
-                res.status(400).json({
-                    message: "projectId và versionId là bắt buộc."
-                });
-                return;
-            }
+    //         if (!projectId || !versionId) {
+    //             res.status(400).json({
+    //                 message: "projectId và versionId là bắt buộc."
+    //             });
+    //             return;
+    //         }
 
-            if (!newRequirementIds || !Array.isArray(newRequirementIds) || newRequirementIds.length === 0) {
-                res.status(400).json({
-                    message: "newRequirementIds là bắt buộc và phải là mảng không rỗng."
-                });
-                return;
-            }
+    //         if (!newRequirementIds || !Array.isArray(newRequirementIds) || newRequirementIds.length === 0) {
+    //             res.status(400).json({
+    //                 message: "newRequirementIds là bắt buộc và phải là mảng không rỗng."
+    //             });
+    //             return;
+    //         }
 
-            console.log(`🔄 Enhancing ENTERPRISE test cases with ${newRequirementIds.length} new requirements for project ${projectId}, version ${versionId}`);
+    //         console.log(`🔄 Enhancing ENTERPRISE test cases with ${newRequirementIds.length} new requirements for project ${projectId}, version ${versionId}`);
 
-            const enhancementResult = await this.testcaseService.enhanceTestCases(
-                projectId,
-                versionId,
-                newRequirementIds,
-                language
-            );
+    //         const enhancementResult = await this.testcaseService.enhanceTestCases(
+    //             projectId,
+    //             versionId,
+    //             newRequirementIds,
+    //             language
+    //         );
 
-            res.status(200).json({
-                message: `Bổ sung thành công ${enhancementResult.additional_testcases.length} ENTERPRISE test cases mới!`,
-                data: enhancementResult,
-                summary: {
-                    added: enhancementResult.additional_testcases.length,
-                    updated: enhancementResult.updated_testcases.length
-                },
-                metadata: {
-                    new_requirements_count: newRequirementIds.length,
-                    database_impact: this.analyzeDatabaseImpact(enhancementResult),
-                    enterprise_improvements: this.analyzeEnterpriseImprovements(enhancementResult)
-                }
-            });
+    //         res.status(200).json({
+    //             message: `Bổ sung thành công ${enhancementResult.additional_testcases.length} ENTERPRISE test cases mới!`,
+    //             data: enhancementResult,
+    //             summary: {
+    //                 added: enhancementResult.additional_testcases.length,
+    //                 updated: enhancementResult.updated_testcases.length
+    //             },
+    //             metadata: {
+    //                 new_requirements_count: newRequirementIds.length,
+    //                 database_impact: this.analyzeDatabaseImpact(enhancementResult),
+    //                 enterprise_improvements: this.analyzeEnterpriseImprovements(enhancementResult)
+    //             }
+    //         });
 
-        } catch (error: any) {
-            console.error("❌ Error enhancing ENTERPRISE test cases:", error);
+    //     } catch (error: any) {
+    //         console.error("❌ Error enhancing ENTERPRISE test cases:", error);
 
-            if (error.message.includes('not found')) {
-                res.status(404).json({
-                    message: error.message
-                });
-                return;
-            }
+    //         if (error.message.includes('not found')) {
+    //             res.status(404).json({
+    //                 message: error.message
+    //             });
+    //             return;
+    //         }
 
-            next(error);
-        }
-    }
+    //         next(error);
+    //     }
+    // }
 
     /**
      * Lưu ENTERPRISE test cases vào database
@@ -1098,5 +1098,140 @@ export class TestcaseController {
             enterprise_impact: this.calculateEnterpriseMetrics(executedTestCases),
             summary: `${tables.size} tables, ${operations.size} operations`
         };
+    }
+    // Thêm method mới trong TestcaseController
+    public previewEnhanceTestCases = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { projectId, versionId } = req.params;
+            const {
+                newRequirementIds,
+                language = 'vi-VN'
+            } = req.body;
+
+            if (!projectId || !versionId) {
+                res.status(400).json({
+                    message: "projectId và versionId là bắt buộc."
+                });
+                return;
+            }
+
+            if (!newRequirementIds || !Array.isArray(newRequirementIds) || newRequirementIds.length === 0) {
+                res.status(400).json({
+                    message: "newRequirementIds là bắt buộc và phải là mảng không rỗng."
+                });
+                return;
+            }
+
+            console.log(`🔍 Previewing ENTERPRISE test case enhancement for project ${projectId}, version ${versionId}`);
+
+            const previewData = await this.testcaseService.previewEnhancedTestCases(
+                projectId,
+                versionId,
+                newRequirementIds,
+                language
+            );
+
+            res.status(200).json({
+                message: "Preview ENTERPRISE test case enhancement thành công!",
+                data: previewData,
+                metadata: {
+                    can_apply: previewData.enhancementPreview.additional_testcases.length > 0 ||
+                        previewData.enhancementPreview.updated_testcases.length > 0,
+                    recommendation: this.generateEnhancementRecommendation(previewData.comparison)
+                }
+            });
+
+        } catch (error: any) {
+            console.error("❌ Error previewing ENTERPRISE test case enhancement:", error);
+
+            if (error.message.includes('not found')) {
+                res.status(404).json({
+                    message: error.message
+                });
+                return;
+            }
+
+            next(error);
+        }
+    }
+
+    private generateEnhancementRecommendation(comparison: any): string {
+        const { summary, enterprise_metrics } = comparison;
+
+        if (summary.new_test_cases === 0 && summary.updated_test_cases === 0) {
+            return "Không có thay đổi nào được đề xuất. Test cases hiện tại đã đạt chuẩn ENTERPRISE.";
+        }
+
+        const improvements = [];
+        if (summary.new_test_cases > 0) {
+            improvements.push(`Thêm ${summary.new_test_cases} test cases mới`);
+        }
+        if (summary.updated_test_cases > 0) {
+            improvements.push(`Cập nhật ${summary.updated_test_cases} test cases hiện có`);
+        }
+        if (enterprise_metrics.improvement.coverage_increase > 0) {
+            improvements.push(`Tăng coverage cho ${enterprise_metrics.improvement.coverage_increase} requirement(s)`);
+        }
+
+        return `Đề xuất áp dụng enhancement để: ${improvements.join(', ')}.`;
+    }
+
+    // Cập nhật enhanceTestCases hiện tại để hỗ trợ cả preview và apply
+    public enhanceTestCases = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { projectId, versionId } = req.params;
+            const {
+                newRequirementIds,
+                language = 'vi-VN',
+                action = 'apply' // 'preview' hoặc 'apply'
+            } = req.body;
+
+            if (!projectId || !versionId) {
+                res.status(400).json({
+                    message: "projectId và versionId là bắt buộc."
+                });
+                return;
+            }
+
+            if (!newRequirementIds || !Array.isArray(newRequirementIds) || newRequirementIds.length === 0) {
+                res.status(400).json({
+                    message: "newRequirementIds là bắt buộc và phải là mảng không rỗng."
+                });
+                return;
+            }
+
+            // Nếu là preview mode
+            if (action === 'preview') {
+                return this.previewEnhanceTestCases(req, res, next);
+            }
+
+            // Apply mode (giữ nguyên logic cũ)
+            console.log(`🔄 Applying ENTERPRISE test case enhancement for project ${projectId}, version ${versionId}`);
+
+            const enhancementResult = await this.testcaseService.enhanceTestCases(
+                projectId,
+                versionId,
+                newRequirementIds,
+                language
+            );
+
+            res.status(200).json({
+                message: `Áp dụng ENTERPRISE test case enhancement thành công!`,
+                data: enhancementResult,
+                summary: {
+                    added: enhancementResult.additional_testcases.length,
+                    updated: enhancementResult.updated_testcases.length
+                },
+                metadata: {
+                    new_requirements_count: newRequirementIds.length,
+                    database_impact: this.analyzeDatabaseImpact(enhancementResult),
+                    enterprise_improvements: this.analyzeEnterpriseImprovements(enhancementResult)
+                }
+            });
+
+        } catch (error: any) {
+            console.error("❌ Error in ENTERPRISE test case enhancement:", error);
+            next(error);
+        }
     }
 }

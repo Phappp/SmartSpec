@@ -38,6 +38,20 @@ export default function initTestcaseRoute(): Router {
         testcaseController.saveTestCases
     );
 
+    // Thêm route mới cho preview
+    router.post(
+        "/projects/:projectId/versions/:versionId/preview-enhancement",
+        requireAuthorizedUser,
+        testcaseController.enhanceTestCases // Sử dụng cùng controller method với action parameter
+    );
+
+    // Hoặc giữ nguyên route cũ với extended functionality
+    router.put(
+        "/projects/:projectId/versions/:versionId/enhance-testcases",
+        requireAuthorizedUser,
+        testcaseController.enhanceTestCases
+    );
+
     // === ENTERPRISE TEST CASE MANAGEMENT ROUTES ===
 
     // [R] Lấy ENTERPRISE test cases theo project

@@ -16,6 +16,18 @@ export const generateTestCasesSimplified = (projectId, versionId, data) =>
 export const enhanceTestCasesSimplified = (projectId, versionId, data) =>
     axiosClient.put(`/api/testcases/projects/${projectId}/versions/${versionId}/enhance-testcases`, data);
 
+/**
+ * 🆕 ENTERPRISE: Enhance test cases với new requirement IDs (hỗ trợ preview/apply)
+ */
+export const enhanceTestCases = (projectId, versionId, data) =>
+    axiosClient.put(`/api/testcases/projects/${projectId}/versions/${versionId}/enhance-testcases`, data);
+
+/**
+ * 🆕 ENTERPRISE: Preview enhancement (route riêng)
+ */
+export const previewEnhanceTestCases = (projectId, versionId, data) =>
+    axiosClient.post(`/api/testcases/projects/${projectId}/versions/${versionId}/preview-enhancement`, data);
+
 // ================== 🆕 ENTERPRISE REPORTING & ANALYTICS ============================
 
 /**
@@ -65,8 +77,8 @@ export const generateTestCasesFromDatabase = (projectId, versionId, data) =>
 /**
  * Enhance existing test cases
  */
-export const enhanceTestCases = (projectId, versionId, data) =>
-    axiosClient.put(`/api/testcases/projects/${projectId}/versions/${versionId}/enhance-testcases`, data);
+// export const enhanceTestCases = (projectId, versionId, data) =>
+//     axiosClient.put(`/api/testcases/projects/${projectId}/versions/${versionId}/enhance-testcases`, data);
 
 /**
  * Save test cases to database

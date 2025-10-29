@@ -174,7 +174,7 @@ export class TestcaseService {
             { $set: updateData },
             { new: true, runValidators: true }
         ).populate('created_by', 'name email')
-         .populate('executed_by', 'name email');
+            .populate('executed_by', 'name email');
     }
 
     /**
@@ -497,7 +497,7 @@ export class TestcaseService {
                 $group: {
                     _id: "$title",
                     count: { $sum: 1 },
-                    test_cases: { 
+                    test_cases: {
                         $push: {
                             _id: "$_id",
                             test_type: "$test_type",
@@ -513,4 +513,187 @@ export class TestcaseService {
 
         return duplicates;
     }
+    // Thêm method mới trong TestcaseService
+    async previewEnhancedTestCases(
+        projectId: string,
+        versionId: string,
+        newRequirementIds: string[],
+        language: string = 'vi-VN'
+    ): Promise<{
+        existingTestCases: any[];
+        enhancementPreview: any;
+        comparison: any;
+    }> {
+        // 1. Lấy existing test cases
+        const existingTestCases = await Testcase.find({
+            project_id: projectId,
+            version_id: versionId
+        }).lean();
+
+        // 2. Lấy new requirements
+        const version = await Version.findOne({
+            project_id: projectId,
+            _id: versionId
+        });
+
+        if (!version) {
+            throw new Error("Version not found");
+        }
+
+        const newRequirements = version.requirement_model.filter(
+            req => newRequirementIds.includes(req.id)
+        );
+
+        if (newRequirements.length === 0) {
+            throw new Error("No matching new requirements found");
+        }
+
+        // 3. Generate enhancement preview
+        const enhancementResult = await this.testcaseGeminiService.enhanceTestCases(
+            existingTestCases,
+            newRequirements,
+            language
+        );
+
+        // 4. Tạo comparison data
+        const comparison = this.createEnhancementComparison(
+            existingTestCases,
+            enhancementResult
+        );
+
+        return {
+            existingTestCases,
+            enhancementPreview: enhancementResult,
+            comparison
+        };
+    }
+
+    private createEnhancementComparison(existingTestCases: any[], enhancementResult: any): any {
+        const existingCount = existingTestCases.length;
+        const additionalCount = enhancementResult.additional_testcases?.length || 0;
+        const updatedCount = enhancementResult.updated_testcases?.length || 0;
+
+        // Phân tích coverage improvements
+        const existingCoverage = this.extractRequirementsCoverage(existingTestCases);
+        const newCoverage = this.extractRequirementsCoverage([
+            ...existingTestCases,
+            ...(enhancementResult.additional_testcases || [])
+        ]);
+
+        return {
+            summary: {
+                existing_test_cases: existingCount,
+                new_test_cases: additionalCount,
+                updated_test_cases: updatedCount,
+                total_after_enhancement: existingCount + additionalCount,
+                coverage_improvement: newCoverage.length - existingCoverage.length
+            },
+            details: {
+                additional_test_cases: enhancementResult.additional_testcases?.map((tc: any) => ({
+                    title: tc.title,
+                    test_type: tc.test_type,
+                    priority: tc.priority,
+                    source_requirements: tc.source_requirement_ids,
+                    database_tables: tc.database_tables
+                })) || [],
+                updated_test_cases: enhancementResult.updated_testcases?.map((tc: any) => ({
+                    id: tc.id, // Nếu có ID từ existing
+                    title: tc.title,
+                    changes: this.identifyTestCaseChanges(tc, existingTestCases)
+                })) || [],
+                coverage_analysis: {
+                    existing_requirements_covered: existingCoverage,
+                    new_requirements_covered: newCoverage.filter((req: string) => !existingCoverage.includes(req)),
+                    total_requirements_covered: newCoverage
+                }
+            },
+            enterprise_metrics: {
+                before: this.calculateEnterpriseMetrics(existingTestCases),
+                after: this.calculateEnterpriseMetrics([
+                    ...existingTestCases,
+                    ...(enhancementResult.additional_testcases || [])
+                ]),
+                improvement: this.calculateImprovementMetrics(existingTestCases, enhancementResult)
+            }
+        };
+    }
+
+    private identifyTestCaseChanges(updatedTestCase: any, existingTestCases: any[]): string[] {
+        const changes: string[] = [];
+
+        // Tìm test case tương ứng bằng title (vì có thể chưa có ID)
+        const existing = existingTestCases.find(tc => tc.title === updatedTestCase.title);
+
+        if (!existing) return ['New test case'];
+
+        if (existing.title !== updatedTestCase.title) changes.push('Title updated');
+        if (JSON.stringify(existing.steps) !== JSON.stringify(updatedTestCase.steps)) changes.push('Steps modified');
+        if (JSON.stringify(existing.test_data) !== JSON.stringify(updatedTestCase.test_data)) changes.push('Test data updated');
+        if (existing.priority !== updatedTestCase.priority) changes.push('Priority changed');
+        if (JSON.stringify(existing.expected_results) !== JSON.stringify(updatedTestCase.expected_results)) changes.push('Expected results updated');
+
+        return changes.length > 0 ? changes : ['Minor enhancements'];
+    }
+
+    private calculateImprovementMetrics(existingTestCases: any[], enhancementResult: any): any {
+        const beforeMetrics = this.calculateEnterpriseMetrics(existingTestCases);
+        const afterTestCases = [
+            ...existingTestCases,
+            ...(enhancementResult.additional_testcases || [])
+        ];
+        const afterMetrics = this.calculateEnterpriseMetrics(afterTestCases);
+
+        return {
+            test_cases_increase: afterMetrics.total_test_cases - beforeMetrics.total_test_cases,
+            automation_rate_change: afterMetrics.automation_rate - beforeMetrics.automation_rate,
+            coverage_increase: afterMetrics.test_types_covered.length - beforeMetrics.test_types_covered.length,
+            steps_increase: afterMetrics.total_steps - beforeMetrics.total_steps,
+            test_data_increase: afterMetrics.total_test_data_scenarios - beforeMetrics.total_test_data_scenarios
+        };
+    }
+
+    /**
+    * 🆕 Extract requirements coverage từ test cases
+    */
+    private extractRequirementsCoverage(testCases: any[]): string[] {
+        const requirements = new Set<string>();
+        testCases.forEach(tc => {
+            if (tc.source_requirement_ids && Array.isArray(tc.source_requirement_ids)) {
+                tc.source_requirement_ids.forEach((reqId: string) => requirements.add(reqId));
+            }
+        });
+        return Array.from(requirements);
+    }
+
+    /**
+     * 🆕 Calculate Enterprise metrics
+     */
+    private calculateEnterpriseMetrics(testCases: any[]): any {
+        let totalSteps = 0;
+        let totalTestData = 0;
+        let automationReady = 0;
+        const testTypes = new Set<string>();
+        const priorities = new Set<string>();
+
+        testCases.forEach(tc => {
+            if (tc.steps) totalSteps += tc.steps.length;
+            if (tc.test_data) totalTestData += tc.test_data.length;
+            if (tc.automation?.is_automated) automationReady++;
+            if (tc.test_type) testTypes.add(tc.test_type);
+            if (tc.priority) priorities.add(tc.priority);
+        });
+
+        return {
+            total_test_cases: testCases.length,
+            total_steps: totalSteps,
+            total_test_data_scenarios: totalTestData,
+            automation_ready_count: automationReady,
+            automation_rate: testCases.length > 0 ? Math.round((automationReady / testCases.length) * 100) : 0,
+            test_types_covered: Array.from(testTypes),
+            priorities_covered: Array.from(priorities),
+            average_steps_per_test: testCases.length > 0 ? Math.round(totalSteps / testCases.length) : 0,
+            test_data_density: testCases.length > 0 ? Math.round(totalTestData / testCases.length) : 0
+        };
+    }
+
 }
