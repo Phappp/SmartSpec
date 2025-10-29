@@ -124,8 +124,8 @@ const createHttpServer = (redisClient: any) => {
 
   app.use(morgan(() => null));
 
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: '10mb' })); // Tăng từ 100KB lên 10MB
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
   app.use(fileUpload());
   const uploadsDir = path.resolve(env.UPLOADS_PATH)
   app.use('/uploads', express.static(uploadsDir))
@@ -203,7 +203,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/input', initInputHandleRoute(inputHandleController));
   app.use('/api/usecaseManagement', initUsecaseRoute(usecaseController));
   app.use('/api/databases', initDatabaseRoute())
-  app.use('/api/testcases', initTestcaseRoute()); 
+  app.use('/api/testcases', initTestcaseRoute());
   app.use(
     "/api/keys",
     initApiKeyRoute(new ApiKeyController(new ApiKeyServiceImpl()))

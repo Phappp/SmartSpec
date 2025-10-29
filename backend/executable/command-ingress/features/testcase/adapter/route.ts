@@ -6,105 +6,119 @@ export default function initTestcaseRoute(): Router {
     const router = Router();
     const testcaseController = new TestcaseController();
 
-    // === 🆕 SIMPLIFIED ROUTES ===
+    // === 🆕 ENTERPRISE TEST CASE GENERATION ROUTES ===
 
-    // [C] Generate test cases từ selected requirement IDs
+    // [C] Generate ENTERPRISE test cases từ selected requirement IDs
     router.post(
         "/projects/:projectId/versions/:versionId/generate-testcases",
         requireAuthorizedUser,
         testcaseController.generateTestCases
     );
 
-    // [U] Enhance test cases với new requirement IDs  
+    // [U] Enhance ENTERPRISE test cases với new requirement IDs  
     router.put(
         "/projects/:projectId/versions/:versionId/enhance-testcases",
         requireAuthorizedUser,
         testcaseController.enhanceTestCases
     );
 
-    // === ALTERNATIVE ROUTES (giữ nguyên) ===
+    // === ALTERNATIVE GENERATION ROUTES ===
 
-    // [C] Generate test cases từ database schema
+    // [C] Generate ENTERPRISE test cases từ database schema
     router.post(
         "/projects/:projectId/versions/:versionId/generate-from-database",
         requireAuthorizedUser,
         testcaseController.generateTestCasesFromDatabase
     );
 
-    // [C] Lưu test cases vào database
+    // [C] Lưu ENTERPRISE test cases vào database
     router.post(
         "/projects/:projectId/versions/:versionId/testcases",
         requireAuthorizedUser,
         testcaseController.saveTestCases
     );
 
-    // === ROUTES CHO TEST CASE MANAGEMENT (giữ nguyên) ===
+    // === ENTERPRISE TEST CASE MANAGEMENT ROUTES ===
 
-    // [R] Lấy test cases theo project
+    // [R] Lấy ENTERPRISE test cases theo project
     router.get(
         "/projects/:projectId/testcases",
         requireAuthorizedUser,
         testcaseController.getTestCasesByProject
     );
 
-    // [R] Lấy test case theo ID
+    // [R] Lấy ENTERPRISE test case theo ID
     router.get(
         "/testcases/:testCaseId",
         requireAuthorizedUser,
         testcaseController.getTestCaseById
     );
 
-    // [U] Cập nhật test case
+    // [U] Cập nhật ENTERPRISE test case
     router.put(
         "/testcases/:testCaseId",
         requireAuthorizedUser,
         testcaseController.updateTestCase
     );
 
-    // [U] Thực thi test case
+    // [U] Thực thi ENTERPRISE test case
     router.put(
         "/testcases/:testCaseId/execute",
         requireAuthorizedUser,
         testcaseController.executeTestCase
     );
 
-    // [D] Xóa test case
+    // [D] Xóa ENTERPRISE test case
     router.delete(
         "/testcases/:testCaseId",
         requireAuthorizedUser,
         testcaseController.deleteTestCase
     );
 
-    // === ROUTES CHO BULK OPERATIONS (giữ nguyên) ===
+    // === ENTERPRISE BULK OPERATIONS ROUTES ===
 
-    // [U] Bulk execute test cases
+    // [U] Bulk execute ENTERPRISE test cases
     router.put(
         "/projects/:projectId/testcases/bulk-execute",
         requireAuthorizedUser,
         testcaseController.bulkExecuteTestCases
     );
 
-    // === ROUTES CHO REPORTING & ANALYTICS (giữ nguyên) ===
+    // === 🆕 ENTERPRISE REPORTING & ANALYTICS ROUTES ===
 
-    // [R] Lấy test statistics
+    // [R] Lấy ENTERPRISE test statistics
     router.get(
         "/projects/:projectId/test-statistics",
         requireAuthorizedUser,
         testcaseController.getTestStatistics
     );
 
-    // [R] Lấy database coverage report
+    // [R] Lấy ENTERPRISE database coverage report
     router.get(
         "/projects/:projectId/database-coverage",
         requireAuthorizedUser,
         testcaseController.getDatabaseCoverageReport
     );
 
-    // [R] Lấy test cases theo database table
+    // [R] 🆕 Lấy ENTERPRISE requirement coverage report
+    router.get(
+        "/projects/:projectId/requirement-coverage",
+        requireAuthorizedUser,
+        testcaseController.getRequirementCoverageReport
+    );
+
+    // [R] Lấy ENTERPRISE test cases theo database table
     router.get(
         "/projects/:projectId/tables/:tableName/testcases",
         requireAuthorizedUser,
         testcaseController.getTestCasesByDatabaseTable
+    );
+
+    // [R] 🆕 Tìm ENTERPRISE test cases trùng lặp
+    router.get(
+        "/projects/:projectId/duplicate-testcases",
+        requireAuthorizedUser,
+        testcaseController.findDuplicateTestCases
     );
 
     return router;

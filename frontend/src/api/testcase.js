@@ -1,20 +1,52 @@
-// 🔥 CẬP NHẬT testcase.js - THÊM SIMPLIFIED APIS VÀ FIX MISSING FUNCTIONS
+// 🔥 CẬP NHẬT testcase.js - THÊM ENTERPRISE APIS VÀ FIX MISSING FUNCTIONS
 
 import axiosClient from "./../utils/axiosClient";
 
-// ================== 🆕 SIMPLIFIED TESTCASE GENERATION ============================
+// ================== 🆕 ENTERPRISE TESTCASE GENERATION ============================
 
 /**
- * 🆕 SIMPLIFIED: Generate test cases từ selected requirement IDs
+ * 🆕 ENTERPRISE: Generate test cases từ selected requirement IDs
  */
 export const generateTestCasesSimplified = (projectId, versionId, data) =>
     axiosClient.post(`/api/testcases/projects/${projectId}/versions/${versionId}/generate-testcases`, data);
 
 /**
- * 🆕 SIMPLIFIED: Enhance test cases với new requirement IDs  
+ * 🆕 ENTERPRISE: Enhance test cases với new requirement IDs  
  */
 export const enhanceTestCasesSimplified = (projectId, versionId, data) =>
     axiosClient.put(`/api/testcases/projects/${projectId}/versions/${versionId}/enhance-testcases`, data);
+
+// ================== 🆕 ENTERPRISE REPORTING & ANALYTICS ============================
+
+/**
+ * 🆕 ENTERPRISE: Lấy requirement coverage report
+ */
+export const getRequirementCoverageReport = (projectId, versionId = null) => {
+    const params = versionId ? { versionId } : {};
+    return axiosClient.get(`/api/testcases/projects/${projectId}/requirement-coverage`, { params });
+};
+
+/**
+ * 🆕 ENTERPRISE: Tìm test cases trùng lặp
+ */
+export const findDuplicateTestCases = (projectId, versionId = null) => {
+    const params = versionId ? { versionId } : {};
+    return axiosClient.get(`/api/testcases/projects/${projectId}/duplicate-testcases`, { params });
+};
+
+/**
+ * 🆕 ENTERPRISE: Validate Enterprise test case format
+ */
+export const validateEnterpriseTestCase = (testCaseData) =>
+    axiosClient.post(`/api/testcases/validate-enterprise`, testCaseData);
+
+/**
+ * 🆕 ENTERPRISE: Analyze test case quality metrics
+ */
+export const analyzeTestCaseQuality = (projectId, versionId = null) => {
+    const params = versionId ? { versionId } : {};
+    return axiosClient.get(`/api/testcases/projects/${projectId}/quality-metrics`, { params });
+};
 
 // ================== CORE TESTCASE APIs ============================
 
@@ -261,11 +293,56 @@ export const debugTestcaseAPI = async (endpoint, data = {}) => {
     }
 };
 
-// 🔥 CẬP NHẬT testcaseApi object - ĐẢM BẢO TẤT CẢ FUNCTIONS ĐƯỢC ĐỊNH NGHĨA
+// ================== 🆕 ENTERPRISE BATCH VALIDATION ============================
+
+/**
+ * 🆕 ENTERPRISE: Validate multiple test cases
+ */
+export const bulkValidateTestCases = (projectId, testCaseIds) =>
+    axiosClient.post(`/api/testcases/projects/${projectId}/bulk-validate`, { testCaseIds });
+
+/**
+ * 🆕 ENTERPRISE: Fix test case format issues
+ */
+export const fixTestCaseFormat = (projectId, testCaseId, fixes) =>
+    axiosClient.put(`/api/testcases/projects/${projectId}/testcases/${testCaseId}/fix-format`, fixes);
+
+/**
+ * 🆕 ENTERPRISE: Bulk fix test case formats
+ */
+export const bulkFixTestCaseFormats = (projectId, fixes) =>
+    axiosClient.put(`/api/testcases/projects/${projectId}/bulk-fix-formats`, fixes);
+
+// ================== 🆕 ENTERPRISE AUTOMATION INTEGRATION ============================
+
+/**
+ * 🆕 ENTERPRISE: Generate automation scripts
+ */
+export const generateAutomationScripts = (projectId, testCaseIds, framework = 'pytest') =>
+    axiosClient.post(`/api/testcases/projects/${projectId}/generate-automation-scripts`, {
+        testCaseIds,
+        framework
+    });
+
+/**
+ * 🆕 ENTERPRISE: Get automation readiness report
+ */
+export const getAutomationReadinessReport = (projectId, versionId = null) => {
+    const params = versionId ? { versionId } : {};
+    return axiosClient.get(`/api/testcases/projects/${projectId}/automation-readiness`, { params });
+};
+
+// 🔥 CẬP NHẬT testcaseApi object - THÊM ENTERPRISE FUNCTIONS
 export const testcaseApi = {
-    // 🆕 Simplified Generation
+    // 🆕 Enterprise Generation
     generateTestCasesSimplified,
     enhanceTestCasesSimplified,
+
+    // 🆕 Enterprise Reporting & Analytics
+    getRequirementCoverageReport,
+    findDuplicateTestCases,
+    validateEnterpriseTestCase,
+    analyzeTestCaseQuality,
 
     // Requirements
     getRequirementsForTestGeneration,
@@ -298,6 +375,15 @@ export const testcaseApi = {
     // 🆕 Test Data Management
     generateTestData,
     validateTestData,
+
+    // 🆕 Enterprise Batch Validation
+    bulkValidateTestCases,
+    fixTestCaseFormat,
+    bulkFixTestCaseFormats,
+
+    // 🆕 Enterprise Automation Integration
+    generateAutomationScripts,
+    getAutomationReadinessReport,
 
     // Utilities
     exportTestCases,

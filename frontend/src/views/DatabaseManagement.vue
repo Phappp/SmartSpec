@@ -1762,34 +1762,33 @@ export default {
 /* Navigation Tabs */
 .navigation-tabs {
   display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
-  padding: 0 8px;
+  background: white;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 2rem;
 }
 
 .tab-button {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-weight: 600;
-  color: #6b7280;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .tab-button:hover {
-  border-color: #1a365d;
   color: #1a365d;
+  background: var(--background-color);
 }
 
 .tab-button.active {
-  background: #1a365d;
-  border-color: #1a365d;
-  color: white;
+  color: #1a365d;
+  border-bottom-color: #1a365d;
 }
 
 .tab-button .material-symbols-outlined {

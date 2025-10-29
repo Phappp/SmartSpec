@@ -103,9 +103,10 @@
               type="text"
               placeholder="Search test cases..."
               class="search-input"
+              @input="handleSearch"
             />
           </div>
-          <select v-model="statusFilter" class="filter-select">
+          <select v-model="statusFilter" class="filter-select" @change="applyFilters">
             <option value="">All Status</option>
             <option value="passed">Passed</option>
             <option value="failed">Failed</option>
@@ -113,7 +114,7 @@
             <option value="not_executed">Not Executed</option>
             <option value="in_progress">In Progress</option>
           </select>
-          <select v-model="testTypeFilter" class="filter-select">
+          <select v-model="testTypeFilter" class="filter-select" @change="applyFilters">
             <option value="">All Types</option>
             <option value="unit">Unit</option>
             <option value="integration">Integration</option>
@@ -122,7 +123,7 @@
             <option value="performance">Performance</option>
             <option value="security">Security</option>
           </select>
-          <select v-model="priorityFilter" class="filter-select">
+          <select v-model="priorityFilter" class="filter-select" @change="applyFilters">
             <option value="">All Priorities</option>
             <option value="critical">Critical</option>
             <option value="high">High</option>
@@ -144,15 +145,107 @@
         </div>
       </div>
 
+      <!-- Sorting Controls -->
+      <div class="sorting-section">
+        <div class="sort-label">Sort by:</div>
+        <div class="sort-options">
+          <button
+            class="sort-option"
+            :class="{
+              active: sortField === 'title',
+              'sort-desc': sortField === 'title' && sortDirection === 'desc',
+            }"
+            @click="setSort('title')"
+          >
+            Title
+            <span class="material-symbols-outlined sort-icon">
+              {{
+                sortField === 'title' && sortDirection === 'desc'
+                  ? 'arrow_downward'
+                  : 'arrow_upward'
+              }}
+            </span>
+          </button>
+          <button
+            class="sort-option"
+            :class="{
+              active: sortField === 'test_type',
+              'sort-desc': sortField === 'test_type' && sortDirection === 'desc',
+            }"
+            @click="setSort('test_type')"
+          >
+            Type
+            <span class="material-symbols-outlined sort-icon">
+              {{
+                sortField === 'test_type' && sortDirection === 'desc'
+                  ? 'arrow_downward'
+                  : 'arrow_upward'
+              }}
+            </span>
+          </button>
+          <button
+            class="sort-option"
+            :class="{
+              active: sortField === 'priority',
+              'sort-desc': sortField === 'priority' && sortDirection === 'desc',
+            }"
+            @click="setSort('priority')"
+          >
+            Priority
+            <span class="material-symbols-outlined sort-icon">
+              {{
+                sortField === 'priority' && sortDirection === 'desc'
+                  ? 'arrow_downward'
+                  : 'arrow_upward'
+              }}
+            </span>
+          </button>
+          <button
+            class="sort-option"
+            :class="{
+              active: sortField === 'status',
+              'sort-desc': sortField === 'status' && sortDirection === 'desc',
+            }"
+            @click="setSort('status')"
+          >
+            Status
+            <span class="material-symbols-outlined sort-icon">
+              {{
+                sortField === 'status' && sortDirection === 'desc'
+                  ? 'arrow_downward'
+                  : 'arrow_upward'
+              }}
+            </span>
+          </button>
+          <button
+            class="sort-option"
+            :class="{
+              active: sortField === 'executed_at',
+              'sort-desc': sortField === 'executed_at' && sortDirection === 'desc',
+            }"
+            @click="setSort('executed_at')"
+          >
+            Last Executed
+            <span class="material-symbols-outlined sort-icon">
+              {{
+                sortField === 'executed_at' && sortDirection === 'desc'
+                  ? 'arrow_downward'
+                  : 'arrow_upward'
+              }}
+            </span>
+          </button>
+        </div>
+      </div>
+
       <!-- Loading State -->
-      <div v-if="loading" class="loading-state">
+      <div v-if="loading && !hasMoreData" class="loading-state">
         <div class="spinner"></div>
         <p>Loading test cases...</p>
       </div>
 
       <!-- Test Cases Table -->
       <div v-else class="testcases-table">
-        <div class="table-container">
+        <div class="table-container" ref="tableContainer" @scroll="handleScroll">
           <table>
             <thead>
               <tr>
@@ -170,7 +263,7 @@
             </thead>
             <tbody>
               <tr
-                v-for="testcase in filteredTestCases"
+                v-for="testcase in displayedTestCases"
                 :key="testcase._id"
                 :class="{ selected: selectedTestCases.includes(testcase._id) }"
                 class="testcase-row"
@@ -254,8 +347,14 @@
             </tbody>
           </table>
 
+          <!-- Loading more indicator -->
+          <div v-if="loading && hasMoreData" class="loading-more">
+            <div class="spinner small"></div>
+            <p>Loading more test cases...</p>
+          </div>
+
           <!-- Empty State -->
-          <div v-if="filteredTestCases.length === 0" class="empty-state">
+          <div v-if="displayedTestCases.length === 0 && !loading" class="empty-state">
             <span class="material-symbols-outlined">playlist_remove</span>
             <h3>No test cases found</h3>
             <p v-if="searchQuery || statusFilter || testTypeFilter || priorityFilter">
@@ -339,7 +438,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
@@ -360,6 +459,19 @@ export default {
     TestcaseDetailModal,
     TestcaseExecutionModal,
   },
+  async created() {
+    const projectId = this.$route.params.id
+    if (projectId) {
+      await this.fetchProjectData(projectId)
+      this.initSocketConnection(projectId) // ✅ THÊM DÒNG NÀY
+    }
+  },
+  beforeUnmount() {
+    // ✅ THÊM: Cleanup socket connection
+    if (this.project?._id) {
+      this.cleanupSocketConnection(this.project._id)
+    }
+  },
   setup() {
     const route = useRoute()
     const router = useRouter()
@@ -374,6 +486,7 @@ export default {
     const databaseSchema = ref(null)
     const testCases = ref([])
     const loading = ref(false)
+    const tableContainer = ref(null)
 
     // UI states
     const showGenerateModal = ref(false)
@@ -389,6 +502,45 @@ export default {
     const priorityFilter = ref('')
     const selectedTestCases = ref([])
     const selectAll = ref(false)
+
+    // Sorting
+    const sortField = ref('title')
+    const sortDirection = ref('asc')
+
+    // Infinite scroll
+    const displayedTestCases = ref([])
+    const itemsPerPage = 50
+    const currentPage = ref(1)
+    const hasMoreData = ref(true)
+
+    // Load sorting preferences from localStorage
+    const loadSortingPreferences = () => {
+      try {
+        const savedSort = localStorage.getItem('testcaseSorting')
+        if (savedSort) {
+          const { field, direction } = JSON.parse(savedSort)
+          sortField.value = field || 'title'
+          sortDirection.value = direction || 'asc'
+        }
+      } catch (error) {
+        console.warn('Failed to load sorting preferences:', error)
+      }
+    }
+
+    // Save sorting preferences to localStorage
+    const saveSortingPreferences = () => {
+      try {
+        localStorage.setItem(
+          'testcaseSorting',
+          JSON.stringify({
+            field: sortField.value,
+            direction: sortDirection.value,
+          })
+        )
+      } catch (error) {
+        console.warn('Failed to save sorting preferences:', error)
+      }
+    }
 
     // Computed statistics với fallback data
     const statistics = computed(() => {
@@ -436,7 +588,7 @@ export default {
 
     // Computed filtered test cases
     const filteredTestCases = computed(() => {
-      let filtered = testCases.value
+      let filtered = [...testCases.value]
 
       if (searchQuery.value) {
         const query = searchQuery.value.toLowerCase()
@@ -466,6 +618,28 @@ export default {
       if (priorityFilter.value) {
         filtered = filtered.filter((tc) => tc.priority === priorityFilter.value)
       }
+
+      // Apply sorting
+      filtered.sort((a, b) => {
+        let aValue = a[sortField.value]
+        let bValue = b[sortField.value]
+
+        // Handle special cases for sorting
+        if (sortField.value === 'executed_at') {
+          aValue = aValue ? new Date(aValue).getTime() : 0
+          bValue = bValue ? new Date(bValue).getTime() : 0
+        }
+
+        // Handle empty values
+        if (!aValue && bValue) return sortDirection.value === 'asc' ? -1 : 1
+        if (aValue && !bValue) return sortDirection.value === 'asc' ? 1 : -1
+        if (!aValue && !bValue) return 0
+
+        // Compare values
+        if (aValue < bValue) return sortDirection.value === 'asc' ? -1 : 1
+        if (aValue > bValue) return sortDirection.value === 'asc' ? 1 : -1
+        return 0
+      })
 
       return filtered
     })
@@ -563,15 +737,46 @@ export default {
         testCases.value = data.data || data || []
         console.log(`✅ Loaded ${testCases.value.length} test cases`)
 
-        // Reset selection khi data thay đổi
+        // Reset selection và infinite scroll khi data thay đổi
         selectedTestCases.value = []
         selectAll.value = false
+        currentPage.value = 1
+        hasMoreData.value = true
+        loadMoreData()
       } catch (error) {
         console.error('❌ Error loading test cases:', error)
         toast.error('Failed to load test cases')
         testCases.value = []
       } finally {
         loading.value = false
+      }
+    }
+
+    // Infinite scroll - load more data
+    const loadMoreData = () => {
+      const startIndex = (currentPage.value - 1) * itemsPerPage
+      const endIndex = startIndex + itemsPerPage
+      const newItems = filteredTestCases.value.slice(startIndex, endIndex)
+
+      if (currentPage.value === 1) {
+        displayedTestCases.value = newItems
+      } else {
+        displayedTestCases.value = [...displayedTestCases.value, ...newItems]
+      }
+
+      hasMoreData.value = endIndex < filteredTestCases.value.length
+    }
+
+    // Handle scroll for infinite loading
+    const handleScroll = () => {
+      if (!tableContainer.value || loading.value || !hasMoreData.value) return
+
+      const { scrollTop, scrollHeight, clientHeight } = tableContainer.value
+      const scrollThreshold = 100 // pixels from bottom
+
+      if (scrollTop + clientHeight >= scrollHeight - scrollThreshold) {
+        currentPage.value += 1
+        loadMoreData()
       }
     }
 
@@ -743,14 +948,46 @@ export default {
       priorityFilter.value = ''
       selectedTestCases.value = []
       selectAll.value = false
+      currentPage.value = 1
+      loadMoreData()
+    }
+
+    const applyFilters = () => {
+      currentPage.value = 1
+      loadMoreData()
+    }
+
+    const handleSearch = () => {
+      clearTimeout(window.searchTimeout)
+      window.searchTimeout = setTimeout(() => {
+        applyFilters()
+      }, 500)
     }
 
     const toggleSelectAll = () => {
       if (selectAll.value) {
-        selectedTestCases.value = filteredTestCases.value.map((tc) => tc._id)
+        selectedTestCases.value = displayedTestCases.value.map((tc) => tc._id)
       } else {
         selectedTestCases.value = []
       }
+    }
+
+    const setSort = (field) => {
+      if (sortField.value === field) {
+        // Toggle direction if same field
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+      } else {
+        // New field, default to ascending
+        sortField.value = field
+        sortDirection.value = 'asc'
+      }
+
+      // Save to localStorage
+      saveSortingPreferences()
+
+      // Reset to first page and reload data
+      currentPage.value = 1
+      loadMoreData()
     }
 
     const exportTestCases = () => {
@@ -816,33 +1053,50 @@ export default {
     // Lifecycle
     onMounted(async () => {
       console.log('🏁 TestcaseManagement mounted')
+      loadSortingPreferences()
       await loadAllData()
     })
 
     onUnmounted(() => {
-      if (project.value._id) {
-        cleanupSocketConnection(project.value._id)
-      }
-      console.log('🧹 TestcaseManagement unmounted')
+      console.log('🧹 Cleaning up TestcaseManagement')
+      cleanupSocketConnection()
     })
 
-    // Watch for version changes
-    watch(selectedVersionId, (newVersionId) => {
-      if (newVersionId) {
-        console.log('🔄 Version changed to:', newVersionId)
-        fetchRequirements()
-        fetchDatabaseSchema()
-        loadTestCases()
+    // Watchers
+    watch(
+      () => route.params.id,
+      async (newId) => {
+        if (newId) {
+          console.log('🔄 Route changed, reloading data for project:', newId)
+          await loadAllData()
+        }
       }
-    })
+    )
 
-    // Watch for filter changes với debounce
-    let filterTimeout
-    watch([searchQuery, statusFilter, testTypeFilter, priorityFilter], () => {
-      clearTimeout(filterTimeout)
-      filterTimeout = setTimeout(() => {
-        loadTestCases()
-      }, 300)
+    watch(
+      () => selectedVersionId.value,
+      (newVersionId) => {
+        if (newVersionId) {
+          console.log('🔄 Version changed, reloading requirements and schema')
+          fetchRequirements()
+          fetchDatabaseSchema()
+          loadTestCases()
+        }
+      }
+    )
+
+    watch(
+      () => filteredTestCases.value,
+      () => {
+        // Reset infinite scroll when filters change
+        currentPage.value = 1
+        loadMoreData()
+      }
+    )
+
+    watch(selectedTestCases, (newSelection) => {
+      selectAll.value =
+        newSelection.length > 0 && newSelection.length === displayedTestCases.value.length
     })
 
     return {
@@ -851,33 +1105,46 @@ export default {
       versions,
       selectedVersionId,
       requirements,
+      databaseSchema,
       testCases,
-      statistics,
       loading,
+      tableContainer,
+      displayedTestCases,
+      hasMoreData,
       activeUsers,
 
-      // UI States
+      // UI states
       showGenerateModal,
       showCreateModal,
       editingTestcase,
       viewingTestcase,
       executingTestcase,
 
-      // Filters
+      // Filters and selection
       searchQuery,
       statusFilter,
       testTypeFilter,
       priorityFilter,
       selectedTestCases,
       selectAll,
-      filteredTestCases,
+
+      // Sorting
+      sortField,
+      sortDirection,
+
+      // Computed
+      statistics,
+      initSocketConnection,
 
       // Methods
       handleVersionSelect,
+      navigateToUsecase,
+      navigateToOutput,
+      goBack,
       handleGenerateTestCases,
       handleSaveTestcase,
-      handleExecuteTestcase,
       executeTestcase,
+      handleExecuteTestcase,
       bulkExecute,
       bulkDelete,
       deleteTestcase,
@@ -886,12 +1153,14 @@ export default {
       closeModal,
       refreshData,
       clearFilters,
+      applyFilters,
+      handleSearch,
       toggleSelectAll,
+      setSort,
       exportTestCases,
       formatDate,
-      navigateToUsecase,
-      navigateToOutput,
-      goBack,
+      handleScroll,
+      fetchProjectData,
     }
   },
 }
@@ -899,154 +1168,142 @@ export default {
 
 <style scoped>
 .testcase-management-view {
-  padding: 24px;
-  background: #f8fafc;
+  padding: 30px;
   min-height: 100vh;
+  background: var(--background-color);
+}
+
+.navigation-tabs {
   display: flex;
-  flex-direction: column;
+  background: white;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 2rem;
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+  color: #1a365d;
+  background: var(--background-color);
+}
+
+.tab-button.active {
+  color: #1a365d;
+  border-bottom-color: #1a365d;
 }
 
 .testcase-content {
-  flex: 1;
+  padding: 2rem;
   max-width: 1400px;
   margin: 0 auto;
-  width: 100%;
 }
 
 .action-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: between;
   align-items: flex-start;
-  margin-bottom: 32px;
-  gap: 20px;
+  margin-bottom: 2rem;
 }
 
 .header-left h2 {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  color: #1a365d;
-  margin-bottom: 8px;
-  line-height: 1.2;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem 0;
 }
 
 .subtitle {
-  color: #6b7280;
-  font-size: 1rem;
+  color: var(--text-secondary);
   margin: 0;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
-  flex-shrink: 0;
+  gap: 1rem;
+}
+
+.btn-primary,
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
   background: #1a365d;
   color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  font-size: 0.875rem;
 }
 
 .btn-primary:hover {
-  background: #2d4a8a;
+  background: #27446c;
+  color: white;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.2);
 }
 
 .btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background: white;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 0.875rem;
-  font-weight: 500;
+  background: var(--background-color);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
 }
 
 .btn-secondary:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-  transform: translateY(-1px);
-}
-
-.btn-secondary.success {
-  background: #d1fae5;
-  color: #065f46;
-  border-color: #a7f3d0;
-}
-
-.btn-secondary.success:hover {
-  background: #a7f3d0;
-}
-
-.btn-secondary.warning {
-  background: #fef3c7;
-  color: #92400e;
-  border-color: #fde68a;
-}
-
-.btn-secondary.warning:hover {
-  background: #fde68a;
-}
-
-.btn-secondary.danger {
-  background: #fee2e2;
-  color: #991b1b;
-  border-color: #fecaca;
-}
-
-.btn-secondary.danger:hover {
-  background: #fecaca;
+  background: var(--border-color);
 }
 
 .btn-icon {
-  padding: 8px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  color: #6b7280;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--background-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.btn-icon:hover:not(:disabled) {
-  background: #f3f4f6;
-  color: #374151;
+.btn-icon:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
 }
 
-.btn-icon:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.btn-icon.success {
+  color: var(--success-color);
 }
 
-.btn-icon.danger:hover:not(:disabled) {
-  background: #fee2e2;
-  color: #dc2626;
+.btn-icon.success:hover {
+  background: var(--success-light);
 }
 
-.btn-icon.success:hover:not(:disabled) {
-  background: #d1fae5;
-  color: #065f46;
+.btn-icon.danger {
+  color: var(--error-color);
 }
 
+.btn-icon.danger:hover {
+  background: var(--error-light);
+}
+
+/* Stats Grid */
 /* Stats Grid */
 .stats-grid {
   display: grid;
@@ -1141,99 +1398,369 @@ export default {
   margin: 0;
   font-weight: 500;
 }
-
 /* Filters Section */
 .filters-section {
   display: flex;
-  justify-content: space-between;
+  justify-content: between;
   align-items: center;
-  margin-bottom: 24px;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .filter-group {
   display: flex;
-  gap: 12px;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 1rem;
   flex: 1;
 }
 
 .search-input-wrapper {
   position: relative;
-  display: flex;
-  align-items: center;
+  flex: 1;
+  max-width: 300px;
 }
 
 .search-icon {
   position: absolute;
-  left: 12px;
-  color: #9ca3af;
-  z-index: 1;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
 }
 
 .search-input {
-  padding: 10px 12px 10px 40px;
-  border: 1px solid #d1d5db;
+  width: 100%;
+  padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 0.875rem;
-  width: 280px;
-  background: white;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease;
 }
 
 .search-input:focus {
   outline: none;
   border-color: #1a365d;
-  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
+  box-shadow: 0 0 0 3px var(--primary-light);
 }
 
 .filter-select {
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  font-size: 0.875rem;
   background: white;
+  color: var(--text-primary);
+  font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 140px;
+  min-width: 120px;
 }
 
 .filter-select:focus {
   outline: none;
   border-color: #1a365d;
-  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
 }
 
 .clear-filters {
-  padding: 10px 16px;
+  padding: 0.75rem 1rem;
 }
 
 .view-actions {
   display: flex;
-  gap: 8px;
-  flex-shrink: 0;
+  gap: 0.5rem;
 }
 
-/* Loading State */
-.loading-state {
-  text-align: center;
-  padding: 80px 20px;
-  color: #6b7280;
+/* Sorting Section */
+.sorting-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.5rem;
   background: white;
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.sort-label {
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.sort-options {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.sort-option {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: white;
+  color: #1a365d;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sort-option:hover {
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.sort-option.active {
+  background: #1a365d;
+  border-color: #1a365d;
+  color: white;
+}
+
+.sort-option.sort-desc .sort-icon {
+  transform: rotate(180deg);
+}
+
+.sort-icon {
+  font-size: 1rem;
+  transition: transform 0.2s ease;
+}
+
+/* Table */
+.testcases-table {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.table-container {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 10;
+}
+
+th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.checkbox-column {
+  width: 40px;
+  text-align: center;
+}
+
+.title-column {
+  min-width: 250px;
+}
+
+.type-column,
+.priority-column,
+.status-column {
+  width: 120px;
+}
+
+.tables-column {
+  min-width: 150px;
+}
+
+.date-column {
+  width: 140px;
+}
+
+.actions-column {
+  width: 160px;
+}
+
+.testcase-row {
+  transition: background-color 0.2s ease;
+}
+
+.testcase-row:hover {
+  background: var(--background-color);
+}
+
+.testcase-row.selected {
+  background: var(--primary-light);
+}
+
+.testcase-title .title-main {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.testcase-title .title-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Badges */
+.type-badge,
+.priority-badge,
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.type-badge.unit {
+  background: var(--success-light);
+  color: var(--success-color);
+}
+
+.type-badge.integration {
+  background: var(--info-light);
+  color: var(--info-color);
+}
+
+.type-badge.api {
+  background: var(--primary-light);
+  color: #1a365d;
+}
+
+.type-badge.ui {
+  background: var(--warning-light);
+  color: var(--warning-color);
+}
+
+.type-badge.performance {
+  background: var(--purple-light);
+  color: var(--purple-color);
+}
+
+.type-badge.security {
+  background: var(--error-light);
+  color: var(--error-color);
+}
+
+.priority-badge.critical {
+  background: var(--error-light);
+  color: var(--error-color);
+}
+
+.priority-badge.high {
+  background: var(--warning-light);
+  color: var(--warning-color);
+}
+
+.priority-badge.medium {
+  background: var(--info-light);
+  color: var(--info-color);
+}
+
+.priority-badge.low {
+  background: var(--success-light);
+  color: var(--success-color);
+}
+
+.status-badge.passed {
+  background: var(--success-light);
+  color: var(--success-color);
+}
+
+.status-badge.failed {
+  background: var(--error-light);
+  color: var(--error-color);
+}
+
+.status-badge.blocked {
+  background: var(--warning-light);
+  color: var(--warning-color);
+}
+
+.status-badge.not_executed {
+  background: var(--gray-light);
+  color: var(--gray-color);
+}
+
+.status-badge.in_progress {
+  background: var(--info-light);
+  color: var(--info-color);
+}
+
+.database-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.table-tag {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: var(--background-color);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.no-tables {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.last-executed {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.25rem;
+}
+
+/* Loading States */
+.loading-state,
+.loading-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: var(--text-secondary);
 }
 
 .spinner {
-  border: 3px solid #f3f4f6;
-  border-top: 3px solid #1a365d;
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid var(--border-color);
+  border-top: 2px solid #1a365d;
   border-radius: 50%;
-  width: 40px;
-  height: 40px;
   animation: spin 1s linear infinite;
-  margin: 0 auto 16px;
+  margin-bottom: 1rem;
+}
+
+.spinner.small {
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 .spinning {
@@ -1249,333 +1776,108 @@ export default {
   }
 }
 
-/* Test Cases Table */
-.testcases-table {
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
-}
-
-.table-container {
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 1000px;
-}
-
-thead {
-  background: #f9fafb;
-  border-bottom: 2px solid #e5e7eb;
-}
-
-th {
-  padding: 16px 12px;
-  text-align: left;
-  font-weight: 600;
-  color: #374151;
-  font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-
-.checkbox-column {
-  width: 40px;
-  padding-left: 16px;
-}
-
-.title-column {
-  min-width: 250px;
-}
-
-.type-column {
-  width: 120px;
-}
-
-.priority-column {
-  width: 100px;
-}
-
-.status-column {
-  width: 120px;
-}
-
-.tables-column {
-  min-width: 150px;
-}
-
-.date-column {
-  width: 120px;
-}
-
-.actions-column {
-  width: 140px;
-}
-
-td {
-  padding: 16px 12px;
-  border-bottom: 1px solid #f3f4f6;
-  vertical-align: top;
-}
-
-.testcase-row:hover {
-  background: #f9fafb;
-}
-
-.testcase-row.selected {
-  background: #eff6ff;
-}
-
-.testcase-title .title-main {
-  font-weight: 600;
-  color: #1f2937;
-  line-height: 1.4;
-  margin-bottom: 4px;
-}
-
-.testcase-title .title-desc {
-  font-size: 0.875rem;
-  color: #6b7280;
-  line-height: 1.4;
-}
-
-/* Badges */
-.type-badge,
-.priority-badge,
-.status-badge {
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: capitalize;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-}
-
-/* Type badges */
-.type-badge.unit {
-  background: #dbeafe;
-  color: #1e40af;
-}
-.type-badge.integration {
-  background: #d1fae5;
-  color: #065f46;
-}
-.type-badge.api {
-  background: #f3e8ff;
-  color: #7e22ce;
-}
-.type-badge.ui {
-  background: #fef3c7;
-  color: #92400e;
-}
-.type-badge.performance {
-  background: #fce7f3;
-  color: #be185d;
-}
-.type-badge.security {
-  background: #fecaca;
-  color: #991b1b;
-}
-
-/* Priority badges */
-.priority-badge.critical {
-  background: #fecaca;
-  color: #991b1b;
-}
-.priority-badge.high {
-  background: #fed7aa;
-  color: #9a3412;
-}
-.priority-badge.medium {
-  background: #fef08a;
-  color: #854d0e;
-}
-.priority-badge.low {
-  background: #dcfce7;
-  color: #166534;
-}
-
-/* Status badges */
-.status-badge.passed {
-  background: #d1fae5;
-  color: #065f46;
-}
-.status-badge.failed {
-  background: #fee2e2;
-  color: #991b1b;
-}
-.status-badge.blocked {
-  background: #fef3c7;
-  color: #92400e;
-}
-.status-badge.not_executed {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-.status-badge.in_progress {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.database-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.table-tag {
-  padding: 4px 8px;
-  background: #e5e7eb;
-  color: #374151;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.no-tables {
-  color: #9ca3af;
-  font-style: italic;
-  font-size: 0.875rem;
-}
-
-.last-executed {
-  color: #6b7280;
-  font-size: 0.875rem;
-  white-space: nowrap;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 4px;
-  justify-content: flex-end;
-}
-
-/* Bulk Actions */
-.bulk-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  background: #f8fafc;
-  border-top: 1px solid #e5e7eb;
-  gap: 16px;
-}
-
-.bulk-info {
-  font-weight: 600;
-  color: #374151;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.bulk-buttons {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* Navigation Tabs */
-.navigation-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
-  padding: 0 4px;
-}
-
-.tab-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-weight: 600;
-  color: #6b7280;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-decoration: none;
-}
-
-.tab-button:hover {
-  border-color: #1a365d;
-  color: #1a365d;
-  transform: translateY(-1px);
-}
-
-.tab-button.active {
-  background: #1a365d;
-  border-color: #1a365d;
-  color: white;
-}
-
-.tab-button .material-symbols-outlined {
-  font-size: 20px;
-}
-
 /* Empty State */
 .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
   text-align: center;
-  padding: 80px 20px;
-  color: #6b7280;
-  background: white;
 }
 
 .empty-state .material-symbols-outlined {
-  font-size: 64px;
-  margin-bottom: 16px;
-  opacity: 0.5;
+  font-size: 4rem;
+  color: var(--text-tertiary);
+  margin-bottom: 1rem;
 }
 
 .empty-state h3 {
   font-size: 1.25rem;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 8px;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
 }
 
 .empty-state p {
-  margin-bottom: 24px;
+  color: var(--text-secondary);
+  margin: 0 0 2rem 0;
   max-width: 400px;
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .empty-state-actions {
   display: flex;
-  gap: 12px;
+  gap: 1rem;
+}
+.empty-state-actions button:hover {
+  opacity: 0.9;
+  border: 1px solid #1a365d;
+  color: #121212;
+}
+/* Bulk Actions */
+.bulk-actions {
+  display: flex;
+  gap: 1pc;
+  border-radius: 15px;
+  justify-self: center;
   justify-content: center;
-  flex-wrap: wrap;
+  width: 70%;
+  border: 2px solid #000;
+  left: 0;
+  right: 0;
+  position: fixed;
+  background-color: #fff;
+  flex-direction: column;
+  bottom: 20px;
+  justify-content: between;
+  align-items: center;
+  padding: 1rem 1.5rem;
 }
 
-/* Responsive Design */
+.bulk-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #1a365d;
+  font-weight: 500;
+}
+
+.bulk-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-secondary.success {
+  background: var(--success-light);
+  color: var(--success-color);
+  border-color: var(--success-color);
+}
+
+.btn-secondary.warning {
+  background: var(--warning-light);
+  color: var(--warning-color);
+  border-color: var(--warning-color);
+}
+
+.btn-secondary.danger {
+  background: var(--error-light);
+  color: var(--error-color);
+  border-color: var(--error-color);
+}
+
+/* Responsive */
 @media (max-width: 1024px) {
-  .testcase-management-view {
-    padding: 16px;
+  .testcase-content {
+    padding: 1rem;
   }
 
   .action-header {
     flex-direction: column;
-    align-items: stretch;
-    gap: 16px;
+    gap: 1rem;
   }
 
   .header-actions {
-    justify-content: flex-start;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 16px;
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .filters-section {
@@ -1584,86 +1886,43 @@ td {
   }
 
   .filter-group {
-    justify-content: space-between;
+    flex-wrap: wrap;
   }
 
-  .search-input {
-    width: 100%;
-    max-width: 300px;
+  .search-input-wrapper {
+    max-width: none;
   }
 }
 
 @media (max-width: 768px) {
   .navigation-tabs {
-    flex-direction: column;
+    padding: 0 1rem;
   }
 
-  .stats-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .stat-card {
-    padding: 16px;
-  }
-
-  .stat-icon {
-    width: 44px;
-    height: 44px;
-  }
-
-  .stat-info h3 {
-    font-size: 1.5rem;
-  }
-
-  .filter-group {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .search-input,
-  .filter-select {
-    width: 100%;
-    max-width: none;
-  }
-
-  .bulk-actions {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  .bulk-buttons {
-    justify-content: stretch;
-  }
-
-  .bulk-buttons .btn-secondary {
-    flex: 1;
-    justify-content: center;
-  }
-}
-
-@media (max-width: 640px) {
   .stats-grid {
     grid-template-columns: 1fr;
   }
 
-  .header-left h2 {
-    font-size: 1.5rem;
-  }
-
-  .action-buttons {
+  .sorting-section {
     flex-direction: column;
-    gap: 4px;
+    align-items: stretch;
   }
 
-  .empty-state-actions {
+  .sort-options {
+    flex-wrap: wrap;
+  }
+
+  .table-container {
+    overflow-x: auto;
+  }
+
+  .bulk-actions {
     flex-direction: column;
-    align-items: center;
+    gap: 1rem;
+    align-items: stretch;
   }
 
-  .empty-state-actions .btn-primary,
-  .empty-state-actions .btn-secondary {
-    width: 200px;
+  .bulk-buttons {
     justify-content: center;
   }
 }

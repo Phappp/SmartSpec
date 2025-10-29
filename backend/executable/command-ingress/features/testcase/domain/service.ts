@@ -7,7 +7,7 @@ export class TestcaseService {
     private testcaseGeminiService = new TestcaseGeminiService();
 
     /**
-     * Generate test cases từ requirements và database schema với selection
+     * Generate ENTERPRISE test cases từ requirements và database schema với selection
      */
     async generateTestCases(
         projectId: string,
@@ -15,7 +15,7 @@ export class TestcaseService {
         selectedRequirementIds: string[],
         language: string = 'vi-VN'
     ) {
-        console.log(`🎯 Generating test cases for ${selectedRequirementIds.length} selected requirements`);
+        console.log(`🎯 Generating ENTERPRISE test cases for ${selectedRequirementIds.length} selected requirements`);
 
         // 1. TỰ ĐỘNG lấy requirements từ version
         const version = await Version.findOne({
@@ -47,7 +47,7 @@ export class TestcaseService {
 
         console.log(`📊 Loaded ${requirementsToProcess.length} requirements and ${database.tables?.length || 0} tables`);
 
-        // 3. Gen test cases
+        // 3. Gen ENTERPRISE test cases
         return await this.testcaseGeminiService.generateTestCases(
             requirementsToProcess,
             database,
@@ -56,7 +56,7 @@ export class TestcaseService {
     }
 
     /**
-     * Enhance existing test cases với requirements mới
+     * Enhance existing test cases với requirements mới theo Enterprise standard
      */
     async enhanceTestCases(
         projectId: string,
@@ -76,11 +76,19 @@ export class TestcaseService {
             _id: versionId
         });
 
+        if (!version) {
+            throw new Error("Version not found");
+        }
+
         const newRequirements = version.requirement_model.filter(
             req => newRequirementIds.includes(req.id)
         );
 
-        // 3. Enhance
+        if (newRequirements.length === 0) {
+            throw new Error("No matching new requirements found");
+        }
+
+        // 3. Enhance với Enterprise standard
         return await this.testcaseGeminiService.enhanceTestCases(
             existingTestCases,
             newRequirements,
@@ -88,9 +96,8 @@ export class TestcaseService {
         );
     }
 
-
     /**
-     * Lưu test cases vào database
+     * Lưu ENTERPRISE test cases vào database
      */
     async saveTestCases(projectId: string, versionId: string, testCases: any[], createdBy?: string) {
         const testCasesToSave = testCases.map(testCase => ({
@@ -104,27 +111,29 @@ export class TestcaseService {
     }
 
     /**
-     * Lấy test cases theo project và version
+     * Lấy test cases theo project và version với Enterprise filters
      */
     async getTestCasesByProject(projectId: string, versionId?: string, filters: any = {}) {
         const query: any = { project_id: projectId };
         if (versionId) query.version_id = versionId;
 
-        // Apply filters
+        // Apply Enterprise filters
         if (filters.test_type) query.test_type = filters.test_type;
         if (filters.status) query.status = filters.status;
         if (filters.priority) query.priority = filters.priority;
         if (filters.database_tables) query.database_tables = { $in: filters.database_tables };
+        if (filters.source_requirement_ids) query.source_requirement_ids = { $in: filters.source_requirement_ids };
+        if (filters.automation_tags) query["automation.tags"] = { $in: filters.automation_tags };
 
         return await Testcase.find(query)
             .populate('created_by', 'name email')
             .populate('executed_by', 'name email')
-            .sort({ createdAt: -1 })
+            .sort({ priority: -1, createdAt: -1 })
             .lean();
     }
 
     /**
-     * Lấy test cases theo database table
+     * Lấy test cases theo database table với Enterprise format
      */
     async getTestCasesByDatabaseTable(projectId: string, tableName: string, versionId?: string) {
         const query: any = {
@@ -140,7 +149,7 @@ export class TestcaseService {
     }
 
     /**
-     * Lấy test case theo ID
+     * Lấy test case theo ID với Enterprise data
      */
     async getTestCaseById(id: string) {
         return await Testcase.findById(id)
@@ -150,7 +159,7 @@ export class TestcaseService {
     }
 
     /**
-     * Cập nhật test case
+     * Cập nhật test case với Enterprise fields
      */
     async updateTestCase(id: string, updateData: any, updatedBy?: string) {
         const forbiddenFields = ['_id', 'project_id', 'version_id', 'created_at', 'created_by'];
@@ -165,23 +174,36 @@ export class TestcaseService {
             { $set: updateData },
             { new: true, runValidators: true }
         ).populate('created_by', 'name email')
-            .populate('executed_by', 'name email');
+         .populate('executed_by', 'name email');
     }
 
     /**
-     * Thực thi test case
+     * Thực thi test case với Enterprise logging
      */
     async executeTestCase(id: string, executionData: any, executedBy?: string) {
         const updateData: any = {
             status: executionData.status,
-            executed_at: new Date()
+            executed_at: new Date(),
+            actual_result: executionData.actual_result || ''
         };
 
-        if (executionData.actual_result !== undefined) updateData.actual_result = executionData.actual_result;
-        if (executionData.execution_logs !== undefined) updateData.execution_logs = executionData.execution_logs;
         if (executionData.environment !== undefined) updateData.environment = executionData.environment;
+        if (executionData.execution_logs !== undefined) updateData.execution_logs = executionData.execution_logs;
         if (executionData.exceptions !== undefined) updateData.exceptions = executionData.exceptions;
         if (executedBy !== undefined) updateData.executed_by = executedBy;
+
+        // 🆕 Update test data với actual outputs nếu có
+        if (executionData.test_data_actual_outputs) {
+            const testCase = await Testcase.findById(id);
+            if (testCase && testCase.test_data) {
+                testCase.test_data.forEach((testData, index) => {
+                    if (executionData.test_data_actual_outputs[index]) {
+                        testData.actual_outputs = executionData.test_data_actual_outputs[index];
+                    }
+                });
+                updateData.test_data = testCase.test_data;
+            }
+        }
 
         return await Testcase.findByIdAndUpdate(
             id,
@@ -198,7 +220,7 @@ export class TestcaseService {
     }
 
     /**
-     * Lấy test statistics với database coverage
+     * Lấy ENTERPRISE test statistics với database coverage
      */
     async getTestStatistics(projectId: string, versionId?: string) {
         const query: any = { project_id: projectId };
@@ -233,9 +255,10 @@ export class TestcaseService {
                             $cond: [{ $eq: ["$automation.is_automated", true] }, 1, 0]
                         }
                     },
-                    // 🆕 Thống kê database coverage
+                    // 🆕 ENTERPRISE statistics
                     database_tables_covered: { $addToSet: "$database_tables" },
-                    database_operations_covered: { $addToSet: "$database_operations" }
+                    database_operations_covered: { $addToSet: "$database_operations" },
+                    requirement_coverage: { $addToSet: "$source_requirement_ids" }
                 }
             },
             {
@@ -284,11 +307,12 @@ export class TestcaseService {
                             }
                         }
                     },
-                    // 🆕 Database coverage stats
+                    // 🆕 ENTERPRISE coverage stats
                     database_coverage: {
                         tables_covered: { $size: { $setUnion: "$database_tables_covered" } },
                         operations_covered: { $size: { $setUnion: "$database_operations_covered" } }
-                    }
+                    },
+                    requirement_coverage_count: { $size: { $setUnion: "$requirement_coverage" } }
                 }
             }
         ]);
@@ -303,12 +327,13 @@ export class TestcaseService {
             database_coverage: {
                 tables_covered: 0,
                 operations_covered: 0
-            }
+            },
+            requirement_coverage_count: 0
         };
     }
 
     /**
-     * 🆕 Lấy database coverage report
+     * 🆕 Lấy ENTERPRISE database coverage report
      */
     async getDatabaseCoverageReport(projectId: string, versionId?: string) {
         const query: any = { project_id: projectId };
@@ -321,7 +346,7 @@ export class TestcaseService {
         const database = await Database.findOne(dbQuery).lean();
         const totalTables = database?.tables?.length || 0;
 
-        // Lấy thống kê test cases coverage
+        // Lấy thống kê test cases coverage với Enterprise format
         const coverageStats = await Testcase.aggregate([
             { $match: query },
             { $unwind: "$database_tables" },
@@ -330,7 +355,8 @@ export class TestcaseService {
                     _id: "$database_tables",
                     test_case_count: { $sum: 1 },
                     test_types: { $addToSet: "$test_type" },
-                    priorities: { $addToSet: "$priority" }
+                    priorities: { $addToSet: "$priority" },
+                    operations: { $addToSet: "$database_operations" }
                 }
             },
             {
@@ -339,26 +365,152 @@ export class TestcaseService {
                     test_case_count: 1,
                     test_types: 1,
                     priorities: 1,
+                    operations: 1,
                     coverage_score: {
-                        $cond: [
-                            { $gt: ["$test_case_count", 0] },
-                            "good",
-                            "poor"
-                        ]
+                        $switch: {
+                            branches: [
+                                { case: { $gt: ["$test_case_count", 5] }, then: "excellent" },
+                                { case: { $gt: ["$test_case_count", 2] }, then: "good" },
+                                { case: { $gt: ["$test_case_count", 0] }, then: "fair" }
+                            ],
+                            default: "poor"
+                        }
                     }
                 }
             },
             { $sort: { test_case_count: -1 } }
         ]);
 
+        // 🆕 Tính coverage chi tiết
+        const uncoveredTables = database?.tables
+            ?.filter((table: any) => !coverageStats.some((stat: any) => stat.table_name === table.name))
+            .map((table: any) => ({
+                name: table.name,
+                description: table.description,
+                columns_count: table.columns?.length || 0
+            })) || [];
+
         return {
             total_tables: totalTables,
             covered_tables: coverageStats.length,
             coverage_percentage: totalTables > 0 ? Math.round((coverageStats.length / totalTables) * 100) : 0,
             table_coverage: coverageStats,
-            uncovered_tables: database?.tables
-                ?.filter((table: any) => !coverageStats.some((stat: any) => stat.table_name === table.name))
-                .map((table: any) => table.name) || []
+            uncovered_tables: uncoveredTables,
+            // 🆕 ENTERPRISE metrics
+            coverage_quality: {
+                excellent: coverageStats.filter((s: any) => s.coverage_score === "excellent").length,
+                good: coverageStats.filter((s: any) => s.coverage_score === "good").length,
+                fair: coverageStats.filter((s: any) => s.coverage_score === "fair").length,
+                poor: coverageStats.filter((s: any) => s.coverage_score === "poor").length
+            }
         };
+    }
+
+    /**
+     * 🆕 Lấy requirement coverage report
+     */
+    async getRequirementCoverageReport(projectId: string, versionId?: string) {
+        const query: any = { project_id: projectId };
+        if (versionId) query.version_id = versionId;
+
+        // Lấy requirements từ version
+        const versionQuery: any = { project_id: projectId };
+        if (versionId) versionQuery._id = versionId;
+
+        const version = await Version.findOne(versionQuery).lean();
+        const totalRequirements = version?.requirement_model?.length || 0;
+
+        // Lấy covered requirements từ test cases
+        const coverageStats = await Testcase.aggregate([
+            { $match: query },
+            { $unwind: "$source_requirement_ids" },
+            {
+                $group: {
+                    _id: "$source_requirement_ids",
+                    test_case_count: { $sum: 1 },
+                    test_types: { $addToSet: "$test_type" },
+                    priorities: { $addToSet: "$priority" }
+                }
+            },
+            {
+                $lookup: {
+                    from: "versions",
+                    let: { requirementId: "$_id", projectId: projectId },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$project_id", { $toObjectId: projectId }] } } },
+                        { $unwind: "$requirement_model" },
+                        { $match: { $expr: { $eq: ["$requirement_model.id", "$$requirementId"] } } },
+                        { $replaceRoot: { newRoot: "$requirement_model" } }
+                    ],
+                    as: "requirement_info"
+                }
+            },
+            {
+                $project: {
+                    requirement_id: "$_id",
+                    requirement_name: { $arrayElemAt: ["$requirement_info.name", 0] },
+                    requirement_priority: { $arrayElemAt: ["$requirement_info.priority", 0] },
+                    test_case_count: 1,
+                    test_types: 1,
+                    priorities: 1,
+                    coverage_score: {
+                        $switch: {
+                            branches: [
+                                { case: { $gt: ["$test_case_count", 3] }, then: "excellent" },
+                                { case: { $gt: ["$test_case_count", 1] }, then: "good" }
+                            ],
+                            default: "insufficient"
+                        }
+                    }
+                }
+            },
+            { $sort: { test_case_count: -1 } }
+        ]);
+
+        const coveredRequirements = coverageStats.length;
+        const uncoveredRequirements = totalRequirements - coveredRequirements;
+
+        return {
+            total_requirements: totalRequirements,
+            covered_requirements: coveredRequirements,
+            coverage_percentage: totalRequirements > 0 ? Math.round((coveredRequirements / totalRequirements) * 100) : 0,
+            requirement_coverage: coverageStats,
+            uncovered_requirements_count: uncoveredRequirements,
+            coverage_quality: {
+                excellent: coverageStats.filter((s: any) => s.coverage_score === "excellent").length,
+                good: coverageStats.filter((s: any) => s.coverage_score === "good").length,
+                insufficient: coverageStats.filter((s: any) => s.coverage_score === "insufficient").length
+            }
+        };
+    }
+
+    /**
+     * 🆕 Tìm test cases trùng lặp (duplicate titles)
+     */
+    async findDuplicateTestCases(projectId: string, versionId?: string) {
+        const query: any = { project_id: projectId };
+        if (versionId) query.version_id = versionId;
+
+        const duplicates = await Testcase.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: "$title",
+                    count: { $sum: 1 },
+                    test_cases: { 
+                        $push: {
+                            _id: "$_id",
+                            test_type: "$test_type",
+                            status: "$status",
+                            created_at: "$createdAt"
+                        }
+                    }
+                }
+            },
+            { $match: { count: { $gt: 1 } } },
+            { $sort: { count: -1 } }
+        ]);
+
+        return duplicates;
     }
 }

@@ -1,13 +1,13 @@
 // TestcaseGeminiService.ts
 import { ApiKeyService } from "../../orchestrator/domain/ApiKeyService";
 
-// PROMPTS cho test case generation với database integration
+// PROMPTS cho test case generation với Enterprise standard
 const testcasePrompts = {
     'vi-VN': {
         testcaseDesign: (requirementsJson: string, databaseSchemaJson: string) => `
 BẠN LÀ MỘT CHUYÊN GIA KIỂM THỬ PHẦN MỀM ĐẲNG CẤP THẾ GIỚI, chuyên tạo ra các test case toàn diện và hiệu quả từ yêu cầu nghiệp vụ và thiết kế database.
 
-Nhiệm vụ của bạn là phân tích danh sách use case và cấu trúc database sau đây để tạo ra các test case chất lượng cao.
+Nhiệm vụ của bạn là phân tích danh sách use case và cấu trúc database sau đây để tạo ra các test case chất lượng cao ĐẠT CHUẨN ENTERPRISE.
 
 DANH SÁCH USE CASE:
 ${requirementsJson}
@@ -22,7 +22,8 @@ ${databaseSchemaJson}
 - XÁC ĐỊNH RÕ database tables và operations được sử dụng
 - Giữ response ngắn gọn, chỉ bao gồm thông tin cần thiết
 
-Phản hồi của bạn BẮT BUỘC CHỈ LÀ một đối tượng JSON hợp lệ. KHÔNG bao gồm bất kỳ lời giải thích, bình luận, hay định dạng markdown nào.
+**YÊU CẦU TUYỆT ĐỐI VỀ ĐẦU RA:**
+PHẢI chỉ trả về **duy nhất một đối tượng JSON hợp lệ**, không có bất kỳ text, chú thích, markdown hoặc ký tự thừa nào trước hoặc sau JSON.
 
 Đối tượng JSON BẮT BUỘC phải tuân thủ nghiêm ngặt cấu trúc sau:
 
@@ -33,68 +34,149 @@ Phản hồi của bạn BẮT BUỘC CHỈ LÀ một đối tượng JSON hợp
       "description": "Mô tả chi tiết về mục đích test",
       "test_type": "unit|integration|api|ui",
       "source_requirement_ids": ["UC1", "UC2"],
-      "database_tables": ["users", "orders"],        // 🆕 BẮT BUỘC: Tables được test
-      "database_operations": ["select", "insert"],   // 🆕 BẮT BUỘC: Operations được thực hiện
-      "steps": [
-        "Bước 1: Mô tả hành động (bao gồm database operations)",
-        "Bước 2: Mô tả hành động",
-        "Bước 3: Mô tả hành động"
-      ],
-      "expected_result": "Kết quả mong đợi sau khi thực hiện tất cả bước",
       "priority": "low|medium|high|critical",
+      
+      // 🆕 ENTERPRISE FIELDS
+      "preconditions": [
+        "Điều kiện tiên quyết trước khi test",
+        "Trạng thái hệ thống/dữ liệu ban đầu"
+      ],
+      "postconditions": [
+        "Trạng thái hệ thống sau khi test",
+        "Cleanup requirements"
+      ],
+      
+      "database_tables": ["users", "orders"],
+      "database_operations": ["select", "insert"],
+      
+      // 🆕 IMPROVED STEPS với input/output rõ ràng
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Mô tả hành động cụ thể",
+          "input_data": {
+            "field_name": "giá_trị_cụ_thể",
+            "method": "POST/PUT/GET",
+            "endpoint": "/api/endpoint (nếu là API)"
+          },
+          "expected_immediate_result": "Kết quả mong đợi ngay sau bước này"
+        }
+      ],
+      
+      // 🆕 MULTI-LEVEL EXPECTED RESULTS
+      "expected_results": {
+        "ui_level": [
+          "Hiển thị thông báo thành công",
+          "Chuyển trang đến dashboard"
+        ],
+        "api_level": {
+          "status_code": 200,
+          "response_schema": {
+            "success": true,
+            "data": {...}
+          }
+        },
+        "database_level": [
+          "Bảng users có bản ghi mới",
+          "Bảng orders được cập nhật"
+        ],
+        "business_level": "Nghiệp vụ được xử lý đúng"
+      },
+      
+      // 🆕 ENHANCED TEST DATA
       "test_data": [
         {
           "name": "Test data scenario 1",
-          "inputs": {
-            "users.email": "test@example.com",      // 🆕 Sử dụng table.column format
-            "users.password": "password123"
+          "input_payload": {
+            "username": "testuser",
+            "password": "Password123!"
           },
-          "expected_outputs": {
-            "result_field": "expected_value"
-          }
+          "expected_output": {
+            "status": "success|failure",
+            "message": "Thông báo cụ thể",
+            "data": {...},
+            "status_code": 200
+          },
+          "validation_rules": [
+            "Email phải đúng định dạng",
+            "Password tối thiểu 8 ký tự"
+          ]
         }
-      ]
+      ],
+      
+      // 🆕 AUTOMATION READY
+      "automation": {
+        "is_automated": false,
+        "script_path": "/tests/features/login/test_login.py",
+        "test_command": "pytest tests/features/login/test_login.py::test_login_success",
+        "tags": ["smoke", "regression", "login"]
+      },
+      
+      // 🆕 EXECUTION LOGS FORMAT
+      "execution_logs_format": {
+        "timestamp": "ISO format",
+        "step_number": 1,
+        "status": "passed|failed|skipped",
+        "actual_result": "Kết quả thực tế",
+        "screenshot_path": "/screenshots/test_001.png",
+        "log_message": "Chi tiết log"
+      }
     }
   ]
 }
 
-**QUY TẮC TẠO TEST CASE:**
+**QUY TẮC TẠO TEST CASE ENTERPRISE:**
 
-1. **PHÂN LOẠI TEST TYPE:**
-   - Unit: Test function/method riêng lẻ
-   - Integration: Test tương tác giữa các component
-   - API: Test API endpoints
-   - UI: Test giao diện người dùng
+1. **CHUẨN HÓA TITLE (QUAN TRỌNG):**
+   - Format: "[UC_ID] - [Tên use case] - [Kịch bản test]"
+   - Ví dụ: "UC1 - Đăng nhập - Thành công với thông tin hợp lệ"
+   - KHÔNG sử dụng "TC1-UC1" hoặc các prefix số thứ tự
+   - **MỖI TITLE PHẢI LÀ DUY NHẤT, KHÔNG TRÙNG LẶP**
 
-2. **DATABASE INTEGRATION:**
-   - Xác định tables nào sẽ được test trong test case
-   - Ghi rõ database operations (select, insert, update, delete)
-   - Sử dụng format "table.column" trong test data
-   - Dựa trên related_usecase_ids trong database schema để xác định tables liên quan
+2. **STEPS CẢI TIẾN - AI TEST GENERATOR FRIENDLY:**
+   - Mỗi step PHẢI có: action + input_data cụ thể + expected_immediate_result
+   - Input_data: giá trị cụ thể, không mô tả chung chung
+   - Ví dụ: 
+     ❌ "Nhập thông tin đăng nhập" 
+     ✅ "Nhập username = 'testuser', password = 'Password123!'"
 
-3. **ƯU TIÊN (PRIORITY):**
-   - Critical: Chức năng core, ảnh hưởng toàn hệ thống
-   - High: Chức năng quan trọng, ảnh hưởng nhiều user
-   - Medium: Chức năng thông thường
-   - Low: Chức năng ít quan trọng
+3. **MULTI-LEVEL EXPECTED RESULTS:**
+   - UI Level: Hiển thị giao diện, thông báo
+   - API Level: Status code, response schema
+   - Database Level: Thay đổi dữ liệu
+   - Business Level: Nghiệp vụ thực tế
 
-4. **TEST DATA DESIGN:**
-   - Valid data: Dữ liệu hợp lệ để test success cases
-   - Invalid data: Dữ liệu không hợp lệ để test error handling
-   - Boundary data: Dữ liệu ở biên để test validation
-   - Sử dụng đúng data types từ database schema
+4. **TEST DATA CHI TIẾT:**
+   - Input_payload: Dữ liệu đầu vào cụ thể
+   - Expected_output: Đầu ra mong đợi chi tiết
+   - Validation_rules: Quy tắc validate áp dụng
 
-5. **COVERAGE REQUIREMENTS:**
-   - Mỗi use case phải có ít nhất 2-3 test cases
-   - Bao gồm cả success và failure scenarios
-   - Test các validation rules từ database schema
-   - Test relationships giữa các bảng
+5. **PRECONDITIONS & POSTCONDITIONS:**
+   - Preconditions: Dữ liệu/trạng thái hệ thống ban đầu
+   - Postconditions: Cleanup, rollback requirements
 
-Hãy tạo test cases chất lượng cao dựa trên use cases và database schema được cung cấp.
+6. **AUTOMATION READY:**
+   - Script_path: Đường dẫn file automation
+   - Test_command: Câu lệnh chạy test
+   - Tags: Phân loại test (smoke, regression, etc.)
+
+7. **DATABASE INTEGRATION:**
+   - Xác định tables liên quan dựa trên use case
+   - Ghi rõ operations (select/insert/update/delete)
+   - Sử dụng field names độc lập với DB schema
+
+8. **COVERAGE TỐI THIỂU:**
+   - **Mỗi use case PHẢI có ít nhất 4 test cases**: 
+     1. Positive - Thành công
+     2. Negative - Thất bại do input sai
+     3. Boundary - Giá trị biên
+     4. Error case - Lỗi hệ thống/exception
+
+Hãy tạo test cases chất lượng cao ĐẠT CHUẨN ENTERPRISE dựa trên use cases và database schema được cung cấp.
 `,
 
         testcaseEnhancement: (existingTestcasesJson: string, newRequirementsJson: string) => `
-BẠN LÀ CHUYÊN GIA KIỂM THỬ, nhiệm vụ là phân tích test cases hiện có và yêu cầu mới để bổ sung test cases còn thiếu.
+BẠN LÀ CHUYÊN GIA KIỂM THỬ ENTERPRISE, nhiệm vụ là phân tích test cases hiện có và yêu cầu mới để bổ sung test cases còn thiếu ĐẠT CHUẨN CAO.
 
 TEST CASES HIỆN TẠI:
 ${existingTestcasesJson}
@@ -102,22 +184,32 @@ ${existingTestcasesJson}
 YÊU CẦU MỚI/UPDATE:
 ${newRequirementsJson}
 
-Phản hồi BẮT BUỘC CHỈ LÀ JSON object với structure:
+**QUY TẮC CHUẨN HÓA ENTERPRISE:**
+- Title format: "[UC_ID] - [Tên use case] - [Kịch bản test]"
+- Steps PHẢI có input_data cụ thể và expected_immediate_result
+- Expected_results PHẢI có multi-level (UI, API, Database, Business)
+- Test_data PHẢI có input_payload và expected_output chi tiết
+- **MỖI TITLE PHẢI LÀ DUY NHẤT** trong toàn bộ danh sách
+
+**YÊU CẦU TUYỆT ĐỐI VỀ ĐẦU RA:**
+PHẢI chỉ trả về **duy nhất một đối tượng JSON hợp lệ**, không có bất kỳ text, chú thích, markdown hoặc ký tự thừa nào trước hoặc sau JSON.
+
+Phản hồi BẮT BUỢC CHỈ LÀ JSON object với structure:
 {
   "additional_testcases": [
-    // Chỉ bao gồm test cases MỚI cần thêm
+    // Chỉ bao gồm test cases MỚI cần thêm (đảm bảo ENTERPRISE STANDARD)
   ],
   "updated_testcases": [
-    // Test cases cần cập nhật (nếu có)
+    // Test cases cần cập nhật để đạt chuẩn enterprise (nếu có)
   ]
 }
 `
     },
     'en-US': {
         testcaseDesign: (requirementsJson: string, databaseSchemaJson: string) => `
-YOU ARE A WORLD-CLASS SOFTWARE TESTING EXPERT, specializing in creating comprehensive and effective test cases from business requirements and database design.
+YOU ARE A WORLD-CLASS SOFTWARE TESTING EXPERT, specializing in creating comprehensive and effective ENTERPRISE-LEVEL test cases from business requirements and database design.
 
-Your task is to analyze the following use cases and database structure to create high-quality test cases.
+Your task is to analyze the following use cases and database structure to create high-quality ENTERPRISE STANDARD test cases.
 
 LIST OF USE CASES:
 ${requirementsJson}
@@ -132,7 +224,8 @@ ${databaseSchemaJson}
 - IDENTIFY SPECIFIC database tables and operations used
 - Keep response concise, include only essential information
 
-Your response MUST be ONLY a single valid JSON object. DO NOT include any explanations, comments, or markdown formatting.
+**ABSOLUTE OUTPUT REQUIREMENT:**
+MUST return ONLY a single valid JSON object, without any text, comments, markdown or extra characters before or after the JSON.
 
 The JSON object MUST strictly follow this structure:
 
@@ -143,67 +236,148 @@ The JSON object MUST strictly follow this structure:
       "description": "Detailed description of test purpose",
       "test_type": "unit|integration|api|ui",
       "source_requirement_ids": ["UC1", "UC2"],
-      "database_tables": ["users", "orders"],        // 🆕 REQUIRED: Tables being tested
-      "database_operations": ["select", "insert"],   // 🆕 REQUIRED: Database operations performed
-      "steps": [
-        "Step 1: Action description (include database operations)",
-        "Step 2: Action description", 
-        "Step 3: Action description"
-      ],
-      "expected_result": "Expected outcome after all steps",
       "priority": "low|medium|high|critical",
+      
+      // 🆕 ENTERPRISE FIELDS
+      "preconditions": [
+        "Prerequisites before testing",
+        "Initial system/data state"
+      ],
+      "postconditions": [
+        "System state after testing",
+        "Cleanup requirements"
+      ],
+      
+      "database_tables": ["users", "orders"],
+      "database_operations": ["select", "insert"],
+      
+      // 🆕 IMPROVED STEPS with clear input/output
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Specific action description",
+          "input_data": {
+            "field_name": "specific_value",
+            "method": "POST/PUT/GET",
+            "endpoint": "/api/endpoint (if API)"
+          },
+          "expected_immediate_result": "Expected outcome immediately after this step"
+        }
+      ],
+      
+      // 🆕 MULTI-LEVEL EXPECTED RESULTS
+      "expected_results": {
+        "ui_level": [
+          "Display success message",
+          "Navigate to dashboard page"
+        ],
+        "api_level": {
+          "status_code": 200,
+          "response_schema": {
+            "success": true,
+            "data": {...}
+          }
+        },
+        "database_level": [
+          "Users table has new record",
+          "Orders table is updated"
+        ],
+        "business_level": "Business process handled correctly"
+      },
+      
+      // 🆕 ENHANCED TEST DATA
       "test_data": [
         {
           "name": "Test data scenario 1",
-          "inputs": {
-            "users.email": "test@example.com",      // 🆕 Use table.column format
-            "users.password": "password123"
+          "input_payload": {
+            "username": "testuser",
+            "password": "Password123!"
           },
-          "expected_outputs": {
-            "result_field": "expected_value"
-          }
+          "expected_output": {
+            "status": "success|failure",
+            "message": "Specific message",
+            "data": {...},
+            "status_code": 200
+          },
+          "validation_rules": [
+            "Email must be valid format",
+            "Password minimum 8 characters"
+          ]
         }
-      ]
+      ],
+      
+      // 🆕 AUTOMATION READY
+      "automation": {
+        "is_automated": false,
+        "script_path": "/tests/features/login/test_login.py",
+        "test_command": "pytest tests/features/login/test_login.py::test_login_success",
+        "tags": ["smoke", "regression", "login"]
+      },
+      
+      // 🆕 EXECUTION LOGS FORMAT
+      "execution_logs_format": {
+        "timestamp": "ISO format",
+        "step_number": 1,
+        "status": "passed|failed|skipped",
+        "actual_result": "Actual result",
+        "screenshot_path": "/screenshots/test_001.png",
+        "log_message": "Log details"
+      }
     }
   ]
 }
 
-**TEST CASE CREATION RULES:**
+**ENTERPRISE TEST CASE CREATION RULES:**
 
-1. **TEST TYPE CLASSIFICATION:**
-   - Unit: Test individual functions/methods
-   - Integration: Test interactions between components
-   - API: Test API endpoints
-   - UI: Test user interface
+1. **STANDARDIZED TITLE (CRITICAL):**
+   - Format: "[UC_ID] - [Use Case Name] - [Test Scenario]"
+   - Example: "UC1 - User Login - Success with valid credentials"
+   - DO NOT use "TC1-UC1" or sequential prefixes
+   - **EACH TITLE MUST BE UNIQUE, NO DUPLICATES**
 
-2. **DATABASE INTEGRATION:**
-   - Identify which tables are tested in this test case
-   - Specify database operations (select, insert, update, delete)
-   - Use "table.column" format in test data
-   - Use related_usecase_ids from database schema to identify relevant tables
+2. **IMPROVED STEPS - AI TEST GENERATOR FRIENDLY:**
+   - Each step MUST have: action + specific input_data + expected_immediate_result
+   - Input_data: specific values, not generic descriptions
+   - Example:
+     ❌ "Enter login information"
+     ✅ "Enter username = 'testuser', password = 'Password123!'"
 
-3. **PRIORITY LEVELS:**
-   - Critical: Core functionality, system-wide impact
-   - High: Important functionality, affects many users
-   - Medium: Regular functionality
-   - Low: Less important functionality
+3. **MULTI-LEVEL EXPECTED RESULTS:**
+   - UI Level: Display, notifications, navigation
+   - API Level: Status code, response schema
+   - Database Level: Data changes
+   - Business Level: Actual business process
 
-4. **TEST DATA DESIGN:**
-   - Valid data: Legitimate data for success cases
-   - Invalid data: Invalid data for error handling
-   - Boundary data: Edge case data for validation testing
-   - Use correct data types from database schema
+4. **DETAILED TEST DATA:**
+   - Input_payload: Specific input data
+   - Expected_output: Detailed expected output
+   - Validation_rules: Applied validation rules
 
-5. **COVERAGE REQUIREMENTS:**
-   - Each use case should have at least 2-3 test cases
-   - Include both success and failure scenarios
-   - Test validation rules from database schema
-   - Test relationships between tables
+5. **PRECONDITIONS & POSTCONDITIONS:**
+   - Preconditions: Initial system/data state
+   - Postconditions: Cleanup, rollback requirements
 
-Create high-quality test cases based on the provided use cases and database schema.
+6. **AUTOMATION READY:**
+   - Script_path: Automation file path
+   - Test_command: Test execution command
+   - Tags: Test classification (smoke, regression, etc.)
+
+7. **DATABASE INTEGRATION:**
+   - Identify related tables based on use case
+   - Specify operations (select/insert/update/delete)
+   - Use field names independent of DB schema
+
+8. **MINIMUM COVERAGE:**
+   - **Each use case MUST have at least 4 test cases**:
+     1. Positive - Success
+     2. Negative - Failure due to invalid input
+     3. Boundary - Edge values
+     4. Error case - System exceptions
+
+Create high-quality ENTERPRISE STANDARD test cases based on the provided use cases and database schema.
 `,
         testcaseEnhancement: (existingTestcasesJson: string, newRequirementsJson: string) => `
-YOU ARE A TESTING EXPERT, your task is to analyze existing test cases and new requirements to supplement missing test cases.
+YOU ARE AN ENTERPRISE TESTING EXPERT, your task is to analyze existing test cases and new requirements to supplement missing test cases meeting ENTERPRISE STANDARDS.
 
 EXISTING TEST CASES:
 ${existingTestcasesJson}
@@ -211,13 +385,23 @@ ${existingTestcasesJson}
 NEW/UPDATED REQUIREMENTS:
 ${newRequirementsJson}
 
+**ENTERPRISE STANDARDIZATION RULES:**
+- Title format: "[UC_ID] - [Use Case Name] - [Test Scenario]"
+- Steps MUST have specific input_data and expected_immediate_result
+- Expected_results MUST have multi-level (UI, API, Database, Business)
+- Test_data MUST have detailed input_payload and expected_output
+- **EACH TITLE MUST BE UNIQUE** across the entire list
+
+**ABSOLUTE OUTPUT REQUIREMENT:**
+MUST return ONLY a single valid JSON object, without any text, comments, markdown or extra characters before or after the JSON.
+
 Response MUST be ONLY JSON object with structure:
 {
   "additional_testcases": [
-    // Only include NEW test cases needed
+    // Only include NEW test cases needed (ensuring ENTERPRISE STANDARD)
   ],
   "updated_testcases": [
-    // Test cases that need updates (if any)
+    // Test cases that need updates to meet enterprise standards (if any)
   ]
 }
 `
@@ -228,15 +412,16 @@ export class TestcaseGeminiService {
     private apiKeyService = new ApiKeyService();
 
     // config
-    private readonly TC_GEN_BATCH_SIZE = 8;
-    private readonly MAX_BATCHES = 50;
+    // Trong GeminiService.ts
+    private readonly TC_GEN_BATCH_SIZE = 3; // Giảm từ 6 xuống 3
+    private readonly MAX_RESPONSE_LENGTH = 15000; // Giới hạn response
 
     /**
-     * Generate test cases từ requirements và database schema
+     * Generate test cases từ requirements và database schema với Enterprise standard
      */
     async generateTestCases(requirements: any[], databaseSchema: any, language: string): Promise<any[]> {
         try {
-            console.log(`🧪 Generating test cases for ${requirements.length} requirements`);
+            console.log(`🧪 Generating ENTERPRISE test cases for ${requirements.length} requirements`);
 
             if (requirements.length <= this.TC_GEN_BATCH_SIZE) {
                 return await this.generateTestCasesBatch(requirements, databaseSchema, language);
@@ -245,12 +430,12 @@ export class TestcaseGeminiService {
             }
         } catch (error) {
             console.error("❌ Error in generateTestCases:", error);
-            return this.createFallbackTestCases(requirements, databaseSchema);
+            return this.createEnterpriseFallbackTestCases(requirements, databaseSchema);
         }
     }
 
     /**
-     * Generate test cases cho một batch requirements
+     * Generate test cases cho một batch requirements với Enterprise standard
      */
     private async generateTestCasesBatch(requirements: any[], databaseSchema: any, language: string): Promise<any[]> {
         // Chuẩn bị data với database mapping
@@ -265,7 +450,7 @@ export class TestcaseGeminiService {
             priority: r.priority
         }));
 
-        // 🆕 Enhanced database schema với use case mapping
+        // Enhanced database schema với use case mapping
         const enhancedDatabase = {
             tables: databaseSchema.tables?.map((table: any) => ({
                 name: table.name,
@@ -278,7 +463,7 @@ export class TestcaseGeminiService {
                     is_primary_key: col.is_primary_key,
                     is_foreign_key: col.is_foreign_key,
                     references: col.references,
-                    related_usecase_ids: col.related_usecase_ids || [] // 🎯 Quan trọng: mapping use cases
+                    related_usecase_ids: col.related_usecase_ids || []
                 }))
             })),
             relationships: databaseSchema.relationships
@@ -290,7 +475,7 @@ export class TestcaseGeminiService {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const prompt = testcasePrompts[lang].testcaseDesign(requirementsJson, databaseJson);
 
-        console.log(`📝 Generating test case batch for ${requirements.length} use cases`);
+        console.log(`📝 Generating ENTERPRISE test case batch for ${requirements.length} use cases`);
 
         const generatedJsonString = await this.generateJsonContent(prompt);
 
@@ -298,7 +483,7 @@ export class TestcaseGeminiService {
             throw new Error("Empty response from Gemini");
         }
 
-        console.log(`📄 Raw test case response length: ${generatedJsonString.length}`);
+        console.log(`📄 Raw ENTERPRISE test case response length: ${generatedJsonString.length}`);
 
         let parsedResponse;
         try {
@@ -319,18 +504,18 @@ export class TestcaseGeminiService {
             throw new Error("Invalid test case response format from Gemini");
         }
 
-        console.log(`✅ Raw test cases processed: ${testCases.length} test cases`);
+        console.log(`✅ Raw ENTERPRISE test cases processed: ${testCases.length} test cases`);
 
-        // 🆕 Enhanced standardization với database integration
-        testCases = this.standardizeTestCases(testCases, requirements, databaseSchema);
+        // Enhanced standardization với Enterprise integration
+        testCases = this.standardizeEnterpriseTestCases(testCases, requirements, databaseSchema);
 
-        console.log(`🎉 Final test cases: ${testCases.length} test cases`);
+        console.log(`🎉 Final ENTERPRISE test cases: ${testCases.length} test cases`);
 
         return testCases;
     }
 
     /**
-     * Enhance existing test cases với requirements mới
+     * Enhance existing test cases với requirements mới theo Enterprise standard
      */
     async enhanceTestCases(existingTestCases: any[], newRequirements: any[], language: string): Promise<{
         additional_testcases: any[];
@@ -344,7 +529,13 @@ export class TestcaseGeminiService {
                 source_requirement_ids: tc.source_requirement_ids,
                 database_tables: tc.database_tables,
                 database_operations: tc.database_operations,
-                priority: tc.priority
+                priority: tc.priority,
+                preconditions: tc.preconditions,
+                postconditions: tc.postconditions,
+                steps: tc.steps,
+                expected_results: tc.expected_results,
+                test_data: tc.test_data,
+                automation: tc.automation
             }));
 
             const simplifiedNewReqs = newRequirements.map(r => ({
@@ -361,7 +552,7 @@ export class TestcaseGeminiService {
             const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
             const prompt = testcasePrompts[lang].testcaseEnhancement(existingJson, newReqsJson);
 
-            console.log(`🔄 Enhancing test cases with ${newRequirements.length} new requirements`);
+            console.log(`🔄 Enhancing ENTERPRISE test cases with ${newRequirements.length} new requirements`);
 
             const generatedJsonString = await this.generateJsonContent(prompt);
 
@@ -378,13 +569,20 @@ export class TestcaseGeminiService {
                 parsedResponse = JSON.parse(repairedJson);
             }
 
-            // Standardize new test cases
+            // Standardize new test cases với Enterprise standard
             if (parsedResponse.additional_testcases && Array.isArray(parsedResponse.additional_testcases)) {
-                // Note: Database schema không có ở đây, sẽ được xử lý sau
-                parsedResponse.additional_testcases = this.standardizeTestCases(
+                parsedResponse.additional_testcases = this.standardizeEnterpriseTestCases(
                     parsedResponse.additional_testcases,
                     newRequirements,
-                    { tables: [], relationships: [] } // Empty schema cho enhancement
+                    { tables: [], relationships: [] }
+                );
+            }
+
+            if (parsedResponse.updated_testcases && Array.isArray(parsedResponse.updated_testcases)) {
+                parsedResponse.updated_testcases = this.standardizeEnterpriseTestCases(
+                    parsedResponse.updated_testcases,
+                    newRequirements,
+                    { tables: [], relationships: [] }
                 );
             }
 
@@ -402,37 +600,63 @@ export class TestcaseGeminiService {
         }
     }
 
-
     /**
-     * Chuẩn hóa test cases theo schema
+     * Chuẩn hóa test cases theo Enterprise schema
      */
-    private standardizeTestCases(testCases: any[], requirements: any[], databaseSchema: any): any[] {
-        console.log("🔄 Standardizing test cases with database integration...");
+    private standardizeEnterpriseTestCases(testCases: any[], requirements: any[], databaseSchema: any): any[] {
+        console.log("🔄 Standardizing ENTERPRISE test cases...");
+
+        const usedTitles = new Set<string>();
 
         return testCases.map((testCase, index) => {
+            // Đảm bảo title là duy nhất
+            let title = testCase.title || `Test Case ${index + 1}`;
+            if (usedTitles.has(title)) {
+                title = `${title} - ${index + 1}`;
+            }
+            usedTitles.add(title);
+
             const standardized: any = {
-                title: testCase.title || `Test Case ${index + 1}`,
+                title: title,
                 description: testCase.description || '',
                 test_type: this.validateTestType(testCase.test_type),
                 source_requirement_ids: this.validateRequirementIds(testCase.source_requirement_ids, requirements),
+                priority: this.validatePriority(testCase.priority),
 
-                // 🆕 Database integration fields
+                // 🆕 Enterprise fields
+                preconditions: this.validatePreconditions(testCase.preconditions),
+                postconditions: this.validatePostconditions(testCase.postconditions),
+
+                // Database integration
                 database_tables: this.extractDatabaseTables(testCase, requirements, databaseSchema),
                 database_operations: this.extractDatabaseOperations(testCase),
 
-                steps: this.validateSteps(testCase.steps),
-                expected_result: testCase.expected_result || 'Operation completed successfully',
-                priority: this.validatePriority(testCase.priority),
-                test_data: this.validateTestData(testCase.test_data),
+                // 🆕 Enhanced steps với Enterprise format
+                steps: this.validateEnterpriseSteps(testCase.steps),
+
+                // 🆕 Multi-level expected results
+                expected_results: this.validateExpectedResults(testCase.expected_results),
+
+                // 🆕 Enhanced test data
+                test_data: this.validateEnterpriseTestData(testCase.test_data),
+
+                // 🆕 Automation ready
+                automation: this.validateAutomation(testCase.automation),
+
                 status: 'not_executed',
                 environment: {},
-                automation: {
-                    is_automated: false
+                execution_logs_format: testCase.execution_logs_format || {
+                    timestamp: "ISO format",
+                    step_number: 1,
+                    status: "passed|failed|skipped",
+                    actual_result: "Actual result",
+                    screenshot_path: "/screenshots/test.png",
+                    log_message: "Log details"
                 }
             };
 
-            // 🆕 Enhanced test data với database schema validation
-            standardized.test_data = this.enhanceTestDataWithSchema(
+            // 🆕 Enhance test data với database schema validation
+            standardized.test_data = this.enhanceEnterpriseTestDataWithSchema(
                 standardized.test_data,
                 standardized.database_tables,
                 databaseSchema
@@ -443,95 +667,269 @@ export class TestcaseGeminiService {
     }
 
     /**
-     * 🆕 Enhance test data với database schema validation
+     * 🆕 Validate và chuẩn hóa Enterprise steps
      */
-    private enhanceTestDataWithSchema(testData: any[], databaseTables: string[], databaseSchema: any): any[] {
-        if (!testData || !Array.isArray(testData) || testData.length === 0) {
-            // Tạo default test data based on database tables
-            return this.generateDefaultTestData(databaseTables, databaseSchema);
+    private validateEnterpriseSteps(steps: any[] | undefined): any[] {
+        if (!steps || !Array.isArray(steps)) {
+            return [{
+                step_number: 1,
+                action: "Execute the test procedure",
+                input_data: {},
+                expected_immediate_result: "System processes the request"
+            }];
         }
 
-        return testData.map(data => {
-            const enhancedData = {
-                name: data.name || "Test Data",
-                inputs: { ...data.inputs },
-                expected_outputs: { ...data.expected_outputs },
-                actual_outputs: { ...data.actual_outputs || {} }
+        return steps.map((step, index) => {
+            if (typeof step === 'string') {
+                // Convert string step to Enterprise format
+                return {
+                    step_number: index + 1,
+                    action: step,
+                    input_data: {},
+                    expected_immediate_result: "Step completed successfully"
+                };
+            }
+
+            return {
+                step_number: step.step_number || index + 1,
+                action: step.action || `Step ${index + 1}`,
+                input_data: step.input_data || {},
+                expected_immediate_result: step.expected_immediate_result || "Step completed successfully"
             };
-
-            // Validate và enhance inputs với database schema
-            Object.keys(enhancedData.inputs).forEach(key => {
-                if (key.includes('.')) {
-                    const [tableName, columnName] = key.split('.');
-                    const columnSchema = this.getColumnSchema(tableName, columnName, databaseSchema);
-
-                    if (columnSchema) {
-                        // Có thể thêm validation hoặc transformation ở đây
-                        // Ví dụ: ensure data type compatibility
-                        enhancedData.inputs[key] = this.validateDataForColumn(
-                            enhancedData.inputs[key],
-                            columnSchema
-                        );
-                    }
-                }
-            });
-
-            return enhancedData;
         });
     }
 
     /**
-     * 🆕 Validate data cho column type
+     * 🆕 Validate expected results
      */
-    private validateDataForColumn(value: any, column: any): any {
-        // Có thể thêm logic validation phức tạp hơn ở đây
-        // Hiện tại chỉ return value as-is
-        return value;
+    private validateExpectedResults(expectedResults: any): any {
+        if (!expectedResults) {
+            return {
+                ui_level: ["Operation completed successfully"],
+                api_level: { status_code: 200, response_schema: { success: true } },
+                database_level: ["Database operations completed"],
+                business_level: "Business requirement satisfied"
+            };
+        }
+
+        return {
+            ui_level: expectedResults.ui_level || ["Operation completed successfully"],
+            api_level: expectedResults.api_level || { status_code: 200, response_schema: { success: true } },
+            database_level: expectedResults.database_level || ["Database operations completed"],
+            business_level: expectedResults.business_level || "Business requirement satisfied"
+        };
     }
 
     /**
-     * 🆕 Lấy column schema từ database
+     * 🆕 Validate automation
      */
-    private getColumnSchema(tableName: string, columnName: string, databaseSchema: any): any {
-        const table = databaseSchema.tables?.find((t: any) => t.name === tableName);
-        return table?.columns?.find((col: any) => col.name === columnName);
+    private validateAutomation(automation: any): any {
+        if (!automation) {
+            return {
+                is_automated: false,
+                script_path: "",
+                test_command: "",
+                tags: []
+            };
+        }
+
+        return {
+            is_automated: automation.is_automated || false,
+            script_path: automation.script_path || "",
+            test_command: automation.test_command || "",
+            tags: automation.tags || []
+        };
     }
 
+    /**
+     * 🆕 Validate preconditions
+     */
+    private validatePreconditions(preconditions: string[] | undefined): string[] {
+        if (!preconditions || !Array.isArray(preconditions)) {
+            return ["System is operational", "Test data is available"];
+        }
+        return preconditions.filter(p => typeof p === 'string' && p.trim().length > 0);
+    }
 
     /**
-     * 🆕 Generate default test data từ database schema
+     * 🆕 Validate postconditions
      */
-    private generateDefaultTestData(databaseTables: string[], databaseSchema: any): any[] {
+    private validatePostconditions(postconditions: string[] | undefined): string[] {
+        if (!postconditions || !Array.isArray(postconditions)) {
+            return ["Test data cleaned up", "System returned to initial state"];
+        }
+        return postconditions.filter(p => typeof p === 'string' && p.trim().length > 0);
+    }
+
+    /**
+     * 🆕 Enhance Enterprise test data với database schema validation
+     */
+    private enhanceEnterpriseTestDataWithSchema(testData: any[], databaseTables: string[], databaseSchema: any): any[] {
+        if (!testData || !Array.isArray(testData) || testData.length === 0) {
+            return this.generateEnterpriseDefaultTestData(databaseTables, databaseSchema);
+        }
+
+        return testData.map(data => ({
+            name: data.name || "Test Data",
+            input_payload: data.input_payload || data.inputs || {},
+            expected_output: data.expected_output || data.expected_outputs || {},
+            validation_rules: data.validation_rules || []
+        }));
+    }
+
+    /**
+     * 🆕 Generate Enterprise default test data
+     */
+    private generateEnterpriseDefaultTestData(databaseTables: string[], databaseSchema: any): any[] {
         const testData = [];
 
-        databaseTables.forEach(tableName => {
-            const table = databaseSchema.tables?.find((t: any) => t.name === tableName);
-            if (table) {
-                const inputs = {};
-                const expectedOutputs = {};
+        if (databaseTables.length > 0) {
+            databaseTables.forEach(tableName => {
+                const table = databaseSchema.tables?.find((t: any) => t.name === tableName);
+                if (table) {
+                    const inputPayload = {};
+                    const expectedOutput = {};
 
-                // Chọn một vài columns quan trọng để tạo test data
-                table.columns?.slice(0, 3).forEach((col: any) => {
-                    if (!col.is_primary_key || !col.is_foreign_key) {
-                        inputs[`${tableName}.${col.name}`] = this.generateTestValueForColumn(col);
-                    }
-                });
+                    // Chọn một vài columns quan trọng
+                    table.columns?.slice(0, 3).forEach((col: any) => {
+                        if (!col.is_primary_key && !col.is_foreign_key) {
+                            inputPayload[col.name] = this.generateTestValueForColumn(col);
+                        }
+                    });
 
-                testData.push({
-                    name: `Default test data for ${tableName}`,
-                    inputs,
-                    expected_outputs: expectedOutputs,
-                    actual_outputs: {}
-                });
-            }
-        });
+                    testData.push({
+                        name: `Default test data for ${tableName}`,
+                        input_payload: inputPayload,
+                        expected_output: expectedOutput,
+                        validation_rules: ["Basic validation rules apply"]
+                    });
+                }
+            });
+        }
 
         return testData.length > 0 ? testData : [{
-            name: "Default Test Data",
-            inputs: {},
-            expected_outputs: {},
-            actual_outputs: {}
+            name: "Default Enterprise Test Data",
+            input_payload: {},
+            expected_output: {},
+            validation_rules: ["Basic validation rules apply"]
         }];
+    }
+
+    /**
+     * 🆕 Validate Enterprise test data
+     */
+    private validateEnterpriseTestData(testData: any[] | undefined): any[] {
+        if (!testData || !Array.isArray(testData)) {
+            return [{
+                name: "Default Enterprise Test Data",
+                input_payload: {},
+                expected_output: {},
+                validation_rules: ["Basic validation rules apply"]
+            }];
+        }
+
+        return testData.map(data => ({
+            name: data.name || "Test Data",
+            input_payload: data.input_payload || data.inputs || {},
+            expected_output: data.expected_output || data.expected_outputs || {},
+            validation_rules: data.validation_rules || []
+        }));
+    }
+
+    /**
+     * 🆕 Extract database operations từ test case
+     */
+    private extractDatabaseOperations(testCase: any): string[] {
+        const operations: Set<string> = new Set();
+
+        // 1. Extract từ test case explicit declaration
+        if (testCase.database_operations && Array.isArray(testCase.database_operations)) {
+            testCase.database_operations.forEach((op: string) => operations.add(op));
+        }
+
+        // 2. Extract từ steps analysis
+        if (testCase.steps && Array.isArray(testCase.steps)) {
+            testCase.steps.forEach((step: any) => {
+                const stepText = typeof step === 'string' ? step : step.action;
+                const lowerStep = stepText.toLowerCase();
+
+                if (lowerStep.includes('insert') || lowerStep.includes('create') || lowerStep.includes('add')) {
+                    operations.add('insert');
+                }
+                if (lowerStep.includes('update') || lowerStep.includes('modify') || lowerStep.includes('change')) {
+                    operations.add('update');
+                }
+                if (lowerStep.includes('delete') || lowerStep.includes('remove') || lowerStep.includes('drop')) {
+                    operations.add('delete');
+                }
+                if (lowerStep.includes('select') || lowerStep.includes('read') || lowerStep.includes('query') || lowerStep.includes('get')) {
+                    operations.add('select');
+                }
+            });
+        }
+
+        return Array.from(operations).length > 0 ? Array.from(operations) : ['select'];
+    }
+
+    /**
+     * 🆕 Extract database tables từ test case và requirements
+     */
+    private extractDatabaseTables(testCase: any, requirements: any[], databaseSchema: any): string[] {
+        const tables: Set<string> = new Set();
+
+        // 1. Extract từ test case explicit declaration
+        if (testCase.database_tables && Array.isArray(testCase.database_tables)) {
+            testCase.database_tables.forEach((table: string) => tables.add(table));
+        }
+
+        // 2. Extract từ requirement mapping trong database schema
+        const requirementIds = testCase.source_requirement_ids || [];
+        requirementIds.forEach((reqId: string) => {
+            databaseSchema.tables?.forEach((table: any) => {
+                const hasRelatedUseCase = table.columns?.some((col: any) =>
+                    col.related_usecase_ids && col.related_usecase_ids.includes(reqId)
+                );
+                if (hasRelatedUseCase) {
+                    tables.add(table.name);
+                }
+            });
+        });
+
+        return Array.from(tables);
+    }
+
+    /**
+     * Validate và chuẩn hóa test type
+     */
+    private validateTestType(testType: string): string {
+        const validTypes = ['unit', 'integration', 'api', 'ui', 'performance', 'security'];
+        if (validTypes.includes(testType)) return testType;
+
+        const lowerType = (testType || '').toLowerCase();
+        if (lowerType.includes('unit')) return 'unit';
+        if (lowerType.includes('api')) return 'api';
+        if (lowerType.includes('ui') || lowerType.includes('interface')) return 'ui';
+        if (lowerType.includes('integrate')) return 'integration';
+
+        return 'integration';
+    }
+
+    /**
+     * Validate requirement IDs
+     */
+    private validateRequirementIds(requirementIds: string[] | undefined, requirements: any[]): string[] {
+        if (!requirementIds || !Array.isArray(requirementIds)) return [];
+        const validRequirementIds = new Set(requirements.map(r => r.id));
+        return requirementIds.filter(id => validRequirementIds.has(id));
+    }
+
+    /**
+     * Validate priority
+     */
+    private validatePriority(priority: string): string {
+        const validPriorities = ['low', 'medium', 'high', 'critical'];
+        if (validPriorities.includes(priority)) return priority;
+        return 'medium';
     }
 
     /**
@@ -567,309 +965,185 @@ export class TestcaseGeminiService {
     }
 
     /**
-     * 🆕 Extract database operations từ test case
-     */
-    private extractDatabaseOperations(testCase: any): string[] {
-        const operations: Set<string> = new Set();
-
-        // 1. Extract từ test case explicit declaration
-        if (testCase.database_operations && Array.isArray(testCase.database_operations)) {
-            testCase.database_operations.forEach((op: string) => operations.add(op));
-        }
-
-        // 2. Extract từ steps analysis
-        if (testCase.steps && Array.isArray(testCase.steps)) {
-            testCase.steps.forEach((step: string) => {
-                const lowerStep = step.toLowerCase();
-                if (lowerStep.includes('insert') || lowerStep.includes('create') || lowerStep.includes('add')) {
-                    operations.add('insert');
-                }
-                if (lowerStep.includes('update') || lowerStep.includes('modify') || lowerStep.includes('change')) {
-                    operations.add('update');
-                }
-                if (lowerStep.includes('delete') || lowerStep.includes('remove') || lowerStep.includes('drop')) {
-                    operations.add('delete');
-                }
-                if (lowerStep.includes('select') || lowerStep.includes('read') || lowerStep.includes('query') || lowerStep.includes('get')) {
-                    operations.add('select');
-                }
-                if (lowerStep.includes('create table') || lowerStep.includes('alter table')) {
-                    operations.add('create');
-                }
-                if (lowerStep.includes('alter') || lowerStep.includes('modify column')) {
-                    operations.add('alter');
-                }
-            });
-        }
-
-        // 3. Extract từ test data analysis
-        if (testCase.test_data && Array.isArray(testCase.test_data)) {
-            testCase.test_data.forEach((data: any) => {
-                if (data.inputs) {
-                    const inputKeys = Object.keys(data.inputs).join(' ').toLowerCase();
-                    if (inputKeys.includes('insert') || inputKeys.includes('new')) {
-                        operations.add('insert');
-                    }
-                    if (inputKeys.includes('update') || inputKeys.includes('modify')) {
-                        operations.add('update');
-                    }
-                }
-            });
-        }
-
-        return Array.from(operations);
-    }
-
-    /**
-     * 🆕 Extract database tables từ test case và requirements
-     */
-    private extractDatabaseTables(testCase: any, requirements: any[], databaseSchema: any): string[] {
-        const tables: Set<string> = new Set();
-
-        // 1. Extract từ test case explicit declaration
-        if (testCase.database_tables && Array.isArray(testCase.database_tables)) {
-            testCase.database_tables.forEach((table: string) => tables.add(table));
-        }
-
-        // 2. Extract từ test data inputs (table.column format)
-        if (testCase.test_data && Array.isArray(testCase.test_data)) {
-            testCase.test_data.forEach((data: any) => {
-                if (data.inputs) {
-                    Object.keys(data.inputs).forEach(key => {
-                        if (key.includes('.')) {
-                            const table = key.split('.')[0];
-                            if (this.isValidTable(table, databaseSchema)) {
-                                tables.add(table);
-                            }
-                        }
-                    });
-                }
-            });
-        }
-
-        // 3. 🆕 Extract từ requirement mapping trong database schema
-        const requirementIds = testCase.source_requirement_ids || [];
-        requirementIds.forEach((reqId: string) => {
-            databaseSchema.tables?.forEach((table: any) => {
-                const hasRelatedUseCase = table.columns?.some((col: any) =>
-                    col.related_usecase_ids && col.related_usecase_ids.includes(reqId)
-                );
-                if (hasRelatedUseCase) {
-                    tables.add(table.name);
-                }
-            });
-        });
-
-        // 4. Extract từ requirement inputs/outputs
-        requirementIds.forEach((reqId: string) => {
-            const requirement = requirements.find((r: any) => r.id === reqId);
-            if (requirement) {
-                // Analyze requirement tasks và inputs để detect tables
-                if (requirement.tasks) {
-                    requirement.tasks.forEach((task: string) => {
-                        databaseSchema.tables?.forEach((table: any) => {
-                            if (task.toLowerCase().includes(table.name.toLowerCase())) {
-                                tables.add(table.name);
-                            }
-                        });
-                    });
-                }
-            }
-        });
-
-        return Array.from(tables);
-    }
-
-    /**
-     * 🆕 Validate table exists in database schema
-     */
-    private isValidTable(tableName: string, databaseSchema: any): boolean {
-        return databaseSchema.tables?.some((table: any) => table.name === tableName) || false;
-    }
-
-    /**
-     * Validate và chuẩn hóa test type
-     */
-    private validateTestType(testType: string): string {
-        const validTypes = ['unit', 'integration', 'api', 'ui', 'performance', 'security'];
-        if (validTypes.includes(testType)) return testType;
-
-        const lowerType = (testType || '').toLowerCase();
-        if (lowerType.includes('unit')) return 'unit';
-        if (lowerType.includes('api')) return 'api';
-        if (lowerType.includes('ui') || lowerType.includes('interface')) return 'ui';
-        if (lowerType.includes('integrate')) return 'integration';
-
-        return 'integration';
-    }
-
-    /**
-     * Validate requirement IDs
-     */
-    private validateRequirementIds(requirementIds: string[] | undefined, requirements: any[]): string[] {
-        if (!requirementIds || !Array.isArray(requirementIds)) return [];
-        const validRequirementIds = new Set(requirements.map(r => r.id));
-        return requirementIds.filter(id => validRequirementIds.has(id));
-    }
-
-    /**
-     * Validate steps
-     */
-    private validateSteps(steps: any[] | undefined): string[] {
-        if (!steps || !Array.isArray(steps)) {
-            return ['Step 1: Execute the test procedure'];
-        }
-        return steps.filter(step => typeof step === 'string' && step.trim().length > 0);
-    }
-
-    /**
-     * Validate priority
-     */
-    private validatePriority(priority: string): string {
-        const validPriorities = ['low', 'medium', 'high', 'critical'];
-        if (validPriorities.includes(priority)) return priority;
-        return 'medium';
-    }
-
-    /**
-     * Validate test data
-     */
-    private validateTestData(testData: any[] | undefined): any[] {
-        if (!testData || !Array.isArray(testData)) {
-            return [{
-                name: "Default Test Data",
-                inputs: {},
-                expected_outputs: {},
-                actual_outputs: {}
-            }];
-        }
-
-        return testData.map(data => ({
-            name: data.name || "Test Data",
-            inputs: data.inputs || {},
-            expected_outputs: data.expected_outputs || {},
-            actual_outputs: data.actual_outputs || {}
-        }));
-    }
-
-    /**
      * Generate test cases với chunking cho số lượng requirements lớn
      */
     private async generateTestCasesWithChunking(requirements: any[], databaseSchema: any, language: string): Promise<any[]> {
-        console.log(`🔀 Splitting ${requirements.length} requirements into chunks for test case generation`);
+        console.log(`🔀 Splitting ${requirements.length} requirements into chunks for ENTERPRISE test case generation`);
 
         const chunks: any[][] = [];
         for (let i = 0; i < requirements.length; i += this.TC_GEN_BATCH_SIZE) {
             chunks.push(requirements.slice(i, i + this.TC_GEN_BATCH_SIZE));
         }
 
-        console.log(`📦 Created ${chunks.length} chunks for test case processing`);
+        console.log(`📦 Created ${chunks.length} chunks for ENTERPRISE test case processing`);
 
         const allTestCases: any[] = [];
 
         // Xử lý từng batch tuần tự
         for (let i = 0; i < chunks.length; i++) {
             try {
-                console.log(`🔄 Processing test case chunk ${i + 1}/${chunks.length}`);
+                console.log(`🔄 Processing ENTERPRISE test case chunk ${i + 1}/${chunks.length}`);
                 const testCases = await this.generateTestCasesBatch(chunks[i], databaseSchema, language);
                 allTestCases.push(...testCases);
-                console.log(`✅ Completed test case chunk ${i + 1}/${chunks.length}`);
+                console.log(`✅ Completed ENTERPRISE test case chunk ${i + 1}/${chunks.length}`);
 
                 // Thêm delay nhỏ giữa các batch
                 if (i < chunks.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 800));
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             } catch (error) {
-                console.error(`❌ Failed test case chunk ${i + 1}:`, error);
+                console.error(`❌ Failed ENTERPRISE test case chunk ${i + 1}:`, error);
                 // Tiếp tục với các chunk khác
             }
         }
 
         if (allTestCases.length === 0) {
-            console.warn("⚠️ All test case generation chunks failed, using fallback");
-            return this.createFallbackTestCases(requirements);
+            console.warn("⚠️ All ENTERPRISE test case generation chunks failed, using fallback");
+            return this.createEnterpriseFallbackTestCases(requirements, databaseSchema);
         }
 
-        console.log(`🔄 Merged ${allTestCases.length} test cases from all chunks`);
+        console.log(`🔄 Merged ${allTestCases.length} ENTERPRISE test cases from all chunks`);
         return allTestCases;
     }
 
     /**
-     * Tạo fallback test cases cơ bản
+     * Tạo Enterprise fallback test cases
      */
-    private createFallbackTestCases(requirements: any[], databaseSchema?: any): any[] {
-        console.log("🔄 Creating enhanced fallback test cases");
+    private createEnterpriseFallbackTestCases(requirements: any[], databaseSchema?: any): any[] {
+        console.log("🔄 Creating ENTERPRISE fallback test cases");
 
-        return requirements.map(requirement => {
-            // 🆕 Extract database tables từ requirement
-            const databaseTables = this.extractTablesFromRequirement(requirement, databaseSchema);
-            const databaseOperations = this.extractOperationsFromRequirement(requirement);
+        const usedTitles = new Set<string>();
 
-            return {
-                title: `Test ${requirement.name}`,
-                description: `Basic test for ${requirement.goal}`,
-                test_type: 'integration',
-                source_requirement_ids: [requirement.id],
-                database_tables: databaseTables,
-                database_operations: databaseOperations,
-                steps: [
-                    `Step 1: Prepare test environment for ${requirement.name}`,
-                    `Step 2: Execute ${requirement.name} functionality`,
-                    `Step 3: Verify results match expected behavior`
-                ],
-                expected_result: `${requirement.name} functionality works as expected`,
-                priority: 'medium',
-                test_data: this.generateFallbackTestData(databaseTables, databaseSchema),
-                status: 'not_executed',
-                environment: {},
-                automation: {
-                    is_automated: false
+        return requirements.flatMap(requirement => {
+            const testCases = [];
+
+            // Tạo 4 test cases cho mỗi requirement theo Enterprise standard
+            const scenarios = [
+                {
+                    suffix: "Thành công với thông tin hợp lệ",
+                    type: "positive",
+                    priority: "high"
+                },
+                {
+                    suffix: "Thất bại do input không hợp lệ",
+                    type: "negative",
+                    priority: "medium"
+                },
+                {
+                    suffix: "Xử lý giá trị biên",
+                    type: "boundary",
+                    priority: "medium"
+                },
+                {
+                    suffix: "Xử lý lỗi hệ thống",
+                    type: "error",
+                    priority: "low"
                 }
-            };
-        });
-    }
+            ];
 
-    /**
-     * 🆕 Generate fallback test data
-     */
-    private generateFallbackTestData(databaseTables: string[], databaseSchema?: any): any[] {
-        if (databaseTables.length === 0) {
-            return [{
-                name: "Basic Test Data",
-                inputs: {},
-                expected_outputs: {},
-                actual_outputs: {}
-            }];
-        }
+            scenarios.forEach(scenario => {
+                const title = `UC${requirement.id} - ${requirement.name} - ${scenario.suffix}`;
+                const uniqueTitle = usedTitles.has(title) ? `${title} - ${scenario.type}` : title;
+                usedTitles.add(uniqueTitle);
 
-        return databaseTables.map(tableName => ({
-            name: `Test data for ${tableName}`,
-            inputs: this.generateTableInputs(tableName, databaseSchema),
-            expected_outputs: {},
-            actual_outputs: {}
-        }));
-    }
+                const databaseTables = this.extractTablesFromRequirement(requirement, databaseSchema);
+                const databaseOperations = this.extractOperationsFromRequirement(requirement);
 
-    /**
-     * 🆕 Generate table inputs
-     */
-    private generateTableInputs(tableName: string, databaseSchema?: any): any {
-        const inputs = {};
-        const table = databaseSchema?.tables?.find((t: any) => t.name === tableName);
-
-        if (table?.columns) {
-            table.columns.slice(0, 2).forEach((col: any) => {
-                if (!col.is_primary_key) {
-                    inputs[`${tableName}.${col.name}`] = this.generateTestValueForColumn(col);
-                }
+                testCases.push({
+                    title: uniqueTitle,
+                    description: `Test ${scenario.type} cho ${requirement.goal}`,
+                    test_type: 'integration',
+                    source_requirement_ids: [requirement.id],
+                    priority: scenario.priority,
+                    preconditions: [
+                        "Hệ thống đang hoạt động bình thường",
+                        "Dữ liệu test đã được chuẩn bị"
+                    ],
+                    postconditions: [
+                        "Dữ liệu test được dọn dẹp",
+                        "Hệ thống trở về trạng thái ban đầu"
+                    ],
+                    database_tables: databaseTables,
+                    database_operations: databaseOperations,
+                    steps: [
+                        {
+                            step_number: 1,
+                            action: `Chuẩn bị môi trường test cho ${requirement.name}`,
+                            input_data: {
+                                environment: "test",
+                                setup: "basic"
+                            },
+                            expected_immediate_result: "Môi trường test sẵn sàng"
+                        },
+                        {
+                            step_number: 2,
+                            action: `Thực thi chức năng ${requirement.name}`,
+                            input_data: {
+                                function: requirement.name,
+                                scenario: scenario.type
+                            },
+                            expected_immediate_result: "Hệ thống xử lý yêu cầu"
+                        },
+                        {
+                            step_number: 3,
+                            action: "Xác minh kết quả",
+                            input_data: {
+                                verification: "result_check"
+                            },
+                            expected_immediate_result: "Kết quả được xác minh"
+                        }
+                    ],
+                    expected_results: {
+                        ui_level: [
+                            "Hiển thị kết quả phù hợp với kịch bản test"
+                        ],
+                        api_level: {
+                            status_code: scenario.type === "positive" ? 200 : 400,
+                            response_schema: {
+                                success: scenario.type === "positive"
+                            }
+                        },
+                        database_level: [
+                            "Các thao tác database được thực hiện đúng"
+                        ],
+                        business_level: `Nghiệp vụ ${scenario.type === "positive" ? "thành công" : "xử lý đúng cách"}`
+                    },
+                    test_data: [
+                        {
+                            name: `Test data ${scenario.type}`,
+                            input_payload: {
+                                test_scenario: scenario.type,
+                                requirement_id: requirement.id
+                            },
+                            expected_output: {
+                                status: scenario.type === "positive" ? "success" : "failure"
+                            },
+                            validation_rules: [
+                                "Kiểm tra tính đúng đắn của nghiệp vụ"
+                            ]
+                        }
+                    ],
+                    automation: {
+                        is_automated: false,
+                        script_path: "",
+                        test_command: "",
+                        tags: [scenario.type, "integration"]
+                    },
+                    status: 'not_executed',
+                    environment: {},
+                    execution_logs_format: {
+                        timestamp: "ISO format",
+                        step_number: 1,
+                        status: "passed|failed|skipped",
+                        actual_result: "Kết quả thực tế",
+                        screenshot_path: "/screenshots/test.png",
+                        log_message: "Chi tiết log"
+                    }
+                });
             });
-        } else {
-            // Fallback generic inputs
-            inputs[`${tableName}.id`] = 1;
-            inputs[`${tableName}.name`] = `Test ${tableName}`;
-        }
 
-        return inputs;
+            return testCases;
+        });
     }
 
     /**
@@ -936,7 +1210,7 @@ export class TestcaseGeminiService {
         let lastError: any;
         for (const k of keys) {
             try {
-                console.log(`🔑 Trying Gemini key for test case content: ${k.key_value.slice(0, 12)}...`);
+                console.log(`🔑 Trying Gemini key for ENTERPRISE test case content: ${k.key_value.slice(0, 12)}...`);
                 const { GoogleGenerativeAI } = await import("@google/generative-ai");
                 const client = new GoogleGenerativeAI(k.key_value);
                 const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
@@ -952,7 +1226,7 @@ export class TestcaseGeminiService {
             } catch (err: any) {
                 lastError = err;
                 const msg = (err?.message || "").toLowerCase();
-                console.error(`❌ Gemini key ${k._id} failed during test case generation:`, err?.message || err);
+                console.error(`❌ Gemini key ${k._id} failed during ENTERPRISE test case generation:`, err?.message || err);
 
                 // Vô hiệu hóa key không hợp lệ
                 if (msg.includes("invalid") || msg.includes("unauthorized")) {
@@ -965,7 +1239,7 @@ export class TestcaseGeminiService {
             }
         }
 
-        throw lastError || new Error("All Gemini API keys failed during test case generation.");
+        throw lastError || new Error("All Gemini API keys failed during ENTERPRISE test case generation.");
     }
 
     /**
@@ -1042,7 +1316,7 @@ export class TestcaseGeminiService {
             JSON.parse(cleanedText);
             return cleanedText;
         } catch (error) {
-            console.warn("⚠️ Could not extract valid JSON from test case response:", {
+            console.warn("⚠️ Could not extract valid JSON from ENTERPRISE test case response:", {
                 originalLength: text?.length,
                 cleanedLength: cleanedText?.length,
                 preview: cleanedText.substring(0, 200)
@@ -1056,9 +1330,14 @@ export class TestcaseGeminiService {
      * Sửa chữa JSON bị cắt ngắn
      */
     private repairTruncatedJson(jsonStr: string): string {
+        console.log(`🔧 Repairing truncated JSON, length: ${jsonStr.length}`);
+
         let balance = 0;
         let inString = false;
         let escapeNext = false;
+
+        // Tìm vị trí JSON hợp lệ cuối cùng
+        let lastValidIndex = 0;
 
         for (let i = 0; i < jsonStr.length; i++) {
             const char = jsonStr[i];
@@ -1075,30 +1354,44 @@ export class TestcaseGeminiService {
 
             if (char === '"' && !escapeNext) {
                 inString = !inString;
-                continue;
             }
 
             if (!inString) {
                 if (char === '{' || char === '[') balance++;
                 if (char === '}' || char === ']') balance--;
+
+                // Ghi nhận vị trí khi balance = 0 (JSON hợp lệ)
+                if (balance === 0) {
+                    lastValidIndex = i;
+                }
             }
         }
 
+        // Nếu có JSON hợp lệ, cắt đến đó
+        if (lastValidIndex > 0 && balance !== 0) {
+            const repaired = jsonStr.substring(0, lastValidIndex + 1);
+            console.log(`✅ Repaired JSON by truncating to position ${lastValidIndex}`);
+            return repaired;
+        }
+
+        // Fallback: đóng các bracket mở
         let repaired = jsonStr;
         while (balance > 0) {
-            if (repaired.trim().endsWith(',')) {
+            if (repaired.endsWith(',') || repaired.endsWith('{') || repaired.endsWith('[')) {
                 repaired = repaired.slice(0, -1);
             }
-            repaired += '}';
+            repaired += balance > 0 ? '}' : ']';
             balance--;
         }
 
+        // Đảm bảo kết thúc đúng
         if (repaired.startsWith('[') && !repaired.endsWith(']')) {
             repaired += ']';
         } else if (repaired.startsWith('{') && !repaired.endsWith('}')) {
             repaired += '}';
         }
 
+        console.log(`✅ Repaired JSON by adding ${balance} closing brackets`);
         return repaired;
     }
 }
