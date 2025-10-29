@@ -72,7 +72,6 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
 
     return savedDocument.toObject({ getters: true }) as UseCaseDiagramResponse;
   }
-
   public async getUsecaseDiagrams(
     versionId: string
   ): Promise<UseCaseDiagramResponse[]> {
@@ -93,7 +92,6 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       created_by: ucd.created_by,
     }));
   }
-
   public async getUsecaseDiagramsById(
     ucId: string
   ): Promise<UseCaseDiagramResponse> {
@@ -135,7 +133,6 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     await uc.save();
     return this.getUsecaseDiagramsById(ucId);
   }
-
   public async deleteActorById(ucId: string, actorId: string): Promise<void> {
     const uc = await UsecaseDiagramSchema.findOne({ _id: ucId });
     if (!uc) {
@@ -170,7 +167,6 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     await uc.save();
     return this.getUsecaseDiagramsById(ucId);
   }
-
   public async deleteUsecaseById(
     ucId: string,
     usecaseId: string
@@ -187,6 +183,50 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     }
     uc.usecases.splice(usecaseIndex, 1);
     await uc.save();
+  }
+  public async createRelationship(
+    ucId: string,
+    data: { source: string; target: string; type: string }
+  ) {
+    const ucd = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!ucd) {
+      throw new Error("Usecase Diagram not found");
+    }
+
+    const ucBySource = ucd.usecases.findIndex(
+      (usecase: any) => usecase.id === data.source
+    );
+    if (ucBySource === -1) {
+      throw new Error("Source not found in usecase diagram");
+    }
+
+    const ucByTarget = ucd.usecases.findIndex(
+      (usecase: any) => usecase.id === data.target
+    );
+    if (ucByTarget === -1) {
+      throw new Error("Target not found in usecase diagram");
+    }
+    
+    const existingRelationship = ucd.relationships.find(
+      (relationship: any) =>
+      relationship.source.equals(new mongoose.Types.ObjectId(data.source)) &&
+      relationship.target.equals(new mongoose.Types.ObjectId(data.target)) &&
+      relationship.type === data.type
+    );
+    console.log(existingRelationship);
+    console.log(data)
+    if (existingRelationship) {
+      throw new Error("Relationship already exists in usecase diagram");
+    }
+
+    ucd.relationships.push({
+      id: new mongoose.Types.ObjectId().toString(),
+      source: data.source,
+      target: data.target,
+      type: data.type,
+    });
+    await ucd.save();
+    return this.getUsecaseDiagramsById(ucId);
   }
   public async editRelationshipById(
     ucId: string,

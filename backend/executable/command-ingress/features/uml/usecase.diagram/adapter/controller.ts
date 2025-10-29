@@ -356,6 +356,45 @@ export class UsecaseDiagramController extends BaseController {
   }
 
   //relationship
+
+   async createRelationship(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const ucId = req.params.ucId;
+        const data = req.body;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+        if (!data) {
+          res.status(400).json({ message: "Data is required." });
+          return;
+        }
+
+        const responseData =
+          await this.usecaseDiagramService.createRelationship(
+            ucId,
+            data
+          );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Create Relationship Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
+
+
   async editRelationshipById(
     req: HttpRequest,
     res: Response,

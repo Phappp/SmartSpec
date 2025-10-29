@@ -53,6 +53,13 @@ const initUsecaseDiagramRoute: (
     );
 
   //relationship
+  router
+    .route("/:ucId/relationship")
+    .post(
+      requireAuthorizedUser,
+      controller.createRelationship.bind(controller)
+    );
+
   //done
   router
     .route("/:ucId/relationships/:relationshipId")
