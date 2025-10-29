@@ -69,16 +69,17 @@ const initUsecaseDiagramRoute: (
     );
 
   //association
-  //progressing
+  //done
   router
     .route("/:ucId/associations/:associationId")
     .patch(
       requireAuthorizedUser,
       controller.editAssociationById.bind(controller)
     );
+  //progressing
   router
     .route("/:ucId/associations/:associationId")
-    .patch(
+    .delete(
       requireAuthorizedUser,
       controller.deleteAssociationById.bind(controller)
     );

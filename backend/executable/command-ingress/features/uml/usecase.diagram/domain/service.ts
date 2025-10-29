@@ -278,6 +278,17 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     ucId: string,
     associationId: string
   ): Promise<void> {
-    throw new Error("Method not implemented.");
+    const ucd = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!ucd) {
+      throw new Error("Usecase Diagram not found");
+    }
+    const associationIndex = ucd.associations.findIndex(
+      (association: any) => association.id === associationId
+    );
+    if (associationIndex === -1) {
+      throw new Error("Association not found");
+    }
+    ucd.associations.splice(associationIndex, 1);
+    await ucd.save();
   }
 }
