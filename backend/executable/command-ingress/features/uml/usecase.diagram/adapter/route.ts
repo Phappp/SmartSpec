@@ -33,7 +33,7 @@ const initUsecaseDiagramRoute: (
   //done
   router
     .route("/:ucId/actors/:actorId")
-    .put(requireAuthorizedUser, controller.editActorById.bind(controller));
+    .patch(requireAuthorizedUser, controller.editActorById.bind(controller));
   //done
   router
     .route("/:ucId/actors/:actorId")
@@ -43,7 +43,7 @@ const initUsecaseDiagramRoute: (
   //done
   router
     .route("/:ucId/usecases/:usecaseId")
-    .put(requireAuthorizedUser, controller.editUsecaseById.bind(controller));
+    .patch(requireAuthorizedUser, controller.editUsecaseById.bind(controller));
   router
     .route("/:ucId/usecases/:usecaseId")
     .delete(
@@ -52,7 +52,7 @@ const initUsecaseDiagramRoute: (
     );
 
   //relationship
-  //progressing
+  //done
   router
     .route("/:ucId/relationships/:relationshipId")
     .patch(

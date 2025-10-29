@@ -47,7 +47,7 @@ interface UseCaseDiagramService {
   editRelationshipById(
     ucId: string,
     relationshipId: string,
-    data: any
+    data: {source: string; target: string; type: string;}
   ): Promise<UseCaseDiagramResponse>;
   deleteRelationshipById(
     ucId: string,
@@ -56,7 +56,7 @@ interface UseCaseDiagramService {
   editAssociationById(
     ucId: string,
     associationId: string,
-    data: any
+    data: {actor_id: string; usecase_id: string;}
   ): Promise<UseCaseDiagramResponse>;
   deleteAssociationById(
     ucId: string,

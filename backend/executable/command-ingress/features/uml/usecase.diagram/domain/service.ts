@@ -8,7 +8,7 @@ import {
   UseCaseDiagramService, // Giữ lại interface của bạn
 } from "../types";
 import { UserServiceImpl } from "../../../user/domain/service"; // Import service của bạn
-
+import mongoose from "mongoose";
 export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
   private geminiService: UsecaseDiagramGeminiService;
 
@@ -178,9 +178,37 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
   public async editRelationshipById(
     ucId: string,
     relationshipId: string,
-    data: any
+    data: {source: string; target: string; type: string;}
   ): Promise<UseCaseDiagramResponse> {
-    throw new Error("Method not implemented.");
+    const ucd = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!ucd) {
+      throw new Error("Usecase Diagram not found");
+    }
+    const relationshipIndex = ucd.relationships.findIndex(
+      (relationship: any) => relationship.id === relationshipId
+    );
+    if (relationshipIndex === -1) {
+      throw new Error("Relationship not found");
+    }
+    
+    const ucBySource = ucd.usecases.findIndex(
+      (usecase: any) => usecase.id === data.source
+    );
+    console.log(ucBySource);
+    if (ucBySource === -1) {
+      throw new Error("Source not found in usecase diagram");
+    }
+    
+    const ucByTarget = ucd.usecases.findIndex(
+      (usecase: any) => usecase.id === data.target
+    );
+    if (ucByTarget === -1) {
+      throw new Error("Target not found in usecase diagram");
+    }
+    
+    ucd.relationships[relationshipIndex].set(data);
+    await ucd.save();
+    return this.getUsecaseDiagramsById(ucId);
   }
   public async deleteRelationshipById(
     ucId: string,
