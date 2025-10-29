@@ -44,7 +44,7 @@ const initUsecaseDiagramRoute: (
   router
     .route("/:ucId/usecases/:usecaseId")
     .patch(requireAuthorizedUser, controller.editUsecaseById.bind(controller));
-  //progressing
+  //done
   router
     .route("/:ucId/usecases/:usecaseId")
     .delete(
@@ -60,6 +60,7 @@ const initUsecaseDiagramRoute: (
       requireAuthorizedUser,
       controller.editRelationshipById.bind(controller)
     );
+  //done
   router
     .route("/:ucId/relationships/:relationshipId")
     .delete(
@@ -68,6 +69,7 @@ const initUsecaseDiagramRoute: (
     );
 
   //association
+  //progressing
   router
     .route("/:ucId/associations/:associationId")
     .patch(

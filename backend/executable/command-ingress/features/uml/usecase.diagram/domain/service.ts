@@ -227,14 +227,52 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     ucId: string,
     relationshipId: string
   ): Promise<void> {
-    throw new Error("Method not implemented.");
+    const ucd = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!ucd) {
+      throw new Error("Usecase Diagram not found");
+    }
+    const relationshipIndex = ucd.relationships.findIndex(
+      (relationship: any) => relationship.id === relationshipId
+    );
+    if (relationshipIndex === -1) {
+      throw new Error("Relationship not found");
+    }
+    ucd.relationships.splice(relationshipIndex, 1);
+    await ucd.save();
   }
   public async editAssociationById(
     ucId: string,
     associationId: string,
-    data: any
+    data: { actor_id: string; usecase_id: string }
   ): Promise<UseCaseDiagramResponse> {
-    throw new Error("Method not implemented.");
+    const ucd = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!ucd) {
+      throw new Error("Usecase Diagram not found");
+    }
+    const associationIndex = ucd.associations.findIndex(
+      (association: any) => association.id === associationId
+    );
+    if (associationIndex === -1) {
+      throw new Error("Association not found");
+    }
+
+    const actorById = ucd.actors.findIndex(
+      (actor: any) => actor.id === data.actor_id
+    );
+    if (actorById === -1) {
+      throw new Error("Actor not found in usecase diagram");
+    }
+
+    const usecaseById = ucd.usecases.findIndex(
+      (usecase: any) => usecase.id === data.usecase_id
+    );
+    if (usecaseById === -1) {
+      throw new Error("Usecase not found in usecase diagram");
+    }
+
+    ucd.associations[associationIndex].set(data);
+    await ucd.save();
+    return this.getUsecaseDiagramsById(ucId);
   }
   public async deleteAssociationById(
     ucId: string,

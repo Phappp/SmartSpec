@@ -287,7 +287,35 @@ export class UsecaseDiagramController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const ucId = req.params.ucId;
+        const associationId = req.params.associationId;
+        const data = req.body;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+        if (!associationId) {
+          res.status(400).json({ message: "AssociationId is required." });
+          return;
+        }
+        if (!data) {
+          res.status(400).json({ message: "Data is required." });
+          return;
+        }
+
+        const responseData =
+          await this.usecaseDiagramService.editAssociationById(
+            ucId,
+            associationId,
+            data
+          );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Edit Association by Id Successfully",
+          data: responseData,
+        });
       }
     );
   }
@@ -361,7 +389,27 @@ export class UsecaseDiagramController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const ucId = req.params.ucId;
+        const relationshipId = req.params.relationshipId;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+        if (!relationshipId) {
+          res.status(400).json({ message: "RelationshipId is required." });
+          return;
+        }
+
+        await this.usecaseDiagramService.deleteRelationshipById(
+          ucId,
+          relationshipId
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Delete Relationship by Id Successfully",
+        });
       }
     );
   }
