@@ -254,7 +254,24 @@ export class UsecaseDiagramController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        throw new Error("Method not implemented.");
+        const ucId = req.params.ucId;
+        const usecaseId = req.params.usecaseId;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+        if (!usecaseId) {
+          res.status(400).json({ message: "UsecaseId is required." });
+          return;
+        }
+
+        await this.usecaseDiagramService.deleteUsecaseById(ucId, usecaseId);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Delete Usecase by Id Successfully",
+        });
       }
     );
   }

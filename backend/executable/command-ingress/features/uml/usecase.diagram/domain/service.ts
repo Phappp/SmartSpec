@@ -130,18 +130,20 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     if (actorIndex === -1) {
       throw new Error("Actor not found");
     }
-    
+
     uc.actors[actorIndex].set(data);
     await uc.save();
     return this.getUsecaseDiagramsById(ucId);
   }
 
   public async deleteActorById(ucId: string, actorId: string): Promise<void> {
-    const uc = await UsecaseDiagramSchema.findOne({_id: ucId});
+    const uc = await UsecaseDiagramSchema.findOne({ _id: ucId });
     if (!uc) {
       throw new Error("Usecase Diagram not found");
     }
-    const actorIndex = uc.actors.findIndex((actor: any) => actor.id === actorId);
+    const actorIndex = uc.actors.findIndex(
+      (actor: any) => actor.id === actorId
+    );
     if (actorIndex === -1) {
       throw new Error("Actor not found");
     }
@@ -151,7 +153,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
   public async editUsecaseById(
     ucId: string,
     usecaseId: string,
-    data: {title: string; description?: string;}
+    data: { title: string; description?: string }
   ): Promise<UseCaseDiagramResponse> {
     const uc = await UsecaseDiagramSchema.findOne({ _id: ucId });
     if (!uc) {
@@ -173,12 +175,23 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     ucId: string,
     usecaseId: string
   ): Promise<void> {
-    throw new Error("Method not implemented.");
+    const uc = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!uc) {
+      throw new Error("Usecase Diagram not found");
+    }
+    const usecaseIndex = uc.usecases.findIndex(
+      (usecase: any) => usecase.id === usecaseId
+    );
+    if (usecaseIndex === -1) {
+      throw new Error("Usecase not found");
+    }
+    uc.usecases.splice(usecaseIndex, 1);
+    await uc.save();
   }
   public async editRelationshipById(
     ucId: string,
     relationshipId: string,
-    data: {source: string; target: string; type: string;}
+    data: { source: string; target: string; type: string }
   ): Promise<UseCaseDiagramResponse> {
     const ucd = await UsecaseDiagramSchema.findOne({ _id: ucId });
     if (!ucd) {
@@ -190,7 +203,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     if (relationshipIndex === -1) {
       throw new Error("Relationship not found");
     }
-    
+
     const ucBySource = ucd.usecases.findIndex(
       (usecase: any) => usecase.id === data.source
     );
@@ -198,14 +211,14 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     if (ucBySource === -1) {
       throw new Error("Source not found in usecase diagram");
     }
-    
+
     const ucByTarget = ucd.usecases.findIndex(
       (usecase: any) => usecase.id === data.target
     );
     if (ucByTarget === -1) {
       throw new Error("Target not found in usecase diagram");
     }
-    
+
     ucd.relationships[relationshipIndex].set(data);
     await ucd.save();
     return this.getUsecaseDiagramsById(ucId);
