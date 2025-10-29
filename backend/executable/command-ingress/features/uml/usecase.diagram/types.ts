@@ -29,7 +29,7 @@ interface UseCaseDiagramService {
   editActorById(
     ucId: string,
     actorId: string,
-    data: any
+    data: {name: string; description?: string;}
   ): Promise<UseCaseDiagramResponse>;
   deleteActorById(
     ucId: string,

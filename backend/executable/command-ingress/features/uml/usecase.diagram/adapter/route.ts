@@ -21,7 +21,7 @@ const initUsecaseDiagramRoute: (
     .route("/versions/:versionId/")
     .get(requireAuthorizedUser, controller.getUsecaseDiagrams.bind(controller));
   
-  //progressing
+  //done
   router
     .route("/:ucId")
     .get(
@@ -30,9 +30,10 @@ const initUsecaseDiagramRoute: (
     );
 
   //actor
+  //progressing
   router
     .route("/:ucId/actors/:actorId")
-    .patch(requireAuthorizedUser, controller.editActorById.bind(controller));
+    .put(requireAuthorizedUser, controller.editActorById.bind(controller));
   router
     .route("/:ucId/actors/:actorId")
     .delete(requireAuthorizedUser, controller.deleteActorById.bind(controller));
