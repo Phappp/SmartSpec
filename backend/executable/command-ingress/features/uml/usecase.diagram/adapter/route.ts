@@ -30,10 +30,11 @@ const initUsecaseDiagramRoute: (
     );
 
   //actor
-  //progressing
+  //done
   router
     .route("/:ucId/actors/:actorId")
     .put(requireAuthorizedUser, controller.editActorById.bind(controller));
+  //progressing
   router
     .route("/:ucId/actors/:actorId")
     .delete(requireAuthorizedUser, controller.deleteActorById.bind(controller));

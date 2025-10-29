@@ -137,7 +137,16 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
   }
 
   public async deleteActorById(ucId: string, actorId: string): Promise<void> {
-    throw new Error("Method not implemented.");
+    const uc = await UsecaseDiagramSchema.findOne({_id: ucId});
+    if (!uc) {
+      throw new Error("Usecase Diagram not found");
+    }
+    const actorIndex = uc.actors.findIndex((actor: any) => actor.id === actorId);
+    if (actorIndex === -1) {
+      throw new Error("Actor not found");
+    }
+    uc.actors.splice(actorIndex, 1);
+    await uc.save();
   }
   public async editUsecaseById(
     ucId: string,
