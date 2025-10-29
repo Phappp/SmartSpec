@@ -153,7 +153,20 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     usecaseId: string,
     data: any
   ): Promise<UseCaseDiagramResponse> {
-    throw new Error("Method not implemented.");
+    const uc = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!uc) {
+      throw new Error("Usecase Diagram not found");
+    }
+    const usecaseIndex = uc.usecases.findIndex(
+      (usecase: any) => usecase.id === usecaseId
+    );
+    if (usecaseIndex === -1) {
+      throw new Error("Usecase not found");
+    }
+
+    uc.usecases[usecaseIndex].set(data);
+    await uc.save();
+    return this.getUsecaseDiagramsById(ucId);
   }
 
   public async deleteUsecaseById(

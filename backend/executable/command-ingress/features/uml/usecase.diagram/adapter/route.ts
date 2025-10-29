@@ -34,17 +34,18 @@ const initUsecaseDiagramRoute: (
   router
     .route("/:ucId/actors/:actorId")
     .put(requireAuthorizedUser, controller.editActorById.bind(controller));
-  //progressing
+  //done
   router
     .route("/:ucId/actors/:actorId")
     .delete(requireAuthorizedUser, controller.deleteActorById.bind(controller));
 
   //usecase
+  //done
   router
-    .route("/:ucId/usecase/:usecaseId")
-    .patch(requireAuthorizedUser, controller.editUsecaseById.bind(controller));
+    .route("/:ucId/usecases/:usecaseId")
+    .put(requireAuthorizedUser, controller.editUsecaseById.bind(controller));
   router
-    .route("/:ucId/usecase/:usecaseId")
+    .route("/:ucId/usecases/:usecaseId")
     .delete(
       requireAuthorizedUser,
       controller.deleteUsecaseById.bind(controller)

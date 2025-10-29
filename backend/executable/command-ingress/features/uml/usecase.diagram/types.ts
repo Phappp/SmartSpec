@@ -38,7 +38,7 @@ interface UseCaseDiagramService {
   editUsecaseById(
     ucId: string,
     usecaseId: string,
-    data: any
+    data: {title: string; description?: string;}
   ): Promise<UseCaseDiagramResponse>;
   deleteUsecaseById(
     ucId: string,
