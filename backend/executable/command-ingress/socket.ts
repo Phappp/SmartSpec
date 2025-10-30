@@ -4,6 +4,7 @@ import { Server as HttpServer } from 'http';
 import { usecaseSocketService } from '../command-ingress/features/usecase/domain/usecase.socket.service';
 import { inputSocketService } from '../command-ingress/features/input/domain/input.socket.service';
 import { presenceSocketService } from '../command-ingress/features/presence/domain/presence.socket.service';
+import { versionSocketService } from '../command-ingress/features/version/domain/version.socket.service';
 
 export let io: Server;
 
@@ -60,6 +61,7 @@ export function initSocket(server: HttpServer) {
                 };
                 presenceSocketService.joinProjectRoom(socket, projectId, userId, fallbackUserInfo);
             }
+            versionSocketService.joinProjectRoom(socket, projectId);
         });
 
         // ✅ Leave project room
@@ -73,6 +75,7 @@ export function initSocket(server: HttpServer) {
             usecaseSocketService.leaveProjectRoom(socket, projectId);
             inputSocketService.leaveProjectRoom(socket, projectId);
             presenceSocketService.leaveProjectRoom(socket, projectId);
+            versionSocketService.leaveProjectRoom(socket, projectId);
         });
 
         socket.on('disconnect', (reason) => {

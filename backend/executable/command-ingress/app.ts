@@ -83,6 +83,9 @@ import initTestcaseRoute from './features/testcase/adapter/route';
 import { TestcaseController } from './features/testcase/adapter/controller';
 import { TestcaseService } from './features/testcase/domain/service';
 
+import initVersionRoute from "./features/version/adapter/route";
+import { VersionController } from "./features/version/adapter/controller";
+import { VersionService } from "./features/version/domain/service";
 // import initOcrRoute from "./features/handle_image/adapter/route";
 // import { OcrController } from "./features/handle_image/adapter/controller";
 // import { OcrService } from "./features/handle_image/domain/service";
@@ -254,7 +257,7 @@ const createHttpServer = (redisClient: any) => {
     initNotificationRoute(new NotificationController(new NotificationServiceImpl))
   );
   app.use("/api/logs", initLogRoute(new LogController(new LogService())));
-
+  app.use("/api/versions",initVersionRoute(new VersionController(new VersionService())))
   app.use(recoverMiddleware);
 
   return server;

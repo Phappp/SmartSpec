@@ -203,7 +203,8 @@ export function resolveProjectConflict(projectId, versionId, data) {
 export const addInputsToVersion = (versionId, data) => axiosClient.post(`/api/input/versions/${versionId}/inputs`, data);
 export const deleteSpecificInput = (versionId, inputId) => axiosClient.delete(`/api/input/versions/${versionId}/inputs/${inputId}`);
 export const getVersionStatus = (versionId) => axiosClient.get(`/api/projects/versions/${versionId}/status`);
-
+export const getVersionInProject = (projectId) => axiosClient.get(`/api/versions/project/${projectId}`);
+export const switchCurrentVersion = (projectId, versionId) => {return axiosClient.patch(`/api/versions/projects/${projectId}/current-version/${versionId}`);}
 // Attachments
 export const uploadAttachments = (projectId, formData) =>
   axiosClient.post(`/api/projects/${projectId}/attachments`, formData, {

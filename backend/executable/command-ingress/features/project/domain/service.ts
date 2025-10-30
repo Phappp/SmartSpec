@@ -79,8 +79,7 @@ export class ProjectService {
       });
 
       // Log action
-      const owner = await User.findById(ownerId).select("email").lean();
-      const userEmail = owner?.email || ownerId;
+      const owner = await User.findById(ownerId).select("name email").lean();
 
       await this.logService.createLog({
         user_id: ownerId,
@@ -94,7 +93,7 @@ export class ProjectService {
             description: newProject.description,
             language: newProject.language,
           },
-          message: `Project "${newProject.name}" created by user ${userEmail}`,
+          message: `Project "${newProject.name}" created by user ${owner.name}`,
         },
         level: "info",
       });
@@ -162,8 +161,7 @@ export class ProjectService {
       language: updatedProject.language,
     };
 
-    const user = await User.findById(userId).select("email").lean();
-    const userEmail = user?.email || userId;
+    const user = await User.findById(userId).select("name email").lean();
 
     await this.logService.createLog({
       user_id: userId,
@@ -171,7 +169,7 @@ export class ProjectService {
       action: "update_project",
       target_id: projectId,
       target_type: "project",
-      details: { before, after, message: `User ${userEmail} updated project ${project.name}` },
+      details: { before, after, message: `${user.name} updated project ${project.name}` },
       level: "info",
     });
 
@@ -207,8 +205,7 @@ export class ProjectService {
 
       await project.save();
 
-      const user = await User.findById(userId).select("email").lean();
-      const userEmail = user?.email || userId;
+      const user = await User.findById(userId).select("name email").lean();
 
       await this.logService.createLog({
         user_id: userId,
@@ -216,7 +213,7 @@ export class ProjectService {
         action: "delete_project",
         target_id: projectId,
         target_type: "project",
-        details: { message: `User ${userEmail} deleted project ${project.name}` },
+        details: { message: `${user.name} deleted project ${project.name}` },
         level: "info",
       });
 
@@ -259,8 +256,7 @@ export class ProjectService {
 
     await project.save();
 
-    const user = await User.findById(userId).select("email").lean();
-    const userEmail = user?.email || userId;
+    const user = await User.findById(userId).select("name email").lean();
 
     await this.logService.createLog({
       user_id: userId,
@@ -268,7 +264,7 @@ export class ProjectService {
       action: "restore_project",
       target_id: projectId,
       target_type: "project",
-      details: { message: `User ${userEmail} restored project ${project.name}` },
+      details: { message: `${user.name} restored project ${project.name}` },
       level: "info",
     });
 
@@ -380,7 +376,7 @@ export class ProjectService {
     // Lấy danh sách versions (metadata)
     const versions = await Version.find({ project_id: project._id })
       .select("_id version_number status created_at updated_at")
-      .sort({ version_number: 1 })
+      .sort({ version_number: -1 })
       .lean();
 
     // Lấy current version (đầy đủ tất cả field)

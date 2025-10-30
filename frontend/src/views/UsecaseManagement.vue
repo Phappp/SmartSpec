@@ -130,6 +130,7 @@ import {
   resolveProjectConflict,
   skipConflict,
   usecaseApi,
+  switchCurrentVersion,
 } from '@/api/project'
 import { useToast } from 'vue-toastification'
 import AppModal from '@/components/AppModal.vue'
@@ -359,6 +360,9 @@ export default {
       socket.on('user_joined', this.handleUserJoined)
       socket.on('user_left', this.handleUserLeft)
 
+      // cho version events
+      socket.on('version_event', this.handleVersionEvent);
+
       // Join project room if already connected
       if (socket.connected) {
         this.joinProjectRoom(projectId)
@@ -387,6 +391,7 @@ export default {
         socket.off('user_joined', this.handleUserJoined)
         socket.off('user_left', this.handleUserLeft)
 
+        socket.off('version_event', this.handleVersionEvent)
         // Leave project room
         if (this.project._id) {
           socket.emit('leave_project', this.project._id)
@@ -437,6 +442,90 @@ export default {
 
     // Trong UsecaseManagement.vue - handleInputEvent
     // Trong UsecaseManagement.vue - handleInputEvent
+    handleVersionEvent(event) {
+      console.log('📩 Realtime version event received:', event)
+
+      // Bỏ qua events từ chính mình
+      if (event.userId === this.currentUserId) return
+
+      switch (event.type) {
+        case 'VERSION_UPDATED':
+          this.handleRemoteVersionUpdated(event)
+          break
+        case 'VERSION_DELETED':
+          this.handleRemoteVersionDeleted(event)
+          break
+        case 'VERSION_SWITCHED':
+          this.handleSwitchedVersion(event)
+          break
+        case 'VERSION_CREATED':
+          this.handleRemoteVersionBumped(event)
+          break
+        default:
+          console.warn('Unknown version event type:', event.type)
+      }
+    },
+
+    async handleRemoteVersionBumped(event) {
+      const version = event.version
+      if (!version) return
+      this.toast.info(`New version created: ${version.version_number || version._id}`)
+      const exists = this.versions.find(v => v._id === version._id)
+      if (!exists) this.versions.push(version)
+      this.selectedVersionId = version._id
+      this.currentVersionDetails = version
+      await this.fetchProjectData(this.project._id);
+      this.$forceUpdate()
+    },
+
+    async handleSwitchedVersion(event){
+      const versionId = event.versionId || event.toVersionId;
+      if (!versionId) return;
+      let version = this.versions.find(v => v._id === versionId);
+      if (!version) {
+        version = this.versions.find(v => v._id === versionId);
+      }
+
+      if (!version) return;
+      await this.fetchProjectData(this.project._id);
+      this.selectedVersionId = version._id;
+      this.currentVersionDetails = version;
+
+      this.toast.info(`Switched to version: ${version.version_number || version._id}`);
+      this.$forceUpdate();
+    },
+
+    async handleRemoteVersionDeleted(event) {
+      const deletedId = event.versionId
+      if (!deletedId) return
+
+      // Xóa khỏi danh sách version
+      this.versions = this.versions.filter(v => v._id !== deletedId)
+
+      // Nếu version hiện tại bị xóa
+      if (this.selectedVersionId === deletedId) {
+        // Chọn version đầu tiên còn lại (nếu có)
+        if (this.versions.length > 0) {
+          this.selectedVersionId = this.versions[0]._id
+          await this.fetchProjectData(this.project._id)
+          this.toast.info(`Current version was deleted. Switched to latest version.`)
+        } else {
+          // Không còn version nào
+          this.selectedVersionId = null
+          this.useCases = []
+          this.inputs = []
+          this.toast.info(`All versions deleted by team.`)
+        }
+      } else {
+        this.toast.info(`A version was deleted by team.`)
+      }
+
+      this.$forceUpdate()
+    },
+    handleRemoteVersionUpdated(event) {
+      
+    },
+
     handleInputEvent(event) {
       console.log('📩 Realtime input event received:', event)
 
@@ -895,11 +984,34 @@ export default {
     },
 
     // ========== VERSION MANAGEMENT ==========
-    handleVersionSelect(versionId) {
-      this.selectedVersionId = versionId
-      this.fetchProjectData(this.project._id)
-    },
+    // handleVersionSelect(versionId) {
+    //   this.selectedVersionId = versionId
+    //   this.fetchProjectData(this.project._id)
+    // },
+    async handleVersionSelect(versionId) {
+      try {
+        if (!versionId) {
+          this.toast.warning('Please select a valid version');
+          return;
+        }
 
+        const res = await switchCurrentVersion(this.project._id, versionId);
+
+        if (!res?.data) throw new Error('No response from server');
+        if (res.data.status !== 'Success') {
+          throw new Error(res.data.message || 'Failed to switch version');
+        }
+
+        this.selectedVersionId = versionId;
+
+        await this.fetchProjectData(this.project._id);
+        this.$forceUpdate();
+        this.toast.success('Switched to new working version');
+      } catch (error) {
+        console.warn('⚠️ Version switch failed:', error?.message || error);
+        this.toast.error('Failed to switch version');
+      }
+    },
     // ========== POLLING & PROGRESS MANAGEMENT ==========
     startPolling(versionId, mode = 'retry') {
       this.cleanupPolling()

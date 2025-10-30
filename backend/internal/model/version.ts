@@ -38,10 +38,14 @@ const conflictSchema = new Schema({
 
 const versionSchema = new Schema({
     project_id: { type: Schema.Types.ObjectId, ref: "projects", required: true },
-    version_number: { type: Number, required: true },
+    version_major: { type: Number, required: true, default: 1 }, // ví dụ: 1.x
+    version_minor: { type: Number, required: true, default: 0 }, // ví dụ: x.1
+    version_patch: { type: String, default: null },  
+    version_number: { type: String, default: null },
     created_by: { type: Schema.Types.ObjectId, ref: "users", required: true },
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now },
+    parent_version_id: { type: Schema.Types.ObjectId, ref: "versions", default: null },
     inputs: [{ type: Schema.Types.ObjectId, ref: "inputs" }],
     outputs: [{ type: Schema.Types.ObjectId, ref: "outputs" }],
     progress: { type: Number, default: 0 }, // %
@@ -59,6 +63,14 @@ const versionSchema = new Schema({
 }, {
     timestamps: true
 });
-
+versionSchema.pre("save", function (next) {
+    if (this.version_major != null && this.version_minor != null) {
+        this.version_number = `${this.version_major}.${this.version_minor}`;
+        if (this.version_patch) {
+            this.version_number += `.${this.version_patch}`;
+        }
+    }
+    next();
+});
 type VersionSchemaInferType = InferSchemaType<typeof versionSchema>;
 export default model<VersionSchemaInferType>("versions", versionSchema);

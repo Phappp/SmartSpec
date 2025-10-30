@@ -7,12 +7,14 @@ import { GeminiService } from "./GeminiService";
 import { RequirementService } from "./RequirementService";
 import { UtilService } from "./UtilService";
 import { inputSocketService } from '../../input/domain/input.socket.service';
+import { VersionService } from "../../../features/version/domain/service";
 
 export class OrchestratorService {
     private inputService = new InputService();
     private gemini = new GeminiService();
     private requirementService = new RequirementService();
     private util = new UtilService();
+    private versionService = new VersionService();
 
     async run(
         projectId: string,
@@ -27,6 +29,8 @@ export class OrchestratorService {
 
         // 🟢 Bắt đầu: clear lỗi cũ
         console.log(`[SERVICE] Clearing previous errors for version ${versionId} before running...`);
+        // Độ trễ ngẫu nhiên từ 2000ms (2 giây) đến 3000ms (3 giây)
+
         await Version.findByIdAndUpdate(versionId, {
             $set: {
                 status: "processing",
@@ -204,6 +208,11 @@ export class OrchestratorService {
             false
         );
 
+        const bumpResult = await this.versionService.bumpVersion(
+            versionId,
+            userId,
+            "minor"
+        );
         return result;
     }
 
