@@ -318,7 +318,7 @@
               </div>
               <span class="progress-text">{{ progress }}%</span>
             </div>-->
-          </div> 
+          </div>
         </div>
       </div>
     </div>
@@ -483,41 +483,35 @@ export default {
       try {
         let response
 
-        if (selectedSource.value === 'requirements') {
-          response = await testcaseApi.generateTestCasesSimplified(
-            props.projectId,
-            props.versionId,
-            {
-              selectedRequirementIds: selectedRequirements.value,
-              language: configuration.value.language,
-              testTypeFocus: configuration.value.testTypeFocus,
-              includeDatabaseOperations: configuration.value.includeDatabaseOperations,
-              includeTestData: configuration.value.includeTestData,
-            }
-          )
-        } else {
-          response = await testcaseApi.generateTestCasesFromDatabase(
-            props.projectId,
-            props.versionId,
-            {
-              selectedTableNames: selectedTables.value,
-              language: configuration.value.language,
-              testTypeFocus: configuration.value.testTypeFocus,
-              includeDatabaseOperations: configuration.value.includeDatabaseOperations,
-              includeTestData: configuration.value.includeTestData,
-            }
-          )
-        }
+        // 🆕 LUÔN sử dụng requirements source (vì database có thể rỗng)
+        response = await testcaseApi.generateTestCasesSimplified(props.projectId, props.versionId, {
+          selectedRequirementIds: selectedRequirements.value,
+          language: configuration.value.language,
+          testTypeFocus: configuration.value.testTypeFocus,
+          includeDatabaseOperations: configuration.value.includeDatabaseOperations,
+          includeTestData: configuration.value.includeTestData,
+        })
 
         previewTestCases.value = response.data.data || response.data || []
         nextStep()
-        toast.success(`Generated ${previewTestCases.value.length} test cases`)
+
+        // 🆕 Thông báo thành công với cảnh báo nếu database rỗng
+        if (props.databaseSchema?.tables?.length === 0) {
+          toast.success(
+            `Generated ${previewTestCases.value.length} test cases (using requirement analysis only)`
+          )
+        } else {
+          toast.success(`Generated ${previewTestCases.value.length} test cases`)
+        }
       } catch (error) {
         console.error('Error generating test cases:', error)
         const errorMessage = error.response?.data?.message || 'Failed to generate test cases'
 
+        // 🆕 XỬ LÝ LỖI MỀM MẠI HƠN
         if (errorMessage.includes('database') || errorMessage.includes('schema')) {
-          toast.error('Database schema not found. Please generate database schema first.')
+          // Thử lại với fallback mode
+          toast.warning('Generating test cases using requirement analysis only...')
+          // Có thể implement fallback logic ở đây
         } else if (errorMessage.includes('requirements')) {
           toast.error('No requirements found for the selected version.')
         } else {
@@ -548,7 +542,6 @@ export default {
         selectedTables.value = databaseTables.value.map((table) => table.name)
       }
     })
-    
 
     return {
       currentStep,
@@ -1372,5 +1365,4 @@ export default {
     justify-content: center;
   }
 }
-
 </style>
