@@ -9,12 +9,7 @@ export class TestcaseService {
     /**
      * Generate ENTERPRISE test cases từ requirements và database schema với selection
      */
-    async generateTestCases(
-        projectId: string,
-        versionId: string,
-        selectedRequirementIds: string[],
-        language: string = 'vi-VN'
-    ) {
+    async generateTestCases(projectId: string, versionId: string, selectedRequirementIds: string[], language: string = 'vi-VN') {
         console.log(`🎯 Generating ENTERPRISE test cases for ${selectedRequirementIds.length} selected requirements`);
 
         // 1. TỰ ĐỘNG lấy requirements từ version
@@ -35,22 +30,25 @@ export class TestcaseService {
             throw new Error("No matching requirements found");
         }
 
-        // 2. TỰ ĐỘNG lấy database schema
+        // 2. TỰ ĐỘNG lấy database schema - NHƯNG CHO PHÉP RỖNG
         const database = await Database.findOne({
             project_id: projectId,
             version_id: versionId
         });
 
-        if (!database) {
-            throw new Error("Database schema not found for this version");
-        }
+        // 🆕 CHO PHÉP database rỗng, tạo schema mặc định
+        const databaseSchema = database || {
+            tables: [],
+            relationships: [],
+            _id: null
+        };
 
-        console.log(`📊 Loaded ${requirementsToProcess.length} requirements and ${database.tables?.length || 0} tables`);
+        console.log(`📊 Loaded ${requirementsToProcess.length} requirements and ${databaseSchema.tables?.length || 0} tables`);
 
-        // 3. Gen ENTERPRISE test cases
+        // 3. Gen ENTERPRISE test cases - VẪN HOẠT ĐỘNG KHI DATABASE RỖNG
         return await this.testcaseGeminiService.generateTestCases(
             requirementsToProcess,
-            database,
+            databaseSchema, // ✅ Truyền databaseSchema (có thể rỗng)
             language
         );
     }

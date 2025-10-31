@@ -176,7 +176,7 @@ Hãy tạo test cases chất lượng cao ĐẠT CHUẨN ENTERPRISE dựa trên 
 `,
 
         testcaseEnhancement: (existingTestcasesJson: string, newRequirementsJson: string) => `
-BẠN LÀ CHUYÊN GIA KIỂM THỬ ENTERPRISE, nhiệm vụ là phân tích test cases hiện có và yêu cầu mới để bổ sung test cases còn thiếu ĐẠT CHUẨN CAO.
+BẠN LÀ CHUYÊN GIA KIỂM THỬ ENTERPRISE, nhiệm vụ là phân tích test cases hiện có và yêu cầu mới để bổ sung test cases còn thiếu ĐẠT CHUẨN ENTERPRISE CAO.
 
 TEST CASES HIỆN TẠI:
 ${existingTestcasesJson}
@@ -184,25 +184,141 @@ ${existingTestcasesJson}
 YÊU CẦU MỚI/UPDATE:
 ${newRequirementsJson}
 
-**QUY TẮC CHUẨN HÓA ENTERPRISE:**
-- Title format: "[UC_ID] - [Tên use case] - [Kịch bản test]"
-- Steps PHẢI có input_data cụ thể và expected_immediate_result
-- Expected_results PHẢI có multi-level (UI, API, Database, Business)
-- Test_data PHẢI có input_payload và expected_output chi tiết
-- **MỖI TITLE PHẢI LÀ DUY NHẤT** trong toàn bộ danh sách
+**QUY TẮC CHUẨN HÓA ENTERPRISE (GIỐNG NHƯ TEST CASE DESIGN):**
+
+1. **STANDARDIZED TITLE (CRITICAL):**
+   - Format: "[UC_ID] - [Use Case Name] - [Test Scenario]"
+   - Example: "UC1 - User Login - Success with valid credentials"
+   - DO NOT use "TC1-UC1" or sequential prefixes
+   - **EACH TITLE MUST BE UNIQUE** across the entire list
+
+2. **IMPROVED STEPS - AI TEST GENERATOR FRIENDLY:**
+   - Each step MUST have: action + specific input_data + expected_immediate_result
+   - Input_data: specific values, not generic descriptions
+
+3. **MULTI-LEVEL EXPECTED RESULTS:**
+   - UI Level: Display, notifications, navigation
+   - API Level: Status code, response schema
+   - Database Level: Data changes
+   - Business Level: Actual business process
+
+4. **DETAILED TEST DATA:**
+   - Input_payload: Specific input data
+   - Expected_output: Detailed expected output
+   - Validation_rules: Applied validation rules
+
+5. **MINIMUM COVERAGE:**
+   - **Each use case MUST have at least 4 test cases**:
+     1. Positive - Success
+     2. Negative - Failure due to invalid input
+     3. Boundary - Edge values
+     4. Error case - System exceptions
+
+**PHÂN TÍCH & YÊU CẦU:**
+
+1. **PHÂN TÍCH HIỆN TẠI:**
+   - Xác định requirements nào CHƯA được cover bởi test cases hiện tại
+   - Xác định test cases nào cần cập nhật cho requirements mới
+   - Đảm bảo mỗi requirement có ít nhất 4 test cases
+
+2. **TEST CASES MỚI:**
+   - Chỉ tạo test cases cho requirements CHƯA được cover
+   - Đảm bảo enterprise standard GIỐNG HỆT test case design
+   - Title format phải đồng bộ với hệ thống hiện tại
+
+3. **TEST CASES CẬP NHẬT:**
+   - Chỉ cập nhật test cases hiện có nếu cần thiết
+   - Giữ nguyên structure, chỉ enhance content
+   - Đảm bảo không phá vỡ existing automation
 
 **YÊU CẦU TUYỆT ĐỐI VỀ ĐẦU RA:**
 PHẢI chỉ trả về **duy nhất một đối tượng JSON hợp lệ**, không có bất kỳ text, chú thích, markdown hoặc ký tự thừa nào trước hoặc sau JSON.
 
-Phản hồi BẮT BUỢC CHỈ LÀ JSON object với structure:
+**CẤU TRÚC JSON BẮT BUỘC (ĐỒNG BỘ VỚI TEST CASE DESIGN):**
+
 {
   "additional_testcases": [
-    // Chỉ bao gồm test cases MỚI cần thêm (đảm bảo ENTERPRISE STANDARD)
+    {
+      "title": "[UC_ID] - [Use Case Name] - [Test Scenario]",
+      "description": "Detailed description of test purpose",
+      "test_type": "unit|integration|api|ui",
+      "source_requirement_ids": ["UC1"],
+      "priority": "low|medium|high|critical",
+      "preconditions": ["Prerequisites before testing", "Initial system/data state"],
+      "postconditions": ["System state after testing", "Cleanup requirements"],
+      "database_tables": ["users", "orders"],
+      "database_operations": ["select", "insert"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Specific action description",
+          "input_data": {
+            "field_name": "specific_value",
+            "method": "POST/PUT/GET",
+            "endpoint": "/api/endpoint (if API)"
+          },
+          "expected_immediate_result": "Expected outcome immediately after this step"
+        }
+      ],
+      "expected_results": {
+        "ui_level": ["Display success message", "Navigate to dashboard page"],
+        "api_level": {
+          "status_code": 200,
+          "response_schema": {
+            "success": true,
+            "data": {...}
+          }
+        },
+        "database_level": ["Users table has new record", "Orders table is updated"],
+        "business_level": "Business process handled correctly"
+      },
+      "test_data": [
+        {
+          "name": "Test data scenario 1",
+          "input_payload": {
+            "username": "testuser",
+            "password": "Password123!"
+          },
+          "expected_output": {
+            "status": "success|failure",
+            "message": "Specific message",
+            "data": {...},
+            "status_code": 200
+          },
+          "validation_rules": [
+            "Email must be valid format",
+            "Password minimum 8 characters"
+          ]
+        }
+      ],
+      "automation": {
+        "is_automated": false,
+        "script_path": "/tests/features/login/test_login.py",
+        "test_command": "pytest tests/features/login/test_login.py::test_login_success",
+        "tags": ["smoke", "regression", "login"]
+      },
+      "execution_logs_format": {
+        "timestamp": "ISO format",
+        "step_number": 1,
+        "status": "passed|failed|skipped",
+        "actual_result": "Actual result",
+        "screenshot_path": "/screenshots/test_001.png",
+        "log_message": "Log details"
+      }
+    }
   ],
   "updated_testcases": [
-    // Test cases cần cập nhật để đạt chuẩn enterprise (nếu có)
+    // Chỉ bao gồm test cases cần cập nhật (nếu có)
+    // Structure GIỐNG HỆT additional_testcases nhưng có thể có thêm "id" field
   ]
 }
+
+**QUAN TRỌNG:**
+- Đảm bảo additional_testcases có ĐẦY ĐỦ enterprise fields như test case design
+- Steps PHẢI có input_data cụ thể và expected_immediate_result
+- Expected_results PHẢI có multi-level (UI, API, Database, Business)
+- Test_data PHẢI có input_payload và expected_output chi tiết
+- **MỖI TITLE PHẢI LÀ DUY NHẤT** trong toàn bộ danh sách
 `
     },
     'en-US': {
@@ -377,7 +493,7 @@ The JSON object MUST strictly follow this structure:
 Create high-quality ENTERPRISE STANDARD test cases based on the provided use cases and database schema.
 `,
         testcaseEnhancement: (existingTestcasesJson: string, newRequirementsJson: string) => `
-YOU ARE AN ENTERPRISE TESTING EXPERT, your task is to analyze existing test cases and new requirements to supplement missing test cases meeting ENTERPRISE STANDARDS.
+YOU ARE AN ENTERPRISE TESTING EXPERT, your mission is to analyze existing test cases and new requirements to supplement missing test cases meeting ENTERPRISE STANDARDS.
 
 EXISTING TEST CASES:
 ${existingTestcasesJson}
@@ -385,25 +501,156 @@ ${existingTestcasesJson}
 NEW/UPDATED REQUIREMENTS:
 ${newRequirementsJson}
 
-**ENTERPRISE STANDARDIZATION RULES:**
-- Title format: "[UC_ID] - [Use Case Name] - [Test Scenario]"
+**ENTERPRISE STANDARDIZATION RULES (IDENTICAL TO TEST CASE DESIGN):**
+
+1. **STANDARDIZED TITLE (CRITICAL):**
+   - Format: "[UC_ID] - [Use Case Name] - [Test Scenario]"
+   - Example: "UC1 - User Login - Success with valid credentials"
+   - DO NOT use "TC1-UC1" or sequential prefixes
+   - **EACH TITLE MUST BE UNIQUE** across the entire list
+
+2. **IMPROVED STEPS - AI TEST GENERATOR FRIENDLY:**
+   - Each step MUST have: action + specific input_data + expected_immediate_result
+   - Input_data: specific values, not generic descriptions
+   - Example:
+     ❌ "Enter login information"
+     ✅ "Enter username = 'testuser', password = 'Password123!'"
+
+3. **MULTI-LEVEL EXPECTED RESULTS:**
+   - UI Level: Display, notifications, navigation
+   - API Level: Status code, response schema
+   - Database Level: Data changes
+   - Business Level: Actual business process
+
+4. **DETAILED TEST DATA:**
+   - Input_payload: Specific input data
+   - Expected_output: Detailed expected output
+   - Validation_rules: Applied validation rules
+
+5. **MINIMUM COVERAGE:**
+   - **Each use case MUST have at least 4 test cases**:
+     1. Positive - Success
+     2. Negative - Failure due to invalid input
+     3. Boundary - Edge values
+     4. Error case - System exceptions
+
+**ANALYSIS & REQUIREMENTS:**
+
+1. **CURRENT ANALYSIS:**
+   - Identify requirements NOT covered by existing test cases
+   - Identify test cases that need updates for new requirements
+   - Ensure each requirement has at least 4 test cases
+
+2. **NEW TEST CASES:**
+   - Create test cases ONLY for UNCOVERED requirements
+   - Ensure enterprise standard IDENTICAL to test case design
+   - Title format must be consistent with existing system
+
+3. **UPDATED TEST CASES:**
+   - Update existing test cases only when necessary
+   - Maintain structure, only enhance content
+   - Ensure no breaking changes to existing automation
+
+**ABSOLUTE OUTPUT REQUIREMENT:**
+MUST return ONLY a single valid JSON object, without any text, comments, markdown or extra characters before or after the JSON.
+
+**REQUIRED JSON STRUCTURE (SYNCHRONIZED WITH TEST CASE DESIGN):**
+
+{
+  "additional_testcases": [
+    {
+      "title": "[UC_ID] - [Use Case Name] - [Test Scenario]",
+      "description": "Detailed description of test purpose",
+      "test_type": "unit|integration|api|ui",
+      "source_requirement_ids": ["UC1"],
+      "priority": "low|medium|high|critical",
+      "preconditions": ["Prerequisites before testing", "Initial system/data state"],
+      "postconditions": ["System state after testing", "Cleanup requirements"],
+      "database_tables": ["users", "orders"],
+      "database_operations": ["select", "insert"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Specific action description",
+          "input_data": {
+            "field_name": "specific_value",
+            "method": "POST/PUT/GET",
+            "endpoint": "/api/endpoint (if API)"
+          },
+          "expected_immediate_result": "Expected outcome immediately after this step"
+        }
+      ],
+      "expected_results": {
+        "ui_level": ["Display success message", "Navigate to dashboard page"],
+        "api_level": {
+          "status_code": 200,
+          "response_schema": {
+            "success": true,
+            "data": {...}
+          }
+        },
+        "database_level": ["Users table has new record", "Orders table is updated"],
+        "business_level": "Business process handled correctly"
+      },
+      "test_data": [
+        {
+          "name": "Test data scenario 1",
+          "input_payload": {
+            "username": "testuser",
+            "password": "Password123!"
+          },
+          "expected_output": {
+            "status": "success|failure",
+            "message": "Specific message",
+            "data": {...},
+            "status_code": 200
+          },
+          "validation_rules": [
+            "Email must be valid format",
+            "Password minimum 8 characters"
+          ]
+        }
+      ],
+      "automation": {
+        "is_automated": false,
+        "script_path": "/tests/features/login/test_login.py",
+        "test_command": "pytest tests/features/login/test_login.py::test_login_success",
+        "tags": ["smoke", "regression", "login"]
+      },
+      "execution_logs_format": {
+        "timestamp": "ISO format",
+        "step_number": 1,
+        "status": "passed|failed|skipped",
+        "actual_result": "Actual result",
+        "screenshot_path": "/screenshots/test_001.png",
+        "log_message": "Log details"
+      }
+    }
+  ],
+  "updated_testcases": [
+    // Only include test cases that need updates (if any)
+    // Structure IDENTICAL to additional_testcases but may include "id" field
+  ]
+}
+
+**IMPORTANT:**
+- Ensure additional_testcases have ALL enterprise fields like test case design
 - Steps MUST have specific input_data and expected_immediate_result
 - Expected_results MUST have multi-level (UI, API, Database, Business)
 - Test_data MUST have detailed input_payload and expected_output
 - **EACH TITLE MUST BE UNIQUE** across the entire list
 
-**ABSOLUTE OUTPUT REQUIREMENT:**
-MUST return ONLY a single valid JSON object, without any text, comments, markdown or extra characters before or after the JSON.
+**COVERAGE STRATEGY:**
+- Focus on requirements with NO existing test cases first
+- For requirements with partial coverage, add missing test case types
+- Update existing test cases only when business logic has changed
+- Maintain backward compatibility for automation scripts
 
-Response MUST be ONLY JSON object with structure:
-{
-  "additional_testcases": [
-    // Only include NEW test cases needed (ensuring ENTERPRISE STANDARD)
-  ],
-  "updated_testcases": [
-    // Test cases that need updates to meet enterprise standards (if any)
-  ]
-}
+**QUALITY ASSURANCE:**
+- Verify all new test cases follow enterprise standards
+- Ensure database operations match the actual business workflow
+- Validate test data scenarios cover realistic use cases
+- Confirm automation tags are appropriate for each test type
 `
     }
 };
@@ -522,20 +769,23 @@ export class TestcaseGeminiService {
         updated_testcases: any[];
     }> {
         try {
+            // 1. Chuẩn bị data với đầy đủ enterprise fields
             const simplifiedExisting = existingTestCases.map(tc => ({
+                // 🆕 THÊM TẤT CẢ ENTERPRISE FIELDS
                 title: tc.title,
                 description: tc.description,
                 test_type: tc.test_type,
                 source_requirement_ids: tc.source_requirement_ids,
-                database_tables: tc.database_tables,
-                database_operations: tc.database_operations,
                 priority: tc.priority,
                 preconditions: tc.preconditions,
                 postconditions: tc.postconditions,
+                database_tables: tc.database_tables,
+                database_operations: tc.database_operations,
                 steps: tc.steps,
                 expected_results: tc.expected_results,
                 test_data: tc.test_data,
-                automation: tc.automation
+                automation: tc.automation,
+                execution_logs_format: tc.execution_logs_format
             }));
 
             const simplifiedNewReqs = newRequirements.map(r => ({
@@ -543,7 +793,10 @@ export class TestcaseGeminiService {
                 name: r.name,
                 role: r.role,
                 goal: r.goal,
-                tasks: r.tasks
+                tasks: r.tasks,
+                inputs: r.inputs, // 🆕 THÊM inputs/outputs
+                outputs: r.outputs,
+                priority: r.priority
             }));
 
             const existingJson = JSON.stringify(simplifiedExisting, null, 2);
@@ -569,12 +822,12 @@ export class TestcaseGeminiService {
                 parsedResponse = JSON.parse(repairedJson);
             }
 
-            // Standardize new test cases với Enterprise standard
+            // 🆕 STANDARDIZE CẢ ADDITIONAL VÀ UPDATED TEST CASES
             if (parsedResponse.additional_testcases && Array.isArray(parsedResponse.additional_testcases)) {
                 parsedResponse.additional_testcases = this.standardizeEnterpriseTestCases(
                     parsedResponse.additional_testcases,
                     newRequirements,
-                    { tables: [], relationships: [] }
+                    { tables: [], relationships: [] } // Database có thể rỗng
                 );
             }
 
@@ -609,42 +862,33 @@ export class TestcaseGeminiService {
         const usedTitles = new Set<string>();
 
         return testCases.map((testCase, index) => {
-            // Đảm bảo title là duy nhất
+            // 🆕 XỬ LÝ CẢ TEST CASES CÓ ID (updated) và KHÔNG CÓ ID (additional)
+            const isUpdatedCase = testCase.id !== undefined;
+
             let title = testCase.title || `Test Case ${index + 1}`;
-            if (usedTitles.has(title)) {
+            if (usedTitles.has(title) && !isUpdatedCase) {
                 title = `${title} - ${index + 1}`;
             }
             usedTitles.add(title);
 
             const standardized: any = {
+                // 🆕 GIỮ LẠI ID NẾU LÀ UPDATED CASE
+                ...(isUpdatedCase && { id: testCase.id }),
                 title: title,
                 description: testCase.description || '',
                 test_type: this.validateTestType(testCase.test_type),
                 source_requirement_ids: this.validateRequirementIds(testCase.source_requirement_ids, requirements),
                 priority: this.validatePriority(testCase.priority),
-
-                // 🆕 Enterprise fields
                 preconditions: this.validatePreconditions(testCase.preconditions),
                 postconditions: this.validatePostconditions(testCase.postconditions),
-
-                // Database integration
                 database_tables: this.extractDatabaseTables(testCase, requirements, databaseSchema),
                 database_operations: this.extractDatabaseOperations(testCase),
-
-                // 🆕 Enhanced steps với Enterprise format
                 steps: this.validateEnterpriseSteps(testCase.steps),
-
-                // 🆕 Multi-level expected results
                 expected_results: this.validateExpectedResults(testCase.expected_results),
-
-                // 🆕 Enhanced test data
                 test_data: this.validateEnterpriseTestData(testCase.test_data),
-
-                // 🆕 Automation ready
                 automation: this.validateAutomation(testCase.automation),
-
-                status: 'not_executed',
-                environment: {},
+                status: testCase.status || 'not_executed',
+                environment: testCase.environment || {},
                 execution_logs_format: testCase.execution_logs_format || {
                     timestamp: "ISO format",
                     step_number: 1,
@@ -655,7 +899,6 @@ export class TestcaseGeminiService {
                 }
             };
 
-            // 🆕 Enhance test data với database schema validation
             standardized.test_data = this.enhanceEnterpriseTestDataWithSchema(
                 standardized.test_data,
                 standardized.database_tables,
