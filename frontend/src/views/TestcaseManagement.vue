@@ -384,7 +384,7 @@
             {{ selectedTestCases.length }} test cases selected
           </div>
           <div class="bulk-buttons">
-            <button class="btn-secondary success" @click="bulkExecute('passed')">
+            <button class="btn-secondary warning" @click="bulkExecute('passed')">
               <span class="material-symbols-outlined">check_circle</span>
               Mark as Passed
             </button>

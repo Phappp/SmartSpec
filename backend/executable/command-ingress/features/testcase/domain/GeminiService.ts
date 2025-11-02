@@ -15,164 +15,129 @@ ${requirementsJson}
 THIẾT KẾ DATABASE (VỚI USE CASE MAPPING):
 ${databaseSchemaJson}
 
-**QUAN TRỌNG:**
-- Tạo test cases cho TẤT CẢ các use case quan trọng
-- Bao gồm cả test cases positive và negative
-- Tập trung vào các chức năng nghiệp vụ chính
-- XÁC ĐỊNH RÕ database tables và operations được sử dụng
-- Giữ response ngắn gọn, chỉ bao gồm thông tin cần thiết
+## 🚨 QUY ĐỊNH NGHIÊM NGẶT VỀ ĐỊNH DẠNG JSON ĐẦU RA
 
-**YÊU CẦU TUYỆT ĐỐI VỀ ĐẦU RA:**
-PHẢI chỉ trả về **duy nhất một đối tượng JSON hợp lệ**, không có bất kỳ text, chú thích, markdown hoặc ký tự thừa nào trước hoặc sau JSON.
+**YÊU CẦU TUYỆT ĐỐI: CHỈ TRẢ VỀ DUY NHẤT MỘT JSON OBJECT - KHÔNG CÓ BẤT KỲ KÝ TỰ, KHOẢNG TRẮNG, XUỐNG DÒNG NÀO NGOÀI JSON**
 
-Đối tượng JSON BẮT BUỘC phải tuân thủ nghiêm ngặt cấu trúc sau:
+### 🔥 CẤU TRÚC JSON BẮT BUỘC - VI PHẠM SẼ GÂY LỖI HỆ THỐNG:
 
+\`\`\`json
 {
   "testcases": [
     {
-      "title": "Tên test case rõ ràng và mô tả",
-      "description": "Mô tả chi tiết về mục đích test",
-      "test_type": "unit|integration|api|ui",
-      "source_requirement_ids": ["UC1", "UC2"],
-      "priority": "low|medium|high|critical",
-      
-      // 🆕 ENTERPRISE FIELDS
-      "preconditions": [
-        "Điều kiện tiên quyết trước khi test",
-        "Trạng thái hệ thống/dữ liệu ban đầu"
-      ],
-      "postconditions": [
-        "Trạng thái hệ thống sau khi test",
-        "Cleanup requirements"
-      ],
-      
-      "database_tables": ["users", "orders"],
-      "database_operations": ["select", "insert"],
-      
-      // 🆕 IMPROVED STEPS với input/output rõ ràng
+      "title": "string (BẮT BUỘC - format: [UC_ID] - [Tên use case] - [Kịch bản test])",
+      "description": "string (BẮT BUỘC)",
+      "test_type": "string (BẮT BUỘC - enum: unit|integration|api|ui)",
+      "source_requirement_ids": ["array of strings"],
+      "priority": "string (BẮT BUỘC - enum: low|medium|high|critical)",
+      "preconditions": ["array of strings"],
+      "postconditions": ["array of strings"],
+      "database_tables": ["array of strings"],
+      "database_operations": ["array of strings - enum: select|insert|update|delete|create|alter"],
       "steps": [
         {
-          "step_number": 1,
-          "action": "Mô tả hành động cụ thể",
+          "step_number": "number (BẮT BUỘC)",
+          "action": "string (BẮT BUỘC)",
           "input_data": {
-            "field_name": "giá_trị_cụ_thể",
-            "method": "POST/PUT/GET",
-            "endpoint": "/api/endpoint (nếu là API)"
+            "field_name": "specific_value",
+            "method": "POST|PUT|GET|DELETE",
+            "endpoint": "/api/endpoint"
           },
-          "expected_immediate_result": "Kết quả mong đợi ngay sau bước này"
+          "expected_immediate_result": "string (BẮT BUỘC)"
         }
       ],
-      
-      // 🆕 MULTI-LEVEL EXPECTED RESULTS
       "expected_results": {
-        "ui_level": [
-          "Hiển thị thông báo thành công",
-          "Chuyển trang đến dashboard"
-        ],
+        "ui_level": ["array of strings"],
         "api_level": {
-          "status_code": 200,
-          "response_schema": {
-            "success": true,
-            "data": {...}
-          }
+          "status_code": "number",
+          "response_schema": {}
         },
-        "database_level": [
-          "Bảng users có bản ghi mới",
-          "Bảng orders được cập nhật"
-        ],
-        "business_level": "Nghiệp vụ được xử lý đúng"
+        "database_level": ["array of strings"],
+        "business_level": "string"
       },
-      
-      // 🆕 ENHANCED TEST DATA
       "test_data": [
         {
-          "name": "Test data scenario 1",
-          "input_payload": {
-            "username": "testuser",
-            "password": "Password123!"
-          },
+          "name": "string (BẮT BUỘC)",
+          "input_payload": {},
           "expected_output": {
             "status": "success|failure",
-            "message": "Thông báo cụ thể",
-            "data": {...},
-            "status_code": 200
+            "message": "string",
+            "data": {},
+            "status_code": "number"
           },
-          "validation_rules": [
-            "Email phải đúng định dạng",
-            "Password tối thiểu 8 ký tự"
-          ]
+          "validation_rules": ["array of strings"]
         }
       ],
-      
-      // 🆕 AUTOMATION READY
       "automation": {
-        "is_automated": false,
-        "script_path": "/tests/features/login/test_login.py",
-        "test_command": "pytest tests/features/login/test_login.py::test_login_success",
-        "tags": ["smoke", "regression", "login"]
+        "is_automated": "boolean",
+        "script_path": "string",
+        "test_command": "string",
+        "tags": ["array of strings"]
       },
-      
-      // 🆕 EXECUTION LOGS FORMAT
       "execution_logs_format": {
-        "timestamp": "ISO format",
-        "step_number": 1,
+        "timestamp": "string",
+        "step_number": "number",
         "status": "passed|failed|skipped",
-        "actual_result": "Kết quả thực tế",
-        "screenshot_path": "/screenshots/test_001.png",
-        "log_message": "Chi tiết log"
+        "actual_result": "string",
+        "screenshot_path": "string",
+        "log_message": "string"
       }
     }
   ]
 }
+\`\`\`
 
-**QUY TẮC TẠO TEST CASE ENTERPRISE:**
+## ⚠️ QUY TẮC VALIDATION NGHIÊM NGẶT:
 
-1. **CHUẨN HÓA TITLE (QUAN TRỌNG):**
+### 1. **FIELD BẮT BUỘC (REQUIRED) - THIẾU SẼ GÂY LỖI:**
+- title, description, test_type, priority
+- steps (ít nhất 1 step)
+- steps[].step_number, steps[].action, steps[].expected_immediate_result
+
+### 2. **ENUM VALIDATION - SAI SẼ GÂY LỖI:**
+- test_type: CHỈ "unit", "integration", "api", "ui"
+- priority: CHỈ "low", "medium", "high", "critical" 
+- database_operations: CHỈ "select", "insert", "update", "delete", "create", "alter"
+- steps[].input_data.method: CHỈ "POST", "PUT", "GET", "DELETE"
+
+### 3. **FORMAT VALIDATION - SAI SẼ GÂY LỖI:**
+- title: PHẢI bắt đầu bằng "[UC_ID]" - ví dụ: "[UC1] - Đăng nhập - Thành công"
+- source_requirement_ids: PHẢI là array của string, ví dụ: ["UC1", "UC2"]
+- steps[].step_number: PHẢI là số nguyên dương, bắt đầu từ 1
+
+### 4. **DATA TYPE VALIDATION - SAI SẼ GÂY LỖI:**
+- steps[].input_data: PHẢI là object, không được là string
+- expected_results.api_level.status_code: PHẢI là number
+- test_data[].input_payload: PHẢI là object
+
+## 🎯 QUY TẮC TẠO TEST CASE ENTERPRISE:
+
+1. **TIÊU CHUẨN TITLE:**
    - Format: "[UC_ID] - [Tên use case] - [Kịch bản test]"
-   - Ví dụ: "UC1 - Đăng nhập - Thành công với thông tin hợp lệ"
-   - KHÔNG sử dụng "TC1-UC1" hoặc các prefix số thứ tự
-   - **MỖI TITLE PHẢI LÀ DUY NHẤT, KHÔNG TRÙNG LẶP**
+   - Ví dụ: "[UC1] - Đăng nhập - Thành công với thông tin hợp lệ"
+   - **KHÔNG ĐƯỢC SỬ DỤNG "TC1-UC1" hoặc prefix số thứ tự**
 
-2. **STEPS CẢI TIẾN - AI TEST GENERATOR FRIENDLY:**
-   - Mỗi step PHẢI có: action + input_data cụ thể + expected_immediate_result
-   - Input_data: giá trị cụ thể, không mô tả chung chung
-   - Ví dụ: 
-     ❌ "Nhập thông tin đăng nhập" 
-     ✅ "Nhập username = 'testuser', password = 'Password123!'"
-
-3. **MULTI-LEVEL EXPECTED RESULTS:**
-   - UI Level: Hiển thị giao diện, thông báo
-   - API Level: Status code, response schema
-   - Database Level: Thay đổi dữ liệu
-   - Business Level: Nghiệp vụ thực tế
-
-4. **TEST DATA CHI TIẾT:**
-   - Input_payload: Dữ liệu đầu vào cụ thể
-   - Expected_output: Đầu ra mong đợi chi tiết
-   - Validation_rules: Quy tắc validate áp dụng
-
-5. **PRECONDITIONS & POSTCONDITIONS:**
-   - Preconditions: Dữ liệu/trạng thái hệ thống ban đầu
-   - Postconditions: Cleanup, rollback requirements
-
-6. **AUTOMATION READY:**
-   - Script_path: Đường dẫn file automation
-   - Test_command: Câu lệnh chạy test
-   - Tags: Phân loại test (smoke, regression, etc.)
-
-7. **DATABASE INTEGRATION:**
-   - Xác định tables liên quan dựa trên use case
-   - Ghi rõ operations (select/insert/update/delete)
-   - Sử dụng field names độc lập với DB schema
-
-8. **COVERAGE TỐI THIỂU:**
-   - **Mỗi use case PHẢI có ít nhất 4 test cases**: 
+2. **COVERAGE TỐI THIỂU:**
+   - **Mỗi use case PHẢI có ít nhất 4 test cases:**
      1. Positive - Thành công
-     2. Negative - Thất bại do input sai
+     2. Negative - Thất bại do input sai  
      3. Boundary - Giá trị biên
      4. Error case - Lỗi hệ thống/exception
 
-Hãy tạo test cases chất lượng cao ĐẠT CHUẨN ENTERPRISE dựa trên use cases và database schema được cung cấp.
+3. **STEPS CHI TIẾT:**
+   - Mỗi step PHẢI có input_data với giá trị CỤ THỂ
+   - Ví dụ: 
+     ✅ "Nhập username = 'testuser', password = 'Password123!'"
+     ❌ "Nhập thông tin đăng nhập"
+
+## 🚫 LỖI JSON KHÔNG ĐƯỢC PHÉP:
+- Thừa dấu phẩy cuối cùng (trailing comma)
+- Thiếu dấu ngoặc, dấu phẩy
+- Comment trong JSON
+- Bất kỳ text nào ngoài JSON object
+- Format date/time không đúng chuẩn
+
+**ĐẦU RA DUY NHẤT: MỘT JSON OBJECT HỢP LỆ - KHÔNG CÓ BẤT KỲ NỘI DUNG NÀO KHÁC**
 `,
 
         testcaseEnhancement: (existingTestcasesJson: string, newRequirementsJson: string) => `
@@ -184,141 +149,126 @@ ${existingTestcasesJson}
 YÊU CẦU MỚI/UPDATE:
 ${newRequirementsJson}
 
-**QUY TẮC CHUẨN HÓA ENTERPRISE (GIỐNG NHƯ TEST CASE DESIGN):**
+## 🚨 QUY ĐỊNH NGHIÊM NGẶT VỀ ĐỊNH DẠNG JSON ĐẦU RA
 
-1. **STANDARDIZED TITLE (CRITICAL):**
-   - Format: "[UC_ID] - [Use Case Name] - [Test Scenario]"
-   - Example: "UC1 - User Login - Success with valid credentials"
-   - DO NOT use "TC1-UC1" or sequential prefixes
-   - **EACH TITLE MUST BE UNIQUE** across the entire list
+**YÊU CẦU TUYỆT ĐỐI: CHỈ TRẢ VỀ DUY NHẤT MỘT JSON OBJECT - KHÔNG CÓ BẤT KỲ KÝ TỰ, KHOẢNG TRẮNG, XUỐNG DÒNG NÀO NGOÀI JSON**
 
-2. **IMPROVED STEPS - AI TEST GENERATOR FRIENDLY:**
-   - Each step MUST have: action + specific input_data + expected_immediate_result
-   - Input_data: specific values, not generic descriptions
+### 🔥 CẤU TRÚC JSON BẮT BUỘC - VI PHẠM SẼ GÂY LỖI HỆ THỐNG:
 
-3. **MULTI-LEVEL EXPECTED RESULTS:**
-   - UI Level: Display, notifications, navigation
-   - API Level: Status code, response schema
-   - Database Level: Data changes
-   - Business Level: Actual business process
-
-4. **DETAILED TEST DATA:**
-   - Input_payload: Specific input data
-   - Expected_output: Detailed expected output
-   - Validation_rules: Applied validation rules
-
-5. **MINIMUM COVERAGE:**
-   - **Each use case MUST have at least 4 test cases**:
-     1. Positive - Success
-     2. Negative - Failure due to invalid input
-     3. Boundary - Edge values
-     4. Error case - System exceptions
-
-**PHÂN TÍCH & YÊU CẦU:**
-
-1. **PHÂN TÍCH HIỆN TẠI:**
-   - Xác định requirements nào CHƯA được cover bởi test cases hiện tại
-   - Xác định test cases nào cần cập nhật cho requirements mới
-   - Đảm bảo mỗi requirement có ít nhất 4 test cases
-
-2. **TEST CASES MỚI:**
-   - Chỉ tạo test cases cho requirements CHƯA được cover
-   - Đảm bảo enterprise standard GIỐNG HỆT test case design
-   - Title format phải đồng bộ với hệ thống hiện tại
-
-3. **TEST CASES CẬP NHẬT:**
-   - Chỉ cập nhật test cases hiện có nếu cần thiết
-   - Giữ nguyên structure, chỉ enhance content
-   - Đảm bảo không phá vỡ existing automation
-
-**YÊU CẦU TUYỆT ĐỐI VỀ ĐẦU RA:**
-PHẢI chỉ trả về **duy nhất một đối tượng JSON hợp lệ**, không có bất kỳ text, chú thích, markdown hoặc ký tự thừa nào trước hoặc sau JSON.
-
-**CẤU TRÚC JSON BẮT BUỘC (ĐỒNG BỘ VỚI TEST CASE DESIGN):**
-
+\`\`\`json
 {
   "additional_testcases": [
     {
-      "title": "[UC_ID] - [Use Case Name] - [Test Scenario]",
-      "description": "Detailed description of test purpose",
-      "test_type": "unit|integration|api|ui",
-      "source_requirement_ids": ["UC1"],
-      "priority": "low|medium|high|critical",
-      "preconditions": ["Prerequisites before testing", "Initial system/data state"],
-      "postconditions": ["System state after testing", "Cleanup requirements"],
-      "database_tables": ["users", "orders"],
-      "database_operations": ["select", "insert"],
+      "title": "string (BẮT BUỘC - format: [UC_ID] - [Tên use case] - [Kịch bản test])",
+      "description": "string (BẮT BUỘC)",
+      "test_type": "string (BẮT BUỘC - enum: unit|integration|api|ui)",
+      "source_requirement_ids": ["array of strings"],
+      "priority": "string (BẮT BUỘC - enum: low|medium|high|critical)",
+      "preconditions": ["array of strings"],
+      "postconditions": ["array of strings"],
+      "database_tables": ["array of strings"],
+      "database_operations": ["array of strings - enum: select|insert|update|delete|create|alter"],
       "steps": [
         {
-          "step_number": 1,
-          "action": "Specific action description",
+          "step_number": "number (BẮT BUỘC)",
+          "action": "string (BẮT BUỘC)",
           "input_data": {
             "field_name": "specific_value",
-            "method": "POST/PUT/GET",
-            "endpoint": "/api/endpoint (if API)"
+            "method": "POST|PUT|GET|DELETE",
+            "endpoint": "/api/endpoint"
           },
-          "expected_immediate_result": "Expected outcome immediately after this step"
+          "expected_immediate_result": "string (BẮT BUỘC)"
         }
       ],
       "expected_results": {
-        "ui_level": ["Display success message", "Navigate to dashboard page"],
+        "ui_level": ["array of strings"],
         "api_level": {
-          "status_code": 200,
-          "response_schema": {
-            "success": true,
-            "data": {...}
-          }
+          "status_code": "number",
+          "response_schema": {}
         },
-        "database_level": ["Users table has new record", "Orders table is updated"],
-        "business_level": "Business process handled correctly"
+        "database_level": ["array of strings"],
+        "business_level": "string"
       },
       "test_data": [
         {
-          "name": "Test data scenario 1",
-          "input_payload": {
-            "username": "testuser",
-            "password": "Password123!"
-          },
+          "name": "string (BẮT BUỘC)",
+          "input_payload": {},
           "expected_output": {
             "status": "success|failure",
-            "message": "Specific message",
-            "data": {...},
-            "status_code": 200
+            "message": "string",
+            "data": {},
+            "status_code": "number"
           },
-          "validation_rules": [
-            "Email must be valid format",
-            "Password minimum 8 characters"
-          ]
+          "validation_rules": ["array of strings"]
         }
       ],
       "automation": {
-        "is_automated": false,
-        "script_path": "/tests/features/login/test_login.py",
-        "test_command": "pytest tests/features/login/test_login.py::test_login_success",
-        "tags": ["smoke", "regression", "login"]
+        "is_automated": "boolean",
+        "script_path": "string",
+        "test_command": "string",
+        "tags": ["array of strings"]
       },
       "execution_logs_format": {
-        "timestamp": "ISO format",
-        "step_number": 1,
+        "timestamp": "string",
+        "step_number": "number",
         "status": "passed|failed|skipped",
-        "actual_result": "Actual result",
-        "screenshot_path": "/screenshots/test_001.png",
-        "log_message": "Log details"
+        "actual_result": "string",
+        "screenshot_path": "string",
+        "log_message": "string"
       }
     }
   ],
   "updated_testcases": [
-    // Chỉ bao gồm test cases cần cập nhật (nếu có)
-    // Structure GIỐNG HỆT additional_testcases nhưng có thể có thêm "id" field
+    // CẤU TRÚC GIỐNG additional_testcases - CHỈ THÊM KHI CẦN UPDATE
   ]
 }
+\`\`\`
 
-**QUAN TRỌNG:**
-- Đảm bảo additional_testcases có ĐẦY ĐỦ enterprise fields như test case design
-- Steps PHẢI có input_data cụ thể và expected_immediate_result
-- Expected_results PHẢI có multi-level (UI, API, Database, Business)
-- Test_data PHẢI có input_payload và expected_output chi tiết
-- **MỖI TITLE PHẢI LÀ DUY NHẤT** trong toàn bộ danh sách
+## ⚠️ QUY TẮC VALIDATION NGHIÊM NGẶT:
+
+### 1. **FIELD BẮT BUỘC (REQUIRED) - THIẾU SẼ GÂY LỖI:**
+- additional_testcases[].title, description, test_type, priority
+- additional_testcases[].steps (ít nhất 1 step)
+- TẤT CẢ field trong steps đều bắt buộc
+
+### 2. **ENUM VALIDATION - SAI SẼ GÂY LỖI:**
+- test_type: CHỈ "unit", "integration", "api", "ui"
+- priority: CHỈ "low", "medium", "high", "critical"
+- database_operations: CHỈ các operation được phép
+
+### 3. **FORMAT VALIDATION - SAI SẼ GÂY LỖI:**
+- title: PHẢI bắt đầu bằng "[UC_ID]" 
+- source_requirement_ids: PHẢI là array của string
+- steps[].step_number: PHẢI là số nguyên dương
+
+### 4. **UNIQUENESS VALIDATION:**
+- **TẤT CẢ title trong additional_testcases PHẢI DUY NHẤT**
+- **KHÔNG ĐƯỢC trùng title với test cases hiện tại**
+
+## 🎯 PHÂN TÍCH & YÊU CẦU:
+
+1. **PHÂN TÍCH HIỆN TẠI:**
+   - Xác định requirements nào CHƯA được cover
+   - Đảm bảo mỗi requirement có ít nhất 4 test cases
+   - Chỉ thêm test cases mới cho requirements chưa cover
+
+2. **TEST CASES MỚI:**
+   - TUÂN THỦ NGHIÊM NGẶT JSON schema trên
+   - Title format đồng bộ với hệ thống hiện tại
+   - Đảm bảo KHÔNG trùng title
+
+3. **TEST CASES CẬP NHẬT:**
+   - Chỉ cập nhật khi thực sự cần thiết
+   - Giữ nguyên structure, chỉ enhance content
+   - Đảm bảo không phá vỡ existing automation
+
+## 🚫 LỖI JSON KHÔNG ĐƯỢC PHÉP:
+- Thừa dấu phẩy cuối cùng (trailing comma)
+- Thiếu dấu ngoặc, dấu phẩy
+- Comment trong JSON
+- Bất kỳ text nào ngoài JSON object
+
+**ĐẦU RA DUY NHẤT: MỘT JSON OBJECT HỢP LỆ - KHÔNG CÓ BẤT KỲ NỘI DUNG NÀO KHÁC**
 `
     },
     'en-US': {
@@ -333,164 +283,129 @@ ${requirementsJson}
 DATABASE DESIGN (WITH USE CASE MAPPING):
 ${databaseSchemaJson}
 
-**IMPORTANT:**
-- Create test cases for ALL important use cases
-- Include both positive and negative test cases
-- Focus on core business functionality
-- IDENTIFY SPECIFIC database tables and operations used
-- Keep response concise, include only essential information
+## 🚨 STRICT JSON OUTPUT FORMAT REQUIREMENTS
 
-**ABSOLUTE OUTPUT REQUIREMENT:**
-MUST return ONLY a single valid JSON object, without any text, comments, markdown or extra characters before or after the JSON.
+**ABSOLUTE REQUIREMENT: RETURN ONLY A SINGLE JSON OBJECT - NO EXTRA CHARACTERS, WHITESPACE, OR NEWLINES OUTSIDE THE JSON**
 
-The JSON object MUST strictly follow this structure:
+### 🔥 MANDATORY JSON STRUCTURE - VIOLATIONS WILL CAUSE SYSTEM ERRORS:
 
+\`\`\`json
 {
   "testcases": [
     {
-      "title": "Clear test case name and description",
-      "description": "Detailed description of test purpose",
-      "test_type": "unit|integration|api|ui",
-      "source_requirement_ids": ["UC1", "UC2"],
-      "priority": "low|medium|high|critical",
-      
-      // 🆕 ENTERPRISE FIELDS
-      "preconditions": [
-        "Prerequisites before testing",
-        "Initial system/data state"
-      ],
-      "postconditions": [
-        "System state after testing",
-        "Cleanup requirements"
-      ],
-      
-      "database_tables": ["users", "orders"],
-      "database_operations": ["select", "insert"],
-      
-      // 🆕 IMPROVED STEPS with clear input/output
+      "title": "string (REQUIRED - format: [UC_ID] - [Use Case Name] - [Test Scenario])",
+      "description": "string (REQUIRED)",
+      "test_type": "string (REQUIRED - enum: unit|integration|api|ui)",
+      "source_requirement_ids": ["array of strings"],
+      "priority": "string (REQUIRED - enum: low|medium|high|critical)",
+      "preconditions": ["array of strings"],
+      "postconditions": ["array of strings"],
+      "database_tables": ["array of strings"],
+      "database_operations": ["array of strings - enum: select|insert|update|delete|create|alter"],
       "steps": [
         {
-          "step_number": 1,
-          "action": "Specific action description",
+          "step_number": "number (REQUIRED)",
+          "action": "string (REQUIRED)",
           "input_data": {
             "field_name": "specific_value",
-            "method": "POST/PUT/GET",
-            "endpoint": "/api/endpoint (if API)"
+            "method": "POST|PUT|GET|DELETE",
+            "endpoint": "/api/endpoint"
           },
-          "expected_immediate_result": "Expected outcome immediately after this step"
+          "expected_immediate_result": "string (REQUIRED)"
         }
       ],
-      
-      // 🆕 MULTI-LEVEL EXPECTED RESULTS
       "expected_results": {
-        "ui_level": [
-          "Display success message",
-          "Navigate to dashboard page"
-        ],
+        "ui_level": ["array of strings"],
         "api_level": {
-          "status_code": 200,
-          "response_schema": {
-            "success": true,
-            "data": {...}
-          }
+          "status_code": "number",
+          "response_schema": {}
         },
-        "database_level": [
-          "Users table has new record",
-          "Orders table is updated"
-        ],
-        "business_level": "Business process handled correctly"
+        "database_level": ["array of strings"],
+        "business_level": "string"
       },
-      
-      // 🆕 ENHANCED TEST DATA
       "test_data": [
         {
-          "name": "Test data scenario 1",
-          "input_payload": {
-            "username": "testuser",
-            "password": "Password123!"
-          },
+          "name": "string (REQUIRED)",
+          "input_payload": {},
           "expected_output": {
             "status": "success|failure",
-            "message": "Specific message",
-            "data": {...},
-            "status_code": 200
+            "message": "string",
+            "data": {},
+            "status_code": "number"
           },
-          "validation_rules": [
-            "Email must be valid format",
-            "Password minimum 8 characters"
-          ]
+          "validation_rules": ["array of strings"]
         }
       ],
-      
-      // 🆕 AUTOMATION READY
       "automation": {
-        "is_automated": false,
-        "script_path": "/tests/features/login/test_login.py",
-        "test_command": "pytest tests/features/login/test_login.py::test_login_success",
-        "tags": ["smoke", "regression", "login"]
+        "is_automated": "boolean",
+        "script_path": "string",
+        "test_command": "string",
+        "tags": ["array of strings"]
       },
-      
-      // 🆕 EXECUTION LOGS FORMAT
       "execution_logs_format": {
-        "timestamp": "ISO format",
-        "step_number": 1,
+        "timestamp": "string",
+        "step_number": "number",
         "status": "passed|failed|skipped",
-        "actual_result": "Actual result",
-        "screenshot_path": "/screenshots/test_001.png",
-        "log_message": "Log details"
+        "actual_result": "string",
+        "screenshot_path": "string",
+        "log_message": "string"
       }
     }
   ]
 }
+\`\`\`
 
-**ENTERPRISE TEST CASE CREATION RULES:**
+## ⚠️ STRICT VALIDATION RULES:
 
-1. **STANDARDIZED TITLE (CRITICAL):**
+### 1. **REQUIRED FIELDS - MISSING WILL CAUSE ERRORS:**
+- title, description, test_type, priority
+- steps (minimum 1 step)
+- steps[].step_number, steps[].action, steps[].expected_immediate_result
+
+### 2. **ENUM VALIDATION - INVALID VALUES WILL CAUSE ERRORS:**
+- test_type: ONLY "unit", "integration", "api", "ui"
+- priority: ONLY "low", "medium", "high", "critical"
+- database_operations: ONLY "select", "insert", "update", "delete", "create", "alter"
+- steps[].input_data.method: ONLY "POST", "PUT", "GET", "DELETE"
+
+### 3. **FORMAT VALIDATION - INVALID FORMAT WILL CAUSE ERRORS:**
+- title: MUST start with "[UC_ID]" - example: "[UC1] - User Login - Success"
+- source_requirement_ids: MUST be array of strings, example: ["UC1", "UC2"]
+- steps[].step_number: MUST be positive integer, starting from 1
+
+### 4. **DATA TYPE VALIDATION - WRONG TYPE WILL CAUSE ERRORS:**
+- steps[].input_data: MUST be object, cannot be string
+- expected_results.api_level.status_code: MUST be number
+- test_data[].input_payload: MUST be object
+
+## 🎯 ENTERPRISE TEST CASE CREATION RULES:
+
+1. **TITLE STANDARDIZATION:**
    - Format: "[UC_ID] - [Use Case Name] - [Test Scenario]"
-   - Example: "UC1 - User Login - Success with valid credentials"
-   - DO NOT use "TC1-UC1" or sequential prefixes
-   - **EACH TITLE MUST BE UNIQUE, NO DUPLICATES**
+   - Example: "[UC1] - User Login - Success with valid credentials"
+   - **DO NOT USE "TC1-UC1" or sequential prefixes**
 
-2. **IMPROVED STEPS - AI TEST GENERATOR FRIENDLY:**
-   - Each step MUST have: action + specific input_data + expected_immediate_result
-   - Input_data: specific values, not generic descriptions
-   - Example:
-     ❌ "Enter login information"
-     ✅ "Enter username = 'testuser', password = 'Password123!'"
-
-3. **MULTI-LEVEL EXPECTED RESULTS:**
-   - UI Level: Display, notifications, navigation
-   - API Level: Status code, response schema
-   - Database Level: Data changes
-   - Business Level: Actual business process
-
-4. **DETAILED TEST DATA:**
-   - Input_payload: Specific input data
-   - Expected_output: Detailed expected output
-   - Validation_rules: Applied validation rules
-
-5. **PRECONDITIONS & POSTCONDITIONS:**
-   - Preconditions: Initial system/data state
-   - Postconditions: Cleanup, rollback requirements
-
-6. **AUTOMATION READY:**
-   - Script_path: Automation file path
-   - Test_command: Test execution command
-   - Tags: Test classification (smoke, regression, etc.)
-
-7. **DATABASE INTEGRATION:**
-   - Identify related tables based on use case
-   - Specify operations (select/insert/update/delete)
-   - Use field names independent of DB schema
-
-8. **MINIMUM COVERAGE:**
-   - **Each use case MUST have at least 4 test cases**:
+2. **MINIMUM COVERAGE:**
+   - **Each use case MUST have at least 4 test cases:**
      1. Positive - Success
      2. Negative - Failure due to invalid input
      3. Boundary - Edge values
      4. Error case - System exceptions
 
-Create high-quality ENTERPRISE STANDARD test cases based on the provided use cases and database schema.
+3. **DETAILED STEPS:**
+   - Each step MUST have input_data with SPECIFIC values
+   - Example:
+     ✅ "Enter username = 'testuser', password = 'Password123!'"
+     ❌ "Enter login information"
+
+## 🚫 PROHIBITED JSON ERRORS:
+- Trailing commas
+- Missing brackets, commas
+- Comments in JSON
+- Any text outside JSON object
+- Incorrect date/time format
+
+**ONLY OUTPUT: A VALID JSON OBJECT - NO OTHER CONTENT ALLOWED**
 `,
         testcaseEnhancement: (existingTestcasesJson: string, newRequirementsJson: string) => `
 YOU ARE AN ENTERPRISE TESTING EXPERT, your mission is to analyze existing test cases and new requirements to supplement missing test cases meeting ENTERPRISE STANDARDS.
@@ -501,156 +416,126 @@ ${existingTestcasesJson}
 NEW/UPDATED REQUIREMENTS:
 ${newRequirementsJson}
 
-**ENTERPRISE STANDARDIZATION RULES (IDENTICAL TO TEST CASE DESIGN):**
+## 🚨 STRICT JSON OUTPUT FORMAT REQUIREMENTS
 
-1. **STANDARDIZED TITLE (CRITICAL):**
-   - Format: "[UC_ID] - [Use Case Name] - [Test Scenario]"
-   - Example: "UC1 - User Login - Success with valid credentials"
-   - DO NOT use "TC1-UC1" or sequential prefixes
-   - **EACH TITLE MUST BE UNIQUE** across the entire list
+**ABSOLUTE REQUIREMENT: RETURN ONLY A SINGLE JSON OBJECT - NO EXTRA CHARACTERS, WHITESPACE, OR NEWLINES OUTSIDE THE JSON**
 
-2. **IMPROVED STEPS - AI TEST GENERATOR FRIENDLY:**
-   - Each step MUST have: action + specific input_data + expected_immediate_result
-   - Input_data: specific values, not generic descriptions
-   - Example:
-     ❌ "Enter login information"
-     ✅ "Enter username = 'testuser', password = 'Password123!'"
+### 🔥 MANDATORY JSON STRUCTURE - VIOLATIONS WILL CAUSE SYSTEM ERRORS:
 
-3. **MULTI-LEVEL EXPECTED RESULTS:**
-   - UI Level: Display, notifications, navigation
-   - API Level: Status code, response schema
-   - Database Level: Data changes
-   - Business Level: Actual business process
-
-4. **DETAILED TEST DATA:**
-   - Input_payload: Specific input data
-   - Expected_output: Detailed expected output
-   - Validation_rules: Applied validation rules
-
-5. **MINIMUM COVERAGE:**
-   - **Each use case MUST have at least 4 test cases**:
-     1. Positive - Success
-     2. Negative - Failure due to invalid input
-     3. Boundary - Edge values
-     4. Error case - System exceptions
-
-**ANALYSIS & REQUIREMENTS:**
-
-1. **CURRENT ANALYSIS:**
-   - Identify requirements NOT covered by existing test cases
-   - Identify test cases that need updates for new requirements
-   - Ensure each requirement has at least 4 test cases
-
-2. **NEW TEST CASES:**
-   - Create test cases ONLY for UNCOVERED requirements
-   - Ensure enterprise standard IDENTICAL to test case design
-   - Title format must be consistent with existing system
-
-3. **UPDATED TEST CASES:**
-   - Update existing test cases only when necessary
-   - Maintain structure, only enhance content
-   - Ensure no breaking changes to existing automation
-
-**ABSOLUTE OUTPUT REQUIREMENT:**
-MUST return ONLY a single valid JSON object, without any text, comments, markdown or extra characters before or after the JSON.
-
-**REQUIRED JSON STRUCTURE (SYNCHRONIZED WITH TEST CASE DESIGN):**
-
+\`\`\`json
 {
   "additional_testcases": [
     {
-      "title": "[UC_ID] - [Use Case Name] - [Test Scenario]",
-      "description": "Detailed description of test purpose",
-      "test_type": "unit|integration|api|ui",
-      "source_requirement_ids": ["UC1"],
-      "priority": "low|medium|high|critical",
-      "preconditions": ["Prerequisites before testing", "Initial system/data state"],
-      "postconditions": ["System state after testing", "Cleanup requirements"],
-      "database_tables": ["users", "orders"],
-      "database_operations": ["select", "insert"],
+      "title": "string (REQUIRED - format: [UC_ID] - [Use Case Name] - [Test Scenario])",
+      "description": "string (REQUIRED)",
+      "test_type": "string (REQUIRED - enum: unit|integration|api|ui)",
+      "source_requirement_ids": ["array of strings"],
+      "priority": "string (REQUIRED - enum: low|medium|high|critical)",
+      "preconditions": ["array of strings"],
+      "postconditions": ["array of strings"],
+      "database_tables": ["array of strings"],
+      "database_operations": ["array of strings - enum: select|insert|update|delete|create|alter"],
       "steps": [
         {
-          "step_number": 1,
-          "action": "Specific action description",
+          "step_number": "number (REQUIRED)",
+          "action": "string (REQUIRED)",
           "input_data": {
             "field_name": "specific_value",
-            "method": "POST/PUT/GET",
-            "endpoint": "/api/endpoint (if API)"
+            "method": "POST|PUT|GET|DELETE",
+            "endpoint": "/api/endpoint"
           },
-          "expected_immediate_result": "Expected outcome immediately after this step"
+          "expected_immediate_result": "string (REQUIRED)"
         }
       ],
       "expected_results": {
-        "ui_level": ["Display success message", "Navigate to dashboard page"],
+        "ui_level": ["array of strings"],
         "api_level": {
-          "status_code": 200,
-          "response_schema": {
-            "success": true,
-            "data": {...}
-          }
+          "status_code": "number",
+          "response_schema": {}
         },
-        "database_level": ["Users table has new record", "Orders table is updated"],
-        "business_level": "Business process handled correctly"
+        "database_level": ["array of strings"],
+        "business_level": "string"
       },
       "test_data": [
         {
-          "name": "Test data scenario 1",
-          "input_payload": {
-            "username": "testuser",
-            "password": "Password123!"
-          },
+          "name": "string (REQUIRED)",
+          "input_payload": {},
           "expected_output": {
             "status": "success|failure",
-            "message": "Specific message",
-            "data": {...},
-            "status_code": 200
+            "message": "string",
+            "data": {},
+            "status_code": "number"
           },
-          "validation_rules": [
-            "Email must be valid format",
-            "Password minimum 8 characters"
-          ]
+          "validation_rules": ["array of strings"]
         }
       ],
       "automation": {
-        "is_automated": false,
-        "script_path": "/tests/features/login/test_login.py",
-        "test_command": "pytest tests/features/login/test_login.py::test_login_success",
-        "tags": ["smoke", "regression", "login"]
+        "is_automated": "boolean",
+        "script_path": "string",
+        "test_command": "string",
+        "tags": ["array of strings"]
       },
       "execution_logs_format": {
-        "timestamp": "ISO format",
-        "step_number": 1,
+        "timestamp": "string",
+        "step_number": "number",
         "status": "passed|failed|skipped",
-        "actual_result": "Actual result",
-        "screenshot_path": "/screenshots/test_001.png",
-        "log_message": "Log details"
+        "actual_result": "string",
+        "screenshot_path": "string",
+        "log_message": "string"
       }
     }
   ],
   "updated_testcases": [
-    // Only include test cases that need updates (if any)
-    // Structure IDENTICAL to additional_testcases but may include "id" field
+    // STRUCTURE IDENTICAL TO additional_testcases - ONLY ADD WHEN UPDATES NEEDED
   ]
 }
+\`\`\`
 
-**IMPORTANT:**
-- Ensure additional_testcases have ALL enterprise fields like test case design
-- Steps MUST have specific input_data and expected_immediate_result
-- Expected_results MUST have multi-level (UI, API, Database, Business)
-- Test_data MUST have detailed input_payload and expected_output
-- **EACH TITLE MUST BE UNIQUE** across the entire list
+## ⚠️ STRICT VALIDATION RULES:
 
-**COVERAGE STRATEGY:**
-- Focus on requirements with NO existing test cases first
-- For requirements with partial coverage, add missing test case types
-- Update existing test cases only when business logic has changed
-- Maintain backward compatibility for automation scripts
+### 1. **REQUIRED FIELDS - MISSING WILL CAUSE ERRORS:**
+- additional_testcases[].title, description, test_type, priority
+- additional_testcases[].steps (minimum 1 step)
+- ALL fields in steps are required
 
-**QUALITY ASSURANCE:**
-- Verify all new test cases follow enterprise standards
-- Ensure database operations match the actual business workflow
-- Validate test data scenarios cover realistic use cases
-- Confirm automation tags are appropriate for each test type
+### 2. **ENUM VALIDATION - INVALID VALUES WILL CAUSE ERRORS:**
+- test_type: ONLY "unit", "integration", "api", "ui"
+- priority: ONLY "low", "medium", "high", "critical"
+- database_operations: ONLY allowed operations
+
+### 3. **FORMAT VALIDATION - INVALID FORMAT WILL CAUSE ERRORS:**
+- title: MUST start with "[UC_ID]"
+- source_requirement_ids: MUST be array of strings
+- steps[].step_number: MUST be positive integer
+
+### 4. **UNIQUENESS VALIDATION:**
+- **ALL titles in additional_testcases MUST BE UNIQUE**
+- **MUST NOT duplicate titles with existing test cases**
+
+## 🎯 ANALYSIS & REQUIREMENTS:
+
+1. **CURRENT ANALYSIS:**
+   - Identify requirements NOT covered
+   - Ensure each requirement has at least 4 test cases
+   - Only add new test cases for uncovered requirements
+
+2. **NEW TEST CASES:**
+   - STRICTLY FOLLOW the JSON schema above
+   - Title format consistent with existing system
+   - Ensure NO duplicate titles
+
+3. **UPDATED TEST CASES:**
+   - Update only when absolutely necessary
+   - Maintain structure, only enhance content
+   - Ensure no breaking changes to existing automation
+
+## 🚫 PROHIBITED JSON ERRORS:
+- Trailing commas
+- Missing brackets, commas
+- Comments in JSON
+- Any text outside JSON object
+
+**ONLY OUTPUT: A VALID JSON OBJECT - NO OTHER CONTENT ALLOWED**
 `
     }
 };

@@ -527,11 +527,61 @@ export default {
       currentStep.value = 2
     }
 
-    const confirmGeneration = () => {
-      emit('generate', previewTestCases.value)
-      emit('close')
-    }
+    // Trong GenerateTestcaseModal.vue
+    const confirmGeneration = async () => {
+      try {
+        console.log('💾 Starting save process...')
+        const testCasesToSave = JSON.parse(JSON.stringify(previewTestCases.value))
 
+        console.log('🔍 Debug test cases structure:')
+        testCasesToSave.forEach((tc, index) => {
+          console.log(`Test case ${index}:`, {
+            title: tc.title,
+            steps_count: tc.steps?.length,
+            test_data_count: tc.test_data?.length,
+            has_requirements: !!tc.source_requirement_ids?.length,
+          })
+        })
+
+        const requestBody = {
+          testCases: testCasesToSave,
+        }
+
+        console.log('🚀 Sending request to save test cases...')
+        const response = await testcaseApi.saveTestCases(
+          props.projectId,
+          props.versionId,
+          requestBody
+        )
+
+        console.log('📨 Full response:', response)
+        console.log('📊 Response data:', response.data)
+
+        // 🆕 Kiểm tra kỹ response
+        if (response.data && response.data.count === 0) {
+          console.warn('⚠️ Warning: Response indicates 0 test cases were saved')
+          console.warn('Response details:', {
+            message: response.data.message,
+            data: response.data.data,
+            metadata: response.data.metadata,
+          })
+        }
+
+        if (response.data.count > 0) {
+          // toast.success(`✅ Successfully created ${response.data.count} test cases`)
+          emit('generate', response.data.data || testCasesToSave)
+          emit('close')
+        } else {
+          // 🆕 Xử lý trường hợp không có test cases nào được lưu
+          toast.warning('No test cases were saved. Please check the data format.')
+          console.error('❌ No test cases saved. Response:', response.data)
+        }
+      } catch (error) {
+        console.error('💥 Save error:', error)
+        const backendMessage = error.response?.data?.message || error.message
+        toast.error(`Save failed: ${backendMessage}`)
+      }
+    }
     onMounted(() => {
       // Auto-select all if few items
       if (props.requirements.length > 0 && props.requirements.length <= 10) {

@@ -1,4 +1,4 @@
-import { Schema, model, InferSchemaType } from "mongoose";
+import mongoose, { Schema, model, InferSchemaType } from "mongoose";
 
 const testcaseSchema = new Schema({
     // === LIÊN KẾT DỰ ÁN ===
@@ -139,9 +139,9 @@ const testcaseSchema = new Schema({
 
     // 🆕 EXECUTION LOGS FORMAT - ENTERPRISE STANDARD
     execution_logs_format: {
-        timestamp: { type: String, default: "ISO format" },
-        step_number: { type: Number },
-        status: { type: String, enum: ["passed", "failed", "skipped"] },
+        timestamp: { type: String, default: null }, // Cho phép cả string template
+        step_number: { type: Schema.Types.Mixed }, // Cho phép cả number và string
+        status: { type: String, default: null }, // Bỏ enum constraint
         actual_result: { type: String },
         screenshot_path: { type: String },
         log_message: { type: String }

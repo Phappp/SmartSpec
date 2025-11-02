@@ -379,8 +379,14 @@ export class TestcaseController {
         try {
             const { projectId, versionId } = req.params;
             const { testCases } = req.body;
-
             const createdBy = req.getSubject ? req.getSubject() : undefined;
+
+            console.log('📥 Controller received:', {
+                projectId,
+                versionId,
+                testCasesCount: testCases?.length,
+                createdBy
+            });
 
             if (!projectId || !versionId) {
                 res.status(400).json({ message: "projectId và versionId là bắt buộc." });
@@ -402,7 +408,7 @@ export class TestcaseController {
                 return;
             }
 
-            console.log(`💾 Saving ${testCases.length} ENTERPRISE test cases for project ${projectId}, version ${versionId}`);
+            console.log(`💾 Saving ${testCases.length} ENTERPRISE test cases`);
 
             const savedTestCases = await this.testcaseService.saveTestCases(
                 projectId,
@@ -411,12 +417,15 @@ export class TestcaseController {
                 createdBy
             );
 
+            console.log('✅ Controller: Test cases saved successfully', savedTestCases.length);
+
             const coverageAnalysis = this.analyzeDatabaseCoverage(savedTestCases);
 
             res.status(201).json({
-                message: "Lưu ENTERPRISE test cases thành công!",
+                message: `Lưu thành công ${savedTestCases.length} ENTERPRISE test cases!`,
                 data: savedTestCases,
                 count: savedTestCases.length,
+                insertedCount: savedTestCases.length,
                 metadata: {
                     database_coverage: coverageAnalysis,
                     tables_covered: coverageAnalysis.tables_covered.length,
@@ -428,9 +437,17 @@ export class TestcaseController {
         } catch (error: any) {
             console.error("❌ Error saving ENTERPRISE test cases:", error);
 
-            if (error.message.includes('validation failed') || error.message.includes('duplicate')) {
+            if (error.message.includes('validation failed') || error.message.includes('Validation failed')) {
                 res.status(400).json({
                     message: "Dữ liệu ENTERPRISE test cases không hợp lệ",
+                    error: error.message
+                });
+                return;
+            }
+
+            if (error.message.includes('duplicate')) {
+                res.status(400).json({
+                    message: "Test cases trùng lặp",
                     error: error.message
                 });
                 return;
