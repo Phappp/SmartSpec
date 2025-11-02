@@ -42,6 +42,9 @@ export class LogService {
           String(dto.user_id),
           doc
         );
+      } else {
+        // ✅ Emit cho toàn hệ thống nếu không thuộc project cụ thể
+        logSocketService.emitGlobalLog(doc);
       }
 
       // 🚨 Gửi cảnh báo bảo mật nếu là lỗi đăng nhập

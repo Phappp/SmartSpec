@@ -5,7 +5,7 @@ import { usecaseSocketService } from '../command-ingress/features/usecase/domain
 import { inputSocketService } from '../command-ingress/features/input/domain/input.socket.service';
 import { presenceSocketService } from '../command-ingress/features/presence/domain/presence.socket.service';
 import { versionSocketService } from '../command-ingress/features/version/domain/version.socket.service';
-
+import { logSocketService } from '../command-ingress/features/log/domain/log.socket.service';
 export let io: Server;
 
 export function initSocket(server: HttpServer) {
@@ -18,7 +18,10 @@ export function initSocket(server: HttpServer) {
 
     io.on('connection', (socket) => {
         console.log(`✅ User connected: ${socket.id}, userId: ${socket.handshake.auth.userId}`);
-
+        socket.on('join_system_logs', () => {
+            console.log(`🧩 User ${socket.id} joined global system log room`);
+            logSocketService.joinSystemRoom(socket);
+            });
         // Initialize projects set for this socket
         socketProjects.set(socket.id, new Set<string>());
 
@@ -45,7 +48,7 @@ export function initSocket(server: HttpServer) {
             // Join usecase & input rooms (existing)
             usecaseSocketService.joinProjectRoom(socket, projectId);
             inputSocketService.joinProjectRoom(socket, projectId);
-
+            logSocketService.joinProjectRoom(socket, projectId);
             // ✅ Join presence tracking
             try {
                 const userInfo = await getUserInfo(userId);
@@ -62,6 +65,7 @@ export function initSocket(server: HttpServer) {
                 presenceSocketService.joinProjectRoom(socket, projectId, userId, fallbackUserInfo);
             }
             versionSocketService.joinProjectRoom(socket, projectId);
+            
         });
 
         // ✅ Leave project room
@@ -76,6 +80,7 @@ export function initSocket(server: HttpServer) {
             inputSocketService.leaveProjectRoom(socket, projectId);
             presenceSocketService.leaveProjectRoom(socket, projectId);
             versionSocketService.leaveProjectRoom(socket, projectId);
+            logSocketService.leaveProjectRoom(socket, projectId);
         });
 
         socket.on('disconnect', (reason) => {
