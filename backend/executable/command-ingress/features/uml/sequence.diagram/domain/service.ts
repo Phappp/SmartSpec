@@ -1,7 +1,7 @@
 // src/features/database/domain/service.ts
 
 import UsecaseDiagramSchema from "../../../../../../internal/model/usecase_diagram";
-import { UsecaseDiagramGeminiService } from "../domain/GeminiService";
+import { UsecaseDiagramGeminiService } from "./GeminiService";
 import {
   GenerateUsecaseDiagrambasePayload,
   UseCaseDiagramResponse,

@@ -13,7 +13,7 @@ interface NotificationResponse {
 }
 interface NotificationService {
   createNotification(
-    recipient_id: string,
+    recipient_id: string | string [],
     sender_id: string,
     type: string,
     title: string,
