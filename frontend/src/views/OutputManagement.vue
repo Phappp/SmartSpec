@@ -83,6 +83,25 @@
           </div>
         </div>
 
+        <!-- Activity Diagram Management Card -->
+        <div class="output-card" @click="navigateToActivityDiagrams">
+          <div class="card-icon uml">
+            <span class="material-symbols-outlined">timeline</span>
+          </div>
+          <div class="card-content">
+            <h3>Activity Diagram Management</h3>
+            <p>Generate and edit activity diagrams from requirement models</p>
+            <div class="card-stats">
+              <span class="stat">
+                <strong>{{ umlStats.activity }}</strong> Diagrams
+              </span>
+            </div>
+          </div>
+          <div class="card-arrow">
+            <span class="material-symbols-outlined">arrow_forward</span>
+          </div>
+        </div>
+
         <!-- UML Management Card -->
         <div class="output-card" @click="navigateToUml">
           <div class="card-icon uml">
@@ -237,6 +256,12 @@ export default {
     navigateToUml() {
       this.$router.push({
         name: 'UmlManagement',
+        params: { id: this.project._id },
+      })
+    },
+    navigateToActivityDiagrams() {
+      this.$router.push({
+        name: 'ActivityDiagramManagement',
         params: { id: this.project._id },
       })
     },

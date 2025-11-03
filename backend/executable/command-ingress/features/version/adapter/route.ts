@@ -3,61 +3,85 @@ import { VersionController } from "./controller";
 import { requireAuthorizedUser } from "../../../middlewares/auth";
 
 /**
+ * 🧩 Version Routes
  */
 export default function initVersionRoute(controller: VersionController) {
   const router = Router();
 
-  // 📘 Tạo version mới từ version hiện tại
+  // 🚀 Tạo version mới từ version hiện tại
   router.post(
     "/:versionId/bump",
     requireAuthorizedUser,
-    (req: Request, res: Response, next: NextFunction) =>controller.bumpVersion(req as any, res, next));
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.bumpVersion(req as any, res, next)
+  );
 
-  router.delete("/:versionId", 
-     requireAuthorizedUser,
-    (req: Request, res: Response, next: NextFunction) => controller.deleteVersion(req as any, res, next));
-
-  // // ♻️ Rollback version
-  // router.post(
-  //   "/rollback",
-  //   requireAuthorizedUser,
-  //   (req: Request, res: Response, next: NextFunction) =>controller.rollbackVersion(req as any, res, next));
-
-  // // 🔍 So sánh 2 version
-  // router.get(
-  //   "/compare",
-  //   requireAuthorizedUser,
-  //   (req: Request, res: Response, next: NextFunction) =>controller.compareVersions(req as any, res, next));
+  // 🗑️ Xóa version
+  router.delete(
+    "/:versionId",
+    requireAuthorizedUser,
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.deleteVersion(req as any, res, next)
+  );
 
   // 📄 Lấy danh sách version theo project
   router.get(
     "/project/:projectId",
     requireAuthorizedUser,
-    (req: Request, res: Response, next: NextFunction) =>controller.getVersionsByProject(req as any, res, next));
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.getVersionsByProject(req as any, res, next)
+  );
 
-  // 📘 Đổi version làm việc
+  // 🔄 Đổi version làm việc (current)
   router.patch(
     "/projects/:projectId/current-version/:versionId",
     requireAuthorizedUser,
-    (req, res, next) => controller.setCurrentVersion(req as any, res, next)
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.setCurrentVersion(req as any, res, next)
   );
-  // //✅ Đánh dấu version ổn định (stable)
+
+  // 📋 Preview và upgrade version
+  router.get(
+    "/:versionId/preview",
+    requireAuthorizedUser,
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.getPreview(req as any, res, next)
+  );
+
+  router.post(
+    "/:versionId",
+    requireAuthorizedUser,
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.createOrUpdatePreview(req as any, res, next)
+  );
+
+  router.post(
+    "/:versionId/approve",
+    requireAuthorizedUser,
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.approve(req as any, res, next)
+  );
+
+  // // ✅ Đánh dấu version ổn định (stable)
   // router.post(
   //   "/mark-stable",
   //   requireAuthorizedUser,
-  //   (req: Request, res: Response, next: NextFunction) =>controller.markVersionAsStable(req as any, res, next));
+  //   (req, res, next) => controller.markVersionAsStable(req as any, res, next)
+  // );
 
   // // 🔒 Khóa version (không cho chỉnh sửa)
   // router.post(
   //   "/lock",
   //   requireAuthorizedUser,
-  //   (req: Request, res: Response, next: NextFunction) =>controller.lockVersion(req as any, res, next));
+  //   (req, res, next) => controller.lockVersion(req as any, res, next)
+  // );
 
-  // // ⚙️ Tự động bump version khi có thay đổi lớn/nhỏ
+  // // ⚙️ Auto bump version khi có thay đổi lớn/nhỏ
   // router.post(
   //   "/auto-bump",
   //   requireAuthorizedUser,
-  //   (req: Request, res: Response, next: NextFunction) =>controller.autoBumpVersionOnChange(req as any, res, next));
+  //   (req, res, next) => controller.autoBumpVersionOnChange(req as any, res, next)
+  // );
 
   return router;
-} 
+}

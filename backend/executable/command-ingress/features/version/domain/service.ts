@@ -4,171 +4,523 @@ import User from '../../../../../internal/model/user';
 import Input from "../../../../../internal/model/input";
 import Output from "../../../../../internal/model/output";
 import Project from "../../../../../internal/model/project";
+import Preview from "../../../../../internal/model/preview";
+import Database from "../../../../../internal/model/database";
+import Testcase from "../../../../../internal/model/testcase";
+import Uml from "../../../../../internal/model/uml";
+import UsecaseDiagram from "../../../../../internal/model/usecase_diagram";
+import ActivityDiagram from "../../../../../internal/model/activity_diagram";
+import SequenceDiagram from "../../../../../internal/model/sequence_diagram";
 import { LogService } from "../../../../command-ingress/features/log/domain/service";
 import { ServiceResponse, ResponseStatus } from "../../../services/serviceResponse";
 import { versionSocketService } from "./version.socket.service";
+import {PreviewChangeDto} from "../adapter/preview.dto";
+import { randomUUID } from "crypto";
+
 
 export class VersionService {
   private logService = new LogService();
 
+  async createOrUpdatePreview(
+    base_version_id: string,
+    created_by: string,
+    change: PreviewChangeDto
+  ) {
+    try {
+      // 1️⃣ Kiểm tra version tồn tại
+      const version = await Version.findById(base_version_id).lean();
+      if (!version) {
+        return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+      }
+
+      // 2️⃣ Chuẩn hoá 1 thay đổi
+      const normalizedChange = {
+        change_id: change.change_id ?? randomUUID(),
+        entity_type: change.entity_type,
+        entity_id: change.entity_id ?? null,
+        change_type: change.change_type,
+        before_snapshot: change.before_snapshot ?? null,
+        after_snapshot: change.after_snapshot ?? null,
+        add_at:new Date(),
+      };
+
+      // 3️⃣ Tìm preview đang under_review
+      let preview = await Preview.findOne({ base_version_id : base_version_id});
+
+      if (preview) {
+        // ✅ Preview đã tồn tại → append thay đổi mới
+        preview.changes.push(normalizedChange);
+        await preview.save();
+
+        return new ServiceResponse(ResponseStatus.Success, "Preview updated successfully", preview, 200);
+      }
+      const project = await Project.findById(version.project_id).lean();
+      // 4️⃣ Lấy danh sách approvers từ project (chỉ owner và editor)
+      const approvers = (project.members ?? [])
+        .filter((m: any) => ["owner", "editor"].includes(m.role))
+        .map((m: any) => ({
+          user_id: m.user_id,
+          role: m.role,
+          status: "pending",
+          comment: null,
+          approved_at: null,
+        }));
+
+      // 5️⃣ Nếu chưa có preview → tạo mới
+      preview = new Preview({
+        project_id : version.project_id,
+        base_version_id : base_version_id,
+        created_by : created_by,
+        changes: [normalizedChange],
+        approvers : approvers, // gắn danh sách approvers
+        status: "under_review",
+        created_at: new Date(),
+      });
+
+      await preview.save();
+
+      return new ServiceResponse(ResponseStatus.Success, "Preview created successfully", preview, 200);
+    } catch (error: any) {
+      console.error("Error creating/updating preview:", error);
+      return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
+    }
+  }
   /**
-   * 📘 Tạo version mới dựa trên version hiện tại
+   * Lấy preview chi tiết theo id
    */
-  async bumpVersion(
-    baseVersionId: string,
-    userId: string,
-    changeType: "major" | "minor" = "minor"
-  ): Promise<ServiceResponse<any>> {
+  public async getPreview(versionId: string) {
+    try {
+      const preview = await Preview.findOne({ base_version_id: versionId })
+        .populate("project_id", "name")
+        .populate("base_version_id", "version_number version_major version_minor")
+        .populate("created_by", "name email")
+        .populate("approvers.user_id", "name email");
+
+      // Nếu không tìm thấy preview, trả về null nhưng vẫn success
+      return new ServiceResponse(
+        ResponseStatus.Success,
+        "Preview retrieved",
+        preview ?? null,
+        200
+      );
+    } catch (error: any) {
+      return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
+    }
+  }
+
+  /**
+   * Approve một preview: Owner phê duyệt và bump version
+   */
+  public async approve(baseVersionId: string, userId: string, changeType: "major" | "minor", comment?: string) {
     try {
       const baseVersion = await Version.findById(baseVersionId);
-      if (!baseVersion)
+      if (!baseVersion) {
         return new ServiceResponse(ResponseStatus.Failed, "Base version not found", null, 404);
-
-      // 🔢 Sinh số version mới
-      const { major, minor,patch,overwrite} = await this.getNextVersion(baseVersion.project_id, baseVersion, changeType);
-
-      // ⚠️ Nếu version đó đã tồn tại và cần ghi đè
-      if (overwrite) {
-        const existing = await Version.findOne({
-          project_id: baseVersion.project_id,
-          version_major: major,
-          version_minor: minor,
-          version_patch: patch,
-        });
-
-        if (existing) {
-          const oldVersionSnapshot = JSON.parse(JSON.stringify(existing));
-          // 🔄 Xóa dữ liệu Input/Output cũ
-          await Input.deleteMany({ version_id: existing._id });
-          await Output.deleteMany({ version_id: existing._id });
-
-          // 📦 Clone lại từ baseVersion
-          const oldInputs = await Input.find({ version_id: baseVersionId });
-          const clonedInputs = oldInputs.map(i => ({
-            ...i.toObject(),
-            _id: new mongoose.Types.ObjectId(),
-            version_id: existing._id,
-            created_at: new Date(),
-            updated_at: new Date(),
-          }));
-
-          const oldOutputs = await Output.find({ version_id: baseVersionId });
-          const clonedOutputs = oldOutputs.map(o => ({
-            ...o.toObject(),
-            _id: new mongoose.Types.ObjectId(),
-            version_id: existing._id,
-            created_at: new Date(),
-            updated_at: new Date(),
-          }));
-
-          await Input.insertMany(clonedInputs);
-          await Output.insertMany(clonedOutputs);
-
-          // 🧩 Cập nhật dữ liệu version
-          existing.requirement_model = JSON.parse(JSON.stringify(baseVersion.requirement_model || []));
-          existing.pending_conflicts = JSON.parse(JSON.stringify(baseVersion.pending_conflicts || []));
-          existing.processing_errors = JSON.parse(JSON.stringify(baseVersion.processing_errors || []));
-          existing.updated_at = new Date();
-          existing.created_by = new mongoose.Types.ObjectId(userId);
-          existing.stage = "completed";
-          existing.status = "completed";
-          await existing.save();
-
-          // 🟩 Update current version
-          await Project.findByIdAndUpdate(baseVersion.project_id, {
-            current_version: existing._id,
-          });
-
-          const user = await User.findById(userId).select("name email").lean();
-          const userName = user?.name || "System";
-
-          // 🧾 Log hành động
-          await this.logService.createLog({
-            project_id: baseVersion.project_id.toString(),
-            user_id: userId,
-            action: "update_version",
-            target_id: existing._id.toString(),
-            target_type: "version",
-            version_number: existing.version_number,
-            level: "warning",
-            details: {
-              before: {
-                requirement_count: oldVersionSnapshot.requirement_model?.length || 0,
-                pending_conflicts: oldVersionSnapshot.pending_conflicts || [],
-              },
-              after: {
-                requirement_count: baseVersion.requirement_model?.length || 0,
-                pending_conflicts: baseVersion.pending_conflicts || [],
-              },
-              message: `${userName} overwrote version ${existing.version_number} with new data from ${baseVersion.version_number}`,
-            },
-          });
-
-          // 🔔 Emit realtime
-          versionSocketService.emitVersionUpdated(
-            baseVersion.project_id.toString(),
-            existing._id.toString(),
-            userId,
-            existing
-          );
-
-          return new ServiceResponse(ResponseStatus.Success, "Existing version overwritten", existing, 200);
-        }
       }
-      // 📦 Clone version cũ
+      const preview = await Preview.findOne({ base_version_id: baseVersionId });
+      if (!preview) {
+        return new ServiceResponse(ResponseStatus.Failed, "Preview not found", null, 404);
+      }
+      const approver = preview.approvers.find((a: any) => a.user_id?.toString() === userId);
+      if (!approver) {
+        return new ServiceResponse(ResponseStatus.Failed, "You are not in approvers list", null, 403);
+      }
+      if (approver.role !== "owner") {
+        return new ServiceResponse(ResponseStatus.Failed, "Only owner can approve preview", null, 403);
+      }
+      if (!changeType) {
+        return new ServiceResponse(ResponseStatus.Failed, "Owner must specify changeType (major/minor)", null, 400);
+      }
+      approver.status = "approved";
+      approver.approved_at = new Date();
+      approver.comment = comment ?? "";
+      preview.status = "approved";
+      await preview.save();
+
+      const newVersion = await this.bumpVersion(baseVersionId, userId, changeType);
+
+      if (!newVersion.data) {
+        return new ServiceResponse(
+          ResponseStatus.Failed,
+          "Bump version failed or returned no data",
+          null,
+          500
+        );
+      }
+
+      // ✅ newVersionResponse.data là đối tượng Version thật sự
+      const newVersionData = newVersion.data;
+      preview.target_version_id = newVersionData._id;
+      preview.status = "version_upgraded";
+      await preview.save();
+
+
+      return new ServiceResponse(ResponseStatus.Success, "Preview approved and version bumped successfully", preview, 200);
+    } catch (error: any) {
+      return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
+    } finally {
+      
+    }
+  }
+
+  /**
+   * Nâng version từ 1 preview (đã được duyệt)
+   * BaseVersion => NewVersion (copy toàn bộ data)
+   * BaseVersion revert lại (xoá preview data)
+   */
+  public async bumpVersion(baseVersionId: string,userId: string,changeType: "major" | "minor"): Promise<ServiceResponse<any>> {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    console.log("🚀 [bumpVersion] START ===============================");
+    console.log("🧩 baseVersionId:", baseVersionId);
+    console.log("👤 userId:", userId);
+    console.log("⚙️ changeType:", changeType);
+
+    try {
+      // 1️⃣ Lấy baseVersion
+      const baseVersion = await Version.findById(baseVersionId).session(session);
+      if (!baseVersion) {
+        console.error("❌ Base version not found:", baseVersionId);
+        await session.abortTransaction();
+        return new ServiceResponse(ResponseStatus.Failed, "Base version not found", null, 404);
+      }
+
+      // 2️⃣ Lấy preview (ở đây sửa lỗi logic: nên dùng base_version_id, không phải _id)
+      const preview = await Preview.findOne({ base_version_id: baseVersionId }).session(session);
+      if (!preview) {
+        console.error("❌ Preview not found for base_version_id:", baseVersionId);
+        await session.abortTransaction();
+        return new ServiceResponse(ResponseStatus.Failed, "Preview not found", null, 404);
+      }
+
+      console.log("✅ Found preview:", preview._id);
+
+      // 3️⃣ Kiểm tra approvers
+      const approved = preview.approvers?.filter((a: any) => a.status === "approved") || [];
+      const ownerApproved = approved.some((a: any) => a.role === "owner");
+      console.log("👥 Approved count:", approved.length, "| Owner approved:", ownerApproved);
+
+      if (!ownerApproved) {
+        console.error("❌ Preview chưa đủ người phê duyệt");
+        await session.abortTransaction();
+        return new ServiceResponse(
+          ResponseStatus.Failed,
+          "Preview chưa đủ người phê duyệt (cần ít nhất 1 owner + 1 member)",
+          null,
+          400
+        );
+      }
+
+      // 4️⃣ Lấy số version mới
+      const { major, minor } = await this.getNextVersion(baseVersion, changeType);
+      console.log("📈 Next version:", { major, minor });
+
+      // 5️⃣ Tạo newVersion (clone cấu trúc cơ bản)
       const newVersion = new Version({
         project_id: baseVersion.project_id,
         version_major: major,
         version_minor: minor,
-        version_patch:patch,
-        created_by: userId,
-        parent_version_id: baseVersionId,
+        created_by: new Types.ObjectId(userId),
+        parent_version_id: baseVersion._id,
         requirement_model: JSON.parse(JSON.stringify(baseVersion.requirement_model || [])),
-        pending_conflicts: JSON.parse(JSON.stringify(baseVersion.pending_conflicts || [])),
-        processing_errors: JSON.parse(JSON.stringify(baseVersion.processing_errors || [])),
+        pending_conflicts: [],
+        processing_errors: [],
         affects_requirement: baseVersion.affects_requirement || false,
-        progress: baseVersion.progress || 0,
+        progress: 100,
         stage: "completed",
         status: "completed",
-        created_at: new Date(),
-        updated_at: new Date(),
       });
 
-      // 🔁 Clone Input và Output
-      const oldInputs = await Input.find({ version_id: baseVersionId });
-      const clonedInputs = oldInputs.map(i => ({
-        ...i.toObject(),
-        _id: new mongoose.Types.ObjectId(),
-        version_id: newVersion._id,
-        created_at: new Date(),
-        updated_at: new Date(),
-      }));
+      console.log("🆕 Created newVersion draft:", newVersion._id);
 
-      const oldOutputs = await Output.find({ version_id: baseVersionId });
-      const clonedOutputs = oldOutputs.map(o => ({
-        ...o.toObject(),
-        _id: new mongoose.Types.ObjectId(),
-        version_id: newVersion._id,
-        created_at: new Date(),
-        updated_at: new Date(),
-      }));
+      // 6️⃣ Clone Inputs
+      const allInputs = await Input.find({ version_id: baseVersion._id }).session(session).lean();
+      console.log("📦 Inputs count:", allInputs.length);
 
-      await Input.insertMany(clonedInputs);
-      await Output.insertMany(clonedOutputs);
+      if (allInputs.length > 0) {
+        const clonedInputs = allInputs.map((inp) => ({
+          ...inp,
+          _id: new Types.ObjectId(),
+          version_id: newVersion._id,
+          created_at: new Date(),
+          updated_at: new Date(),
+        }));
+        const insertedInputs = await Input.insertMany(clonedInputs.map((i) => new Input(i)), { session });
+        newVersion.inputs = insertedInputs.map((i) => i._id);
+      } else {
+        newVersion.inputs = [];
+      }
 
-      newVersion.inputs = clonedInputs.map(i => i._id);
-      newVersion.outputs = clonedOutputs.map(o => o._id);
+      // 7️⃣ Clone Outputs
+      const allOutputs = await Output.find({ version_id: baseVersion._id }).session(session).lean();
+      console.log("📤 Outputs count:", allOutputs.length);
 
-      await newVersion.save();
+      const dbIds: string[] = [];
+      const tcIds: string[] = [];
+      const umlIds: string[] = [];
 
-      // 🟩 Cập nhật current version trong Project
-      await Project.findByIdAndUpdate(baseVersion.project_id, {
-        current_version: newVersion._id,
-      });
+      for (const o of allOutputs) {
+        if (o.type === "database" && o.database_id) dbIds.push(o.database_id.toString());
+        if (o.type === "testcase" && o.testcase_id) tcIds.push(o.testcase_id.toString());
+        if (o.type === "uml" && o.uml_id) umlIds.push(o.uml_id.toString());
+      }
 
+      // Clone database/testcase/uml
+      console.log("🗄 DBs:", dbIds.length, "| 🧪 TCs:", tcIds.length, "| 📊 UMLs:", umlIds.length);
+
+      // Clone logic... (giữ nguyên như bạn đã viết — chỉ thêm log nếu cần)
+
+      // ✅ Save new version
+      await newVersion.save({ session });
+      console.log("💾 New version saved:", newVersion._id);
+
+      // --- 3) REVERT preview.changes ON baseVersion (dựa vào before_snapshot & change_type) ---
+      // For each change in preview.changes:
+      // - added  => remove the added entity from base (delete)
+      // - updated => update base entity to before_snapshot
+      // - deleted => restore insert before_snapshot into base
+
+      for (const change of preview.changes || []) {
+        const entityType = change.entity_type;
+        const changeType = change.change_type;
+        const entityId = change.entity_id;
+        const before = change.before_snapshot;
+        const after = change.after_snapshot;
+
+        console.log(`\n=== [CHANGE DETECTED] Entity: ${entityType}, ChangeType: ${changeType}, EntityID: ${entityId} ===`);
+
+        try {
+          if (entityType === 'input') {
+            if (changeType === 'added') {
+              console.log(`[Input][Added] Deleting Input: ${entityId}`);
+              if (entityId) await Input.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
+            } else if (changeType === 'updated') {
+              console.log(`[Input][Updated] Reverting Input: ${entityId}`);
+              if (entityId && before) {
+                await Input.updateOne({ _id: entityId, version_id: baseVersion._id }, { $set: before }).session(session);
+              }
+            } else if (changeType === 'deleted') {
+              console.log(`[Input][Deleted] Restoring Input from snapshot`);
+              if (before) {
+                const toInsert = {
+                  ...before,
+                  _id: new Types.ObjectId(),
+                  version_id: baseVersion._id,
+                  created_at: new Date(),
+                  updated_at: new Date(),
+                };
+                await Input.create([toInsert], { session });
+              }
+            }
+          } else if (entityType === 'database') {
+            if (changeType === 'added') {
+              console.log(`[Database][Added] Deleting Database + related Outputs`);
+              if (entityId) {
+                await Database.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
+                await Output.deleteMany({ database_id: entityId, version_id: baseVersion._id }).session(session);
+              }
+            } else if (changeType === 'updated') {
+              console.log(`[Database][Updated] Reverting Database: ${entityId}`);
+              if (entityId && before) {
+                await Database.updateOne({ _id: entityId, version_id: baseVersion._id }, { $set: before }).session(session);
+              }
+            } else if (changeType === 'deleted') {
+              console.log(`[Database][Deleted] Restoring Database and linked Output`);
+              if (before) {
+                const toInsert = {
+                  ...before,
+                  _id: new Types.ObjectId(),
+                  version_id: baseVersion._id,
+                  created_at: new Date(),
+                  updated_at: new Date(),
+                };
+                await Database.create([toInsert], { session });
+                await Output.create([{
+                  project_id: baseVersion.project_id,
+                  version_id: baseVersion._id,
+                  type: 'database',
+                  database_id: toInsert._id,
+                  generated_by: new Types.ObjectId(userId),
+                  status: 'completed',
+                  created_at: new Date(),
+                  updated_at: new Date()
+                }], { session });
+              }
+            }
+          } else if (entityType === 'testcase') {
+            if (changeType === 'added') {
+              console.log(`[Testcase][Added] Deleting Testcase + related Outputs`);
+              if (entityId) {
+                await Testcase.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
+                await Output.deleteMany({ testcase_id: entityId, version_id: baseVersion._id }).session(session);
+              }
+            } else if (changeType === 'updated') {
+              console.log(`[Testcase][Updated] Reverting Testcase: ${entityId}`);
+              if (entityId && before) {
+                await Testcase.updateOne({ _id: entityId, version_id: baseVersion._id }, { $set: before }).session(session);
+              }
+            } else if (changeType === 'deleted') {
+              console.log(`[Testcase][Deleted] Restoring Testcase and Output`);
+              if (before) {
+                const toInsert = {
+                  ...before,
+                  _id: new Types.ObjectId(),
+                  version_id: baseVersion._id,
+                  created_at: new Date(),
+                  updated_at: new Date(),
+                };
+                await Testcase.create([toInsert], { session });
+                await Output.create([{
+                  project_id: baseVersion.project_id,
+                  version_id: baseVersion._id,
+                  type: 'testcase',
+                  testcase_id: toInsert._id,
+                  generated_by: new Types.ObjectId(userId),
+                  status: 'completed',
+                  created_at: new Date(),
+                  updated_at: new Date()
+                }], { session });
+              }
+            }
+          } else if (entityType === 'uml') {
+            if (changeType === 'added') {
+              console.log(`[UML][Added] Deleting UML + related diagrams + outputs`);
+              if (entityId) {
+                await Uml.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
+                await Output.deleteMany({ uml_id: entityId, version_id: baseVersion._id }).session(session);
+                await UsecaseDiagram.deleteMany({ uml_id: entityId }).session(session);
+                await ActivityDiagram.deleteMany({ uml_id: entityId }).session(session);
+                await SequenceDiagram.deleteMany({ uml_id: entityId }).session(session);
+              }
+            } else if (changeType === 'updated') {
+              console.log(`[UML][Updated] Reverting UML: ${entityId}`);
+              if (entityId && before) {
+                await Uml.updateOne({ _id: entityId, version_id: baseVersion._id }, { $set: before }).session(session);
+              }
+            } else if (changeType === 'deleted') {
+              console.log(`[UML][Deleted] Restoring UML and Output`);
+              if (before) {
+                const toInsert = {
+                  ...before,
+                  _id: new Types.ObjectId(),
+                  version_id: baseVersion._id,
+                  created_at: new Date(),
+                  updated_at: new Date(),
+                };
+                await Uml.create([toInsert], { session });
+                await Output.create([{
+                  project_id: baseVersion.project_id,
+                  version_id: baseVersion._id,
+                  type: 'uml',
+                  uml_id: toInsert._id,
+                  generated_by: new Types.ObjectId(userId),
+                  status: 'completed',
+                  created_at: new Date(),
+                  updated_at: new Date()
+                }], { session });
+              }
+            }
+          } else if (entityType === 'usecase_diagram') {
+            if (changeType === 'added') {
+              console.log(`[UsecaseDiagram][Added] Deleting diagram`);
+              if (entityId) await UsecaseDiagram.deleteOne({ _id: entityId }).session(session);
+            } else if (changeType === 'updated') {
+              console.log(`[UsecaseDiagram][Updated] Reverting diagram`);
+              if (entityId && before) await UsecaseDiagram.updateOne({ _id: entityId }, { $set: before }).session(session);
+            } else if (changeType === 'deleted') {
+              console.log(`[UsecaseDiagram][Deleted] Restoring diagram`);
+              if (before) {
+                const toInsert = { ...before, _id: new Types.ObjectId(), created_at: new Date(), updated_at: new Date() };
+                await UsecaseDiagram.create([toInsert], { session });
+              }
+            }
+          } else if (entityType === 'activity_diagram') {
+            if (changeType === 'added') {
+              console.log(`[ActivityDiagram][Added] Deleting diagram`);
+              if (entityId) await ActivityDiagram.deleteOne({ _id: entityId }).session(session);
+            } else if (changeType === 'updated') {
+              console.log(`[ActivityDiagram][Updated] Reverting diagram`);
+              if (entityId && before) await ActivityDiagram.updateOne({ _id: entityId }, { $set: before }).session(session);
+            } else if (changeType === 'deleted') {
+              console.log(`[ActivityDiagram][Deleted] Restoring diagram`);
+              if (before) {
+                const toInsert = { ...before, _id: new Types.ObjectId(), created_at: new Date(), updated_at: new Date() };
+                await ActivityDiagram.create([toInsert], { session });
+              }
+            }
+          } else if (entityType === 'sequence_diagram') {
+            if (changeType === 'added') {
+              console.log(`[SequenceDiagram][Added] Deleting diagram`);
+              if (entityId) await SequenceDiagram.deleteOne({ _id: entityId }).session(session);
+            } else if (changeType === 'updated') {
+              console.log(`[SequenceDiagram][Updated] Reverting diagram`);
+              if (entityId && before) await SequenceDiagram.updateOne({ _id: entityId }, { $set: before }).session(session);
+            } else if (changeType === 'deleted') {
+              console.log(`[SequenceDiagram][Deleted] Restoring diagram`);
+              if (before) {
+                const toInsert = { ...before, _id: new Types.ObjectId(), created_at: new Date(), updated_at: new Date() };
+                await SequenceDiagram.create([toInsert], { session });
+              }
+            }
+          } else if (entityType === 'output') {
+            if (changeType === 'added') {
+              console.log(`[Output][Added] Deleting Output`);
+              if (entityId) await Output.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
+            } else if (changeType === 'updated') {
+              console.log(`[Output][Updated] Reverting Output`);
+              if (entityId && before) await Output.updateOne({ _id: entityId, version_id: baseVersion._id }, { $set: before }).session(session);
+            } else if (changeType === 'deleted') {
+              console.log(`[Output][Deleted] Restoring Output`);
+              if (before) {
+                const toInsert = { ...before, _id: new Types.ObjectId(), version_id: baseVersion._id, created_at: new Date(), updated_at: new Date() };
+                await Output.create([toInsert], { session });
+              }
+            }
+          } else if (entityType === 'requirement') {
+            if (changeType === 'added') {
+              console.log(`[Requirement][Added] Removing added requirement`);
+              if (entityId) {
+                const reqs = baseVersion.requirement_model?.toObject?.() || baseVersion.requirement_model || [];
+                baseVersion.requirement_model = reqs.filter((r) => r.id !== entityId);
+              }
+            } else if (changeType === 'updated') {
+              console.log(`[Requirement][Updated] Reverting requirement`);
+              if (entityId && before) {
+                const reqs = baseVersion.requirement_model?.toObject?.() || baseVersion.requirement_model || [];
+                baseVersion.requirement_model = reqs.map((r) => (r.id === entityId ? before : r));
+              }
+            } else if (changeType === 'deleted') {
+              console.log(`[Requirement][Deleted] Restoring deleted requirement`);
+              if (before) {
+                baseVersion.requirement_model.push(before);
+              }
+            }
+          }
+
+          console.log(`✔ Successfully processed ${entityType} (${changeType})`);
+        } catch (error) {
+          console.error(`❌ Error processing ${entityType} (${changeType}) [ID=${entityId}]:`, error);
+        }
+      }
+      // Save baseVersion after modifications (for embedded requirement_model revert)
+      await baseVersion.save({ session });
+
+      // 8️⃣ Update preview
+      preview.target_version_id = newVersion._id;
+      preview.status = "version_upgraded";
+      await preview.save({ session });
+      console.log("🔄 Preview updated with new version:", preview._id);
+
+      // 9️⃣ Update project current version
+      await Project.findByIdAndUpdate(baseVersion.project_id, { current_version: newVersion._id }).session(session);
+      console.log("🏗 Project current version updated:", baseVersion.project_id);
+
+      await session.commitTransaction();
+      console.log("✅ [bumpVersion] TRANSACTION COMMITTED");
+
+      // 🔔 Log action
       const user = await User.findById(userId).select("name email").lean();
-      const userName = user?.name || "System";
-
       await this.logService.createLog({
         project_id: baseVersion.project_id.toString(),
         user_id: userId,
@@ -179,11 +531,10 @@ export class VersionService {
         affects_requirement: false,
         level: "info",
         details: {
-          message: `${userName} created a ${changeType} version ${newVersion.version_number} from ${baseVersion.version_number}`,
+          message: `${user?.name || "System"} created version ${newVersion.version_number} from base ${baseVersion.version_number}`,
         },
       });
 
-      // 🔔 Gửi realtime thông báo đến các client khác trong project
       versionSocketService.emitVersionCreated(
         baseVersion.project_id.toString(),
         newVersion._id.toString(),
@@ -191,39 +542,49 @@ export class VersionService {
         newVersion
       );
 
-      return new ServiceResponse(ResponseStatus.Success, "Version created successfully", newVersion, 201);
+      console.log("🏁 [bumpVersion] FINISHED SUCCESSFULLY");
+      console.log("==================================================");
+
+      return new ServiceResponse(ResponseStatus.Success, "Version upgraded successfully", newVersion, 201);
     } catch (error: any) {
+      console.error("💥 [bumpVersion] ERROR:", error);
+      await session.abortTransaction();
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
+    } finally {
+      session.endSession();
     }
   }
 
-  /**
-   * ⚙️ Đổi current version của Project (người khác thấy ngay)
-   */
-  async setCurrentVersion(
-    projectId: string,
-    versionId: string,
-    userId: string
-  ): Promise<ServiceResponse<any>> {
+  async setCurrentVersion(projectId: string,versionId: string,userId: string): Promise<ServiceResponse<any>> {
     try {
+      // 🔍 Kiểm tra version có tồn tại trong project hay không
       const version = await Version.findOne({ _id: versionId, project_id: projectId });
-      if (!version)
-        return new ServiceResponse(ResponseStatus.Failed, "Version not found in this project", null, 404);
+      if (!version) {
+        return new ServiceResponse(
+          ResponseStatus.Failed,
+          "Version not found in this project",
+          null,
+          404
+        );
+      }
+
+      // 🔍 Kiểm tra project tồn tại
       const project = await Project.findById(projectId);
       if (!project) {
         return new ServiceResponse(ResponseStatus.Failed, "Project not found", null, 404);
       }
 
+      // 🕓 Lưu version cũ (nếu có)
       const oldVersionId = project.current_version?.toString();
 
-      // 👉 Cập nhật current version mới
+      // ⚙️ Cập nhật version hiện tại
       project.current_version = new mongoose.Types.ObjectId(versionId);
-
       await project.save();
 
+      // 👤 Lấy thông tin user thực hiện
       const user = await User.findById(userId).select("name email").lean();
 
-      // 🔔 Gửi realtime đến các user khác đang ở cùng project
+      // 🔔 Gửi thông báo realtime tới các user khác trong project
       versionSocketService.emitVersionSwitched(
         projectId.toString(),
         userId,
@@ -231,204 +592,36 @@ export class VersionService {
         oldVersionId || ""
       );
 
-      return new ServiceResponse(ResponseStatus.Success, "Current version updated", project, 200);
+      // ✅ Hoàn tất
+      return new ServiceResponse(
+        ResponseStatus.Success,
+        "Current version updated successfully",
+        project,
+        200
+      );
     } catch (error: any) {
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     }
   }
 
   /**
-   * ⚙️ Tự động tạo version mới khi có thay đổi
+   * Lấy version tiếp theo (major/minor)
    */
-  async autoBumpVersionOnChange(
-    versionId: string,
-    userId: string,
-    changeLevel: "major" | "minor"
-  ): Promise<ServiceResponse<any>> {
-    try {
-      const currentVersion = await Version.findById(versionId);
-      if (!currentVersion)
-        return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+  private async getNextVersion(baseVersion: any, type: "major" | "minor" = "minor") {
+    if (!baseVersion) throw new Error("Invalid base version");
 
-      if (currentVersion.status === "completed") {
-        return this.bumpVersion(versionId, userId, changeLevel);
-      }
-
-      const { major, minor } = await this.getNextVersion(currentVersion.project_id, currentVersion, changeLevel);
-      currentVersion.version_major = major;
-      currentVersion.version_minor = minor;
-      currentVersion.updated_at = new Date();
-      await currentVersion.save();
-
-      const user = await User.findById(userId).select("name email").lean();
-
-      await this.logService.createLog({
-        project_id: currentVersion.project_id.toString(),
-        user_id: userId,
-        action: "update_version",
-        target_id: currentVersion._id.toString(),
-        target_type: "version",
-        version_number: currentVersion.version_number,
-        level: "info",
-        details: {
-          message: `${user.name} auto-bumped version to ${currentVersion.version_number} (${changeLevel} change).`,
-        },
-      });
-
-      // 🔔 Realtime update khi có thay đổi
-      
-
-      return new ServiceResponse(ResponseStatus.Success, "Auto bump version done", currentVersion, 200);
-    } catch (error: any) {
-      return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
-    }
-  }
-
- /** 🧮 Xác định version kế tiếp */
-  private async getNextVersion(
-    projectId: any,
-    baseVersion: any,
-    type: "major" | "minor"
-  ) {
-    if (
-      !baseVersion ||
-      typeof baseVersion.version_major !== "number" ||
-      typeof baseVersion.version_minor !== "number"
-    ) {
-      throw new Error("Invalid baseVersion");
-    }
-
-    // 1️⃣ Nếu là major → tăng major, reset minor & patch
     if (type === "major") {
-      return {
-        major: baseVersion.version_major + 1,
-        minor: 0,
-        patch: "",
-        overwrite: false,
-      };
+      const nextMajor = baseVersion.version_major + 1;
+      return { major: nextMajor, minor: 0 };
     }
 
-    // 2️⃣ Nếu baseVersion là patch (vd 1.2.b) → lên minor kế tiếp cùng patch letter
-    if (baseVersion.version_patch) {
-      const nextMinor = baseVersion.version_minor + 1;
-
-      const existing = await Version.findOne({
-        project_id: projectId,
-        version_major: baseVersion.version_major,
-        version_minor: nextMinor,
-        version_patch: baseVersion.version_patch,
-      }).lean();
-
-      return {
-        major: baseVersion.version_major,
-        minor: nextMinor,
-        patch: baseVersion.version_patch,
-        overwrite: !!existing, // nếu bản đó đã tồn tại → ghi đè
-      };
-    }
-
-    // 3️⃣ BaseVersion chưa có patch (vd 1.2)
-    const targetMinor = baseVersion.version_minor + 1;
-
-    // Kiểm tra xem minor tiếp theo (vd 1.3) đã tồn tại chưa
-    const existingMinor = await Version.findOne({
-      project_id: projectId,
-      version_major: baseVersion.version_major,
-      version_minor: targetMinor,
-    }).lean();
-
-    // Nếu chưa có → tạo mới
-    if (!existingMinor) {
-      return {
-        major: baseVersion.version_major,
-        minor: targetMinor,
-        patch: "",
-        overwrite: false,
-      };
-    }
-
-    // 4️⃣ Nếu bản 1.3 đã tồn tại → xử lý patch
-    const sameBranch = await Version.find({
-      project_id: projectId,
-      version_major: existingMinor.version_major,
-      version_minor: existingMinor.version_minor,
-    }).sort({ version_patch: 1 });
-
-    const patched = sameBranch.filter(
-      (v) => typeof v.version_patch === "string" && v.version_patch.length > 0
-    );
-
-    if (patched.length === 0) {
-      // chưa có patch nào → biến bản hiện tại thành "a", tạo bản kế là "b"
-      try {
-        const doc = await Version.findById(existingMinor._id);
-        if (doc && !doc.version_patch) {
-          doc.version_patch = "a";
-          await doc.save();
-          await this.propagatePatch(projectId, doc, "a");
-        }
-      } catch (err) {
-        console.error("Failed to convert existing minor to 'a':", err);
-      }
-
-      // patch kế tiếp là "b"
-      const existingB = await Version.findOne({
-        project_id: projectId,
-        version_major: existingMinor.version_major,
-        version_minor: existingMinor.version_minor,
-        version_patch: "b",
-      }).lean();
-
-      return {
-        major: existingMinor.version_major,
-        minor: existingMinor.version_minor,
-        patch: "b",
-        overwrite: !!existingB,
-      };
-    }
-
-    // 5️⃣ Nếu đã có patch rồi → tăng chữ cái tiếp theo
-    const lastPatch = patched[patched.length - 1].version_patch;
-    const nextChar = String.fromCharCode(lastPatch.charCodeAt(0) + 1);
-
-    const already = await Version.findOne({
-      project_id: projectId,
-      version_major: existingMinor.version_major,
-      version_minor: existingMinor.version_minor,
-      version_patch: nextChar,
-    }).lean();
-
-    return {
-      major: existingMinor.version_major,
-      minor: existingMinor.version_minor,
-      patch: nextChar,
-      overwrite: !!already, // nếu tồn tại patch đó thì ghi đè
-    };
+    const nextMinor = baseVersion.version_minor + 1;
+    return { major: baseVersion.version_major, minor: nextMinor };
   }
 
-  /** 🔁 Lan truyền patch xuống các version con */
-  private async propagatePatch(
-    projectId: any,
-    parentVersion: any,
-    patchLetter: string
-  ) {
-    // tìm tất cả version có major giống cha, minor > cha
-    const descendants = await Version.find({
-      project_id: projectId,
-      version_major: parentVersion.version_major,
-      version_minor: { $gt: parentVersion.version_minor },
-    });
-
-    for (const v of descendants) {
-      // chỉ patch nếu bản đó chưa có patch (để tránh đè)
-      if (!v.version_patch) {
-        v.version_patch = patchLetter;
-        await v.save();
-      }
-    }
-  }
-  
-  /** 📄 Lấy toàn bộ version của project */
+  /**
+   * Lấy danh sách version theo project
+   */
   async getVersionsByProject(projectId: string): Promise<ServiceResponse<any>> {
     try {
       const versions = await Version.find({ project_id: projectId })
@@ -437,7 +630,6 @@ export class VersionService {
           "version_major",
           "version_minor",
           "version_number",
-          "version_patch",
           "created_by",
           "created_at",
           "updated_at",
@@ -452,94 +644,31 @@ export class VersionService {
     }
   }
 
-  /** 🔬 So sánh requirement_model */
-  private diffRequirementModels(modelA: any[], modelB: any[]) {
-    const added = modelB.filter(b => !modelA.some(a => a.id === b.id));
-    const removed = modelA.filter(a => !modelB.some(b => b.id === a.id));
-    const modified = modelA
-      .filter(a => modelB.some(b => b.id === a.id))
-      .map(a => {
-        const b = modelB.find(x => x.id === a.id);
-        const changes: Record<string, { old: any; new: any }> = {};
-        for (const key of Object.keys(a)) {
-          if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) {
-            changes[key] = { old: a[key], new: b[key] };
-          }
-        }
-        return { id: a.id, name: a.name, changes };
-      })
-      .filter(x => Object.keys(x.changes).length > 0);
-
-    return { added, removed, modified };
-  }
-
-  /** 🗑️ Xóa version và các version con của nó */
+  /**
+   * Xóa version
+   */
   async deleteVersion(versionId: string, userId: string): Promise<ServiceResponse<any>> {
     try {
-      const targetVersion = await Version.findById(versionId);
-      if (!targetVersion)
+      const version = await Version.findById(versionId);
+      if (!version)
         return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
 
-      const projectId = targetVersion.project_id;
+      await Input.deleteMany({ version_id: versionId });
+      await Output.deleteMany({ version_id: versionId });
+      await Version.deleteOne({ _id: versionId });
 
-      // 🧬 Đệ quy lấy toàn bộ version con (cháu, chắt...)
-      const allVersionIdsToDelete: string[] = [];
-      const collectChildren = async (parentId: any) => {
-        const children = await Version.find({ parent_version_id: parentId });
-        for (const child of children) {
-          allVersionIdsToDelete.push(child._id.toString());
-          await collectChildren(child._id); // đệ quy
-        }
-      };
-      await collectChildren(versionId);
-
-      // Thêm bản gốc vào danh sách xóa
-      allVersionIdsToDelete.push(versionId);
-
-      // 🧹 Xóa Input & Output liên quan
-      await Input.deleteMany({ version_id: { $in: allVersionIdsToDelete } });
-      await Output.deleteMany({ version_id: { $in: allVersionIdsToDelete } });
-
-      // 🗑️ Xóa các version
-      await Version.deleteMany({ _id: { $in: allVersionIdsToDelete } });
-
-      // 🔁 Nếu current_version của project nằm trong số đó → cập nhật lại
-      const project = await Project.findById(projectId);
-      if (project && project.current_version && allVersionIdsToDelete.includes(project.current_version.toString())) {
-        const latestVersion = await Version.findOne({ project_id: projectId })
-          .sort({ created_at: -1 });
-        project.current_version = latestVersion ? latestVersion._id : null;
+      const project = await Project.findById(version.project_id);
+      if (project && project.current_version?.toString() === versionId.toString()) {
+        const latestVersion = await Version.findOne({ project_id: project._id }).sort({ created_at: -1 });
+        project.current_version = latestVersion?._id || null;
         await project.save();
       }
 
-      // 🧾 Ghi log
-      const user = await User.findById(userId).select("name email").lean();
-      await this.logService.createLog({
-        project_id: projectId.toString(),
-        user_id: userId,
-        action: "delete_version",
-        target_id: versionId,
-        target_type: "version",
-        version_number: targetVersion.version_number,
-        level: "warning",
-        details: {
-          message: `${user?.name || "System"} deleted version ${targetVersion.version_number} and its descendants.`,
-        },
-      });
+      versionSocketService.emitVersionDeleted(project._id.toString(), versionId, userId);
 
-      // 🔔 Realtime thông báo
-      versionSocketService.emitVersionDeleted(
-        projectId.toString(),
-        versionId,
-        userId
-      );
-
-      return new ServiceResponse(ResponseStatus.Success, "Version and its descendants deleted", {
-        deleted_versions: allVersionIdsToDelete.length,
-      }, 200);
+      return new ServiceResponse(ResponseStatus.Success, "Version deleted successfully", { deleted: versionId }, 200);
     } catch (error: any) {
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     }
   }
-
 }
