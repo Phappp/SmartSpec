@@ -228,8 +228,8 @@ export class ProjectService {
     await notificationServiceDomain.createNotification(
       membersToNotify,
       user.id,
-      "INVITATION",
-      "Request to join",
+      "PROJECT",
+      "Project Updated",
       `<b>${user.name}</b> updated the project <b>${project.name}</b>`,
       ""
     );
@@ -303,9 +303,9 @@ export class ProjectService {
       await notificationServiceDomain.createNotification(
         membersToNotify,
         user.id,
-        "INVITATION",
-        "Request to join",
-        `<b>${user.name}</b> updated the project <b>${project.name}</b>`,
+        "PROJECT",
+        "Project Deleted",
+        `<b>${user.name}</b> deleted the project <b>${project.name}</b>`,
         ""
       );
 
@@ -356,7 +356,7 @@ export class ProjectService {
 
     await project.save();
 
-    const user = await User.findById(userId).select("email").lean();
+    const user = await User.findById(userId);
     const userEmail = user?.email || userId;
 
     await this.logService.createLog({
@@ -370,6 +370,30 @@ export class ProjectService {
       },
       level: "info",
     });
+
+    const membersToNotify: string[] = (project.members || [])
+      .filter(
+        (m: any) => m.status === "accepted" && m.user_id.toString() !== userId
+      )
+      .map((m: any) => m.user_id.toString());
+    console.log("membersToNotify:", membersToNotify);
+
+    //send notification to members if members updated
+    const notificationServiceDomain = new NotificationServiceImpl();
+    await notificationService.SocketNotification(
+      membersToNotify,
+      "Project Restored",
+      `<b>${user.name}</b> Restored the project <b>${project.name}</b>`
+    );
+
+    await notificationServiceDomain.createNotification(
+      membersToNotify,
+      user.id,
+      "PROJECT",
+      "Project Restored",
+      `<b>${user.name}</b> Restored the project <b>${project.name}</b>`,
+      ""
+    );
 
     return new ServiceResponse(
       ResponseStatus.Success,
