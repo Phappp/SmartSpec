@@ -216,11 +216,6 @@ export class OrchestratorService {
         return result;
     }
 
-
-    // async resolveDuplicate(versionId: string, conflictId: string, keep: "old" | "new") {
-    //     return this.requirementService.resolveDuplicate(versionId, conflictId, keep);
-    // }
-
     /**
      * HÀM MỚI: Cung cấp tính năng tìm xung đột.
      */

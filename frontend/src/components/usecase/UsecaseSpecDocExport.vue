@@ -178,7 +178,7 @@ export default {
     availableRoles() {
       const roles = new Set()
       this.useCases.forEach((uc) => {
-        if (uc.role) roles.add(uc.role)
+        if (uc.role.name) roles.add(uc.role.name)
       })
       return Array.from(roles).sort()
     },
@@ -187,7 +187,7 @@ export default {
       const counts = {}
       this.useCases.forEach((uc) => {
         if (uc.role) {
-          counts[uc.role] = (counts[uc.role] || 0) + 1
+          counts[uc.role.name] = (counts[uc.role.name] || 0) + 1
         }
       })
       return counts
@@ -199,7 +199,7 @@ export default {
           return this.selectedUseCases
         case 'role':
           return this.selectedRole
-            ? this.useCases.filter((uc) => uc.role === this.selectedRole)
+            ? this.useCases.filter((uc) => uc.role.name === this.selectedRole)
             : []
         case 'all':
         default:
@@ -473,7 +473,7 @@ export default {
         content += `\n${index + 1}. USE CASE: ${uc.name}\n`
         content += `${'='.repeat(50)}\n`
         content += `ID: UC-${uc.id}\n`
-        content += `Role: ${uc.role || 'Not specified'}\n`
+        content += `Role: ${uc.role.name || 'Not specified'}\n`
         content += `Priority: ${uc.priority || 'Not specified'}\n\n`
 
         content += `Goal: ${uc.goal || 'Not specified'}\n\n`
@@ -660,7 +660,7 @@ export default {
       <div class="usecase-section page-break-avoid">
         <div class="usecase-header keep-with-next">
           <h2>${index + 1}. ${uc.name}</h2>
-          <p>UC-${uc.id} | Role: ${uc.role || 'Not specified'} | Priority: ${
+          <p>UC-${uc.id} | Role: ${uc.role.name || 'Not specified'} | Priority: ${
           uc.priority || 'Not specified'
         }</p>
         </div>

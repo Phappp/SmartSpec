@@ -135,12 +135,12 @@ import {
 import { useToast } from 'vue-toastification'
 import AppModal from '@/components/AppModal.vue'
 import ProjectHeader from '@/components/ProjectHeader.vue'
-import UseCaseMainContent from '@/components/UseCaseMainContent.vue'
-import InputSidebar from '@/components/InputSidebar.vue'
-import HandleConflict from '@/components/HandleConflict.vue'
-import ConflictDetailModal from '@/components/ConflictDetailModal.vue'
-import AddInputModal from '@/components/AddInputModal.vue'
-import IncrementalAnalysis from '@/components/IncrementalAnalysis.vue'
+import UseCaseMainContent from '@/components/usecase/UseCaseMainContent.vue'
+import InputSidebar from '@/components/usecase/InputSidebar.vue'
+import HandleConflict from '@/components/usecase/HandleConflict.vue'
+import ConflictDetailModal from '@/components/usecase/ConflictDetailModal.vue'
+import AddInputModal from '@/components/usecase/AddInputModal.vue'
+import IncrementalAnalysis from '@/components/usecase/IncrementalAnalysis.vue'
 import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
 import { socket } from '@/utils/socket'
 
@@ -361,7 +361,7 @@ export default {
       socket.on('user_left', this.handleUserLeft)
 
       // cho version events
-      socket.on('version_event', this.handleVersionEvent);
+      socket.on('version_event', this.handleVersionEvent)
 
       // Join project room if already connected
       if (socket.connected) {
@@ -470,29 +470,29 @@ export default {
       const version = event.version
       if (!version) return
       this.toast.info(`New version created: ${version.version_number || version._id}`)
-      const exists = this.versions.find(v => v._id === version._id)
+      const exists = this.versions.find((v) => v._id === version._id)
       if (!exists) this.versions.push(version)
       this.selectedVersionId = version._id
       this.currentVersionDetails = version
-      await this.fetchProjectData(this.project._id);
+      await this.fetchProjectData(this.project._id)
       this.$forceUpdate()
     },
 
-    async handleSwitchedVersion(event){
-      const versionId = event.versionId || event.toVersionId;
-      if (!versionId) return;
-      let version = this.versions.find(v => v._id === versionId);
+    async handleSwitchedVersion(event) {
+      const versionId = event.versionId || event.toVersionId
+      if (!versionId) return
+      let version = this.versions.find((v) => v._id === versionId)
       if (!version) {
-        version = this.versions.find(v => v._id === versionId);
+        version = this.versions.find((v) => v._id === versionId)
       }
 
-      if (!version) return;
-      await this.fetchProjectData(this.project._id);
-      this.selectedVersionId = version._id;
-      this.currentVersionDetails = version;
+      if (!version) return
+      await this.fetchProjectData(this.project._id)
+      this.selectedVersionId = version._id
+      this.currentVersionDetails = version
 
-      this.toast.info(`Switched to version: ${version.version_number || version._id}`);
-      this.$forceUpdate();
+      this.toast.info(`Switched to version: ${version.version_number || version._id}`)
+      this.$forceUpdate()
     },
 
     async handleRemoteVersionDeleted(event) {
@@ -500,7 +500,7 @@ export default {
       if (!deletedId) return
 
       // Xóa khỏi danh sách version
-      this.versions = this.versions.filter(v => v._id !== deletedId)
+      this.versions = this.versions.filter((v) => v._id !== deletedId)
 
       // Nếu version hiện tại bị xóa
       if (this.selectedVersionId === deletedId) {
@@ -522,9 +522,7 @@ export default {
 
       this.$forceUpdate()
     },
-    handleRemoteVersionUpdated(event) {
-      
-    },
+    handleRemoteVersionUpdated(event) {},
 
     handleInputEvent(event) {
       console.log('📩 Realtime input event received:', event)
@@ -740,9 +738,20 @@ export default {
       try {
         console.log('🚀 Sending usecase data to BE:', data)
 
-        // 🔥 VALIDATION PHÍA FE TRƯỚC KHI GỬI
-        const requiredFields = ['name', 'role', 'goal', 'reason', 'priority']
+        // 🔥 FIX: Kiểm tra nếu data là SubmitEvent thì không xử lý
+        if (data instanceof SubmitEvent || data.isTrusted) {
+          console.warn('⚠️ Received SubmitEvent instead of usecase data, skipping...')
+          return
+        }
+
+        // 🔥 VALIDATION PHÍA FE TRƯỚC KHI GỬI - CẬP NHẬT CHO ROLE MỚI
+        const requiredFields = ['name', 'goal', 'reason', 'priority']
         const missingFields = requiredFields.filter((field) => !data[field])
+
+        // Kiểm tra role riêng vì giờ là object
+        if (!data.role || !data.role.name || !data.role.name.trim()) {
+          missingFields.push('role')
+        }
 
         // if (missingFields.length > 0) {
         //   throw new Error(`Please fill in all required fields: ${missingFields.join(', ')}`)
@@ -752,7 +761,26 @@ export default {
         //   throw new Error('At least one task is required')
         // }
 
-        const response = await usecaseApi.createUsecase(this.selectedVersionId, data)
+        // 🔥 ĐẢM BẢO ROLE CÓ CẤU TRÚC ĐÚNG TRƯỚC KHI GỬI
+        const payload = {
+          ...data,
+          role: {
+            id:
+              data.role?.id ||
+              `role_${data.role?.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`,
+            name: data.role?.name || '',
+          },
+        }
+
+        // 🔥 FIX: Loại bỏ các trường không cần thiết
+        delete payload._vts
+        delete payload.isTrusted
+        delete payload.submitter
+        delete payload.target
+
+        console.log('📤 Final payload with normalized role:', JSON.stringify(payload, null, 2))
+
+        const response = await usecaseApi.createUsecase(this.selectedVersionId, payload)
 
         if (response.data && response.data.status === 'Success') {
           this.toast.success('Use case created successfully')
@@ -764,6 +792,12 @@ export default {
         }
       } catch (error) {
         console.error('❌ Error creating use case:', error)
+
+        // 🔥 FIX: Log chi tiết lỗi từ BE
+        if (error.response?.data) {
+          console.error('🔍 BE Error details:', error.response.data)
+        }
+
         const errorMessage =
           error.response?.data?.message || error.message || 'Failed to create use case'
         this.toast.error(errorMessage)
@@ -991,25 +1025,25 @@ export default {
     async handleVersionSelect(versionId) {
       try {
         if (!versionId) {
-          this.toast.warning('Please select a valid version');
-          return;
+          this.toast.warning('Please select a valid version')
+          return
         }
 
-        const res = await switchCurrentVersion(this.project._id, versionId);
+        const res = await switchCurrentVersion(this.project._id, versionId)
 
-        if (!res?.data) throw new Error('No response from server');
+        if (!res?.data) throw new Error('No response from server')
         if (res.data.status !== 'Success') {
-          throw new Error(res.data.message || 'Failed to switch version');
+          throw new Error(res.data.message || 'Failed to switch version')
         }
 
-        this.selectedVersionId = versionId;
+        this.selectedVersionId = versionId
 
-        await this.fetchProjectData(this.project._id);
-        this.$forceUpdate();
-        this.toast.success('Switched to new working version');
+        await this.fetchProjectData(this.project._id)
+        this.$forceUpdate()
+        this.toast.success('Switched to new working version')
       } catch (error) {
-        console.warn('⚠️ Version switch failed:', error?.message || error);
-        this.toast.error('Failed to switch version');
+        console.warn('⚠️ Version switch failed:', error?.message || error)
+        this.toast.error('Failed to switch version')
       }
     },
     // ========== POLLING & PROGRESS MANAGEMENT ==========
