@@ -15,36 +15,110 @@ export class ActivityCoreService {
     return { valid: errors.length === 0, errors };
   }
 
-  // very naive SVG renderer for quick preview
   renderSvg(diagram: Pick<ActivityDiagramDTO, 'nodes' | 'edges' | 'name'>): string {
-    const width = 800;
-    const height = 600;
-    const nodeRadius = 20;
+    const width = 1200;
+    const height = 800;
 
-    const positions: Record<string, { x: number; y: number }> = {};
     const nodes = diagram.nodes || [];
     const edges = diagram.edges || [];
-    const colCount = Math.max(1, nodes.length);
-    nodes.forEach((n, idx) => {
-      positions[n.id] = { x: 60 + (idx % colCount) * 120, y: 80 + Math.floor(idx / colCount) * 80 };
+
+    // ---- 1️⃣ Gán vị trí tự động (simple vertical flow layout)
+    const positions: Record<string, { x: number; y: number }> = {};
+    const colSpacing = 200;
+    const rowSpacing = 100;
+    let layer = 0;
+
+    // sắp theo loại: start, action, decision, merge, end
+    const typeOrder = ["start", "action", "decision", "merge", "end"];
+    const sortedNodes = [...nodes].sort(
+      (a, b) => typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type)
+    );
+
+    sortedNodes.forEach((n, i) => {
+      const x = 200 + (i % 4) * colSpacing;
+      const y = 100 + Math.floor(i / 4) * rowSpacing;
+      positions[n.id] = { x, y };
     });
 
-    const nodeEls = nodes.map(n => {
-      const p = positions[n.id] || { x: 50, y: 50 };
-      const label = n.label || n.type;
-      const isTerminal = n.type === 'start' || n.type === 'end';
-      return `\n<g>\n ${isTerminal ? `<circle cx="${p.x}" cy="${p.y}" r="${nodeRadius}" fill="${n.type === 'start' ? '#22c55e' : '#ef4444'}" />` : `<rect x="${p.x - 40}" y="${p.y - 20}" width="80" height="40" rx="6" ry="6" fill="#fff" stroke="#111"/>`}\n <text x="${p.x}" y="${p.y + 4}" font-size="12" text-anchor="middle">${label}</text>\n</g>`;
-    }).join('');
+    // ---- 2️⃣ Render các node
+    const nodeEls = sortedNodes.map((n) => {
+      const p = positions[n.id];
+      const label = n.label || n.id;
+      let shape = "";
 
-    const edgeEls = edges.map(e => {
-      const a = positions[e.from] || { x: 0, y: 0 };
-      const b = positions[e.to] || { x: 0, y: 0 };
-      const mx = (a.x + b.x) / 2;
-      const my = (a.y + b.y) / 2;
-      return `\n<g>\n <line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#555" marker-end="url(#arrow)"/>\n ${e.condition ? `<text x="${mx}" y="${my - 6}" font-size="11" text-anchor="middle">${e.condition}</text>` : ''}\n</g>`;
-    }).join('');
+      switch (n.type) {
+        case "start":
+          shape = `<circle cx="${p.x}" cy="${p.y}" r="20" fill="#22c55e" stroke="#0f5132" stroke-width="2"/>`;
+          break;
+        case "end":
+          shape = `<circle cx="${p.x}" cy="${p.y}" r="20" fill="#ef4444" stroke="#7f1d1d" stroke-width="2"/>`;
+          break;
+        case "decision":
+          shape = `<polygon points="${p.x},${p.y - 25} ${p.x + 25},${p.y} ${p.x},${p.y + 25} ${p.x - 25},${p.y}" fill="#fde68a" stroke="#b45309" stroke-width="2"/>`;
+          break;
+        case "merge":
+          shape = `<rect x="${p.x - 40}" y="${p.y - 10}" width="80" height="20" rx="2" ry="2" fill="#e5e7eb" stroke="#111"/>`;
+          break;
+        default: // action
+          shape = `<rect x="${p.x - 50}" y="${p.y - 20}" width="100" height="40" rx="8" ry="8" fill="#ffffff" stroke="#111" stroke-width="1.5" />`;
+      }
 
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#555"/></marker></defs>\n<rect width="100%" height="100%" fill="#fafafa"/>\n<text x="16" y="24" font-size="14" fill="#111">${diagram.name || 'Activity Diagram'}</text>\n${edgeEls}\n${nodeEls}\n</svg>`;
+      return `
+        <g>
+          ${shape}
+          <text x="${p.x}" y="${p.y + 5}" font-size="12" text-anchor="middle" fill="#111">${label}</text>
+        </g>
+      `;
+    }).join("\n");
+
+    // ---- 3️⃣ Render các cạnh (edge) với đường cong
+    const edgeEls = edges.map((e) => {
+      const a = positions[e.from];
+      const b = positions[e.to];
+      if (!a || !b) return "";
+
+      const curvature = 0.2;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const ctrlX = a.x + dx * curvature;
+      const ctrlY = a.y + dy * curvature;
+
+      const labelX = (a.x + b.x) / 2;
+      const labelY = (a.y + b.y) / 2 - 10;
+
+      return `
+        <g>
+          <path d="M ${a.x} ${a.y} Q ${ctrlX} ${ctrlY}, ${b.x} ${b.y}"
+                fill="none" stroke="#555" stroke-width="1.6"
+                marker-end="url(#arrow)" />
+          ${
+            e.condition
+              ? `<text x="${labelX}" y="${labelY}" font-size="11" text-anchor="middle" fill="#374151">${e.condition}</text>`
+              : ""
+          }
+        </g>
+      `;
+    }).join("\n");
+
+    // ---- 4️⃣ Kết hợp SVG
+    return `<?xml version="1.0" encoding="UTF-8"?>
+    <svg xmlns="http://www.w3.org/2000/svg"
+        width="${width}" height="${height}"
+        viewBox="0 0 ${width} ${height}">
+      <defs>
+        <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L9,3 z" fill="#555"/>
+        </marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#fafafa"/>
+      <text x="20" y="30" font-size="18" font-weight="bold" fill="#111">
+        ${diagram.name || "Activity Diagram"}
+      </text>
+
+      ${edgeEls}
+      ${nodeEls}
+    </svg>`;
   }
 }
 

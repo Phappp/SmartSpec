@@ -295,8 +295,10 @@ export class VersionService {
             if (changeType === 'added') {
               console.log(`[Input][Added] Deleting Input: ${entityId}`);
               if (entityId){
-                await Input.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
-                await Version.updateOne({ _id: baseVersion._id },{ $pull: { inputs: entityId } },{ session });
+                 // Xóa input vừa thêm trong baseVersion
+                  await Input.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
+                  // Cập nhật lại mảng inputs trong version
+                  await Version.updateOne({ _id: baseVersion._id },{ $pull: { inputs: new Types.ObjectId(entityId) } },{ session });
               }
             }else if (changeType === 'deleted') {
               console.log(`[Input][Deleted] Restoring Input from snapshot`);
