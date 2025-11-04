@@ -17,7 +17,7 @@ hoặc "Hệ thống thẩm định và phê duyệt yêu cầu điều chỉnh"
 Mỗi use case là một object JSON với các trường:
 - id
 - name (mô tả chức năng phần mềm, ví dụ: "Đăng nhập hệ thống", "Gửi yêu cầu phê duyệt")
-- role (vai trò trong phần mềm: Người dùng, Quản trị viên, Cán bộ thẩm định…)
+- role (object với id và name - vai trò trong phần mềm: Người dùng, Quản trị viên, Cán bộ thẩm định…)
 - goal (mục tiêu chính của chức năng)
 - reason (tại sao chức năng này tồn tại)
 - tasks[] (danh sách các bước tương tác phần mềm hỗ trợ người dùng thực hiện mục tiêu, KHÔNG phải thủ tục giấy tờ ngoài đời)
@@ -39,6 +39,7 @@ YÊU CẦU QUAN TRỌNG:
 - OUTPUT PHẢI LÀ JSON ARRAY HỢP LỆ, PARSE ĐƯỢC NGAY.
 - Nếu chỉ có 1 use case thì array vẫn phải có 1 phần tử.
 - Các trường dạng danh sách luôn là array chuỗi [].
+- role PHẢI là object với id và name (ví dụ: {"id": "role_1", "name": "Người dùng"})
 - related_usecases phải là một mảng chuỗi CHỈ chứa ID của các use case liên quan (ví dụ: ["UC1", "UC5"]). KHÔNG được bao gồm tên của use case.
 - Mỗi lần chỉ trả về TỐI ĐA ${batchSize} use case.
 - BẮT ĐẦU từ use case số ${offset + 1}.
@@ -66,7 +67,6 @@ Chỉ trả lời đúng một trong hai JSON sau, không kèm giải thích:
 { "conflict": true }
 { "conflict": false }
 `,
-        // --- PROMPT MỚI: Yêu cầu Gemini gom nhóm các UC trùng lặp ---
         groupConflicts: (useCasesJson: string) => `
 Bạn là một chuyên gia phân tích yêu cầu phần mềm cực kỳ chính xác.
 Nhiệm vụ của bạn là đọc danh sách các use case sau đây và GOM NHÓM các use case bị TRÙNG LẶP về mặt chức năng.
@@ -109,7 +109,7 @@ or "The system validates and approves the adjustment request".
 Each use case is a JSON object with these fields:
 - id
 - name (describes a software function, e.g., "Log into the system", "Submit approval request")
-- role (role in the software: User, Administrator, Approver...)
+- role (object with id and name - role in the software: User, Administrator, Approver...)
 - goal (the main objective or intended outcome of this function)
 - reason (the rationale or purpose for why this function exists)
 - tasks[] (list of interaction steps the software supports the user to perform, NOT real-world paperwork)
@@ -131,6 +131,7 @@ CRITICAL REQUIREMENTS:
 - THE OUTPUT MUST BE A VALID, IMMEDIATELY PARSABLE JSON ARRAY.
 - If there is only one use case, the array must still contain one element.
 - List-type fields must always be a string array [].
+- role MUST be an object with id and name (e.g., {"id": "role_1", "name": "User"})
 - related_usecases must be a string array containing ONLY the IDs of related use cases (e.g., ["UC1", "UC5"]). DO NOT include the use case name.
 - Return a MAXIMUM of ${batchSize} use cases at a time.
 - START from use case number ${offset + 1}.
@@ -180,11 +181,8 @@ Example output:
   ["UC2", "UC8"]
 ]
 `
-
-
     }
 };
-
 
 export class GeminiService {
     private apiKeyService = new ApiKeyService();
@@ -315,6 +313,7 @@ export class GeminiService {
         // Nếu tất cả các chiến lược đều thất bại, trả về mảng rỗng
         return { items: [], incomplete: true };
     }
+
     private filterValidUseCases(items: any[]): any[] {
         if (!Array.isArray(items)) return [];
         return items.filter(item =>
@@ -334,6 +333,16 @@ export class GeminiService {
             .map((it: any) => {
                 if (typeof it === "string") {
                     return { name: it };
+                }
+                // Normalize role field to match new schema
+                if (it.role && typeof it.role === 'string') {
+                    it.role = {
+                        id: `role_${it.role.toLowerCase().replace(/\s+/g, '_')}`,
+                        name: it.role
+                    };
+                } else if (it.role && typeof it.role === 'object' && !it.role.id) {
+                    // Ensure role has id if it's already an object
+                    it.role.id = `role_${it.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`;
                 }
                 return it;
             })
@@ -368,7 +377,6 @@ export class GeminiService {
                 const { GoogleGenerativeAI } = await import("@google/generative-ai");
                 const client = new GoogleGenerativeAI(k.key_value);
                 const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
-
 
                 const resp: any = await model.generateContent({
                     contents: [{ role: "user", parts: [{ text: basePrompt }] }],
@@ -431,7 +439,6 @@ export class GeminiService {
                     const client = new GoogleGenerativeAI(key);
                     const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
 
-
                     const prompt = this.buildPrompt(cleanText, language, offset, this.BATCH_SIZE);
 
                     const resp: any = await model.generateContent({
@@ -447,6 +454,16 @@ export class GeminiService {
                     if (parsed.items.length > 0) {
                         const normalized = parsed.items.map((it: any) => {
                             if (typeof it === "string") return { name: it };
+                            // Normalize role to match new schema
+                            if (it.role && typeof it.role === 'string') {
+                                it.role = {
+                                    id: `role_${it.role.toLowerCase().replace(/\s+/g, '_')}`,
+                                    name: it.role
+                                };
+                            } else if (it.role && typeof it.role === 'object' && !it.role.id) {
+                                // Ensure role has id if it's already an object
+                                it.role.id = `role_${it.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`;
+                            }
                             return it;
                         });
                         allResults = allResults.concat(normalized);
@@ -533,6 +550,7 @@ export class GeminiService {
         }
         throw lastError || new Error("All Gemini API keys failed for conflict check");
     }
+
     // --- HÀM MỚI: Gọi Gemini để tìm các nhóm ID xung đột ---
     async findConflictGroups(useCases: any[], language: string): Promise<string[][]> {
         if (!useCases || useCases.length < 2) {

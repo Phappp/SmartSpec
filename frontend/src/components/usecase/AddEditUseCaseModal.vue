@@ -61,13 +61,25 @@
               <label for="role" class="required">Role</label>
               <input
                 id="role"
-                v-model="localForm.role"
+                :value="roleName"
+                @input="updateRoleName($event.target.value)"
+                @blur="validateRoleName(roleName)"
                 type="text"
                 required
                 placeholder="e.g., User, Admin, System"
-                :class="{ error: fieldErrors.role }"
-                @blur="validateField('role')"
+                autocomplete="off"
+                :class="{ error: fieldErrors.role, 'has-suggestion': showSuggestion }"
               />
+
+              <!-- Gợi ý (không tự động áp dụng) -->
+              <div v-if="showSuggestion" class="suggestion-banner">
+                <span>Gợi ý: </span>
+                <button type="button" class="suggestion-btn" @click="applySuggestion">
+                  {{ suggestedRole }}
+                </button>
+                <span> (Nhấn để áp dụng)</span>
+              </div>
+
               <div v-if="fieldErrors.role" class="error-message">{{ fieldErrors.role }}</div>
             </div>
 
@@ -504,7 +516,7 @@
                   </div>
                   <div class="review-item">
                     <span class="review-label">Role:</span>
-                    <span class="review-value">{{ localForm.role || 'Not provided' }}</span>
+                    <span class="review-value">{{ localForm.role.name || 'Not provided' }}</span>
                   </div>
                   <div class="review-item">
                     <span class="review-label">Priority:</span>
@@ -604,14 +616,42 @@ export default {
       localForm: this.getEmptyForm(),
       currentStep: 1,
       fieldErrors: {},
+      showSuggestion: false,
+      suggestedRole: '',
     }
   },
   computed: {
+    existingRoles() {
+      const roles = this.availableUseCases.map((uc) => uc.role).filter(Boolean)
+      const uniqueRoles = [...new Map(roles.map((role) => [role.id, role])).values()]
+      return uniqueRoles
+    },
+
+    nextRoleId() {
+      // ❌ CÓ THỂ XÓA vì BE đã xử lý
+      // Hoặc giữ lại chỉ để hiển thị tạm thời
+      return 'role_new' // Placeholder
+    },
+    roleName: {
+      get() {
+        return this.localForm.role?.name || ''
+      },
+      set(value) {
+        if (!this.localForm.role) {
+          this.localForm.role = { id: '', name: '' }
+        }
+        this.localForm.role.name = value
+        // ❌ XÓA dòng này - để updateRoleName xử lý
+        // this.localForm.role.id = `role_${value.toLowerCase().replace(/\s+/g, '_')}`
+      },
+    },
     isFormValid() {
       // Check required fields
       const requiredFields = ['name', 'role', 'goal', 'reason']
       for (const field of requiredFields) {
-        if (!this.localForm[field]?.trim()) return false
+        if (field === 'role') {
+          if (!this.localForm.role?.name?.trim()) return false
+        } else if (!this.localForm[field]?.trim()) return false
       }
 
       // Check tasks
@@ -629,7 +669,12 @@ export default {
       // Validate current step before proceeding
       if (this.currentStep === 1) {
         const step1Fields = ['name', 'role', 'goal', 'reason']
-        return step1Fields.every((field) => this.localForm[field]?.trim())
+        return step1Fields.every((field) => {
+          if (field === 'role') {
+            return this.localForm.role?.name?.trim()
+          }
+          return this.localForm[field]?.trim()
+        })
       } else if (this.currentStep === 2) {
         return (
           Array.isArray(this.localForm.tasks) &&
@@ -647,10 +692,22 @@ export default {
     },
   },
   watch: {
+    'localForm.role.name': {
+      handler(newValue) {
+        if (newValue && this.showSuggestion) {
+          // Nếu user tự sửa đúng thì ẩn gợi ý
+          const trimmed = newValue.trim()
+          if (!/^[a-z]/.test(trimmed)) {
+            this.showSuggestion = false
+          }
+        }
+      },
+      immediate: false,
+    },
     usecaseData: {
       handler(newData) {
         if (newData && Object.keys(newData).length > 0) {
-          this.localForm = { ...this.getEmptyForm(), ...newData }
+          this.localForm = { ...this.getEmptyForm(), ...this.normalizeFormData(newData) }
         } else {
           this.localForm = this.getEmptyForm()
         }
@@ -669,6 +726,18 @@ export default {
       this.fieldErrors = {}
     },
 
+    updateRoleName(value) {
+      if (!this.localForm.role) {
+        this.localForm.role = { id: '', name: '' }
+      }
+      this.localForm.role.name = value
+
+      // ❌ XÓA logic tạo ID cũ - để BE xử lý
+      // this.localForm.role.id = exactRole ? exactRole.id : this.nextRoleId
+
+      this.validateRoleName(value)
+    },
+
     submitForm() {
       if (this.isEditing && !this.localForm.id) {
         console.warn('⚠️ No usecase ID provided — skipping submit.')
@@ -681,7 +750,7 @@ export default {
         if (this.useSteps) {
           if (
             !this.localForm.name?.trim() ||
-            !this.localForm.role?.trim() ||
+            !this.localForm.role?.name?.trim() ||
             !this.localForm.goal?.trim() ||
             !this.localForm.reason?.trim()
           ) {
@@ -697,14 +766,23 @@ export default {
         return
       }
 
-      // Clean data
+      // Clean data and ensure role has proper structure
       const cleanedForm = this.cleanFormData()
       if (!this.isEditing) {
         delete cleanedForm.id
       }
       console.log('📤 Data being sent to BE:', JSON.stringify(cleanedForm, null, 2))
       console.log('✅ Submitting form with ID:', cleanedForm.id)
+
+      // 🔥 FIX: Chỉ emit cleanedForm, không emit event object
       this.$emit('submit', cleanedForm)
+    },
+
+    applySuggestion() {
+      this.roleName = this.suggestedRole
+      this.showSuggestion = false
+      // ✅ Cần gọi lại updateRoleName để cập nhật ID
+      this.updateRoleName(this.suggestedRole)
     },
 
     validateForm() {
@@ -719,7 +797,12 @@ export default {
       ]
 
       for (const field of requiredFields) {
-        if (!this.localForm[field.key]?.trim()) {
+        if (field.key === 'role') {
+          // Fix: Kiểm tra role.name
+          if (!this.localForm.role?.name?.trim()) {
+            this.fieldErrors[field.key] = `${field.label} is required`
+          }
+        } else if (!this.localForm[field.key]?.trim()) {
           this.fieldErrors[field.key] = `${field.label} is required`
         }
       }
@@ -743,7 +826,15 @@ export default {
       }
 
       const requiredFields = ['name', 'role', 'goal', 'reason']
-      if (requiredFields.includes(fieldName) && !this.localForm[fieldName]?.trim()) {
+
+      if (fieldName === 'role') {
+        // Fix: Kiểm tra role.name thay vì role
+        if (!this.localForm.role?.name?.trim()) {
+          this.fieldErrors[fieldName] = 'This field is required'
+        } else {
+          delete this.fieldErrors[fieldName]
+        }
+      } else if (requiredFields.includes(fieldName) && !this.localForm[fieldName]?.trim()) {
         this.fieldErrors[fieldName] = 'This field is required'
       } else {
         delete this.fieldErrors[fieldName]
@@ -764,6 +855,13 @@ export default {
 
     cleanFormData() {
       const cleanedForm = { ...this.localForm }
+
+      // Ensure role has proper structure
+      if (!cleanedForm.role.id || cleanedForm.role.id === 'role_unknown') {
+        cleanedForm.role.id = `role_${
+          cleanedForm.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'
+        }`
+      }
 
       // Clean array fields - đảm bảo luôn là array
       const arrayFields = [
@@ -811,6 +909,52 @@ export default {
       }
 
       return cleanedForm
+    },
+
+    // Trong AddEditUseCaseModal.vue
+    validateRoleName(value) {
+      const trimmed = value.trim()
+
+      // Reset suggestion trước
+      this.showSuggestion = false
+      this.suggestedRole = ''
+
+      // Chỉ gợi ý nếu có giá trị và bắt đầu bằng chữ thường
+      if (trimmed && /^[a-z]/.test(trimmed)) {
+        const suggested = trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+
+        // Chỉ show gợi ý nếu khác với giá trị hiện tại
+        if (suggested !== trimmed) {
+          this.showSuggestion = true
+          this.suggestedRole = suggested
+        }
+      }
+    },
+
+    normalizeFormData(data) {
+      if (data.role && typeof data.role === 'string') {
+        // ✅ Đơn giản hóa - chỉ giữ name, để BE mapping ID
+        return {
+          ...data,
+          role: {
+            id: '', // Để BE tự động mapping
+            name: data.role,
+          },
+        }
+      }
+
+      if (data.role && typeof data.role === 'object' && !data.role.id) {
+        // ✅ Chỉ cần name, BE sẽ tạo ID đúng
+        return {
+          ...data,
+          role: {
+            id: '', // Để BE tự động mapping
+            name: data.role.name || '',
+          },
+        }
+      }
+
+      return data
     },
 
     nextStep() {
@@ -1507,5 +1651,32 @@ textarea {
   .step-label {
     display: none;
   }
+}
+.suggestion-banner {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  font-size: 0.875rem;
+  color: #0369a1;
+}
+
+.suggestion-btn {
+  background: none;
+  border: none;
+  color: #0891b2;
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.suggestion-btn:hover {
+  color: #0e7490;
+}
+
+input.has-suggestion {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 1px #38bdf8;
 }
 </style>

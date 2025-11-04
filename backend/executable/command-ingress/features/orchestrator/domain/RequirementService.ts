@@ -69,6 +69,29 @@ export class RequirementService {
     }
 
     /**
+     * Normalize role structure to match new schema
+     */
+    private normalizeRoleStructure(requirements: any[]): any[] {
+        return requirements.map(uc => {
+            if (!uc.role) return uc;
+
+            // If role is string, convert to object
+            if (typeof uc.role === 'string') {
+                uc.role = {
+                    id: `role_${uc.role.toLowerCase().replace(/\s+/g, '_')}`,
+                    name: uc.role
+                };
+            }
+            // If role is object but missing id, generate one
+            else if (typeof uc.role === 'object' && !uc.role.id) {
+                uc.role.id = `role_${uc.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`;
+            }
+
+            return uc;
+        });
+    }
+
+    /**
     * Finalize: Phân tích input và cập nhật requirement model.
     * Phiên bản này đã được dọn dẹp và tối ưu, chỉ thực hiện một nhiệm vụ duy nhất.
     */
@@ -155,6 +178,9 @@ export class RequirementService {
             uc && typeof uc === 'object' &&
             ((uc.name && uc.name.trim() !== "") || (uc.goal && uc.goal.trim() !== ""))
         );
+
+        // Normalize role structure for new requirements
+        newRequirements = this.normalizeRoleStructure(newRequirements);
 
         const finalRequirements = mode === 'full'
             ? newRequirements
@@ -303,6 +329,7 @@ export class RequirementService {
         const useCaseMap = new Map(useCases.map(uc => [uc.id, uc]));
         const pending_conflicts = conflictIdGroups.map(idGroup => {
             return {
+                conflict_id: `conflict_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 items: idGroup.map(id => useCaseMap.get(id)).filter(Boolean)
             };
         });
@@ -317,6 +344,7 @@ export class RequirementService {
             conflicts: version.pending_conflicts,
         };
     }
+
     /**
      * HÀM MỚI: Giải quyết một nhóm xung đột bằng cách giữ lại một UC.
      */

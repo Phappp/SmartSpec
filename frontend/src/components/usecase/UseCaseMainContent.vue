@@ -467,7 +467,7 @@ export default {
       }
 
       const groups = this.useCases.reduce((groups, uc) => {
-        const role = uc.role || 'Undefined'
+        const role = uc.role.name || 'Undefined'
         if (!groups[role]) {
           groups[role] = []
         }
@@ -929,7 +929,6 @@ export default {
   font-weight: 600;
   color: #1f2937;
   margin: 0;
-  text-transform: capitalize;
 }
 
 .group-count {

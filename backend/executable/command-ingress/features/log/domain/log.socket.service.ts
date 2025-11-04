@@ -26,7 +26,35 @@ export class LogSocketService {
     io.to(`user_${userId}`).emit('log_event', event);
     console.log(`📢 Sent log event to user ${userId}:`, event.type);
   }
+  /**
+ * Gửi event log tới toàn hệ thống (ví dụ: login, logout, tạo project,...)
+ */
+broadcastToSystem(event: LogEvent): void {
+  io.to('system_logs').emit('log_event', event);
+  console.log(`🌍 Broadcast global log event:`, event.type);
+}
 
+/**
+ * Thành viên join room hệ thống để nhận toàn bộ log
+ */
+joinSystemRoom(socket: any): void {
+  socket.join('system_logs');
+  console.log(`✅ User ${socket.id} joined system log room`);
+}
+
+/**
+ * Emit log hệ thống
+ */
+emitGlobalLog(log: any): void {
+  const event: LogCreatedEvent = {
+    type: 'LOG_CREATED',
+    projectId: undefined,
+    userId: log.userId,
+    log,
+    timestamp: new Date(),
+  };
+  this.broadcastToSystem(event);
+}
   /**
    * Thành viên join vào phòng của project
    */
