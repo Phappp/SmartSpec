@@ -18,13 +18,13 @@ const testcaseSchema = new Schema({
     // === PHÂN LOẠI ===
     test_type: {
         type: String,
-        enum: ["unit", "integration", "api", "ui", "performance", "security"],
+        enum: ["integration", "api", "ui", "performance", "security"],
         default: "integration",
         index: true
     },
     source_requirement_ids: [{ type: String }],
 
-    // 🆕 LIÊN KẾT VỚI DATABASE SCHEMA
+    // === DATABASE IMPACT ===
     database_tables: [{
         type: String,
         trim: true,
@@ -36,7 +36,7 @@ const testcaseSchema = new Schema({
         default: "select"
     }],
 
-    // === THÔNG TIN CHÍNH - ENTERPRISE STANDARD ===
+    // === THÔNG TIN CHÍNH ===
     title: {
         type: String,
         required: true,
@@ -47,8 +47,12 @@ const testcaseSchema = new Schema({
         type: String,
         trim: true
     },
+    objectives: [{
+        type: String,
+        trim: true
+    }],
 
-    // 🆕 ENTERPRISE FIELDS
+    // === TIỀN ĐIỀU KIỆN / HẬU ĐIỀU KIỆN ===
     preconditions: [{
         type: String,
         trim: true
@@ -58,15 +62,16 @@ const testcaseSchema = new Schema({
         trim: true
     }],
 
-    // 🆕 ENHANCED STEPS với Enterprise format
+    // === CÁC BƯỚC THỰC HIỆN (ENTERPRISE FORMAT) ===
     steps: [{
         step_number: { type: Number, required: true },
         action: { type: String, required: true, trim: true },
         input_data: { type: Schema.Types.Mixed, default: {} },
-        expected_immediate_result: { type: String, trim: true }
+        expected_immediate_result: { type: String, trim: true },
+        verification_points: [{ type: String, trim: true }]
     }],
 
-    // 🆕 MULTI-LEVEL EXPECTED RESULTS
+    // === KẾT QUẢ MONG ĐỢI Ở NHIỀU TẦNG ===
     expected_results: {
         ui_level: [{ type: String, trim: true }],
         api_level: {
@@ -77,6 +82,7 @@ const testcaseSchema = new Schema({
         business_level: { type: String, trim: true }
     },
 
+    // === KẾT QUẢ THỰC TẾ ===
     actual_result: {
         type: String,
         trim: true
@@ -95,8 +101,13 @@ const testcaseSchema = new Schema({
         default: "medium",
         index: true
     },
+    severity: {
+        type: String,
+        enum: ["minor", "major", "critical"],
+        default: "minor"
+    },
 
-    // 🆕 ENHANCED TEST DATA - ENTERPRISE STANDARD
+    // === TEST DATA ===
     test_data: [{
         name: { type: String, required: true },
         input_payload: { type: Schema.Types.Mixed, default: {} },
@@ -105,7 +116,7 @@ const testcaseSchema = new Schema({
         actual_outputs: { type: Schema.Types.Mixed, default: {} }
     }],
 
-    // === XỬ LÝ LỖI ===
+    // === LỖI / NGOẠI LỆ ===
     exceptions: [{
         message: { type: String },
         type: {
@@ -116,16 +127,18 @@ const testcaseSchema = new Schema({
         occurred_at_step: { type: Number },
         resolved: { type: Boolean, default: false },
         resolved_by: { type: Schema.Types.ObjectId, ref: "users" },
-        resolved_at: { type: Date }
+        resolved_at: { type: Date },
+        severity: { type: String, enum: ["low", "medium", "high", "critical"], default: "low" }
     }],
 
-    // === THÔNG TIN THỰC THI ===
+    // === THỰC THI & MÔI TRƯỜNG ===
     environment: {
         os: String,
         browser: String,
         database: String,
         url: String,
-        device: String
+        device: String,
+        runtime_env: { type: String, enum: ["local", "staging", "production"], default: "staging" }
     },
     executed_by: {
         type: Schema.Types.ObjectId,
@@ -135,28 +148,47 @@ const testcaseSchema = new Schema({
         type: Date,
         index: true
     },
-    execution_logs: [{ type: String }],
 
-    // 🆕 EXECUTION LOGS FORMAT - ENTERPRISE STANDARD
-    execution_logs_format: {
-        timestamp: { type: String, default: null }, // Cho phép cả string template
-        step_number: { type: Schema.Types.Mixed }, // Cho phép cả number và string
-        status: { type: String, default: null }, // Bỏ enum constraint
+    // === LỊCH SỬ THỰC THI (TÁCH NHẸ) ===
+    execution_history: [{
+        executed_at: { type: Date, default: Date.now },
+        executed_by: { type: Schema.Types.ObjectId, ref: "users" },
+        duration_ms: { type: Number },
+        result: { type: String, enum: ["passed", "failed", "blocked"], default: "passed" },
+        environment_snapshot: { type: Schema.Types.Mixed, default: {} }
+    }],
+
+    // === LOG CHI TIẾT THỰC THI ===
+    execution_logs: [{
+        timestamp: { type: Date, default: Date.now },
+        step_number: { type: Schema.Types.Mixed },
+        status: { type: String },
         actual_result: { type: String },
         screenshot_path: { type: String },
         log_message: { type: String }
-    },
+    }],
 
-    // === TỰ ĐỘNG HÓA - ENTERPRISE STANDARD ===
+    // === TỰ ĐỘNG HÓA ===
     automation: {
         is_automated: { type: Boolean, default: false },
         script_path: { type: String },
         test_command: { type: String },
         tags: [{ type: String }],
-        last_run_duration: { type: Number }
+        last_run_duration: { type: Number },
+        last_run_status: { type: String, enum: ["passed", "failed", "error", "skipped"], default: "skipped" },
+        ci_pipeline_id: { type: String },
+        ci_job_url: { type: String }
     },
 
-    // === TRACKING ===
+    // === PHÂN TÍCH MỞ RỘNG (ANALYTICS / AI FEEDBACK) ===
+    insights: {
+        stability_score: { type: Number, min: 0, max: 1, default: null },
+        failure_rate: { type: Number, min: 0, max: 1, default: null },
+        last_failure_reason: { type: String, trim: true },
+        ai_recommendation: { type: String, trim: true }
+    },
+
+    // === THEO DÕI / AUDIT TRAIL ===
     created_by: {
         type: Schema.Types.ObjectId,
         ref: "users"
@@ -170,32 +202,29 @@ const testcaseSchema = new Schema({
     timestamps: true
 });
 
-// === INDEXES FOR PERFORMANCE - ENTERPRISE OPTIMIZED ===
+
+// === INDEXES (ENTERPRISE OPTIMIZED) ===
 testcaseSchema.index({ project_id: 1, status: 1 });
 testcaseSchema.index({ project_id: 1, test_type: 1 });
 testcaseSchema.index({ project_id: 1, priority: 1 });
 testcaseSchema.index({ project_id: 1, database_tables: 1 });
 testcaseSchema.index({ database_tables: 1 });
 testcaseSchema.index({ database_operations: 1 });
-testcaseSchema.index({ title: 1 }); // 🆕 For unique title lookup
-testcaseSchema.index({ "automation.tags": 1 }); // 🆕 For automation tag filtering
-testcaseSchema.index({ "source_requirement_ids": 1 }); // 🆕 For requirement-based queries
+testcaseSchema.index({ title: 1 });
+testcaseSchema.index({ "automation.tags": 1 });
+testcaseSchema.index({ "source_requirement_ids": 1 });
+testcaseSchema.index({ executed_by: 1, executed_at: -1 });
+testcaseSchema.index({ project_id: 1, version_id: 1, status: 1 });
+testcaseSchema.index({ project_id: 1, test_type: 1, priority: 1 });
+testcaseSchema.index({ project_id: 1, database_tables: 1, status: 1 });
+testcaseSchema.index({ "insights.failure_rate": 1 });
 
-// 🆕 Compound indexes for common query patterns
-testcaseSchema.index({
-    project_id: 1,
-    version_id: 1,
-    status: 1
-});
+// === COMPOUND INDEX FOR REPORT DASHBOARD ===
 testcaseSchema.index({
     project_id: 1,
     test_type: 1,
-    priority: 1
-});
-testcaseSchema.index({
-    project_id: 1,
-    database_tables: 1,
-    status: 1
+    status: 1,
+    "automation.is_automated": 1
 });
 
 type TestcaseSchemaInferType = InferSchemaType<typeof testcaseSchema>;

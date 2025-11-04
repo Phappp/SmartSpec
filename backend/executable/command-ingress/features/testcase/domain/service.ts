@@ -1,3 +1,4 @@
+// TestcaseService.ts
 import Testcase from "../../../../../internal/model/testcase";
 import Database from "../../../../../internal/model/database";
 import Version from "../../../../../internal/model/version";
@@ -7,12 +8,12 @@ export class TestcaseService {
     private testcaseGeminiService = new TestcaseGeminiService();
 
     /**
-     * Generate ENTERPRISE test cases từ requirements và database schema với selection
+     * Generate enterprise test cases from selected requirements
      */
-    async generateTestCases(projectId: string, versionId: string, selectedRequirementIds: string[], language: string = 'vi-VN') {
-        console.log(`🎯 Generating ENTERPRISE test cases for ${selectedRequirementIds.length} selected requirements`);
+    async generateTestCases(projectId: string, versionId: string, selectedRequirementIds: string[], language: string = 'vi-VN', testType: string = 'all') {
+        console.log(`🎯 Generating ${testType} test cases for ${selectedRequirementIds.length} requirements`);
 
-        // 1. TỰ ĐỘNG lấy requirements từ version
+        // Get version and requirements
         const version = await Version.findOne({
             project_id: projectId,
             _id: versionId
@@ -30,75 +31,79 @@ export class TestcaseService {
             throw new Error("No matching requirements found");
         }
 
-        // 2. TỰ ĐỘNG lấy database schema - NHƯNG CHO PHÉP RỖNG
+        // Get database schema (optional)
         const database = await Database.findOne({
             project_id: projectId,
             version_id: versionId
         });
 
-        // 🆕 CHO PHÉP database rỗng, tạo schema mặc định
         const databaseSchema = database || {
             tables: [],
-            relationships: [],
-            _id: null
+            relationships: []
         };
 
-        console.log(`📊 Loaded ${requirementsToProcess.length} requirements and ${databaseSchema.tables?.length || 0} tables`);
+        console.log(`📊 Processing ${requirementsToProcess.length} requirements with ${databaseSchema.tables?.length || 0} tables`);
 
-        // 3. Gen ENTERPRISE test cases - VẪN HOẠT ĐỘNG KHI DATABASE RỖNG
-        return await this.testcaseGeminiService.generateTestCases(
-            requirementsToProcess,
-            databaseSchema, // ✅ Truyền databaseSchema (có thể rỗng)
-            language
-        );
+        // XỬ LÝ LOGIC KHI testType = "all"
+        if (testType === 'all') {
+            return await this.generateAllTestTypes(
+                requirementsToProcess,
+                databaseSchema,
+                language
+            );
+        } else {
+            // Generate với testType cụ thể
+            return await this.testcaseGeminiService.generateTestCases(
+                requirementsToProcess,
+                databaseSchema,
+                language,
+                testType
+            );
+        }
+    }
+
+    private async generateAllTestTypes(requirements: any[], databaseSchema: any, language: string): Promise<any[]> {
+        console.log(`🔄 Generating all test types for ${requirements.length} requirements`);
+
+        const allTestCases: any[] = [];
+        const testTypes = ['integration', 'api', 'ui', 'performance', 'security']; // Các loại test chính
+
+        for (const requirement of requirements) {
+            try {
+                // Tạo test cases cho từng loại test
+                for (const testType of testTypes) {
+                    console.log(`🧪 Generating ${testType} tests for requirement: ${requirement.name}`);
+
+                    const testCases = await this.testcaseGeminiService.generateTestCases(
+                        [requirement], // Chỉ 1 requirement
+                        databaseSchema,
+                        language,
+                        testType
+                    );
+
+                    // Thêm vào kết quả tổng
+                    allTestCases.push(...testCases);
+
+                    // Delay giữa các request để tránh rate limit
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            } catch (error) {
+                console.error(`❌ Error generating tests for requirement ${requirement.name}:`, error);
+                // Tiếp tục với requirement tiếp theo
+                continue;
+            }
+        }
+
+        console.log(`🎉 Generated total ${allTestCases.length} test cases across all types`);
+        return allTestCases;
     }
 
     /**
-     * Enhance existing test cases với requirements mới theo Enterprise standard
+     * Save test cases to database
      */
-    async enhanceTestCases(
-        projectId: string,
-        versionId: string,
-        newRequirementIds: string[],
-        language: string = 'vi-VN'
-    ) {
-        // 1. Lấy existing test cases
-        const existingTestCases = await Testcase.find({
-            project_id: projectId,
-            version_id: versionId
-        }).lean();
-
-        // 2. Lấy new requirements từ version
-        const version = await Version.findOne({
-            project_id: projectId,
-            _id: versionId
-        });
-
-        if (!version) {
-            throw new Error("Version not found");
-        }
-
-        const newRequirements = version.requirement_model.filter(
-            req => newRequirementIds.includes(req.id)
-        );
-
-        if (newRequirements.length === 0) {
-            throw new Error("No matching new requirements found");
-        }
-
-        // 3. Enhance với Enterprise standard
-        return await this.testcaseGeminiService.enhanceTestCases(
-            existingTestCases,
-            newRequirements,
-            language
-        );
-    }
-
-    /**
-     * Lưu ENTERPRISE test cases vào database
-     */
+    // Sửa hàm saveTestCases
     async saveTestCases(projectId: string, versionId: string, testCases: any[], createdBy?: string) {
-        console.log('💾 Service: Saving test cases:', {
+        console.log('💾 Saving test cases:', {
             projectId,
             versionId,
             testCasesCount: testCases.length,
@@ -106,10 +111,44 @@ export class TestcaseService {
         });
 
         try {
-            // 🆕 Remove execution_logs_format 
             const testCasesToSave = testCases.map(testCase => {
-                const { execution_logs_format, ...cleanTestCase } = testCase;
+                // XÓA id nếu có để MongoDB tự generate _id
+                const { id, ...cleanTestCase } = testCase;
 
+                return {
+                    project_id: projectId,
+                    version_id: versionId,
+                    created_by: createdBy,
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                    ...cleanTestCase  // KHÔNG có id
+                };
+            });
+
+            console.log('📦 Test cases ready for save:', testCasesToSave.length);
+
+            const savedTestCases = await Testcase.insertMany(testCasesToSave, {
+                ordered: false
+            }).catch(error => {
+                console.warn('⚠️ Some test cases failed, but continuing...', error);
+
+                if (error.insertedDocs && error.insertedDocs.length > 0) {
+                    return error.insertedDocs;
+                }
+
+                console.log('🔄 No insertedDocs found, returning original test cases');
+                return testCasesToSave;
+            });
+
+            console.log(`✅ Successfully processed ${savedTestCases.length} test cases`);
+            return savedTestCases;
+
+        } catch (error: any) {
+            console.warn('⚠️ Error caught but ignoring:', error);
+            console.log('🔄 Returning original test cases as success');
+
+            const safeTestCases = testCases.map(testCase => {
+                const { id, ...cleanTestCase } = testCase;
                 return {
                     project_id: projectId,
                     version_id: versionId,
@@ -120,57 +159,23 @@ export class TestcaseService {
                 };
             });
 
-            console.log('📦 Test cases ready for save:', testCasesToSave.length);
-
-            // 🆕 Sử dụng insertMany và bỏ qua mọi lỗi
-            const savedTestCases = await Testcase.insertMany(testCasesToSave, {
-                ordered: false
-            }).catch(error => {
-                // 🆕 BỎ QUA LỖI: Log lỗi nhưng vẫn trả về documents đã được insert
-                console.warn('⚠️ Some test cases may have failed, but continuing...', error);
-
-                // Trả về các documents đã được insert thành công
-                if (error.insertedDocs && error.insertedDocs.length > 0) {
-                    return error.insertedDocs;
-                }
-
-                // Nếu không có insertedDocs, trả về testCasesToSave như đã thành công
-                console.log('🔄 No insertedDocs found, returning original test cases');
-                return testCasesToSave;
-            });
-
-            console.log(`✅ Successfully processed ${savedTestCases.length} test cases`);
-            return savedTestCases;
-
-        } catch (error: any) {
-            // 🆕 BỎ QUA LỖI: Trong trường hợp cực hiếm vẫn có lỗi, trả về test cases gốc
-            console.warn('⚠️ Error caught but ignoring:', error);
-            console.log('🔄 Returning original test cases as success');
-            return testCases.map(testCase => ({
-                project_id: projectId,
-                version_id: versionId,
-                created_by: createdBy,
-                created_at: new Date(),
-                updated_at: new Date(),
-                ...testCase
-            }));
+            return safeTestCases;
         }
     }
 
     /**
-     * Lấy test cases theo project và version với Enterprise filters
+     * Get test cases with filters
      */
     async getTestCasesByProject(projectId: string, versionId?: string, filters: any = {}) {
         const query: any = { project_id: projectId };
         if (versionId) query.version_id = versionId;
 
-        // Apply Enterprise filters
+        // Apply filters
         if (filters.test_type) query.test_type = filters.test_type;
         if (filters.status) query.status = filters.status;
         if (filters.priority) query.priority = filters.priority;
         if (filters.database_tables) query.database_tables = { $in: filters.database_tables };
         if (filters.source_requirement_ids) query.source_requirement_ids = { $in: filters.source_requirement_ids };
-        if (filters.automation_tags) query["automation.tags"] = { $in: filters.automation_tags };
 
         return await Testcase.find(query)
             .populate('created_by', 'name email')
@@ -180,7 +185,7 @@ export class TestcaseService {
     }
 
     /**
-     * Lấy test cases theo database table với Enterprise format
+     * Get test cases by database table
      */
     async getTestCasesByDatabaseTable(projectId: string, tableName: string, versionId?: string) {
         const query: any = {
@@ -196,7 +201,7 @@ export class TestcaseService {
     }
 
     /**
-     * Lấy test case theo ID với Enterprise data
+     * Get test case by ID
      */
     async getTestCaseById(id: string) {
         return await Testcase.findById(id)
@@ -206,7 +211,7 @@ export class TestcaseService {
     }
 
     /**
-     * Cập nhật test case với Enterprise fields
+     * Update test case
      */
     async updateTestCase(id: string, updateData: any, updatedBy?: string) {
         const forbiddenFields = ['_id', 'project_id', 'version_id', 'created_at', 'created_by'];
@@ -225,7 +230,7 @@ export class TestcaseService {
     }
 
     /**
-     * Thực thi test case với Enterprise logging
+     * Execute test case
      */
     async executeTestCase(id: string, executionData: any, executedBy?: string) {
         const updateData: any = {
@@ -234,12 +239,12 @@ export class TestcaseService {
             actual_result: executionData.actual_result || ''
         };
 
-        if (executionData.environment !== undefined) updateData.environment = executionData.environment;
-        if (executionData.execution_logs !== undefined) updateData.execution_logs = executionData.execution_logs;
-        if (executionData.exceptions !== undefined) updateData.exceptions = executionData.exceptions;
-        if (executedBy !== undefined) updateData.executed_by = executedBy;
+        if (executionData.environment) updateData.environment = executionData.environment;
+        if (executionData.execution_logs) updateData.execution_logs = executionData.execution_logs;
+        if (executionData.exceptions) updateData.exceptions = executionData.exceptions;
+        if (executedBy) updateData.executed_by = executedBy;
 
-        // 🆕 Update test data với actual outputs nếu có
+        // Update test data with actual outputs
         if (executionData.test_data_actual_outputs) {
             const testCase = await Testcase.findById(id);
             if (testCase && testCase.test_data) {
@@ -260,14 +265,14 @@ export class TestcaseService {
     }
 
     /**
-     * Xóa test case
+     * Delete test case
      */
     async deleteTestCase(id: string) {
         return await Testcase.findByIdAndDelete(id);
     }
 
     /**
-     * Lấy ENTERPRISE test statistics với database coverage
+     * Get test statistics
      */
     async getTestStatistics(projectId: string, versionId?: string) {
         const query: any = { project_id: projectId };
@@ -302,9 +307,7 @@ export class TestcaseService {
                             $cond: [{ $eq: ["$automation.is_automated", true] }, 1, 0]
                         }
                     },
-                    // 🆕 ENTERPRISE statistics
                     database_tables_covered: { $addToSet: "$database_tables" },
-                    database_operations_covered: { $addToSet: "$database_operations" },
                     requirement_coverage: { $addToSet: "$source_requirement_ids" }
                 }
             },
@@ -354,10 +357,8 @@ export class TestcaseService {
                             }
                         }
                     },
-                    // 🆕 ENTERPRISE coverage stats
                     database_coverage: {
-                        tables_covered: { $size: { $setUnion: "$database_tables_covered" } },
-                        operations_covered: { $size: { $setUnion: "$database_operations_covered" } }
+                        tables_covered: { $size: { $setUnion: "$database_tables_covered" } }
                     },
                     requirement_coverage_count: { $size: { $setUnion: "$requirement_coverage" } }
                 }
@@ -371,29 +372,26 @@ export class TestcaseService {
             by_status: {},
             by_type: {},
             by_priority: {},
-            database_coverage: {
-                tables_covered: 0,
-                operations_covered: 0
-            },
+            database_coverage: { tables_covered: 0 },
             requirement_coverage_count: 0
         };
     }
 
     /**
-     * 🆕 Lấy ENTERPRISE database coverage report
+     * Get database coverage report
      */
     async getDatabaseCoverageReport(projectId: string, versionId?: string) {
         const query: any = { project_id: projectId };
         if (versionId) query.version_id = versionId;
 
-        // Lấy database schema để biết tổng số tables
+        // Get database schema
         const dbQuery: any = { project_id: projectId };
         if (versionId) dbQuery.version_id = versionId;
 
         const database = await Database.findOne(dbQuery).lean();
         const totalTables = database?.tables?.length || 0;
 
-        // Lấy thống kê test cases coverage với Enterprise format
+        // Get coverage stats
         const coverageStats = await Testcase.aggregate([
             { $match: query },
             { $unwind: "$database_tables" },
@@ -402,8 +400,7 @@ export class TestcaseService {
                     _id: "$database_tables",
                     test_case_count: { $sum: 1 },
                     test_types: { $addToSet: "$test_type" },
-                    priorities: { $addToSet: "$priority" },
-                    operations: { $addToSet: "$database_operations" }
+                    priorities: { $addToSet: "$priority" }
                 }
             },
             {
@@ -412,7 +409,6 @@ export class TestcaseService {
                     test_case_count: 1,
                     test_types: 1,
                     priorities: 1,
-                    operations: 1,
                     coverage_score: {
                         $switch: {
                             branches: [
@@ -428,7 +424,7 @@ export class TestcaseService {
             { $sort: { test_case_count: -1 } }
         ]);
 
-        // 🆕 Tính coverage chi tiết
+        // Find uncovered tables
         const uncoveredTables = database?.tables
             ?.filter((table: any) => !coverageStats.some((stat: any) => stat.table_name === table.name))
             .map((table: any) => ({
@@ -443,7 +439,6 @@ export class TestcaseService {
             coverage_percentage: totalTables > 0 ? Math.round((coverageStats.length / totalTables) * 100) : 0,
             table_coverage: coverageStats,
             uncovered_tables: uncoveredTables,
-            // 🆕 ENTERPRISE metrics
             coverage_quality: {
                 excellent: coverageStats.filter((s: any) => s.coverage_score === "excellent").length,
                 good: coverageStats.filter((s: any) => s.coverage_score === "good").length,
@@ -454,20 +449,20 @@ export class TestcaseService {
     }
 
     /**
-     * 🆕 Lấy requirement coverage report
+     * Get requirement coverage report
      */
     async getRequirementCoverageReport(projectId: string, versionId?: string) {
         const query: any = { project_id: projectId };
         if (versionId) query.version_id = versionId;
 
-        // Lấy requirements từ version
+        // Get requirements from version
         const versionQuery: any = { project_id: projectId };
         if (versionId) versionQuery._id = versionId;
 
         const version = await Version.findOne(versionQuery).lean();
         const totalRequirements = version?.requirement_model?.length || 0;
 
-        // Lấy covered requirements từ test cases
+        // Get covered requirements from test cases
         const coverageStats = await Testcase.aggregate([
             { $match: query },
             { $unwind: "$source_requirement_ids" },
@@ -532,7 +527,7 @@ export class TestcaseService {
     }
 
     /**
-     * 🆕 Tìm test cases trùng lặp (duplicate titles)
+     * Find duplicate test cases
      */
     async findDuplicateTestCases(projectId: string, versionId?: string) {
         const query: any = { project_id: projectId };
@@ -560,187 +555,167 @@ export class TestcaseService {
 
         return duplicates;
     }
-    // Thêm method mới trong TestcaseService
-    async previewEnhancedTestCases(
-        projectId: string,
-        versionId: string,
-        newRequirementIds: string[],
-        language: string = 'vi-VN'
-    ): Promise<{
-        existingTestCases: any[];
-        enhancementPreview: any;
-        comparison: any;
-    }> {
-        // 1. Lấy existing test cases
-        const existingTestCases = await Testcase.find({
-            project_id: projectId,
-            version_id: versionId
-        }).lean();
 
-        // 2. Lấy new requirements
-        const version = await Version.findOne({
-            project_id: projectId,
-            _id: versionId
-        });
+    /**
+     * Get test case metrics for dashboard
+     */
+    async getDashboardMetrics(projectId: string, versionId?: string) {
+        const query: any = { project_id: projectId };
+        if (versionId) query.version_id = versionId;
 
-        if (!version) {
-            throw new Error("Version not found");
-        }
-
-        const newRequirements = version.requirement_model.filter(
-            req => newRequirementIds.includes(req.id)
-        );
-
-        if (newRequirements.length === 0) {
-            throw new Error("No matching new requirements found");
-        }
-
-        // 3. Generate enhancement preview
-        const enhancementResult = await this.testcaseGeminiService.enhanceTestCases(
-            existingTestCases,
-            newRequirements,
-            language
-        );
-
-        // 4. Tạo comparison data
-        const comparison = this.createEnhancementComparison(
-            existingTestCases,
-            enhancementResult
-        );
-
-        return {
-            existingTestCases,
-            enhancementPreview: enhancementResult,
-            comparison
-        };
-    }
-
-    private createEnhancementComparison(existingTestCases: any[], enhancementResult: any): any {
-        const existingCount = existingTestCases.length;
-        const additionalCount = enhancementResult.additional_testcases?.length || 0;
-        const updatedCount = enhancementResult.updated_testcases?.length || 0;
-
-        // Phân tích coverage improvements
-        const existingCoverage = this.extractRequirementsCoverage(existingTestCases);
-        const newCoverage = this.extractRequirementsCoverage([
-            ...existingTestCases,
-            ...(enhancementResult.additional_testcases || [])
+        const metrics = await Testcase.aggregate([
+            { $match: query },
+            {
+                $facet: {
+                    statusSummary: [
+                        {
+                            $group: {
+                                _id: "$status",
+                                count: { $sum: 1 }
+                            }
+                        }
+                    ],
+                    typeSummary: [
+                        {
+                            $group: {
+                                _id: "$test_type",
+                                count: { $sum: 1 }
+                            }
+                        }
+                    ],
+                    prioritySummary: [
+                        {
+                            $group: {
+                                _id: "$priority",
+                                count: { $sum: 1 }
+                            }
+                        }
+                    ],
+                    automationSummary: [
+                        {
+                            $group: {
+                                _id: "$automation.is_automated",
+                                count: { $sum: 1 }
+                            }
+                        }
+                    ],
+                    recentActivity: [
+                        { $sort: { updated_at: -1 } },
+                        { $limit: 10 },
+                        {
+                            $project: {
+                                title: 1,
+                                status: 1,
+                                test_type: 1,
+                                updated_at: 1
+                            }
+                        }
+                    ]
+                }
+            }
         ]);
 
-        return {
-            summary: {
-                existing_test_cases: existingCount,
-                new_test_cases: additionalCount,
-                updated_test_cases: updatedCount,
-                total_after_enhancement: existingCount + additionalCount,
-                coverage_improvement: newCoverage.length - existingCoverage.length
-            },
-            details: {
-                additional_test_cases: enhancementResult.additional_testcases?.map((tc: any) => ({
-                    title: tc.title,
-                    test_type: tc.test_type,
-                    priority: tc.priority,
-                    source_requirements: tc.source_requirement_ids,
-                    database_tables: tc.database_tables
-                })) || [],
-                updated_test_cases: enhancementResult.updated_testcases?.map((tc: any) => ({
-                    id: tc.id, // Nếu có ID từ existing
-                    title: tc.title,
-                    changes: this.identifyTestCaseChanges(tc, existingTestCases)
-                })) || [],
-                coverage_analysis: {
-                    existing_requirements_covered: existingCoverage,
-                    new_requirements_covered: newCoverage.filter((req: string) => !existingCoverage.includes(req)),
-                    total_requirements_covered: newCoverage
-                }
-            },
-            enterprise_metrics: {
-                before: this.calculateEnterpriseMetrics(existingTestCases),
-                after: this.calculateEnterpriseMetrics([
-                    ...existingTestCases,
-                    ...(enhancementResult.additional_testcases || [])
-                ]),
-                improvement: this.calculateImprovementMetrics(existingTestCases, enhancementResult)
-            }
-        };
-    }
-
-    private identifyTestCaseChanges(updatedTestCase: any, existingTestCases: any[]): string[] {
-        const changes: string[] = [];
-
-        // Tìm test case tương ứng bằng title (vì có thể chưa có ID)
-        const existing = existingTestCases.find(tc => tc.title === updatedTestCase.title);
-
-        if (!existing) return ['New test case'];
-
-        if (existing.title !== updatedTestCase.title) changes.push('Title updated');
-        if (JSON.stringify(existing.steps) !== JSON.stringify(updatedTestCase.steps)) changes.push('Steps modified');
-        if (JSON.stringify(existing.test_data) !== JSON.stringify(updatedTestCase.test_data)) changes.push('Test data updated');
-        if (existing.priority !== updatedTestCase.priority) changes.push('Priority changed');
-        if (JSON.stringify(existing.expected_results) !== JSON.stringify(updatedTestCase.expected_results)) changes.push('Expected results updated');
-
-        return changes.length > 0 ? changes : ['Minor enhancements'];
-    }
-
-    private calculateImprovementMetrics(existingTestCases: any[], enhancementResult: any): any {
-        const beforeMetrics = this.calculateEnterpriseMetrics(existingTestCases);
-        const afterTestCases = [
-            ...existingTestCases,
-            ...(enhancementResult.additional_testcases || [])
-        ];
-        const afterMetrics = this.calculateEnterpriseMetrics(afterTestCases);
-
-        return {
-            test_cases_increase: afterMetrics.total_test_cases - beforeMetrics.total_test_cases,
-            automation_rate_change: afterMetrics.automation_rate - beforeMetrics.automation_rate,
-            coverage_increase: afterMetrics.test_types_covered.length - beforeMetrics.test_types_covered.length,
-            steps_increase: afterMetrics.total_steps - beforeMetrics.total_steps,
-            test_data_increase: afterMetrics.total_test_data_scenarios - beforeMetrics.total_test_data_scenarios
+        return metrics[0] || {
+            statusSummary: [],
+            typeSummary: [],
+            prioritySummary: [],
+            automationSummary: [],
+            recentActivity: []
         };
     }
 
     /**
-    * 🆕 Extract requirements coverage từ test cases
-    */
-    private extractRequirementsCoverage(testCases: any[]): string[] {
-        const requirements = new Set<string>();
-        testCases.forEach(tc => {
-            if (tc.source_requirement_ids && Array.isArray(tc.source_requirement_ids)) {
-                tc.source_requirement_ids.forEach((reqId: string) => requirements.add(reqId));
-            }
-        });
-        return Array.from(requirements);
-    }
-
-    /**
-     * 🆕 Calculate Enterprise metrics
+     * Bulk update test cases
      */
-    private calculateEnterpriseMetrics(testCases: any[]): any {
-        let totalSteps = 0;
-        let totalTestData = 0;
-        let automationReady = 0;
-        const testTypes = new Set<string>();
-        const priorities = new Set<string>();
+    async bulkUpdateTestCases(ids: string[], updateData: any, updatedBy?: string) {
+        const forbiddenFields = ['_id', 'project_id', 'version_id', 'created_at', 'created_by'];
+        forbiddenFields.forEach(field => delete updateData[field]);
 
-        testCases.forEach(tc => {
-            if (tc.steps) totalSteps += tc.steps.length;
-            if (tc.test_data) totalTestData += tc.test_data.length;
-            if (tc.automation?.is_automated) automationReady++;
-            if (tc.test_type) testTypes.add(tc.test_type);
-            if (tc.priority) priorities.add(tc.priority);
-        });
+        if (updatedBy) {
+            updateData.updated_by = updatedBy;
+        }
+
+        updateData.updated_at = new Date();
+
+        const result = await Testcase.updateMany(
+            { _id: { $in: ids } },
+            { $set: updateData }
+        );
 
         return {
-            total_test_cases: testCases.length,
-            total_steps: totalSteps,
-            total_test_data_scenarios: totalTestData,
-            automation_ready_count: automationReady,
-            automation_rate: testCases.length > 0 ? Math.round((automationReady / testCases.length) * 100) : 0,
-            test_types_covered: Array.from(testTypes),
-            priorities_covered: Array.from(priorities),
-            average_steps_per_test: testCases.length > 0 ? Math.round(totalSteps / testCases.length) : 0,
-            test_data_density: testCases.length > 0 ? Math.round(totalTestData / testCases.length) : 0
+            matchedCount: result.matchedCount,
+            modifiedCount: result.modifiedCount
         };
     }
 
+    /**
+     * Bulk delete test cases
+     */
+    async bulkDeleteTestCases(ids: string[]) {
+        const result = await Testcase.deleteMany({
+            _id: { $in: ids }
+        });
+
+        return {
+            deletedCount: result.deletedCount
+        };
+    }
+
+    /**
+     * Export test cases to JSON
+     */
+    async exportTestCases(projectId: string, versionId?: string) {
+        const query: any = { project_id: projectId };
+        if (versionId) query.version_id = versionId;
+
+        const testCases = await Testcase.find(query)
+            .populate('created_by', 'name email')
+            .populate('executed_by', 'name email')
+            .lean();
+
+        const exportData = {
+            export_date: new Date().toISOString(),
+            project_id: projectId,
+            version_id: versionId,
+            total_test_cases: testCases.length,
+            test_cases: testCases.map(tc => ({
+                title: tc.title,
+                description: tc.description,
+                test_type: tc.test_type,
+                priority: tc.priority,
+                status: tc.status,
+                source_requirement_ids: tc.source_requirement_ids,
+                database_tables: tc.database_tables,
+                steps: tc.steps,
+                test_data: tc.test_data,
+                expected_results: tc.expected_results,
+                automation: tc.automation
+            }))
+        };
+
+        return exportData;
+    }
+
+    /**
+     * Import test cases from JSON
+     */
+    async importTestCases(projectId: string, versionId: string, importData: any, createdBy?: string) {
+        const testCasesToImport = importData.test_cases.map((tc: any) => ({
+            project_id: projectId,
+            version_id: versionId,
+            created_by: createdBy,
+            created_at: new Date(),
+            updated_at: new Date(),
+            ...tc
+        }));
+
+        const result = await Testcase.insertMany(testCasesToImport, {
+            ordered: false
+        });
+
+        return {
+            importedCount: result.length,
+            totalCount: testCasesToImport.length
+        };
+    }
 }

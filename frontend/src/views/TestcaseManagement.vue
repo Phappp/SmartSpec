@@ -33,16 +33,11 @@
           <p class="subtitle">Manage and execute test cases for your requirements</p>
         </div>
         <div class="header-actions">
-          <button class="btn-secondary" @click="showGenerateModal = true">
+          <button class="btn-secondary" @click="showGenerateModal = true" :disabled="loading">
             <span class="material-symbols-outlined">auto_awesome</span>
             Generate Test Cases
           </button>
-          <!-- 🆕 THÊM NÚT ENHANCE -->
-          <!-- <button class="btn-secondary" @click="showEnhanceModal = true">
-            <span class="material-symbols-outlined">blur_medium</span>
-            Enhance Test Cases
-          </button> -->
-          <button class="btn-primary" @click="showCreateModal = true">
+          <button class="btn-primary" @click="showCreateModal = true" :disabled="loading">
             <span class="material-symbols-outlined">add</span>
             Create Manual
           </button>
@@ -56,7 +51,7 @@
             <span class="material-symbols-outlined">format_list_numbered</span>
           </div>
           <div class="stat-info">
-            <h3>{{ statistics.total }}</h3>
+            <h3>{{ statistics.total || 0 }}</h3>
             <p>Total Test Cases</p>
           </div>
         </div>
@@ -65,7 +60,7 @@
             <span class="material-symbols-outlined">check_circle</span>
           </div>
           <div class="stat-info">
-            <h3>{{ statistics.passed }}</h3>
+            <h3>{{ statistics.passed || 0 }}</h3>
             <p>Passed</p>
           </div>
         </div>
@@ -74,7 +69,7 @@
             <span class="material-symbols-outlined">cancel</span>
           </div>
           <div class="stat-info">
-            <h3>{{ statistics.failed }}</h3>
+            <h3>{{ statistics.failed || 0 }}</h3>
             <p>Failed</p>
           </div>
         </div>
@@ -83,17 +78,17 @@
             <span class="material-symbols-outlined">schedule</span>
           </div>
           <div class="stat-info">
-            <h3>{{ statistics.not_executed }}</h3>
+            <h3>{{ statistics.not_executed || 0 }}</h3>
             <p>Not Executed</p>
           </div>
         </div>
         <div class="stat-card coverage">
           <div class="stat-icon">
-            <span class="material-symbols-outlined">database</span>
+            <span class="material-symbols-outlined"> full_coverage </span>
           </div>
           <div class="stat-info">
-            <h3>{{ statistics.coverage }}%</h3>
-            <p>Database Coverage</p>
+            <h3>{{ coveragePercentage }}%</h3>
+            <p>Requirement Coverage</p>
           </div>
         </div>
       </div>
@@ -109,9 +104,15 @@
               placeholder="Search test cases..."
               class="search-input"
               @input="handleSearch"
+              :disabled="loading"
             />
           </div>
-          <select v-model="statusFilter" class="filter-select" @change="applyFilters">
+          <select
+            v-model="statusFilter"
+            class="filter-select"
+            @change="loadTestCases"
+            :disabled="loading"
+          >
             <option value="">All Status</option>
             <option value="passed">Passed</option>
             <option value="failed">Failed</option>
@@ -119,7 +120,12 @@
             <option value="not_executed">Not Executed</option>
             <option value="in_progress">In Progress</option>
           </select>
-          <select v-model="testTypeFilter" class="filter-select" @change="applyFilters">
+          <select
+            v-model="testTypeFilter"
+            class="filter-select"
+            @change="loadTestCases"
+            :disabled="loading"
+          >
             <option value="">All Types</option>
             <option value="unit">Unit</option>
             <option value="integration">Integration</option>
@@ -128,158 +134,141 @@
             <option value="performance">Performance</option>
             <option value="security">Security</option>
           </select>
-          <select v-model="priorityFilter" class="filter-select" @change="applyFilters">
+          <select
+            v-model="priorityFilter"
+            class="filter-select"
+            @change="loadTestCases"
+            :disabled="loading"
+          >
             <option value="">All Priorities</option>
             <option value="critical">Critical</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </select>
-          <button class="btn-secondary clear-filters" @click="clearFilters">
+          <button class="btn-secondary clear-filters" @click="clearFilters" :disabled="loading">
             <span class="material-symbols-outlined">clear_all</span>
             Clear
           </button>
         </div>
         <div class="view-actions">
-          <button class="btn-icon" @click="refreshData" title="Refresh" :disabled="loading">
+          <button class="btn-icon" @click="loadTestCases" title="Refresh" :disabled="loading">
             <span class="material-symbols-outlined" :class="{ spinning: loading }">refresh</span>
           </button>
-          <button class="btn-icon" @click="exportTestCases" title="Export">
+          <button class="btn-icon" @click="exportTestCases" title="Export" :disabled="loading">
             <span class="material-symbols-outlined">download</span>
           </button>
         </div>
       </div>
 
-      <!-- Sorting Controls -->
+      <!-- Sorting Options -->
       <div class="sorting-section">
-        <div class="sort-label">Sort by:</div>
+        <span class="sort-label">Sort by:</span>
         <div class="sort-options">
           <button
             class="sort-option"
-            :class="{
-              active: sortField === 'title',
-              'sort-desc': sortField === 'title' && sortDirection === 'desc',
-            }"
+            :class="{ active: sortBy === 'title' }"
             @click="setSort('title')"
           >
             Title
-            <span class="material-symbols-outlined sort-icon">
-              {{
-                sortField === 'title' && sortDirection === 'desc'
-                  ? 'arrow_downward'
-                  : 'arrow_upward'
-              }}
+            <span
+              class="material-symbols-outlined sort-icon"
+              :class="{ 'sort-desc': sortOrder === 'desc' }"
+            >
+              unfold_more
             </span>
           </button>
           <button
             class="sort-option"
-            :class="{
-              active: sortField === 'test_type',
-              'sort-desc': sortField === 'test_type' && sortDirection === 'desc',
-            }"
-            @click="setSort('test_type')"
-          >
-            Type
-            <span class="material-symbols-outlined sort-icon">
-              {{
-                sortField === 'test_type' && sortDirection === 'desc'
-                  ? 'arrow_downward'
-                  : 'arrow_upward'
-              }}
-            </span>
-          </button>
-          <button
-            class="sort-option"
-            :class="{
-              active: sortField === 'priority',
-              'sort-desc': sortField === 'priority' && sortDirection === 'desc',
-            }"
+            :class="{ active: sortBy === 'priority' }"
             @click="setSort('priority')"
           >
             Priority
-            <span class="material-symbols-outlined sort-icon">
-              {{
-                sortField === 'priority' && sortDirection === 'desc'
-                  ? 'arrow_downward'
-                  : 'arrow_upward'
-              }}
+            <span
+              class="material-symbols-outlined sort-icon"
+              :class="{ 'sort-desc': sortOrder === 'desc' }"
+            >
+              unfold_more
             </span>
           </button>
           <button
             class="sort-option"
-            :class="{
-              active: sortField === 'status',
-              'sort-desc': sortField === 'status' && sortDirection === 'desc',
-            }"
+            :class="{ active: sortBy === 'status' }"
             @click="setSort('status')"
           >
             Status
-            <span class="material-symbols-outlined sort-icon">
-              {{
-                sortField === 'status' && sortDirection === 'desc'
-                  ? 'arrow_downward'
-                  : 'arrow_upward'
-              }}
+            <span
+              class="material-symbols-outlined sort-icon"
+              :class="{ 'sort-desc': sortOrder === 'desc' }"
+            >
+              unfold_more
             </span>
           </button>
           <button
             class="sort-option"
-            :class="{
-              active: sortField === 'executed_at',
-              'sort-desc': sortField === 'executed_at' && sortDirection === 'desc',
-            }"
+            :class="{ active: sortBy === 'executed_at' }"
             @click="setSort('executed_at')"
           >
             Last Executed
-            <span class="material-symbols-outlined sort-icon">
-              {{
-                sortField === 'executed_at' && sortDirection === 'desc'
-                  ? 'arrow_downward'
-                  : 'arrow_upward'
-              }}
+            <span
+              class="material-symbols-outlined sort-icon"
+              :class="{ 'sort-desc': sortOrder === 'desc' }"
+            >
+              unfold_more
             </span>
           </button>
         </div>
       </div>
 
       <!-- Loading State -->
-      <div v-if="loading && !hasMoreData" class="loading-state">
+      <div v-if="loading" class="loading-state">
         <div class="spinner"></div>
         <p>Loading test cases...</p>
       </div>
 
       <!-- Test Cases Table -->
       <div v-else class="testcases-table">
-        <div class="table-container" ref="tableContainer" @scroll="handleScroll">
+        <div class="table-container">
           <table>
             <thead>
               <tr>
                 <th class="checkbox-column">
-                  <input type="checkbox" v-model="selectAll" @change="toggleSelectAll" />
+                  <input
+                    type="checkbox"
+                    v-model="selectAll"
+                    @change="toggleSelectAll"
+                    :disabled="testCases.length === 0"
+                  />
                 </th>
                 <th class="title-column">Title</th>
                 <th class="type-column">Type</th>
                 <th class="priority-column">Priority</th>
                 <th class="status-column">Status</th>
                 <th class="tables-column">Database Tables</th>
+                <th class="requirements-column">Requirements</th>
                 <th class="date-column">Last Executed</th>
                 <th class="actions-column">Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr
-                v-for="testcase in displayedTestCases"
+                v-for="testcase in paginatedTestCases"
                 :key="testcase._id"
                 :class="{ selected: selectedTestCases.includes(testcase._id) }"
                 class="testcase-row"
               >
                 <td class="checkbox-column">
-                  <input type="checkbox" :value="testcase._id" v-model="selectedTestCases" />
+                  <input
+                    type="checkbox"
+                    :value="testcase._id"
+                    v-model="selectedTestCases"
+                    :disabled="testcase.status === 'in_progress'"
+                  />
                 </td>
                 <td class="title-column">
                   <div class="testcase-title">
-                    <div class="title-main">{{ testcase.title || 'Untitled Test Case' }}</div>
-                    <div class="title-desc" v-if="testcase.description">
+                    <div class="title-main">{{ formatTestCaseTitle(testcase) }}</div>
+                    <div v-if="testcase.description" class="title-desc">
                       {{ testcase.description }}
                     </div>
                   </div>
@@ -311,6 +300,27 @@
                     <span
                       v-if="!testcase.database_tables || testcase.database_tables.length === 0"
                       class="no-tables"
+                    >
+                      -
+                    </span>
+                  </div>
+                </td>
+                <td class="requirements-column">
+                  <div class="requirement-tags">
+                    <span
+                      v-for="reqId in testcase.source_requirement_ids || []"
+                      :key="reqId"
+                      class="requirement-tag"
+                      :title="getRequirementName(reqId)"
+                    >
+                      {{ reqId }}
+                    </span>
+                    <span
+                      v-if="
+                        !testcase.source_requirement_ids ||
+                        testcase.source_requirement_ids.length === 0
+                      "
+                      class="no-requirements"
                     >
                       -
                     </span>
@@ -352,19 +362,11 @@
             </tbody>
           </table>
 
-          <!-- Loading more indicator -->
-          <div v-if="loading && hasMoreData" class="loading-more">
-            <div class="spinner small"></div>
-            <p>Loading more test cases...</p>
-          </div>
-
           <!-- Empty State -->
-          <div v-if="displayedTestCases.length === 0 && !loading" class="empty-state">
+          <div v-if="testCases.length === 0" class="empty-state">
             <span class="material-symbols-outlined">playlist_remove</span>
             <h3>No test cases found</h3>
-            <p v-if="searchQuery || statusFilter || testTypeFilter || priorityFilter">
-              Try adjusting your filters or search terms.
-            </p>
+            <p v-if="hasActiveFilters">Try adjusting your filters or search terms.</p>
             <p v-else>
               Create your first test case or generate them automatically from requirements.
             </p>
@@ -377,6 +379,51 @@
           </div>
         </div>
 
+        <!-- Pagination -->
+        <div v-if="testCases.length > 0" class="pagination">
+          <div class="pagination-info">
+            Showing {{ pagination.startIndex + 1 }} to {{ pagination.endIndex }} of
+            {{ testCases.length }} test cases
+          </div>
+          <div class="pagination-controls">
+            <button class="btn-icon" @click="previousPage" :disabled="pagination.currentPage === 1">
+              <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            <div class="page-numbers">
+              <button
+                v-for="page in visiblePages"
+                :key="page"
+                class="page-number"
+                :class="{ active: page === pagination.currentPage }"
+                @click="goToPage(page)"
+              >
+                {{ page }}
+              </button>
+            </div>
+            <button
+              class="btn-icon"
+              @click="nextPage"
+              :disabled="pagination.currentPage === pagination.totalPages"
+            >
+              <span class="material-symbols-outlined">chevron_right</span>
+            </button>
+          </div>
+          <div class="page-size-selector">
+            <label for="pageSize">Show:</label>
+            <select
+              id="pageSize"
+              v-model="pagination.pageSize"
+              @change="handlePageSizeChange"
+              class="page-size-select"
+            >
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+
         <!-- Bulk Actions -->
         <div v-if="selectedTestCases.length > 0" class="bulk-actions">
           <div class="bulk-info">
@@ -384,15 +431,19 @@
             {{ selectedTestCases.length }} test cases selected
           </div>
           <div class="bulk-buttons">
-            <button class="btn-secondary warning" @click="bulkExecute('passed')">
+            <button class="btn-secondary" @click="bulkExecute('passed')" :disabled="loading">
               <span class="material-symbols-outlined">check_circle</span>
               Mark as Passed
             </button>
-            <button class="btn-secondary warning" @click="bulkExecute('failed')">
+            <button class="btn-secondary" @click="bulkExecute('failed')" :disabled="loading">
               <span class="material-symbols-outlined">cancel</span>
               Mark as Failed
             </button>
-            <button class="btn-secondary danger" @click="bulkDelete">
+            <button class="btn-secondary" @click="bulkExecute('not_executed')" :disabled="loading">
+              <span class="material-symbols-outlined">schedule</span>
+              Mark as Not Executed
+            </button>
+            <button class="btn-secondary" @click="bulkDelete" :disabled="loading">
               <span class="material-symbols-outlined">delete</span>
               Delete Selected
             </button>
@@ -410,17 +461,6 @@
       :database-schema="databaseSchema"
       @close="showGenerateModal = false"
       @generate="handleGenerateTestCases"
-    />
-
-    <!-- 🆕 ENHANCE TEST CASES MODAL -->
-    <EnhanceTestcaseModal
-      v-if="showEnhanceModal"
-      :project-id="project._id"
-      :version-id="selectedVersionId"
-      :requirements="requirements"
-      :existing-test-cases="testCases"
-      @close="showEnhanceModal = false"
-      @enhance="handleEnhanceTestCases"
     />
 
     <!-- Create/Edit Test Case Modal -->
@@ -454,12 +494,11 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
 import GenerateTestcaseModal from '@/components/testcase/GenerateTestcaseModal.vue'
-import EnhanceTestcaseModal from '@/components/testcase/EnhanceTestcaseModal.vue' // 🆕 IMPORT MODAL MỚI
 import TestcaseFormModal from '@/components/testcase/TestcaseFormModal.vue'
 import TestcaseDetailModal from '@/components/testcase/TestcaseDetailModal.vue'
 import TestcaseExecutionModal from '@/components/testcase/TestcaseExecutionModal.vue'
@@ -472,7 +511,6 @@ export default {
   components: {
     ProjectHeader,
     GenerateTestcaseModal,
-    EnhanceTestcaseModal, // 🆕 THÊM COMPONENT MỚI
     TestcaseFormModal,
     TestcaseDetailModal,
     TestcaseExecutionModal,
@@ -491,163 +529,147 @@ export default {
     const databaseSchema = ref(null)
     const testCases = ref([])
     const loading = ref(false)
-    const tableContainer = ref(null)
 
-    // UI states - 🆕 THÊM showEnhanceModal
+    // UI states
     const showGenerateModal = ref(false)
-    const showEnhanceModal = ref(false) // 🆕 STATE MỚI
     const showCreateModal = ref(false)
     const editingTestcase = ref(null)
     const viewingTestcase = ref(null)
     const executingTestcase = ref(null)
 
-    // Filters
+    // Filters and sorting
     const searchQuery = ref('')
     const statusFilter = ref('')
     const testTypeFilter = ref('')
     const priorityFilter = ref('')
+    const sortBy = ref('title')
+    const sortOrder = ref('asc')
     const selectedTestCases = ref([])
     const selectAll = ref(false)
 
-    // Sorting
-    const sortField = ref('title')
-    const sortDirection = ref('asc')
+    // Pagination
+    const pagination = ref({
+      currentPage: 1,
+      pageSize: 25,
+      totalPages: 1,
+      startIndex: 0,
+      endIndex: 0,
+    })
 
-    // Infinite scroll
-    const displayedTestCases = ref([])
-    const itemsPerPage = 50
-    const currentPage = ref(1)
-    const hasMoreData = ref(true)
+    // Computed properties
+    const hasActiveFilters = computed(() => {
+      return searchQuery.value || statusFilter.value || testTypeFilter.value || priorityFilter.value
+    })
 
-    // Load sorting preferences from localStorage
-    const loadSortingPreferences = () => {
-      try {
-        const savedSort = localStorage.getItem('testcaseSorting')
-        if (savedSort) {
-          const { field, direction } = JSON.parse(savedSort)
-          sortField.value = field || 'title'
-          sortDirection.value = direction || 'asc'
-        }
-      } catch (error) {
-        console.warn('Failed to load sorting preferences:', error)
-      }
-    }
-
-    // Save sorting preferences to localStorage
-    const saveSortingPreferences = () => {
-      try {
-        localStorage.setItem(
-          'testcaseSorting',
-          JSON.stringify({
-            field: sortField.value,
-            direction: sortDirection.value,
-          })
-        )
-      } catch (error) {
-        console.warn('Failed to save sorting preferences:', error)
-      }
-    }
-
-    // Computed statistics với fallback data
     const statistics = computed(() => {
-      if (testCases.value.length > 0) {
-        const total = testCases.value.length
-        const passed = testCases.value.filter((tc) => tc.status === 'passed').length
-        const failed = testCases.value.filter((tc) => tc.status === 'failed').length
-        const not_executed = testCases.value.filter((tc) => tc.status === 'not_executed').length
-        const in_progress = testCases.value.filter((tc) => tc.status === 'in_progress').length
-        const blocked = testCases.value.filter((tc) => tc.status === 'blocked').length
+      const total = testCases.value.length
+      const passed = testCases.value.filter((tc) => tc.status === 'passed').length
+      const failed = testCases.value.filter((tc) => tc.status === 'failed').length
+      const not_executed = testCases.value.filter((tc) => tc.status === 'not_executed').length
+      const in_progress = testCases.value.filter((tc) => tc.status === 'in_progress').length
+      const blocked = testCases.value.filter((tc) => tc.status === 'blocked').length
 
-        // Tính database coverage từ database schema thực tế
-        const tablesCovered = new Set()
-        testCases.value.forEach((tc) => {
-          if (tc.database_tables && Array.isArray(tc.database_tables)) {
-            tc.database_tables.forEach((table) => tablesCovered.add(table))
-          }
-        })
-
-        const totalTables = databaseSchema.value?.tables?.length || 0
-        const coverage = totalTables > 0 ? Math.round((tablesCovered.size / totalTables) * 100) : 0
-
-        return {
-          total,
-          passed,
-          failed,
-          not_executed,
-          in_progress,
-          blocked,
-          coverage,
-        }
-      }
-
-      // Fallback data khi không có test cases
       return {
-        total: 0,
-        passed: 0,
-        failed: 0,
-        not_executed: 0,
-        in_progress: 0,
-        blocked: 0,
-        coverage: 0,
+        total,
+        passed,
+        failed,
+        not_executed,
+        in_progress,
+        blocked,
       }
     })
 
-    // Computed filtered test cases
-    const filteredTestCases = computed(() => {
-      let filtered = [...testCases.value]
+    const coveragePercentage = computed(() => {
+      if (requirements.value.length === 0) return 0
 
-      if (searchQuery.value) {
-        const query = searchQuery.value.toLowerCase()
-        filtered = filtered.filter(
-          (tc) =>
-            tc.title?.toLowerCase().includes(query) ||
-            tc.description?.toLowerCase().includes(query) ||
-            (tc.source_requirement_ids &&
-              Array.isArray(tc.source_requirement_ids) &&
-              tc.source_requirement_ids.some((id) =>
-                requirements.value
-                  .find((r) => r.id === id)
-                  ?.name?.toLowerCase()
-                  .includes(query)
-              ))
-        )
-      }
+      const coveredRequirements = new Set()
+      testCases.value.forEach((tc) => {
+        if (tc.source_requirement_ids) {
+          tc.source_requirement_ids.forEach((reqId) => coveredRequirements.add(reqId))
+        }
+      })
 
-      if (statusFilter.value) {
-        filtered = filtered.filter((tc) => tc.status === statusFilter.value)
-      }
+      return Math.round((coveredRequirements.size / requirements.value.length) * 100)
+    })
 
-      if (testTypeFilter.value) {
-        filtered = filtered.filter((tc) => tc.test_type === testTypeFilter.value)
-      }
-
-      if (priorityFilter.value) {
-        filtered = filtered.filter((tc) => tc.priority === priorityFilter.value)
-      }
+    const sortedTestCases = computed(() => {
+      let sorted = [...testCases.value]
 
       // Apply sorting
-      filtered.sort((a, b) => {
-        let aValue = a[sortField.value]
-        let bValue = b[sortField.value]
+      sorted.sort((a, b) => {
+        let aValue = a[sortBy.value]
+        let bValue = b[sortBy.value]
 
-        // Handle special cases for sorting
-        if (sortField.value === 'executed_at') {
+        // Handle special cases for priority sorting
+        if (sortBy.value === 'priority') {
+          const priorityOrder = { critical: 4, high: 3, medium: 2, low: 1 }
+          aValue = priorityOrder[aValue] || 0
+          bValue = priorityOrder[bValue] || 0
+        }
+
+        // Handle date sorting
+        if (sortBy.value === 'executed_at') {
           aValue = aValue ? new Date(aValue).getTime() : 0
           bValue = bValue ? new Date(bValue).getTime() : 0
         }
 
-        // Handle empty values
-        if (!aValue && bValue) return sortDirection.value === 'asc' ? -1 : 1
-        if (aValue && !bValue) return sortDirection.value === 'asc' ? 1 : -1
-        if (!aValue && !bValue) return 0
-
-        // Compare values
-        if (aValue < bValue) return sortDirection.value === 'asc' ? -1 : 1
-        if (aValue > bValue) return sortDirection.value === 'asc' ? 1 : -1
-        return 0
+        if (sortOrder.value === 'asc') {
+          return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
+        } else {
+          return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
+        }
       })
 
-      return filtered
+      return sorted
+    })
+
+    const paginatedTestCases = computed(() => {
+      const startIndex = (pagination.value.currentPage - 1) * pagination.value.pageSize
+      const endIndex = startIndex + pagination.value.pageSize
+
+      pagination.value.startIndex = startIndex
+      pagination.value.endIndex = Math.min(endIndex, sortedTestCases.value.length)
+      pagination.value.totalPages = Math.ceil(
+        sortedTestCases.value.length / pagination.value.pageSize
+      )
+
+      return sortedTestCases.value.slice(startIndex, endIndex)
+    })
+
+    const visiblePages = computed(() => {
+      const pages = []
+      const totalPages = pagination.value.totalPages
+      const currentPage = pagination.value.currentPage
+
+      if (totalPages <= 7) {
+        for (let i = 1; i <= totalPages; i++) {
+          pages.push(i)
+        }
+      } else {
+        if (currentPage <= 4) {
+          for (let i = 1; i <= 5; i++) {
+            pages.push(i)
+          }
+          pages.push('...')
+          pages.push(totalPages)
+        } else if (currentPage >= totalPages - 3) {
+          pages.push(1)
+          pages.push('...')
+          for (let i = totalPages - 4; i <= totalPages; i++) {
+            pages.push(i)
+          }
+        } else {
+          pages.push(1)
+          pages.push('...')
+          for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+            pages.push(i)
+          }
+          pages.push('...')
+          pages.push(totalPages)
+        }
+      }
+
+      return pages
     })
 
     // Methods
@@ -659,7 +681,6 @@ export default {
           return
         }
 
-        console.log('🔄 Fetching project data for:', projectId)
         const { data } = await getProjectDetail(projectId)
         const result = data.data || data
         project.value = result.project || {}
@@ -667,67 +688,49 @@ export default {
 
         if (versions.value.length > 0 && !selectedVersionId.value) {
           selectedVersionId.value = versions.value[0]._id
-          console.log('✅ Auto-selected version:', selectedVersionId.value)
         }
 
-        // Initialize socket connection
         if (project.value._id) {
           initSocketConnection(project.value._id)
         }
       } catch (error) {
-        console.error('❌ Error fetching project:', error)
+        console.error('Error fetching project:', error)
         toast.error('Failed to load project data')
       }
     }
 
     const fetchRequirements = async () => {
-      if (!selectedVersionId.value) {
-        console.log('❌ No version selected for requirements')
-        return
-      }
+      if (!selectedVersionId.value) return
 
       try {
-        console.log('🔄 Fetching requirements for version:', selectedVersionId.value)
         const { data } = await usecaseApi.getUsecases(selectedVersionId.value)
         requirements.value = data.data || data || []
-        console.log(`✅ Loaded ${requirements.value.length} requirements`)
       } catch (error) {
-        console.error('❌ Error fetching requirements:', error)
+        console.error('Error fetching requirements:', error)
         requirements.value = []
       }
     }
 
     const fetchDatabaseSchema = async () => {
-      if (!selectedVersionId.value) {
-        console.log('❌ No version selected for database schema')
-        return
-      }
+      if (!selectedVersionId.value) return
 
       try {
-        console.log(`🗄️ Fetching database schema for version ${selectedVersionId.value}`)
         const { data } = await getDatabasesByVersion(selectedVersionId.value)
-
-        if (data && data.data && data.data.length > 0) {
+        if (data?.data?.[0]) {
           databaseSchema.value = data.data[0]
-          console.log('✅ Database schema loaded:', databaseSchema.value)
-        } else if (data && data.length > 0) {
+        } else if (data?.[0]) {
           databaseSchema.value = data[0]
-          console.log('✅ Database schema loaded (fallback):', databaseSchema.value)
         } else {
-          console.warn('⚠️ No database found for this version')
           databaseSchema.value = null
         }
       } catch (error) {
-        console.error('❌ Error fetching database schema:', error)
+        console.error('Error fetching database schema:', error)
         databaseSchema.value = null
       }
     }
 
     const loadTestCases = async () => {
-      if (!project.value._id) {
-        console.log('❌ No project ID available for loading test cases')
-        return
-      }
+      if (!project.value._id) return
 
       loading.value = true
       try {
@@ -738,19 +741,15 @@ export default {
           priority: priorityFilter.value || undefined,
         }
 
-        console.log('🔄 Loading test cases for project:', project.value._id)
         const { data } = await testcaseApi.getTestCasesByProject(project.value._id, params)
         testCases.value = data.data || data || []
-        console.log(`✅ Loaded ${testCases.value.length} test cases`)
 
-        // Reset selection và infinite scroll khi data thay đổi
+        // Reset selection and pagination
         selectedTestCases.value = []
         selectAll.value = false
-        currentPage.value = 1
-        hasMoreData.value = true
-        loadMoreData()
+        pagination.value.currentPage = 1
       } catch (error) {
-        console.error('❌ Error loading test cases:', error)
+        console.error('Error loading test cases:', error)
         toast.error('Failed to load test cases')
         testCases.value = []
       } finally {
@@ -758,32 +757,31 @@ export default {
       }
     }
 
-    // Infinite scroll - load more data
-    const loadMoreData = () => {
-      const startIndex = (currentPage.value - 1) * itemsPerPage
-      const endIndex = startIndex + itemsPerPage
-      const newItems = filteredTestCases.value.slice(startIndex, endIndex)
-
-      if (currentPage.value === 1) {
-        displayedTestCases.value = newItems
-      } else {
-        displayedTestCases.value = [...displayedTestCases.value, ...newItems]
+    const formatTestCaseTitle = (testcase) => {
+      // Kiểm tra nếu title đã có format [UC_ID] - [Tên use case] - thì không format lại
+      const existingFormatRegex = /^\[.*\] - .* - .*/
+      if (existingFormatRegex.test(testcase.title)) {
+        return testcase.title
       }
 
-      hasMoreData.value = endIndex < filteredTestCases.value.length
+      // Format mới chỉ khi title chưa có format trên
+      const requirementIds = testcase.source_requirement_ids || []
+
+      if (requirementIds.length === 0) {
+        return testcase.title || 'Untitled Test Case'
+      }
+
+      // Get the first requirement ID and name
+      const firstReqId = requirementIds[0]
+      const requirementName = getRequirementName(firstReqId)
+      const baseTitle = testcase.title || 'Test Scenario'
+
+      return `[${firstReqId}] - ${requirementName} - ${baseTitle}`
     }
 
-    // Handle scroll for infinite loading
-    const handleScroll = () => {
-      if (!tableContainer.value || loading.value || !hasMoreData.value) return
-
-      const { scrollTop, scrollHeight, clientHeight } = tableContainer.value
-      const scrollThreshold = 100 // pixels from bottom
-
-      if (scrollTop + clientHeight >= scrollHeight - scrollThreshold) {
-        currentPage.value += 1
-        loadMoreData()
-      }
+    const getRequirementName = (requirementId) => {
+      const requirement = requirements.value.find((req) => req.id === requirementId)
+      return requirement?.name || 'Unknown Requirement'
     }
 
     const handleGenerateTestCases = async (generatedTestCases) => {
@@ -793,66 +791,54 @@ export default {
       }
 
       try {
-        console.log('💾 Saving generated test cases:', generatedTestCases.length)
+        // Format titles before saving
+        const formattedTestCases = generatedTestCases.map((tc) => ({
+          ...tc,
+          title: formatGeneratedTestCaseTitle(tc),
+        }))
+
         await testcaseApi.saveTestCases(project.value._id, selectedVersionId.value, {
-          testCases: generatedTestCases,
+          testCases: formattedTestCases,
         })
-        toast.success(`Successfully generated ${generatedTestCases.length} test cases`)
-        await loadTestCases() // Reload để cập nhật statistics
+        toast.success(`Successfully generated ${formattedTestCases.length} test cases`)
+        showGenerateModal.value = false
+        await loadTestCases()
       } catch (error) {
-        console.error('❌ Error saving generated test cases:', error)
+        console.error('Error saving generated test cases:', error)
         const errorMessage = error.response?.data?.message || error.message
         toast.error(`Failed to save test cases: ${errorMessage}`)
       }
     }
 
-    // 🆕 HANDLE ENHANCE TEST CASES
-    const handleEnhanceTestCases = async (enhancementData) => {
-      if (!project.value._id || !selectedVersionId.value) {
-        toast.error('Project and version must be selected')
-        return
+    const formatGeneratedTestCaseTitle = (testcase) => {
+      const requirementIds = testcase.source_requirement_ids || []
+
+      if (requirementIds.length === 0) {
+        return testcase.title || 'Generated Test Case'
       }
 
-      try {
-        console.log(
-          '🔄 Enhancing test cases with new requirements:',
-          enhancementData.newRequirementIds
-        )
-        const { data } = await testcaseApi.enhanceTestCases(
-          project.value._id,
-          selectedVersionId.value,
-          enhancementData
-        )
+      const firstReqId = requirementIds[0]
+      const requirementName = getRequirementName(firstReqId)
+      const testScenario = testcase.title || 'Test Scenario'
 
-        toast.success(
-          `Successfully enhanced test cases! Added ${data.summary?.added || 0} new test cases`
-        )
-        await loadTestCases() // Reload để cập nhật statistics
-        showEnhanceModal.value = false
-      } catch (error) {
-        console.error('❌ Error enhancing test cases:', error)
-        const errorMessage = error.response?.data?.message || error.message
-        toast.error(`Failed to enhance test cases: ${errorMessage}`)
-      }
+      return `[${firstReqId}] - ${requirementName} - ${testScenario}`
     }
 
     const handleSaveTestcase = async (testcaseData) => {
       try {
         if (editingTestcase.value) {
-          console.log('✏️ Updating test case:', editingTestcase.value._id)
           await testcaseApi.updateTestCase(editingTestcase.value._id, testcaseData)
           toast.success('Test case updated successfully')
         } else {
-          console.log('🆕 Creating new test case')
           await testcaseApi.saveTestCases(project.value._id, selectedVersionId.value, {
             testCases: [testcaseData],
           })
           toast.success('Test case created successfully')
         }
-        await loadTestCases() // Reload để cập nhật statistics
+        await loadTestCases()
         closeModal()
       } catch (error) {
-        console.error('❌ Error saving test case:', error)
+        console.error('Error saving test case:', error)
         const errorMessage = error.response?.data?.message || error.message
         toast.error(`Failed to save test case: ${errorMessage}`)
       }
@@ -874,13 +860,12 @@ export default {
       }
 
       try {
-        console.log('🎯 Executing test case:', executingTestcase.value._id)
         await testcaseApi.executeTestCase(executingTestcase.value._id, executionData)
         toast.success('Test case executed successfully')
-        await loadTestCases() // Reload để cập nhật data
+        await loadTestCases()
         executingTestcase.value = null
       } catch (error) {
-        console.error('❌ Error executing test case:', error)
+        console.error('Error executing test case:', error)
         const errorMessage = error.response?.data?.message || error.message
         toast.error(`Failed to execute test case: ${errorMessage}`)
       }
@@ -893,7 +878,6 @@ export default {
       }
 
       try {
-        console.log(`⚡ Bulk executing ${selectedTestCases.value.length} test cases as ${status}`)
         await testcaseApi.bulkExecuteTestCases(project.value._id, {
           testCaseIds: selectedTestCases.value,
           executionData: { status },
@@ -903,7 +887,7 @@ export default {
         selectAll.value = false
         await loadTestCases()
       } catch (error) {
-        console.error('❌ Error bulk executing:', error)
+        console.error('Error bulk executing:', error)
         const errorMessage = error.response?.data?.message || error.message
         toast.error(`Failed to update test cases: ${errorMessage}`)
       }
@@ -916,42 +900,37 @@ export default {
       }
 
       if (
-        !confirm(
-          `Are you sure you want to delete ${selectedTestCases.value.length} test cases? This action cannot be undone.`
-        )
+        !confirm(`Are you sure you want to delete ${selectedTestCases.value.length} test cases?`)
       ) {
         return
       }
 
       try {
-        console.log(`🗑️ Bulk deleting ${selectedTestCases.value.length} test cases`)
-        // Sử dụng bulk delete nếu có, hoặc delete từng cái
-        await Promise.all(selectedTestCases.value.map((id) => testcaseApi.deleteTestCase(id)))
+        await testcaseApi.bulkDeleteTestCases(project.value._id, {
+          testCaseIds: selectedTestCases.value,
+        })
         toast.success(`Deleted ${selectedTestCases.value.length} test cases`)
         selectedTestCases.value = []
         selectAll.value = false
         await loadTestCases()
       } catch (error) {
-        console.error('❌ Error bulk deleting:', error)
+        console.error('Error bulk deleting:', error)
         const errorMessage = error.response?.data?.message || error.message
         toast.error(`Failed to delete test cases: ${errorMessage}`)
       }
     }
 
     const deleteTestcase = async (testcaseId) => {
-      if (
-        !confirm('Are you sure you want to delete this test case? This action cannot be undone.')
-      ) {
+      if (!confirm('Are you sure you want to delete this test case?')) {
         return
       }
 
       try {
-        console.log('🗑️ Deleting test case:', testcaseId)
         await testcaseApi.deleteTestCase(testcaseId)
         toast.success('Test case deleted successfully')
         await loadTestCases()
       } catch (error) {
-        console.error('❌ Error deleting test case:', error)
+        console.error('Error deleting test case:', error)
         const errorMessage = error.response?.data?.message || error.message
         toast.error(`Failed to delete test case: ${errorMessage}`)
       }
@@ -970,64 +949,70 @@ export default {
       editingTestcase.value = null
     }
 
-    const refreshData = () => {
-      console.log('🔄 Refreshing data...')
-      loadTestCases()
-      fetchRequirements()
-      fetchDatabaseSchema()
-    }
-
     const clearFilters = () => {
       searchQuery.value = ''
       statusFilter.value = ''
       testTypeFilter.value = ''
       priorityFilter.value = ''
-      selectedTestCases.value = []
-      selectAll.value = false
-      currentPage.value = 1
-      loadMoreData()
-    }
-
-    const applyFilters = () => {
-      currentPage.value = 1
-      loadMoreData()
     }
 
     const handleSearch = () => {
       clearTimeout(window.searchTimeout)
       window.searchTimeout = setTimeout(() => {
-        applyFilters()
+        loadTestCases()
       }, 500)
     }
 
     const toggleSelectAll = () => {
       if (selectAll.value) {
-        selectedTestCases.value = displayedTestCases.value.map((tc) => tc._id)
+        selectedTestCases.value = paginatedTestCases.value.map((tc) => tc._id)
       } else {
         selectedTestCases.value = []
       }
     }
 
     const setSort = (field) => {
-      if (sortField.value === field) {
-        // Toggle direction if same field
-        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+      if (sortBy.value === field) {
+        sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
       } else {
-        // New field, default to ascending
-        sortField.value = field
-        sortDirection.value = 'asc'
+        sortBy.value = field
+        sortOrder.value = 'asc'
       }
-
-      // Save to localStorage
-      saveSortingPreferences()
-
-      // Reset to first page and reload data
-      currentPage.value = 1
-      loadMoreData()
     }
 
-    const exportTestCases = () => {
-      toast.info('Export feature will be available soon')
+    const goToPage = (page) => {
+      if (page !== '...') {
+        pagination.value.currentPage = page
+      }
+    }
+
+    const previousPage = () => {
+      if (pagination.value.currentPage > 1) {
+        pagination.value.currentPage--
+      }
+    }
+
+    const nextPage = () => {
+      if (pagination.value.currentPage < pagination.value.totalPages) {
+        pagination.value.currentPage++
+      }
+    }
+
+    const handlePageSizeChange = () => {
+      pagination.value.currentPage = 1
+    }
+
+    const exportTestCases = async () => {
+      try {
+        const response = await testcaseApi.exportTestCases(
+          project.value._id,
+          selectedVersionId.value
+        )
+        toast.success('Export completed successfully')
+      } catch (error) {
+        console.error('Error exporting test cases:', error)
+        toast.error('Failed to export test cases')
+      }
     }
 
     const formatDate = (dateString) => {
@@ -1044,24 +1029,19 @@ export default {
     }
 
     const handleVersionSelect = (versionId) => {
-      console.log('🎯 Version selected:', versionId)
       selectedVersionId.value = versionId
-      refreshData()
+      loadAllData()
     }
 
     const navigateToUsecase = () => {
       if (project.value._id) {
         router.push({ name: 'Editor', params: { id: project.value._id } })
-      } else {
-        toast.error('Project not loaded')
       }
     }
 
     const navigateToOutput = () => {
       if (project.value._id) {
         router.push({ name: 'OutputManagement', params: { id: project.value._id } })
-      } else {
-        toast.error('Project not loaded')
       }
     }
 
@@ -1072,14 +1052,12 @@ export default {
     const loadAllData = async () => {
       loading.value = true
       try {
-        console.log('🚀 Loading all test case management data...')
         await fetchProjectData()
         await fetchRequirements()
         await fetchDatabaseSchema()
         await loadTestCases()
-        console.log('✅ All data loaded successfully')
       } catch (error) {
-        console.error('❌ Error loading data:', error)
+        console.error('Error loading data:', error)
         toast.error('Failed to load project data')
       } finally {
         loading.value = false
@@ -1088,13 +1066,10 @@ export default {
 
     // Lifecycle
     onMounted(async () => {
-      console.log('🏁 TestcaseManagement mounted')
-      loadSortingPreferences()
       await loadAllData()
     })
 
     onUnmounted(() => {
-      console.log('🧹 Cleaning up TestcaseManagement')
       cleanupSocketConnection()
     })
 
@@ -1103,7 +1078,6 @@ export default {
       () => route.params.id,
       async (newId) => {
         if (newId) {
-          console.log('🔄 Route changed, reloading data for project:', newId)
           await loadAllData()
         }
       }
@@ -1113,7 +1087,6 @@ export default {
       () => selectedVersionId.value,
       (newVersionId) => {
         if (newVersionId) {
-          console.log('🔄 Version changed, reloading requirements and schema')
           fetchRequirements()
           fetchDatabaseSchema()
           loadTestCases()
@@ -1121,18 +1094,9 @@ export default {
       }
     )
 
-    watch(
-      () => filteredTestCases.value,
-      () => {
-        // Reset infinite scroll when filters change
-        currentPage.value = 1
-        loadMoreData()
-      }
-    )
-
     watch(selectedTestCases, (newSelection) => {
       selectAll.value =
-        newSelection.length > 0 && newSelection.length === displayedTestCases.value.length
+        newSelection.length > 0 && newSelection.length === paginatedTestCases.value.length
     })
 
     return {
@@ -1144,14 +1108,10 @@ export default {
       databaseSchema,
       testCases,
       loading,
-      tableContainer,
-      displayedTestCases,
-      hasMoreData,
       activeUsers,
 
-      // UI states - 🆕 THÊM showEnhanceModal
+      // UI states
       showGenerateModal,
-      showEnhanceModal,
       showCreateModal,
       editingTestcase,
       viewingTestcase,
@@ -1162,16 +1122,20 @@ export default {
       statusFilter,
       testTypeFilter,
       priorityFilter,
+      sortBy,
+      sortOrder,
       selectedTestCases,
       selectAll,
 
-      // Sorting
-      sortField,
-      sortDirection,
+      // Pagination
+      pagination,
+      paginatedTestCases,
+      visiblePages,
 
       // Computed
       statistics,
-      initSocketConnection,
+      hasActiveFilters,
+      coveragePercentage,
 
       // Methods
       handleVersionSelect,
@@ -1179,7 +1143,6 @@ export default {
       navigateToOutput,
       goBack,
       handleGenerateTestCases,
-      handleEnhanceTestCases, // 🆕 THÊM METHOD MỚI
       handleSaveTestcase,
       executeTestcase,
       handleExecuteTestcase,
@@ -1189,22 +1152,155 @@ export default {
       viewTestcase,
       editTestcase,
       closeModal,
-      refreshData,
+      loadTestCases,
       clearFilters,
-      applyFilters,
       handleSearch,
       toggleSelectAll,
       setSort,
+      goToPage,
+      previousPage,
+      nextPage,
+      handlePageSizeChange,
       exportTestCases,
       formatDate,
-      handleScroll,
-      fetchProjectData,
+      formatTestCaseTitle,
+      getRequirementName,
     }
   },
 }
 </script>
 
 <style scoped>
+/* Các styles giữ nguyên từ phiên bản trước, chỉ thêm styles mới cho pagination và requirement tags */
+
+/* Pagination Styles */
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-color);
+  background: white;
+}
+
+.pagination-info {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.page-numbers {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.page-number {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  background: white;
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.page-number:hover {
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.page-number.active {
+  background: #1a365d;
+  border-color: #1a365d;
+  color: white;
+}
+
+.page-number:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.page-size-selector label {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.page-size-select {
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: white;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
+/* Requirement Tags */
+.requirement-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.requirement-tag {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: var(--primary-light);
+  color: #1a365d;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-family: 'Courier New', monospace;
+}
+
+.no-requirements {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* Thêm column mới cho requirements */
+.requirements-column {
+  min-width: 150px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .pagination {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .requirements-column {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .pagination-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .page-numbers {
+    order: -1;
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* Giữ nguyên tất cả các styles khác từ phiên bản trước */
 .testcase-management-view {
   padding: 30px;
   min-height: 100vh;
@@ -1250,7 +1346,7 @@ export default {
 
 .action-header {
   display: flex;
-  justify-content: between;
+  justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 2rem;
 }
@@ -1269,7 +1365,8 @@ export default {
 
 .header-actions {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .btn-primary,
@@ -1304,6 +1401,39 @@ export default {
 
 .btn-secondary:hover {
   background: var(--border-color);
+}
+
+.btn-secondary.success {
+  background: var(--success-light);
+  color: var(--success-color);
+  border: 1px solid var(--success-color);
+}
+
+.btn-secondary.success:hover {
+  background: var(--success-color);
+  color: white;
+}
+
+.btn-secondary.warning {
+  background: var(--warning-light);
+  color: var(--warning-color);
+  border: 1px solid var(--warning-color);
+}
+
+.btn-secondary.warning:hover {
+  background: var(--warning-color);
+  color: white;
+}
+
+.btn-secondary.danger {
+  background: var(--error-light);
+  color: var(--error-color);
+  border: 1px solid var(--error-color);
+}
+
+.btn-secondary.danger:hover {
+  background: var(--error-color);
+  color: white;
 }
 
 .btn-icon {
@@ -1341,7 +1471,6 @@ export default {
   background: var(--error-light);
 }
 
-/* Stats Grid */
 /* Stats Grid */
 .stats-grid {
   display: grid;
@@ -1436,10 +1565,11 @@ export default {
   margin: 0;
   font-weight: 500;
 }
+
 /* Filters Section */
 .filters-section {
   display: flex;
-  justify-content: between;
+  justify-content: space-between;
   align-items: center;
   gap: 1rem;
   margin-bottom: 1.5rem;
@@ -1623,6 +1753,10 @@ td {
 }
 
 .tables-column {
+  min-width: 150px;
+}
+
+.requirements-column {
   min-width: 150px;
 }
 
@@ -1851,24 +1985,24 @@ td {
   border: 1px solid #1a365d;
   color: #121212;
 }
+
 /* Bulk Actions */
 .bulk-actions {
-  display: flex;
-  gap: 1pc;
-  border-radius: 15px;
-  justify-self: center;
-  justify-content: center;
-  width: 70%;
-  border: 2px solid #000;
-  left: 0;
-  right: 0;
   position: fixed;
-  background-color: #fff;
-  flex-direction: column;
   bottom: 20px;
-  justify-content: between;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: space-between;
   align-items: center;
+  background: white;
   padding: 1rem 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border: 2px solid #1a365d;
+  width: 70%;
+  max-width: 800px;
+  z-index: 1000;
 }
 
 .bulk-info {
@@ -1882,24 +2016,6 @@ td {
 .bulk-buttons {
   display: flex;
   gap: 0.5rem;
-}
-
-.btn-secondary.success {
-  background: var(--success-light);
-  color: var(--success-color);
-  border-color: var(--success-color);
-}
-
-.btn-secondary.warning {
-  background: var(--warning-light);
-  color: var(--warning-color);
-  border-color: var(--warning-color);
-}
-
-.btn-secondary.danger {
-  background: var(--error-light);
-  color: var(--error-color);
-  border-color: var(--error-color);
 }
 
 /* Responsive */
@@ -1958,143 +2074,25 @@ td {
     flex-direction: column;
     gap: 1rem;
     align-items: stretch;
-  }
-
-  .bulk-buttons {
-    justify-content: center;
-  }
-}
-/* 🆕 CSS MỚI CHO NÚT ENHANCE */
-.btn-secondary.success {
-  background: var(--success-light);
-  color: var(--success-color);
-  border: 1px solid var(--success-color);
-}
-
-.btn-secondary.success:hover {
-  background: var(--success-color);
-  color: white;
-}
-
-/* 🆕 CSS CHO BULK ACTIONS FIXED */
-.bulk-actions {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: white;
-  padding: 1rem 1.5rem;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  border: 2px solid #1a365d;
-  width: 70%;
-  max-width: 800px;
-  z-index: 1000;
-}
-
-.bulk-info {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #1a365d;
-  font-weight: 500;
-}
-
-.bulk-buttons {
-  display: flex;
-  gap: 0.5rem;
-}
-
-/* 🆕 RESPONSIVE CHO BULK ACTIONS */
-@media (max-width: 768px) {
-  .bulk-actions {
     width: 90%;
-    flex-direction: column;
-    gap: 1rem;
-    text-align: center;
   }
 
   .bulk-buttons {
     justify-content: center;
     flex-wrap: wrap;
   }
-}
 
-/* 🆕 HEADER ACTIONS SPACING */
-.header-actions {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
+  .pagination {
+    flex-direction: column;
+    gap: 1rem;
+  }
 
-/* 🆕 ENHANCE BUTTON SPECIFIC STYLES */
-.btn-secondary.success .material-symbols-outlined {
-  font-size: 1.1rem;
-}
+  .pagination-controls {
+    order: -1;
+  }
 
-/* Giữ nguyên các style cũ khác */
-.testcase-management-view {
-  padding: 30px;
-  min-height: 100vh;
-  background: var(--background-color);
-}
-
-.navigation-tabs {
-  display: flex;
-  background: white;
-  border-bottom: 1px solid var(--border-color);
-  padding: 0 2rem;
-}
-
-.tab-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tab-button:hover {
-  color: #1a365d;
-  background: var(--background-color);
-}
-
-.tab-button.active {
-  color: #1a365d;
-  border-bottom-color: #1a365d;
-}
-
-.testcase-content {
-  padding: 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.action-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 2rem;
-}
-
-.header-left h2 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0 0 0.25rem 0;
-}
-
-.subtitle {
-  color: var(--text-secondary);
-  margin: 0;
+  .page-size-selector {
+    order: 1;
+  }
 }
 </style>

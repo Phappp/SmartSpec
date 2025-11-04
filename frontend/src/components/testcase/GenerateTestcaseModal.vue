@@ -1,264 +1,187 @@
 <template>
-  <div class="modal-overlay" @click.self="$emit('close')">
+  <div class="modal-overlay" @click.self="handleClose">
     <div class="modal-content large">
       <div class="modal-header">
         <h2>Generate Test Cases</h2>
-        <button class="btn-close" @click="$emit('close')">
+        <button class="btn-close" @click="handleClose">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
 
       <div class="modal-body">
-        <!-- Progress Steps -->
-        <div class="progress-steps">
-          <div class="step" :class="{ active: currentStep === 1, completed: currentStep > 1 }">
-            <div class="step-number">1</div>
-            <div class="step-label">Configuration</div>
-          </div>
-          <div class="step-connector" :class="{ completed: currentStep > 1 }"></div>
-          <div class="step" :class="{ active: currentStep === 2, completed: currentStep > 2 }">
-            <div class="step-number">2</div>
-            <div class="step-label">Selection</div>
-          </div>
-          <div class="step-connector" :class="{ completed: currentStep > 2 }"></div>
-          <div class="step" :class="{ active: currentStep === 3, completed: currentStep > 3 }">
-            <div class="step-number">3</div>
-            <div class="step-label">Preview</div>
-          </div>
-        </div>
-
-        <!-- Step 1: Configuration -->
-        <div v-if="currentStep === 1" class="step-content">
-          <h3 class="step-title">Generation Configuration</h3>
-
-          <div class="configuration-options">
-            <div class="option-group">
-              <!-- <label class="option-label">Source Type</label> -->
-              <div class="source-options">
-                <div
-                  v-for="source in sourceTypes"
-                  :key="source.id"
-                  class="source-option"
-                  :class="{ selected: selectedSource === source.id }"
-                  @click="selectSource(source.id)"
-                >
-                  <div class="source-icon">
-                    <span class="material-symbols-outlined">{{ source.icon }}</span>
-                  </div>
-                  <div class="source-info">
-                    <h4>{{ source.title }}</h4>
-                    <p>{{ source.description }}</p>
-                  </div>
-                  <div class="source-check">
-                    <span class="material-symbols-outlined" v-if="selectedSource === source.id">
-                      check_circle
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="option-group">
-              <label class="option-label">Generation Options</label>
-              <div class="generation-options">
-                <div class="form-group">
-                  <label class="form-label">Language</label>
-                  <select v-model="configuration.language" class="form-select">
-                    <option value="vi-VN">Vietnamese</option>
-                    <option value="en-US">English</option>
-                  </select>
-                </div>
-
-                <!-- <div class="form-group">
-                  <label class="form-label">Test Type Focus</label>
-                  <select v-model="configuration.testTypeFocus" class="form-select">
-                    <option value="all">All Test Types</option>
-                    <option value="unit">Unit Tests Only</option>
-                    <option value="integration">Integration Tests Only</option>
-                    <option value="api">API Tests Only</option>
-                    <option value="ui">UI Tests Only</option>
-                  </select>
-                </div> -->
-
-                <!-- <div class="checkbox-group">
-                  <label class="checkbox-item">
-                    <input type="checkbox" v-model="configuration.includeDatabaseOperations" />
-                    <span class="checkmark"></span>
-                    <span class="checkbox-label">Include Database Operations</span>
-                  </label>
-
-                  <label class="checkbox-item">
-                    <input type="checkbox" v-model="configuration.includeTestData" />
-                    <span class="checkmark"></span>
-                    <span class="checkbox-label">Generate Test Data</span>
-                  </label>
-
-                  <label class="checkbox-item">
-                    <input type="checkbox" v-model="configuration.includeAutomation" />
-                    <span class="checkmark"></span>
-                    <span class="checkbox-label">Include Automation Scripts</span>
-                  </label>
-                </div> -->
-              </div>
-            </div>
-          </div>
-
-          <div class="step-actions">
-            <button class="btn btn-secondary" @click="$emit('close')">Cancel</button>
-            <button class="btn btn-primary" @click="nextStep" :disabled="!selectedSource">
-              Continue to Selection
-            </button>
-          </div>
-        </div>
-
-        <!-- Step 2: Selection -->
-        <div v-if="currentStep === 2" class="step-content">
-          <h3 class="step-title">
-            {{
-              selectedSource === 'requirements' ? 'Select Requirements' : 'Select Database Tables'
-            }}
-          </h3>
+        <!-- Requirements Selection -->
+        <div class="selection-section">
+          <h3 class="section-title">Select Requirements</h3>
+          <p class="section-subtitle">Choose requirements to generate test cases from</p>
 
           <div class="selection-container">
             <div class="selection-header">
               <div class="selection-info">
-                <span class="selected-count"> {{ getSelectedCount }} selected </span>
+                <span class="selected-count">{{ selectedRequirements.length }} selected</span>
+                <span class="total-count">{{ requirements.length }} total</span>
               </div>
               <div class="selection-actions">
-                <button class="btn btn-sm btn-secondary" @click="selectAll">Select All</button>
+                <button
+                  class="btn btn-sm btn-secondary"
+                  @click="selectAll"
+                  :disabled="requirements.length === 0"
+                >
+                  Select All
+                </button>
                 <button class="btn btn-sm btn-secondary" @click="clearSelection">Clear All</button>
               </div>
             </div>
 
             <div class="selection-list">
-              <!-- Requirements Selection -->
-              <div v-if="selectedSource === 'requirements'" class="requirements-selection">
-                <div
-                  v-for="requirement in requirements"
-                  :key="requirement.id"
-                  class="selection-item"
-                  :class="{ selected: selectedRequirements.includes(requirement.id) }"
-                  @click="toggleRequirement(requirement.id)"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="selectedRequirements.includes(requirement.id)"
-                    @change="toggleRequirement(requirement.id)"
-                  />
-                  <div class="item-content">
-                    <h4 class="item-title">{{ requirement.name }}</h4>
-                    <p class="item-description">{{ requirement.goal }}</p>
-                    <div class="item-meta">
-                      <span class="meta-tag">{{ requirement.type || 'Functional' }}</span>
-                      <span class="meta-tag" v-if="requirement.priority">
-                        {{ requirement.priority }}
-                      </span>
-                    </div>
+              <div
+                v-for="requirement in requirements"
+                :key="requirement.id"
+                class="selection-item"
+                :class="{ selected: selectedRequirements.includes(requirement.id) }"
+                @click="toggleRequirement(requirement.id)"
+              >
+                <input
+                  type="checkbox"
+                  :checked="selectedRequirements.includes(requirement.id)"
+                  @change="toggleRequirement(requirement.id)"
+                />
+                <div class="item-content">
+                  <h4 class="item-title">{{ requirement.name }}</h4>
+                  <p class="item-description">{{ requirement.goal }}</p>
+                  <div class="item-meta">
+                    <span class="meta-tag type">{{ requirement.type || 'Functional' }}</span>
+                    <span
+                      v-if="requirement.priority"
+                      class="meta-tag priority"
+                      :class="requirement.priority"
+                    >
+                      {{ requirement.priority }}
+                    </span>
                   </div>
-                </div>
-
-                <div v-if="requirements.length === 0" class="empty-selection">
-                  <span class="material-symbols-outlined">list_alt</span>
-                  <p>No requirements available for this version</p>
                 </div>
               </div>
 
-              <!-- Database Tables Selection -->
-              <div v-else class="tables-selection">
-                <div
-                  v-for="table in databaseTables"
-                  :key="table.name"
-                  class="selection-item"
-                  :class="{ selected: selectedTables.includes(table.name) }"
-                  @click="toggleTable(table.name)"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="selectedTables.includes(table.name)"
-                    @change="toggleTable(table.name)"
-                  />
-                  <div class="item-content">
-                    <h4 class="item-title">{{ table.name }}</h4>
-                    <p class="item-description">
-                      {{ table.columns?.length || 0 }} columns
-                      <span v-if="table.description">• {{ table.description }}</span>
-                    </p>
-                    <div class="item-meta">
-                      <span
-                        v-for="column in table.columns?.slice(0, 3)"
-                        :key="column.name"
-                        class="meta-tag column"
-                      >
-                        {{ column.name }}: {{ column.type }}
-                      </span>
-                      <span v-if="table.columns?.length > 3" class="meta-tag more">
-                        +{{ table.columns.length - 3 }} more
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div v-if="databaseTables.length === 0" class="empty-selection">
-                  <span class="material-symbols-outlined">database</span>
-                  <p>No database schema available for this version</p>
-                  <p class="empty-hint">Please generate database schema first</p>
-                </div>
+              <div v-if="requirements.length === 0" class="empty-selection">
+                <span class="material-symbols-outlined">list_alt</span>
+                <p>No requirements available for this version</p>
+                <p class="empty-hint">Please create requirements first</p>
               </div>
             </div>
           </div>
+        </div>
 
-          <div class="step-actions">
-            <button class="btn btn-secondary" @click="prevStep">Back</button>
-            <button
-              class="btn btn-primary"
-              @click="generatePreview"
-              :disabled="getSelectedCount === 0 || generating"
-            >
-              <span v-if="generating" class="spinner"></span>
-              {{ generating ? 'Generating...' : `Generate Preview (${getSelectedCount} items)` }}
-            </button>
+        <!-- Configuration Options -->
+        <div class="configuration-section">
+          <h3 class="section-title">Generation Options</h3>
+
+          <div class="configuration-grid">
+            <div class="form-group">
+              <label class="form-label">Test Type</label>
+              <select v-model="configuration.testType" class="form-select">
+                <option value="all">All Types</option>
+                <!-- <option value="unit">Unit</option> -->
+                <option value="integration">Integration</option>
+                <option value="api">API</option>
+                <option value="ui">UI</option>
+                <option value="performance">Performance</option>
+                <option value="security">Security</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Language</label>
+              <select v-model="configuration.language" class="form-select">
+                <option value="vi-VN">Vietnamese</option>
+                <option value="en-US">English</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Priority Level</label>
+              <select v-model="configuration.priority" class="form-select">
+                <option value="auto">Auto-detect</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <!-- Step 3: Preview -->
-        <div v-if="currentStep === 3" class="step-content">
-          <h3 class="step-title">Generated Test Cases Preview</h3>
+        <!-- Draft Management -->
+        <div v-if="hasDraft" class="draft-section">
+          <div class="draft-banner">
+            <div class="draft-info">
+              <span class="material-symbols-outlined">draft</span>
+              <div>
+                <h4>Draft Found</h4>
+                <p>You have unsaved test cases from your previous session</p>
+              </div>
+            </div>
+            <div class="draft-actions">
+              <button class="btn btn-secondary" @click="restoreDraft">Restore Draft</button>
+              <button class="btn btn-secondary" @click="discardDraft">Discard</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview Section -->
+        <div v-if="previewTestCases.length > 0" class="preview-section">
+          <div class="preview-header-section">
+            <h3 class="section-title">Preview ({{ previewTestCases.length }} test cases)</h3>
+            <div class="preview-actions">
+              <button class="btn btn-sm btn-secondary" @click="toggleAllDetails">
+                <span class="material-symbols-outlined">
+                  {{ showAllDetails ? 'visibility_off' : 'visibility' }}
+                </span>
+                {{ showAllDetails ? 'Hide All' : 'Show All' }}
+              </button>
+              <button
+                class="btn btn-sm btn-secondary"
+                @click="saveDraft"
+              >
+                <span class="material-symbols-outlined">save</span>
+                {{ savingDraft ? 'Saving...' : hasUnsavedChanges ? 'Save Draft' : 'Draft Saved' }}
+              </button>
+            </div>
+          </div>
 
           <div class="preview-container">
-            <div class="preview-header">
-              <div class="preview-stats">
-                <span class="stat">
-                  <strong>{{ previewTestCases.length }}</strong> test cases generated
-                </span>
-                <span class="stat">
-                  <strong>{{ coverageStats.tablesCovered }}</strong> tables covered
-                </span>
-                <span class="stat">
-                  <strong>{{ coverageStats.operationsCovered }}</strong> operations
-                </span>
+            <div class="preview-stats-bar">
+              <div class="stat-item">
+                <span class="stat-label">Test Types:</span>
+                <span class="stat-value">{{ testTypeDistribution }}</span>
               </div>
-              <div class="preview-actions">
-                <button class="btn btn-sm btn-secondary" @click="regenerate">
-                  <span class="material-symbols-outlined">refresh</span>
-                  Regenerate
-                </button>
+              <div class="stat-item">
+                <span class="stat-label">Tables Covered:</span>
+                <span class="stat-value">{{ coverageStats.tablesCovered }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Requirements Covered:</span>
+                <span class="stat-value">{{ coverageStats.requirementsCovered }}</span>
               </div>
             </div>
 
             <div class="preview-list">
               <div v-for="(testcase, index) in previewTestCases" :key="index" class="preview-item">
-                <div class="preview-main">
-                  <h4 class="preview-title">{{ testcase.title }}</h4>
-                  <p class="preview-description" v-if="testcase.description">
-                    {{ testcase.description }}
-                  </p>
+                <div class="preview-main" @click="toggleDetail(index)">
+                  <div class="preview-header">
+                    <h4 class="preview-title">{{ formatTestCaseTitle(testcase) }}</h4>
+                    <div class="preview-badges">
+                      <span class="badge type" :class="testcase.test_type">
+                        {{ testcase.test_type }}
+                      </span>
+                      <span class="badge priority" :class="testcase.priority">
+                        {{ testcase.priority }}
+                      </span>
+                      <span class="material-symbols-outlined expand-icon">
+                        {{ expandedDetails.includes(index) ? 'expand_less' : 'expand_more' }}
+                      </span>
+                    </div>
+                  </div>
+
                   <div class="preview-meta">
-                    <span class="badge type" :class="testcase.test_type">
-                      {{ testcase.test_type }}
-                    </span>
-                    <span class="badge priority" :class="testcase.priority">
-                      {{ testcase.priority }}
-                    </span>
                     <span
                       v-if="testcase.database_tables && testcase.database_tables.length > 0"
                       class="table-info"
@@ -266,43 +189,130 @@
                       <span class="material-symbols-outlined">table</span>
                       {{ testcase.database_tables.join(', ') }}
                     </span>
+                    <span v-if="testcase.source_requirement_ids" class="requirement-info">
+                      <span class="material-symbols-outlined">label</span>
+                      {{ testcase.source_requirement_ids.join(', ') }}
+                    </span>
                   </div>
                 </div>
 
-                <div class="preview-details">
+                <!-- Collapsible Detail Section -->
+                <div v-if="expandedDetails.includes(index)" class="preview-detail">
                   <div class="detail-section">
-                    <strong>Steps:</strong> {{ testcase.steps?.length || 0 }}
+                    <h5>Description</h5>
+                    <p>{{ testcase.description || 'No description provided' }}</p>
                   </div>
-                  <div class="detail-section">
-                    <strong>Test Data:</strong> {{ testcase.test_data?.length || 0 }} scenarios
-                  </div>
+
                   <div
-                    v-if="testcase.database_operations && testcase.database_operations.length > 0"
+                    v-if="testcase.objectives && testcase.objectives.length > 0"
                     class="detail-section"
                   >
-                    <strong>Operations:</strong> {{ testcase.database_operations.join(', ') }}
+                    <h5>Objectives</h5>
+                    <ul>
+                      <li v-for="(objective, objIndex) in testcase.objectives" :key="objIndex">
+                        {{ objective }}
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div v-if="testcase.steps && testcase.steps.length > 0" class="detail-section">
+                    <h5>Test Steps ({{ testcase.steps.length }})</h5>
+                    <div class="steps-list">
+                      <div
+                        v-for="(step, stepIndex) in testcase.steps"
+                        :key="stepIndex"
+                        class="step-item"
+                      >
+                        <div class="step-number">{{ step.step_number }}</div>
+                        <div class="step-content">
+                          <div class="step-action">{{ step.action }}</div>
+                          <div v-if="step.expected_immediate_result" class="step-expected">
+                            Expected: {{ step.expected_immediate_result }}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="testcase.expected_results" class="detail-section">
+                    <h5>Expected Results</h5>
+                    <div class="expected-results">
+                      <div
+                        v-if="
+                          testcase.expected_results.ui_level &&
+                          testcase.expected_results.ui_level.length > 0
+                        "
+                      >
+                        <strong>UI Level:</strong>
+                        <ul>
+                          <li
+                            v-for="(uiResult, uiIndex) in testcase.expected_results.ui_level"
+                            :key="uiIndex"
+                          >
+                            {{ uiResult }}
+                          </li>
+                        </ul>
+                      </div>
+                      <div
+                        v-if="
+                          testcase.expected_results.api_level &&
+                          testcase.expected_results.api_level.status_code
+                        "
+                      >
+                        <strong>API Level:</strong> Status
+                        {{ testcase.expected_results.api_level.status_code }}
+                      </div>
+                      <div v-if="testcase.expected_results.business_level">
+                        <strong>Business Level:</strong>
+                        {{ testcase.expected_results.business_level }}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-
-            <div v-if="previewTestCases.length === 0" class="empty-preview">
-              <span class="material-symbols-outlined">auto_awesome</span>
-              <h4>No Test Cases Generated</h4>
-              <p>Try adjusting your selection or generation options</p>
-              <button class="btn btn-secondary" @click="regenerate">Try Again</button>
-            </div>
           </div>
+        </div>
 
-          <div class="step-actions">
-            <button class="btn btn-secondary" @click="prevStep">Back</button>
-            <button
-              class="btn btn-primary"
-              @click="confirmGeneration"
-              :disabled="previewTestCases.length === 0"
-            >
-              Create {{ previewTestCases.length }} Test Cases
-            </button>
+        <!-- Actions -->
+        <div class="action-section">
+          <div class="action-buttons">
+            <button class="btn btn-secondary" @click="handleClose">Cancel</button>
+
+            <div class="primary-actions">
+              <button
+                v-if="previewTestCases.length === 0"
+                class="btn btn-primary"
+                @click="generateTestCases"
+                :disabled="selectedRequirements.length === 0 || generating"
+              >
+                <span v-if="generating" class="spinner"></span>
+                {{
+                  generating
+                    ? 'Generating...'
+                    : `Generate Test Cases (${selectedRequirements.length})`
+                }}
+              </button>
+
+              <button
+                v-else
+                class="btn btn-primary"
+                @click="confirmGeneration"
+                :disabled="generating || saving"
+              >
+                <span v-if="saving" class="spinner"></span>
+                {{ saving ? 'Saving...' : `Create ${previewTestCases.length} Test Cases` }}
+              </button>
+
+              <button
+                v-if="previewTestCases.length > 0"
+                class="btn btn-secondary"
+                @click="regenerate"
+                :disabled="generating"
+              >
+                Regenerate
+              </button>
+            </div>
           </div>
         </div>
 
@@ -312,12 +322,39 @@
             <div class="spinner large"></div>
             <h3>Generating Test Cases</h3>
             <p>AI is creating comprehensive test cases based on your selection...</p>
-            <!-- <div class="loading-progress">
+            <div class="generation-progress">
               <div class="progress-bar">
-                <div class="progress-fill" :style="{ width: `${progress}%` }"></div>
+                <div class="progress-fill" :style="{ width: `${generationProgress}%` }"></div>
               </div>
-              <span class="progress-text">{{ progress }}%</span>
-            </div>-->
+              <span class="progress-text">{{ generationProgress }}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div v-if="showConfirmModal" class="modal-overlay confirm-overlay">
+      <div class="modal-content medium">
+        <div class="modal-header">
+          <h3>Confirm Action</h3>
+          <button class="btn-close" @click="showConfirmModal = false">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>{{ confirmMessage }}</p>
+          <div class="confirm-actions">
+            <!-- ĐÚNG -->
+            <button
+              class="btn btn-secondary"
+              @click="executeCancelAction ? executeCancelAction() : (showConfirmModal = false)"
+            >
+              {{ confirmedCancelAction ? "Don't Save" : 'Cancel' }}
+            </button>
+            <button class="btn btn-primary" @click="executeConfirmedAction">
+              {{ confirmedCancelAction ? 'Save Draft' : 'Confirm' }}
+            </button>
           </div>
         </div>
       </div>
@@ -326,7 +363,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useToast } from 'vue-toastification'
 import { testcaseApi } from '@/api/testcase'
 
@@ -348,98 +385,71 @@ export default {
   setup(props, { emit }) {
     const toast = useToast()
 
-    const currentStep = ref(1)
-    const selectedSource = ref('requirements')
+    // State management
     const generating = ref(false)
-    const progress = ref(0)
-
+    const saving = ref(false)
+    const savingDraft = ref(false)
     const selectedRequirements = ref([])
-    const selectedTables = ref([])
     const previewTestCases = ref([])
+    const expandedDetails = ref([])
+    const showAllDetails = ref(false)
+    const showConfirmModal = ref(false)
+    const confirmMessage = ref('')
+    const confirmedAction = ref(null)
+    const generationProgress = ref(0)
+    const hasUnsavedChanges = ref(false)
+    const confirmedCancelAction = ref(null)
+    const hasDraft = ref(false)
 
+    // Configuration
     const configuration = ref({
+      testType: 'all',
       language: 'vi-VN',
-      testTypeFocus: 'all',
-      includeDatabaseOperations: true,
-      includeTestData: true,
-      includeAutomation: false,
+      priority: 'auto',
     })
 
-    const sourceTypes = [
-      // {
-      //   id: 'requirements',
-      //   title: 'From Requirements',
-      //   icon: 'list_alt',
-      //   description:
-      //     'Generate test cases based on selected requirements and their acceptance criteria',
-      // },
-      // {
-      //   id: 'database',
-      //   title: 'From Database Schema',
-      //   icon: 'database',
-      //   description: 'Generate test cases based on database tables, relationships, and operations',
-      // },
-    ]
+    // Draft management
+    const draftKey = computed(() => `testcase_draft_${props.projectId}_${props.versionId}`)
 
-    const databaseTables = computed(() => {
-      return props.databaseSchema?.tables || []
-    })
-
-    const getSelectedCount = computed(() => {
-      return selectedSource.value === 'requirements'
-        ? selectedRequirements.value.length
-        : selectedTables.value.length
-    })
-
+    // Computed properties
     const coverageStats = computed(() => {
       const tablesCovered = new Set()
-      const operationsCovered = new Set()
+      const requirementsCovered = new Set()
 
       previewTestCases.value.forEach((tc) => {
         if (tc.database_tables) {
           tc.database_tables.forEach((table) => tablesCovered.add(table))
         }
-        if (tc.database_operations) {
-          tc.database_operations.forEach((op) => operationsCovered.add(op))
+        if (tc.source_requirement_ids) {
+          tc.source_requirement_ids.forEach((reqId) => requirementsCovered.add(reqId))
         }
       })
 
       return {
         tablesCovered: tablesCovered.size,
-        operationsCovered: operationsCovered.size,
+        requirementsCovered: requirementsCovered.size,
       }
     })
 
-    const selectSource = (source) => {
-      selectedSource.value = source
-    }
+    const testTypeDistribution = computed(() => {
+      const distribution = {}
+      previewTestCases.value.forEach((tc) => {
+        const type = tc.test_type || 'unknown'
+        distribution[type] = (distribution[type] || 0) + 1
+      })
 
-    const nextStep = () => {
-      if (currentStep.value < 3) {
-        currentStep.value++
-      }
-    }
+      return Object.entries(distribution)
+        .map(([type, count]) => `${type} (${count})`)
+        .join(', ')
+    })
 
-    const prevStep = () => {
-      if (currentStep.value > 1) {
-        currentStep.value--
-      }
-    }
-
+    // Methods
     const selectAll = () => {
-      if (selectedSource.value === 'requirements') {
-        selectedRequirements.value = props.requirements.map((req) => req.id)
-      } else {
-        selectedTables.value = databaseTables.value.map((table) => table.name)
-      }
+      selectedRequirements.value = props.requirements.map((req) => req.id)
     }
 
     const clearSelection = () => {
-      if (selectedSource.value === 'requirements') {
-        selectedRequirements.value = []
-      } else {
-        selectedTables.value = []
-      }
+      selectedRequirements.value = []
     }
 
     const toggleRequirement = (reqId) => {
@@ -449,173 +459,353 @@ export default {
       } else {
         selectedRequirements.value.push(reqId)
       }
-    }
-
-    const toggleTable = (tableName) => {
-      const index = selectedTables.value.indexOf(tableName)
-      if (index > -1) {
-        selectedTables.value.splice(index, 1)
-      } else {
-        selectedTables.value.push(tableName)
+      if (previewTestCases.value.length > 0) {
+        hasUnsavedChanges.value = true
       }
     }
 
-    const simulateProgress = () => {
-      progress.value = 0
-      const interval = setInterval(() => {
-        progress.value += Math.random() * 10
-        if (progress.value >= 100) {
-          progress.value = 100
-          clearInterval(interval)
+    // THAY THẾ - Chỉ watch previewTestCases với logic đơn giản
+    watch(
+      () => previewTestCases.value,
+      (newTestCases, oldTestCases) => {
+        // Chỉ set hasUnsavedChanges = true khi có test cases mới được generate
+        // và không phải đang restore từ draft
+        if (newTestCases.length > 0 && newTestCases !== oldTestCases) {
+          hasUnsavedChanges.value = true
         }
-      }, 200)
+      },
+      { deep: true }
+    )
+
+    const toggleDetail = (index) => {
+      const detailIndex = expandedDetails.value.indexOf(index)
+      if (detailIndex > -1) {
+        expandedDetails.value.splice(detailIndex, 1)
+      } else {
+        expandedDetails.value.push(index)
+      }
     }
 
-    const generatePreview = async () => {
-      if (getSelectedCount.value === 0) {
-        toast.error('Please select at least one item to generate test cases')
+    const toggleAllDetails = () => {
+      if (showAllDetails.value) {
+        expandedDetails.value = []
+      } else {
+        expandedDetails.value = previewTestCases.value.map((_, index) => index)
+      }
+      showAllDetails.value = !showAllDetails.value
+    }
+
+    const formatTestCaseTitle = (testcase) => {
+      const requirementIds = testcase.source_requirement_ids || []
+      if (requirementIds.length === 0) {
+        return testcase.title || 'Untitled Test Case'
+      }
+
+      const firstReqId = requirementIds[0]
+      const requirement = props.requirements.find((req) => req.id === firstReqId)
+      const requirementName = requirement?.name || 'Unknown Requirement'
+      const baseTitle = testcase.title || 'Test Scenario'
+
+      return `[${firstReqId}] - ${requirementName} - ${baseTitle}`
+    }
+
+    const generateTestCases = async () => {
+      if (selectedRequirements.value.length === 0) {
+        toast.error('Please select at least one requirement')
+        return
+      }
+
+      if (!props.projectId || !props.versionId) {
+        toast.error('Project and version must be selected')
         return
       }
 
       generating.value = true
-      simulateProgress()
+      generationProgress.value = 0
+      previewTestCases.value = []
+
+      // Simulate progress updates
+      const progressInterval = setInterval(() => {
+        if (generationProgress.value < 90) {
+          generationProgress.value += 10
+        }
+      }, 500)
 
       try {
-        let response
-
-        // 🆕 LUÔN sử dụng requirements source (vì database có thể rỗng)
-        response = await testcaseApi.generateTestCasesSimplified(props.projectId, props.versionId, {
+        const response = await testcaseApi.generateTestCases(props.projectId, props.versionId, {
           selectedRequirementIds: selectedRequirements.value,
           language: configuration.value.language,
-          testTypeFocus: configuration.value.testTypeFocus,
-          includeDatabaseOperations: configuration.value.includeDatabaseOperations,
-          includeTestData: configuration.value.includeTestData,
+          testType: configuration.value.testType,
         })
 
-        previewTestCases.value = response.data.data || response.data || []
-        nextStep()
+        clearInterval(progressInterval)
+        generationProgress.value = 100
 
-        // 🆕 Thông báo thành công với cảnh báo nếu database rỗng
-        if (props.databaseSchema?.tables?.length === 0) {
-          toast.success(
-            `Generated ${previewTestCases.value.length} test cases (using requirement analysis only)`
+        previewTestCases.value = response.data.data || response.data || []
+        hasUnsavedChanges.value = true
+
+        if (previewTestCases.value.length === 0) {
+          toast.warning(
+            'No test cases were generated. Please try different requirements or options.'
           )
         } else {
           toast.success(`Generated ${previewTestCases.value.length} test cases`)
+          // Auto-expand first item
+          if (previewTestCases.value.length > 0) {
+            expandedDetails.value = [0]
+          }
         }
       } catch (error) {
         console.error('Error generating test cases:', error)
+        clearInterval(progressInterval)
         const errorMessage = error.response?.data?.message || 'Failed to generate test cases'
 
-        // 🆕 XỬ LÝ LỖI MỀM MẠI HƠN
-        if (errorMessage.includes('database') || errorMessage.includes('schema')) {
-          // Thử lại với fallback mode
-          toast.warning('Generating test cases using requirement analysis only...')
-          // Có thể implement fallback logic ở đây
-        } else if (errorMessage.includes('requirements')) {
-          toast.error('No requirements found for the selected version.')
+        if (errorMessage.includes('requirements') || errorMessage.includes('not found')) {
+          toast.error('No matching requirements found for the selected IDs')
+        } else if (errorMessage.includes('Gemini') || errorMessage.includes('API key')) {
+          toast.error('AI service is temporarily unavailable. Please try again later.')
         } else {
           toast.error(errorMessage)
         }
+
+        previewTestCases.value = []
+        hasUnsavedChanges.value = false
       } finally {
         generating.value = false
-        progress.value = 0
+        generationProgress.value = 0
       }
     }
 
     const regenerate = () => {
-      currentStep.value = 2
+      previewTestCases.value = []
+      expandedDetails.value = []
+      showAllDetails.value = false
+      hasUnsavedChanges.value = false
     }
 
-    // Trong GenerateTestcaseModal.vue
-    const confirmGeneration = async () => {
+    const saveDraft = async () => {
+      if (previewTestCases.value.length === 0) {
+        toast.error('No test cases to save as draft')
+        return
+      }
+
+      savingDraft.value = true
       try {
-        console.log('💾 Starting save process...')
-        const testCasesToSave = JSON.parse(JSON.stringify(previewTestCases.value))
-
-        console.log('🔍 Debug test cases structure:')
-        testCasesToSave.forEach((tc, index) => {
-          console.log(`Test case ${index}:`, {
-            title: tc.title,
-            steps_count: tc.steps?.length,
-            test_data_count: tc.test_data?.length,
-            has_requirements: !!tc.source_requirement_ids?.length,
-          })
-        })
-
-        const requestBody = {
-          testCases: testCasesToSave,
+        const draftData = {
+          testCases: previewTestCases.value,
+          configuration: configuration.value,
+          selectedRequirements: selectedRequirements.value,
+          timestamp: new Date().toISOString(),
         }
 
-        console.log('🚀 Sending request to save test cases...')
+        localStorage.setItem(draftKey.value, JSON.stringify(draftData))
+        hasUnsavedChanges.value = false
+        hasDraft.value = true // ← Thêm dòng này
+        toast.success('Draft saved successfully')
+      } catch (error) {
+        console.error('Error saving draft:', error)
+        toast.error('Failed to save draft')
+      } finally {
+        savingDraft.value = false
+      }
+    }
+
+    const restoreDraft = () => {
+      try {
+        const draft = localStorage.getItem(draftKey.value)
+        if (draft) {
+          const draftData = JSON.parse(draft)
+          previewTestCases.value = draftData.testCases || []
+          configuration.value = draftData.configuration || configuration.value
+          selectedRequirements.value = draftData.selectedRequirements || []
+          hasUnsavedChanges.value = false
+          hasDraft.value = true // ← Thêm dòng này
+          toast.success('Draft restored successfully')
+        }
+      } catch (error) {
+        console.error('Error restoring draft:', error)
+        toast.error('Failed to restore draft')
+      }
+    }
+
+    const discardDraft = () => {
+      showConfirmation(
+        'Are you sure you want to discard the saved draft? This action cannot be undone.',
+        () => {
+          localStorage.removeItem(draftKey.value)
+          hasUnsavedChanges.value = false
+          hasDraft.value = false // ← Cập nhật state
+
+          // Clear preview nếu đang hiển thị draft
+          if (previewTestCases.value.length > 0) {
+            previewTestCases.value = []
+            expandedDetails.value = []
+            showAllDetails.value = false
+          }
+
+          toast.success('Draft discarded')
+        }
+      )
+    }
+
+    const confirmGeneration = () => {
+      showConfirmation(`Are you sure you want to create this test cases?`, executeGeneration)
+    }
+
+    const executeGeneration = async () => {
+      if (previewTestCases.value.length === 0) {
+        toast.error('No test cases to save')
+        return
+      }
+
+      saving.value = true
+      try {
+        const formattedTestCases = previewTestCases.value.map((tc) => ({
+          ...tc,
+          title: formatTestCaseTitle(tc),
+        }))
+
+        const requestBody = {
+          testCases: formattedTestCases,
+        }
+
         const response = await testcaseApi.saveTestCases(
           props.projectId,
           props.versionId,
           requestBody
         )
 
-        console.log('📨 Full response:', response)
-        console.log('📊 Response data:', response.data)
+        const savedCount = response.data?.count || previewTestCases.value.length
 
-        // 🆕 Kiểm tra kỹ response
-        if (response.data && response.data.count === 0) {
-          console.warn('⚠️ Warning: Response indicates 0 test cases were saved')
-          console.warn('Response details:', {
-            message: response.data.message,
-            data: response.data.data,
-            metadata: response.data.metadata,
-          })
-        }
+        // Clear draft và reset unsaved changes
+        localStorage.removeItem(draftKey.value)
+        hasUnsavedChanges.value = false
 
-        if (response.data.count > 0) {
-          // toast.success(`✅ Successfully created ${response.data.count} test cases`)
-          emit('generate', response.data.data || testCasesToSave)
-          emit('close')
-        } else {
-          // 🆕 Xử lý trường hợp không có test cases nào được lưu
-          toast.warning('No test cases were saved. Please check the data format.')
-          console.error('❌ No test cases saved. Response:', response.data)
-        }
+        toast.success(`Successfully created ${savedCount} test cases`)
+        emit('generate', response.data?.data || formattedTestCases)
+        handleClose()
       } catch (error) {
-        console.error('💥 Save error:', error)
-        const backendMessage = error.response?.data?.message || error.message
-        toast.error(`Save failed: ${backendMessage}`)
+        console.error('Error saving test cases:', error)
+        const errorMessage = error.response?.data?.message || error.message
+        toast.error(`Failed to save test cases: ${errorMessage}`)
+      } finally {
+        saving.value = false
       }
     }
+
+    const showConfirmation = (message, confirmAction, cancelAction = null) => {
+      confirmMessage.value = message
+      confirmedAction.value = confirmAction
+      confirmedCancelAction.value = cancelAction
+      showConfirmModal.value = true
+    }
+
+    const executeConfirmedAction = () => {
+      if (confirmedAction.value) {
+        confirmedAction.value()
+      }
+      showConfirmModal.value = false
+      confirmedAction.value = null
+      confirmedCancelAction.value = null
+    }
+
+    // Thêm method mới cho cancel action
+    const executeCancelAction = () => {
+      if (confirmedCancelAction.value) {
+        confirmedCancelAction.value()
+      }
+      showConfirmModal.value = false
+      confirmedAction.value = null
+      confirmedCancelAction.value = null
+    }
+
+    const checkDraft = () => {
+      try {
+        const draft = localStorage.getItem(draftKey.value)
+        if (!draft) {
+          hasDraft.value = false
+          return false
+        }
+
+        const draftData = JSON.parse(draft)
+        hasDraft.value = draftData.testCases && draftData.testCases.length > 0
+        return hasDraft.value
+      } catch (error) {
+        console.error('Error checking draft:', error)
+        hasDraft.value = false
+        return false
+      }
+    }
+
+    const handleClose = () => {
+      if (hasUnsavedChanges.value && previewTestCases.value.length > 0) {
+        showConfirmation(
+          'You have unsaved test cases. Do you want to save them as draft before closing?',
+          () => {
+            saveDraft().finally(() => {
+              emit('close')
+            })
+          },
+          () => {
+            // Thêm dòng này
+            emit('close')
+          }
+        )
+      } else {
+        emit('close')
+      }
+    }
+
+    // Lifecycle
     onMounted(() => {
-      // Auto-select all if few items
+      // Auto-select all requirements if there are few
       if (props.requirements.length > 0 && props.requirements.length <= 10) {
         selectedRequirements.value = props.requirements.map((req) => req.id)
       }
 
-      if (databaseTables.value.length > 0 && databaseTables.value.length <= 5) {
-        selectedTables.value = databaseTables.value.map((table) => table.name)
+      // Check for existing draft - SỬA THÀNH checkDraft()
+      if (checkDraft()) {
+        toast.info('Draft found for this project. You can restore it from the draft section.')
       }
     })
 
+    onUnmounted(() => {
+      // Cleanup any intervals
+      const intervals = []
+      intervals.forEach((interval) => clearInterval(interval))
+    })
+
     return {
-      currentStep,
-      selectedSource,
       generating,
-      progress,
+      saving,
+      savingDraft,
       selectedRequirements,
-      selectedTables,
       previewTestCases,
+      expandedDetails,
+      showAllDetails,
+      showConfirmModal,
+      confirmMessage,
       configuration,
-      sourceTypes,
-      databaseTables,
-      getSelectedCount,
       coverageStats,
-      selectSource,
-      nextStep,
-      prevStep,
+      testTypeDistribution,
+      generationProgress,
+      hasDraft,
       selectAll,
       clearSelection,
       toggleRequirement,
-      toggleTable,
-      generatePreview,
+      toggleDetail,
+      toggleAllDetails,
+      formatTestCaseTitle,
+      generateTestCases,
       regenerate,
+      saveDraft,
+      restoreDraft,
+      discardDraft,
       confirmGeneration,
+      executeConfirmedAction,
+      handleClose,
+      checkDraft,
+      executeCancelAction,
     }
   },
 }
@@ -640,11 +830,24 @@ export default {
   background: white;
   border-radius: 12px;
   width: 100%;
-  height: 90vh;
   max-width: 900px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modal-content.medium {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.confirm-overlay {
+  z-index: 1001;
 }
 
 .modal-header {
@@ -687,268 +890,294 @@ export default {
   padding: 2rem;
 }
 
-.progress-steps {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 2rem;
-  gap: 0.5rem;
-}
-
-.step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 80px;
-}
-
-.step-number {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 0.875rem;
-  background: #e2e8f0;
-  color: #64748b;
-  transition: all 0.3s ease;
-}
-
-.step.active .step-number {
-  background: #1a365d;
-  color: white;
-}
-
-.step.completed .step-number {
-  background: #135495;
-  color: white;
-}
-
-.step-label {
-  font-size: 0.75rem;
-  color: #64748b;
-  font-weight: 500;
-  text-align: center;
-}
-
-.step.active .step-label {
-  color: #1a365d;
-  font-weight: 600;
-}
-
-.step-connector {
-  flex: 1;
-  height: 2px;
-  background: #e2e8f0;
-  margin: 0 0.5rem;
-  transition: background 0.3s ease;
-}
-
-.step-connector.completed {
-  background: #1a365d;
-}
-
-.step-content {
-  animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.step-title {
+.section-title {
   font-size: 1.25rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin-bottom: 1.5rem;
-  text-align: center;
-}
-
-.configuration-options {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.option-group {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.option-label {
-  font-weight: 600;
-  color: #374151;
-  font-size: 1rem;
-}
-
-.source-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-.source-option {
-  display: flex;
-  gap: 1rem;
-  padding: 1.5rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  background: white;
-  position: relative;
-}
-
-.source-option:hover {
-  border-color: #cbd5e1;
-  transform: translateY(-2px);
-}
-
-.source-option.selected {
-  border-color: #1a365d;
-  background: #eff6ff;
-  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1);
-}
-
-.source-icon {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 8px;
-  background: #e2e8f0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #64748b;
-  flex-shrink: 0;
-}
-
-.source-option.selected .source-icon {
-  background: #1a365d;
-  color: white;
-}
-
-.source-info {
-  flex: 1;
-}
-
-.source-info h4 {
   font-weight: 600;
   color: #1e293b;
   margin-bottom: 0.5rem;
 }
 
-.source-info p {
+.section-subtitle {
   color: #64748b;
+  margin-bottom: 1.5rem;
   font-size: 0.875rem;
-  line-height: 1.4;
-  margin: 0;
 }
 
-.source-check {
-  color: #1a365d;
-  flex-shrink: 0;
+.selection-section,
+.configuration-section,
+.preview-section {
+  margin-bottom: 2rem;
 }
 
-.generation-options {
+.configuration-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+/* Draft Section */
+.draft-section {
+  margin-bottom: 2rem;
+}
+
+.draft-banner {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+}
+
+.draft-info {
+  display: flex;
+  align-items: center;
   gap: 1rem;
 }
 
-.form-group {
+.draft-info h4 {
+  margin: 0 0 0.25rem 0;
+  color: #856404;
+}
+
+.draft-info p {
+  margin: 0;
+  color: #856404;
+  font-size: 0.875rem;
+}
+
+.draft-actions {
   display: flex;
-  flex-direction: column;
   gap: 0.5rem;
 }
 
-.form-label {
+/* Preview Header */
+.preview-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.preview-container {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.preview-stats-bar {
+  display: flex;
+  gap: 2rem;
+  padding: 1rem 1.5rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.875rem;
+}
+
+.stat-item {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.stat-label {
+  color: #64748b;
   font-weight: 500;
+}
+
+.stat-value {
   color: #374151;
+  font-weight: 600;
+}
+
+.preview-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.preview-item {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background-color 0.2s;
+}
+
+.preview-item:last-child {
+  border-bottom: none;
+}
+
+.preview-item:hover {
+  background: #f8fafc;
+}
+
+.preview-main {
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.preview-main:hover {
+  background: #f1f5f9;
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.preview-title {
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+  flex: 1;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.preview-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.expand-icon {
+  color: #64748b;
+  font-size: 1.25rem;
+  transition: transform 0.2s;
+}
+
+.preview-meta {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.table-info,
+.requirement-info {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+/* Detail Section */
+.preview-detail {
+  padding: 0 1.5rem 1.5rem 1.5rem;
+  background: #fafbfc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.detail-section {
+  margin-bottom: 1.5rem;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-section h5 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 0.75rem 0;
+}
+
+.detail-section p {
+  color: #64748b;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.detail-section ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: #64748b;
   font-size: 0.875rem;
 }
 
-.form-select {
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  background: white;
-  transition: all 0.2s;
+.detail-section li {
+  margin-bottom: 0.25rem;
+  line-height: 1.4;
 }
 
-.form-select:focus {
-  outline: none;
-  border-color: #1a365d;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.checkbox-group {
+/* Steps List */
+.steps-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.checkbox-item {
+.step-item {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  cursor: pointer;
+  gap: 1rem;
   padding: 0.75rem;
+  background: white;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
-  transition: all 0.2s;
 }
 
-.checkbox-item:hover {
-  border-color: #cbd5e1;
-  background: #f8fafc;
-}
-
-.checkbox-item input[type='checkbox'] {
-  display: none;
-}
-
-.checkmark {
-  width: 1.125rem;
-  height: 1.125rem;
-  border: 2px solid #d1d5db;
-  border-radius: 4px;
+.step-number {
+  width: 2rem;
+  height: 2rem;
+  background: #1a365d;
+  color: white;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  font-size: 0.75rem;
+  font-weight: 600;
   flex-shrink: 0;
 }
 
-.checkbox-item input[type='checkbox']:checked + .checkmark {
-  background: #1a365d;
-  border-color: #3b82f6;
+.step-content {
+  flex: 1;
 }
 
-.checkbox-item input[type='checkbox']:checked + .checkmark::after {
-  content: '✓';
-  color: white;
-  font-size: 0.75rem;
-  font-weight: bold;
-}
-
-.checkbox-label {
+.step-action {
   font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.step-expected {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+/* Expected Results */
+.expected-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.expected-results > div {
+  padding: 0.75rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.expected-results strong {
   color: #374151;
   font-size: 0.875rem;
 }
 
+.expected-results ul {
+  margin: 0.5rem 0 0 0;
+}
+
+/* Selection styles (keep existing) */
 .selection-container {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -970,6 +1199,12 @@ export default {
   font-size: 0.875rem;
 }
 
+.total-count {
+  color: #64748b;
+  font-size: 0.875rem;
+  margin-left: 0.5rem;
+}
+
 .selection-actions {
   display: flex;
   gap: 0.5rem;
@@ -981,7 +1216,7 @@ export default {
 }
 
 .selection-list {
-  max-height: 400px;
+  max-height: 300px;
   overflow-y: auto;
 }
 
@@ -1006,11 +1241,6 @@ export default {
 
 .selection-item:last-child {
   border-bottom: none;
-}
-
-.selection-item input[type='checkbox'] {
-  margin-top: 0.25rem;
-  flex-shrink: 0;
 }
 
 .item-content {
@@ -1046,15 +1276,24 @@ export default {
   font-weight: 500;
 }
 
-.meta-tag.column {
-  background: #dbeafe;
-  color: #1a365d;
+.meta-tag.priority.critical {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
-.meta-tag.more {
-  background: #f1f5f9;
-  color: #64748b;
-  font-style: italic;
+.meta-tag.priority.high {
+  background: #fed7aa;
+  color: #ea580c;
+}
+
+.meta-tag.priority.medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.meta-tag.priority.low {
+  background: #d1fae5;
+  color: #059669;
 }
 
 .empty-selection {
@@ -1075,125 +1314,50 @@ export default {
   margin-top: 0.5rem;
 }
 
-.preview-container {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.preview-header {
+/* Form styles */
+.form-group {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-.preview-stats {
-  display: flex;
-  gap: 1.5rem;
-}
-
-.stat {
-  color: #64748b;
+.form-label {
+  font-weight: 500;
+  color: #374151;
   font-size: 0.875rem;
 }
 
-.stat strong {
-  color: #374151;
-  font-weight: 600;
-}
-
-.preview-list {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.preview-item {
-  padding: 1.5rem;
-  border-bottom: 1px solid #f1f5f9;
+.form-select {
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
   transition: all 0.2s;
 }
 
-.preview-item:hover {
-  background: #f8fafc;
+.form-select:focus {
+  outline: none;
+  border-color: #1a365d;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.preview-item:last-child {
-  border-bottom: none;
-}
-
-.preview-main {
-  margin-bottom: 1rem;
-}
-
-.preview-title {
-  font-weight: 600;
-  color: #1e293b;
-  margin-bottom: 0.5rem;
-  font-size: 1rem;
-}
-
-.preview-description {
-  color: #64748b;
-  font-size: 0.875rem;
-  line-height: 1.4;
-  margin-bottom: 0.75rem;
-}
-
-.preview-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.table-info {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: #64748b;
-}
-
-.preview-details {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
-  font-size: 0.875rem;
-  color: #64748b;
-}
-
-.detail-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.empty-preview {
-  text-align: center;
-  padding: 3rem 2rem;
-  color: #64748b;
-}
-
-.empty-preview .material-symbols-outlined {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
-}
-
-.empty-preview h4 {
-  color: #475569;
-  margin-bottom: 0.5rem;
-}
-
-.step-actions {
-  display: flex;
-  justify-content: space-between;
+/* Action Section */
+.action-section {
   margin-top: 2rem;
   padding-top: 2rem;
   border-top: 1px solid #e2e8f0;
+}
+
+.action-buttons {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.primary-actions {
+  display: flex;
+  gap: 1rem;
 }
 
 .btn {
@@ -1207,17 +1371,18 @@ export default {
   cursor: pointer;
   transition: all 0.2s;
   text-decoration: none;
+  font-size: 0.875rem;
 }
 
 .btn-primary {
   background: #1a365d;
-  border-color: #3b82f6;
+  border-color: #1a365d;
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
   background: #1f3b62;
-  border-color: #2563eb;
+  border-color: #1f3b62;
 }
 
 .btn-primary:disabled {
@@ -1232,11 +1397,19 @@ export default {
   color: #374151;
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background: #f9fafb;
   border-color: #9ca3b8;
 }
 
+.btn-secondary:disabled {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Loading */
 .spinner {
   width: 1rem;
   height: 1rem;
@@ -1247,6 +1420,7 @@ export default {
 }
 
 .spinner.large {
+  justify-self: center;
   width: 3rem;
   height: 3rem;
   border-width: 3px;
@@ -1278,9 +1452,6 @@ export default {
   text-align: center;
   max-width: 400px;
   padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
 
 .loading-content h3 {
@@ -1292,10 +1463,8 @@ export default {
   color: #64748b;
   margin-bottom: 1.5rem;
 }
-.spinner {
-  margin-bottom: 8px;
-}
-.loading-progress {
+
+.generation-progress {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -1303,16 +1472,15 @@ export default {
 
 .progress-bar {
   width: 100%;
-  height: 6px;
+  height: 8px;
   background: #e2e8f0;
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
   background: #1a365d;
-  border-radius: 3px;
   transition: width 0.3s ease;
 }
 
@@ -1322,6 +1490,7 @@ export default {
   font-weight: 600;
 }
 
+/* Badges */
 .badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
@@ -1351,6 +1520,16 @@ export default {
   color: #d97706;
 }
 
+.badge.type.performance {
+  background: #fce7f3;
+  color: #be185d;
+}
+
+.badge.type.security {
+  background: #dcfce7;
+  color: #166534;
+}
+
 .badge.priority.critical {
   background: #fee2e2;
   color: #dc2626;
@@ -1371,6 +1550,15 @@ export default {
   color: #059669;
 }
 
+/* Confirm Actions */
+.confirm-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+/* Responsive */
 @media (max-width: 768px) {
   .modal-content.large {
     margin: 1rem;
@@ -1381,38 +1569,69 @@ export default {
     padding: 1rem;
   }
 
-  .source-options {
+  .configuration-grid {
     grid-template-columns: 1fr;
   }
 
-  .progress-steps {
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-
-  .step-connector {
-    display: none;
-  }
-
-  .preview-stats {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .preview-header {
+  .preview-header-section {
     flex-direction: column;
     gap: 1rem;
     align-items: stretch;
   }
 
-  .step-actions {
+  .preview-actions {
+    justify-content: center;
+  }
+
+  .preview-stats-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .action-buttons {
     flex-direction: column;
     gap: 1rem;
   }
 
-  .step-actions .btn {
+  .primary-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .primary-actions .btn {
     width: 100%;
     justify-content: center;
+  }
+
+  .selection-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .selection-actions {
+    justify-content: center;
+  }
+
+  .draft-banner {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .draft-info {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .preview-header {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+
+  .preview-badges {
+    align-self: flex-end;
   }
 }
 </style>
