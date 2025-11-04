@@ -2,10 +2,12 @@ import Testcase from "../../../../../internal/model/testcase";
 import Database from "../../../../../internal/model/database";
 import Version from "../../../../../internal/model/version";
 import { TestcaseGeminiService } from "./GeminiService";
+import { VersionService } from "../../version/domain/service";
+import {PreviewChangeDto} from "../../version/adapter/preview.dto";
 
 export class TestcaseService {
     private testcaseGeminiService = new TestcaseGeminiService();
-
+    private versionService = new VersionService();
     /**
      * Generate ENTERPRISE test cases từ requirements và database schema với selection
      */
@@ -168,7 +170,7 @@ export class TestcaseService {
         if (updatedBy) {
             updateData.updated_by = updatedBy;
         }
-
+        
         return await Testcase.findByIdAndUpdate(
             id,
             { $set: updateData },

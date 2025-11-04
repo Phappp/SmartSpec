@@ -193,6 +193,27 @@ export class OrchestratorService {
             language
         );
 
+        try {
+            if (result) {
+                for (const req of result.newRequirements) {
+                await this.versionService.createOrUpdatePreview(
+                    versionId,
+                    userId,
+                    {
+                    entity_type: "requirement",
+                    entity_id: req.id,
+                    change_type: "added",
+                    before_snapshot: null,
+                    after_snapshot: req,
+                    }
+                );
+                }
+                console.log(`✅ Preview logged for ${result.newRequirements.length} generated requirements.`);
+            }
+            } catch (previewErr: any) {
+                console.error("⚠️ Error logging preview:", previewErr);
+            }
+            
         // 6️⃣ Hoàn tất
         await Version.findByIdAndUpdate(versionId, {
             $set: { stage: "completed", progress: 100 }
@@ -206,12 +227,6 @@ export class OrchestratorService {
             100,
             "completed",
             false
-        );
-
-        const bumpResult = await this.versionService.bumpVersion(
-            versionId,
-            userId,
-            "minor"
         );
         return result;
     }

@@ -75,6 +75,19 @@ export class UsecaseService {
       version.affects_requirement = true;
 
       await version.save({ session });
+
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "requirement",
+          entity_id: newUsecase.id,
+          change_type: "added",
+          before_snapshot: null,
+          after_snapshot: newUsecase
+        }
+      );
+
       await this.logService.createLog({
         project_id: version.project_id.toString(),
         user_id: userId,
@@ -208,6 +221,19 @@ export class UsecaseService {
 
       // ✅ 10. Lưu transaction
       await version.save({ session });
+
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "requirement",
+          entity_id: updatedUsecase.id,
+          change_type: "updated",
+          before_snapshot: originalUsecase,
+          after_snapshot: updatedUsecase
+        }
+      );
+
       await this.logService.createLog({
         project_id: project._id.toString(),
         user_id: userId,
@@ -320,6 +346,20 @@ export class UsecaseService {
       version.affects_requirement = true;
 
       await version.save({ session });
+
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "requirement",
+          entity_id: usecaseId,
+          change_type: "deleted",
+          before_snapshot: deletedUsecase,
+          after_snapshot: null
+        }
+      );
+
+
       await this.logService.createLog({
         project_id: project._id.toString(),
         user_id: userId,

@@ -13,6 +13,7 @@ import User from '../../../../../internal/model/user'
 import { inputSocketService } from '../../input/domain/input.socket.service';
 import { io } from '../../../socket';
 import { VersionService } from "../../version/domain/service";
+import {PreviewChangeDto} from "../../version/adapter/preview.dto";
 
 export class InputHandleService {
   private logService: LogService;
@@ -120,6 +121,27 @@ export class InputHandleService {
 
       // Chỉ emit summary nếu có inputs mới
       if (newFilesCount > 0 || newTextProvided) {
+        
+        const newInputs = await Input.find({ version_id: versionId })
+            .sort({ created_at: -1 })
+            .limit(newFilesCount + (newTextProvided ? 1 : 0))
+            .lean();
+
+        for (const input of newInputs) {
+          const changePayload : PreviewChangeDto  = {
+            entity_type: "input",
+            change_type: "added",
+            entity_id: input._id.toString(),
+            before_snapshot: null,
+            after_snapshot: input,
+          };
+
+          const previewRes = await this.versionService.createOrUpdatePreview(
+            versionId,
+            userId,
+            changePayload
+          );
+        }
         const summaryEvent = {
           type: 'INPUTS_ADDED_SUMMARY',
           projectId,
@@ -195,6 +217,25 @@ export class InputHandleService {
       }
 
       const beforeDelete = await Input.findById(inputId).lean();
+      // 🧩 Ghi preview change cho xóa input
+      if (beforeDelete) {
+        const changePayload : PreviewChangeDto = {
+          entity_type: "input",
+          change_type: "deleted",
+          entity_id: beforeDelete._id.toString(),
+          before_snapshot: beforeDelete,
+          after_snapshot: null,
+        };
+
+        const previewRes = await this.versionService.createOrUpdatePreview(
+          versionId,
+          userId,
+          changePayload
+        );
+
+        console.log(`🗑️ Preview updated for deleted input ${inputId}:`, previewRes.data);
+      }
+
       await Input.findByIdAndDelete(inputId).session(session);
 
       await Version.findByIdAndUpdate(

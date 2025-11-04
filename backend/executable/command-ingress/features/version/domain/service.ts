@@ -294,13 +294,11 @@ export class VersionService {
           if (entityType === 'input') {
             if (changeType === 'added') {
               console.log(`[Input][Added] Deleting Input: ${entityId}`);
-              if (entityId) await Input.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
-            } else if (changeType === 'updated') {
-              console.log(`[Input][Updated] Reverting Input: ${entityId}`);
-              if (entityId && before) {
-                await Input.updateOne({ _id: entityId, version_id: baseVersion._id }, { $set: before }).session(session);
+              if (entityId){
+                await Input.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
+                await Version.updateOne({ _id: baseVersion._id },{ $pull: { inputs: entityId } },{ session });
               }
-            } else if (changeType === 'deleted') {
+            }else if (changeType === 'deleted') {
               console.log(`[Input][Deleted] Restoring Input from snapshot`);
               if (before) {
                 const toInsert = {
@@ -310,7 +308,8 @@ export class VersionService {
                   created_at: new Date(),
                   updated_at: new Date(),
                 };
-                await Input.create([toInsert], { session });
+                const inputInsert = await Input.create([toInsert], { session });
+                await Version.updateOne({ _id: baseVersion._id },{ $addToSet: { inputs: toInsert.$_id} },{ session });
               }
             }
           } else if (entityType === 'database') {
