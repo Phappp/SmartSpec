@@ -76,12 +76,5 @@ export default function initVersionRoute(controller: VersionController) {
   //   (req, res, next) => controller.lockVersion(req as any, res, next)
   // );
 
-  // // ⚙️ Auto bump version khi có thay đổi lớn/nhỏ
-  // router.post(
-  //   "/auto-bump",
-  //   requireAuthorizedUser,
-  //   (req, res, next) => controller.autoBumpVersionOnChange(req as any, res, next)
-  // );
-
   return router;
 }

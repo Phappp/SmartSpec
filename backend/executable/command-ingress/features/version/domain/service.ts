@@ -97,12 +97,7 @@ export class VersionService {
         .populate("approvers.user_id", "name email");
 
       // Nếu không tìm thấy preview, trả về null nhưng vẫn success
-      return new ServiceResponse(
-        ResponseStatus.Success,
-        "Preview retrieved",
-        preview ?? null,
-        200
-      );
+      return new ServiceResponse(ResponseStatus.Success,"Preview retrieved",preview ?? null,200);
     } catch (error: any) {
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     }
@@ -111,58 +106,70 @@ export class VersionService {
   /**
    * Approve một preview: Owner phê duyệt và bump version
    */
-  public async approve(baseVersionId: string, userId: string, changeType: "major" | "minor", comment?: string) {
+  public async approve(baseVersionId: string,userId: string,changeType: "major" | "minor",comment?: string) {
     try {
       const baseVersion = await Version.findById(baseVersionId);
       if (!baseVersion) {
         return new ServiceResponse(ResponseStatus.Failed, "Base version not found", null, 404);
       }
+
       const preview = await Preview.findOne({ base_version_id: baseVersionId });
       if (!preview) {
         return new ServiceResponse(ResponseStatus.Failed, "Preview not found", null, 404);
       }
+
       const approver = preview.approvers.find((a: any) => a.user_id?.toString() === userId);
       if (!approver) {
         return new ServiceResponse(ResponseStatus.Failed, "You are not in approvers list", null, 403);
       }
-      if (approver.role !== "owner") {
-        return new ServiceResponse(ResponseStatus.Failed, "Only owner can approve preview", null, 403);
+
+      if (approver.status === "approved") {
+        return new ServiceResponse(ResponseStatus.Success,"You have already approved this preview.",preview,200);
       }
-      if (!changeType) {
-        return new ServiceResponse(ResponseStatus.Failed, "Owner must specify changeType (major/minor)", null, 400);
-      }
+
+      // ✅ Cập nhật trạng thái của người hiện tại
       approver.status = "approved";
       approver.approved_at = new Date();
       approver.comment = comment ?? "";
-      preview.status = "approved";
+
       await preview.save();
 
-      const newVersion = await this.bumpVersion(baseVersionId, userId, changeType);
+      // ✅ Đếm số người đã approve
+      const approvedUsers = preview.approvers.filter((a: any) => a.status === "approved");
+      const approvedCount = approvedUsers.length;
 
-      if (!newVersion.data) {
-        return new ServiceResponse(
-          ResponseStatus.Failed,
-          "Bump version failed or returned no data",
-          null,
-          500
-        );
+      // ✅ Kiểm tra có owner nào đã approve không
+      const ownerApproved = approvedUsers.some((a: any) => a.role === "owner");
+
+      // 🔸 Điều kiện: ít nhất 2 người và phải có owner
+      if (approvedCount >= 2 && ownerApproved) {
+        preview.status = "approved";
+        await preview.save();
+
+        const newVersion = await this.bumpVersion(baseVersionId, userId, changeType);
+        if (!newVersion.data) {
+          return new ServiceResponse(ResponseStatus.Failed,"Bump version failed or returned no data",null,500);
+        }
+
+        const newVersionData = newVersion.data;
+        preview.target_version_id = newVersionData._id;
+        preview.status = "version_upgraded";
+        await preview.save();
+
+        return new ServiceResponse(ResponseStatus.Success,"At least 2 approvers (including owner) have approved. New version created successfully.",preview,200);
       }
 
-      // ✅ newVersionResponse.data là đối tượng Version thật sự
-      const newVersionData = newVersion.data;
-      preview.target_version_id = newVersionData._id;
-      preview.status = "version_upgraded";
-      await preview.save();
+      // ❗Chưa đủ điều kiện
+      const remaining = ownerApproved
+        ? `Need at least ${2 - approvedCount} more approver(s).`
+        : "Need owner approval to complete.";
 
+      return new ServiceResponse(ResponseStatus.Success,`You have successfully approved. ${remaining}`,preview,200);
 
-      return new ServiceResponse(ResponseStatus.Success, "Preview approved and version bumped successfully", preview, 200);
     } catch (error: any) {
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
-    } finally {
-      
     }
   }
-
   /**
    * Nâng version từ 1 preview (đã được duyệt)
    * BaseVersion => NewVersion (copy toàn bộ data)
@@ -204,12 +211,7 @@ export class VersionService {
       if (!ownerApproved) {
         console.error("❌ Preview chưa đủ người phê duyệt");
         await session.abortTransaction();
-        return new ServiceResponse(
-          ResponseStatus.Failed,
-          "Preview chưa đủ người phê duyệt (cần ít nhất 1 owner + 1 member)",
-          null,
-          400
-        );
+        return new ServiceResponse(ResponseStatus.Failed,"Preview chưa đủ người phê duyệt (cần ít nhất 1 owner + 1 member)",null,400);
       }
 
       // 4️⃣ Lấy số version mới
