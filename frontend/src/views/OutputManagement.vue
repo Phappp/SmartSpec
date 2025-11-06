@@ -1263,6 +1263,11 @@ export default {
   border: 2px solid #bae6fd;
 }
 
+.log-item.default {
+  /* background: #f9fafb; */
+  border: 2px solid #d1d5db;
+}
+
 .log-icon {
   width: 32px;
   height: 32px;

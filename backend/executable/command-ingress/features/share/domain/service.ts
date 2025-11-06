@@ -102,7 +102,7 @@ export class ShareProjectService {
           target_id: existingMember.user_id.toString(),
           target_type: "member",
           level: "info",
-          details: {message: `${sender.name} re-invited ${user.name} as ${role}`}
+          details: { message: `${sender.name} re-invited ${user.name} as ${role}` }
         });
 
         const mailIsSent = await this.sendInviteEmail(
@@ -125,7 +125,7 @@ export class ShareProjectService {
         await notificationService.SocketNotification(
           user.id,
           "Request to join",
-          `<b>${sender.name}</b> has re-sent you an invitation to join the project <b>${project.name}</b> as an <b>${role}</b>.`,
+          `${sender.name} re-sent your invite to join ${project.name} as ${role}`,
           acceptUrl,
           rejectUrl
         );
@@ -135,7 +135,7 @@ export class ShareProjectService {
           subId,
           "INVITATION",
           "Request to join",
-          `<b>${sender.name}</b> has re-sent you an invitation to join the project <b>${project.name}</b> as an <b>${role}</b>.`,
+          `${sender.name} re-sent your invite to join ${project.name} as ${role}.`,
           ""
         );
 
@@ -168,7 +168,7 @@ export class ShareProjectService {
           target_id: existingMember.user_id.toString(),
           target_type: "member",
           level: "info",
-          details: {message: `${sender.name} re-invited ${user.name} as ${role}`}
+          details: { message: `${sender.name} re-invited ${user.name} as ${role}` }
         });
 
         const mailIsSent = await this.sendInviteEmail(
@@ -192,7 +192,7 @@ export class ShareProjectService {
         await notificationService.SocketNotification(
           user.id,
           "Request to join",
-          `<b>${sender.name}</b> has invited you to re-join the project <b>${project.name}</b> as an <b>${role}</b>.`,
+          `${sender.name} invited you to rejoin ${project.name} as ${role}`,
           acceptUrl,
           rejectUrl
         );
@@ -202,7 +202,7 @@ export class ShareProjectService {
           subId,
           "INVITATION",
           "Request to join",
-          `<b>${sender.name}</b> has invited you to re-join the project <b>${project.name}</b> as an <b>${role}</b>.`,
+          `${sender.name} invited you to rejoin ${project.name} as ${role}`,
           ""
         );
 
@@ -240,7 +240,7 @@ export class ShareProjectService {
         target_id: userId.toString(),
         target_type: "member",
         level: "info",
-        details: {message: `${sender.name} invited ${user.name} as ${role}`}
+        details: { message: `${sender.name} invited ${user.name} as ${role}` }
       });
 
       const mailIsSent = await this.sendInviteEmail(
@@ -263,7 +263,7 @@ export class ShareProjectService {
       await notificationService.SocketNotification(
         user.id,
         "Request to join",
-        `<b>${sender.name}</b> has invited you to join the project <b>${project.name}</b> as an <b>${role}</b>.`,
+        `${sender.name} invited you to join ${project.name} as ${role}`,
         acceptUrl,
         rejectUrl
       );
@@ -273,7 +273,7 @@ export class ShareProjectService {
         subId,
         "INVITATION",
         "Request to join",
-        `<b>${sender.name}</b> has invited you to join the project <b>${project.name}</b> as an <b>${role}</b>.`,
+        `${sender.name} invited you to join ${project.name} as ${role}`,
         ""
       );
       return new ServiceResponse<any>(
@@ -338,12 +338,12 @@ export class ShareProjectService {
     const project = await Project.findById(projectId)
       .populate({
         path: "members.user_id",
-        select: "name email",
+        select: "name email avatar_url", // ✅ THÊM avatar_url
         model: "users",
       })
       .populate({
         path: "members.invited_by",
-        select: "name email",
+        select: "name email avatar_url", // ✅ THÊM avatar_url  
         model: "users",
       })
       .lean();
@@ -398,11 +398,13 @@ export class ShareProjectService {
             _id: "$inviter._id",
             name: "$inviter.name",
             email: "$inviter.email",
+            avatar_url: "$inviter.avatar_url",
           },
           invitee: {
             _id: "$invitee._id",
             name: "$invitee.name",
             email: "$invitee.email",
+            avatar_url: "$invitee.avatar_url",
           },
         },
       },
@@ -426,6 +428,15 @@ export class ShareProjectService {
           localField: "members.user_id",
           foreignField: "_id",
           as: "invitee",
+          pipeline: [
+            {
+              $project: {
+                name: 1,
+                email: 1,
+                avatar_url: 1
+              }
+            }
+          ]
         },
       },
       {
@@ -434,6 +445,15 @@ export class ShareProjectService {
           localField: "members.invited_by",
           foreignField: "_id",
           as: "inviter",
+          pipeline: [
+            {
+              $project: {
+                name: 1,
+                email: 1,
+                avatar_url: 1
+              }
+            }
+          ]
         },
       },
       { $unwind: "$invitee" },
@@ -442,6 +462,7 @@ export class ShareProjectService {
         $project: {
           invite_id: "$members._id",
           project_id: "$_id",
+          projectName: "$name", // ✅ Thêm projectName từ cái mới
           role: "$members.role",
           status: "$members.status",
           created_at: "$members.invited_at",
@@ -450,15 +471,19 @@ export class ShareProjectService {
             _id: "$inviter._id",
             name: "$inviter.name",
             email: "$inviter.email",
+            avatar_url: "$inviter.avatar_url",
           },
           invitee: {
             _id: "$invitee._id",
             name: "$invitee.name",
             email: "$invitee.email",
+            avatar_url: "$invitee.avatar_url",
           },
         },
       },
     ]);
+
+    console.log('🔍 getUserInvites result:', JSON.stringify(invites, null, 2));
 
     return new ServiceResponse(ResponseStatus.Success, "OK", invites, 200);
   }
@@ -533,7 +558,7 @@ export class ShareProjectService {
       target_id: member.user_id.toString(),
       target_type: "member",
       level: "info",
-      details: {  message: `User ${recipient.name} (${recipient.email}) accepted invitation to project ${project.name}` }
+      details: { message: `User ${recipient.name} (${recipient.email}) accepted invitation to project ${project.name}` }
     });
 
     if (!sender) {
@@ -544,7 +569,7 @@ export class ShareProjectService {
     await notificationService.SocketNotification(
       sender.id,
       "New Member Joined Project",
-      `<b>${recipient.name}</b> has accepted your invitation to project <b>${project.name}</b>.`
+      `${recipient.name} accepted your invite to ${project.name}`
     );
 
     await notificationServiceDomain.createNotification(
@@ -552,7 +577,7 @@ export class ShareProjectService {
       recipient.id,
       "RESPOND TO INVITATION",
       "New Member Joined Project",
-      `<b>${recipient.name}</b> has accepted your invitation to project <b>${project.name}</b>.`,
+      `${recipient.name} accepted your invitation to ${project.name}`,
       ""
     );
 
@@ -638,7 +663,7 @@ export class ShareProjectService {
       target_id: member.user_id.toString(),
       target_type: "member",
       level: "info",
-      details: {message: `User ${recipient.name} (${recipient.email}) rejected invitation to project ${project.name}`}
+      details: { message: `User ${recipient.name} (${recipient.email}) rejected invitation to project ${project.name}` }
     });
 
     if (!sender) {
@@ -649,7 +674,7 @@ export class ShareProjectService {
     await notificationService.SocketNotification(
       sender.id,
       "Invitation Declined",
-      `<b>${recipient.name}</b> has rejected your invitation to project <b>${project.name}</b>.`
+      `${recipient.name} rejected your invitation to ${project.name}`
     );
 
     await notificationServiceDomain.createNotification(
@@ -657,7 +682,7 @@ export class ShareProjectService {
       recipient.id,
       "RESPOND TO INVITATION",
       "Invitation Declined",
-      `<b>${recipient.name}</b> has rejected your invitation to project <b>${project.name}</b>.`,
+      `${recipient.name} rejected your invitation to ${project.name}`,
       ""
     );
 
@@ -821,7 +846,7 @@ export class ShareProjectService {
       // xoá hẳn member
       project.members.splice(memberIndex, 1);
       await project.save();
-      
+
       const sender = await User.findOne({ _id: userId });
       const recipient = await User.findOne({ _id: memberId });
 
@@ -832,9 +857,9 @@ export class ShareProjectService {
         target_type: "member",
         target_id: memberId,
         level: "info",
-        details: {message: `User ${sender.name} (${sender.email}) removed member ${recipient.name} (${recipient.email}) from project ${project.name}`}
+        details: { message: `User ${sender.name} (${sender.email}) removed member ${recipient.name} (${recipient.email}) from project ${project.name}` }
       });
-      
+
       if (!sender) {
         throw new Error("Sender not found");
       }
@@ -843,7 +868,7 @@ export class ShareProjectService {
       await notificationService.SocketNotification(
         recipient.id,
         "Project Access Removed",
-        `You have been removed from the project <b>${project.name}</b>`
+        `You have been removed from the project ${project.name}`
       );
 
       await notificationServiceDomain.createNotification(
@@ -851,7 +876,7 @@ export class ShareProjectService {
         sender.id,
         "LEAVE THE PROJECT",
         "Project Access Removed",
-        `<b>${recipient.name}</b> has been removed from the project <b>${project.name}</b>.`,
+        `${recipient.name} was removed from ${project.name}`,
         ""
       );
 
@@ -930,7 +955,7 @@ export class ShareProjectService {
       // xoá thành viên
       project.members.splice(memberIndex, 1);
       await project.save();
-      
+
       const sender = await User.findOne({ _id: member.invited_by });
       const recipient = await User.findOne({ _id: userId });
 
@@ -941,9 +966,9 @@ export class ShareProjectService {
         target_id: userId,
         target_type: "member",
         level: "info",
-        details: {message: `User ${recipient.name} (${recipient.email}) left the project ${project.name}`}
+        details: { message: `User ${recipient.name} (${recipient.email}) left the project ${project.name}` }
       });
-      
+
       if (!sender) {
         throw new Error("Sender not found");
       }
@@ -952,7 +977,7 @@ export class ShareProjectService {
       await notificationService.SocketNotification(
         sender.id,
         "Member Left Project",
-        `<b>${recipient.name}</b> has left the project <b>${project.name}</b>.`
+        `${recipient.name} left ${project.name}`
       );
 
       await notificationServiceDomain.createNotification(
@@ -960,7 +985,7 @@ export class ShareProjectService {
         recipient.id,
         "LEAVE THE PROJECT",
         "Member Left Project",
-        `<b>${recipient.name}</b> has left the project <b>${project.name}</b>.`,
+        `${recipient.name} left the project ${project.name}`,
         ""
       );
 
@@ -971,6 +996,59 @@ export class ShareProjectService {
         200
       );
     } catch (err: any) {
+      return new ServiceResponse(
+        ResponseStatus.Failed,
+        "Internal Server Error",
+        err.message,
+        500
+      );
+    }
+  }
+  /**
+ * Tìm kiếm user trong toàn hệ thống (không phụ thuộc project)
+ */
+  async searchUsers(
+    userId: string,
+    searchTerm: string
+  ): Promise<ServiceResponse<any>> {
+    try {
+      if (!searchTerm || searchTerm.trim().length < 2) {
+        return new ServiceResponse(
+          ResponseStatus.Failed,
+          "Search term must be at least 2 characters",
+          null,
+          400
+        );
+      }
+
+      // ✅ SỬA: select 'avatar_url' thay vì 'avatar'
+      const users = await User.find({
+        $or: [
+          { name: { $regex: searchTerm, $options: 'i' } },
+          { email: { $regex: searchTerm, $options: 'i' } }
+        ]
+      })
+        .select('_id name email avatar_url') // ✅ SỬA THÀNH avatar_url
+        .limit(20)
+        .lean();
+
+      // Format response
+      const formattedUsers = users.map(user => ({
+        _id: user._id,
+        name: user.name || user.email.split('@')[0],
+        email: user.email,
+        avatar_url: user.avatar_url || null // ✅ SỬA THÀNH avatar_url
+      }));
+
+      return new ServiceResponse(
+        ResponseStatus.Success,
+        "Users found successfully",
+        formattedUsers,
+        200
+      );
+
+    } catch (err: any) {
+      console.error("Error searching users:", err);
       return new ServiceResponse(
         ResponseStatus.Failed,
         "Internal Server Error",

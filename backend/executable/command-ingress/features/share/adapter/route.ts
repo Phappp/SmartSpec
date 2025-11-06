@@ -54,6 +54,16 @@ export default function initShareProjectRoute(
 
   router.get("/:projectId/members/:memberId/reject", controller.rejectInvite);
 
+  // GET /api/projects/:projectId/members/search?q=searchTerm -> tìm kiếm thành viên
+  // GET /api/users/search?q=searchTerm -> tìm kiếm user toàn hệ thống
+  // GET /api/users/search?q=searchTerm -> tìm kiếm user toàn hệ thống
+  router.get(
+    "/users/search",
+    requireAuthorizedUser,
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.searchUsers(req as any, res, next)
+  );
+
   // Cancel Invite
   router.delete(
     "/:projectId/members/:memberId/cancel",
@@ -77,6 +87,7 @@ export default function initShareProjectRoute(
     (req: Request, res: Response, next: NextFunction) =>
       controller.leaveProject(req as any, res, next)
   );
+
 
   return router;
 }

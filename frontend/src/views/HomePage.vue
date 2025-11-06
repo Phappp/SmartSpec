@@ -298,16 +298,19 @@ import {
   restoreProject as apiRestoreProject,
   updateProject,
   getVersionStatus,
+  retryProjectAnalysis,
+} from '@/api/project'
+import {
   getMyInvitations,
   getProjectInvites,
   cancelInvite,
   acceptInvite,
   rejectInvite,
   leaveProject,
-} from '@/api/project'
+} from '@/api/share'
 import { getUserInfo, logout as authLogout } from '@/utils/authGuard'
-import axiosClient from '@/utils/axiosClient'
 import { socket } from '@/utils/socket'
+
 export default {
   name: 'Homepage',
   components: {
@@ -351,16 +354,18 @@ export default {
       isNotificationsVisible: false,
       myInvitations: [],
       sentInvitations: [],
+      isMobile: false,
     }
   },
   mounted() {
+    this.checkMobile()
+    window.addEventListener('resize', this.checkMobile)
+
     socket.on('notification', (data) => {
       console.log('📩 Realtime notification received:', data)
-      // Cho phép HTML render đúng
       this.toast.info(`${data.title}: ${data.message}`, {
         dangerouslyHTMLString: true,
       })
-      // Cập nhật danh sách realtime
       if (data.type === 'invitation' || data.title?.includes('Request to join')) {
         this.fetchMyInvitationsRealtime()
       }
@@ -433,13 +438,16 @@ export default {
   },
   beforeUnmount() {
     this.cleanupAllPolling()
+    window.removeEventListener('resize', this.checkMobile)
     if (socket) {
       socket.off('notification')
       console.log('🧹 Socket listener removed on unmount')
     }
   },
   methods: {
-    // --- Dọn dẹp polling ---
+    checkMobile() {
+      this.isMobile = window.innerWidth <= 768
+    },
     cleanupAllPolling() {
       Object.values(this.pollingIntervals).forEach((interval) => {
         clearInterval(interval)
@@ -481,16 +489,10 @@ export default {
         this.recentProjects = recentRes.data?.data || []
         this.trashedProjects = trashedRes.data?.data || []
 
-        // 🔥 FIXED: Đảm bảo lấy đúng token từ API response
         this.myInvitations = (invRes.data?.data || []).map((inv) => ({
-          id: inv._id || inv.invite_id,
-          project_id: inv.project_id,
-          projectName: inv.project_name || 'Unnamed Project',
-          role: inv.role,
-          invitedBy: inv.inviter?.name || 'Unknown',
-          date: inv.created_at,
-          invitee: inv.invitee,
-          invite_token: inv.invite_token, // 🔥 QUAN TRỌNG: Đảm bảo có token
+          ...inv, // ✅ Giữ nguyên tất cả data từ BE
+          // Chỉ thêm id nếu cần
+          id: inv.invite_id || inv._id,
         }))
 
         console.log(
@@ -502,10 +504,8 @@ export default {
           }))
         )
 
-        // Load sent invitations
         this.loadSentInvitations()
 
-        // Khôi phục retry processes
         this.$nextTick(() => {
           this.restoreRetryProcesses()
         })
@@ -516,38 +516,27 @@ export default {
         }
       }
     },
-
-    // Trong methods của HomePage.vue
     async handleLeaveProject(projectId) {
       try {
         console.log('Leaving project:', projectId)
-
-        // Gọi API leave project
         await leaveProject(projectId)
-
         this.toast.success('You have left the project successfully.')
-
-        // Refresh data
         this.fetchInitialData()
       } catch (err) {
         console.error('Leave project error:', err)
-
         if (err.response?.status === 403) {
           this.toast.error('You cannot leave a project you own. Please transfer ownership first.')
         } else if (err.response?.status === 404) {
           this.toast.error('Project not found or you are not a member.')
-          this.fetchInitialData() // Refresh anyway
+          this.fetchInitialData()
         } else {
           this.toast.error('Failed to leave project. Please try again.')
         }
       }
     },
-
-    // --- ✨ NOTIFICATION METHODS ---
     toggleNotifications() {
       this.isNotificationsVisible = !this.isNotificationsVisible
     },
-
     async handleAcceptInvitation(inv) {
       try {
         console.log('🎯 Accepting invitation:', {
@@ -557,21 +546,17 @@ export default {
           token: inv.invite_token ? '***' : 'MISSING',
         })
 
-        // 🔥 FIXED: Kiểm tra kỹ dữ liệu trước khi gọi API
         if (!inv.project_id || !inv.invitee?._id) {
           console.error('❌ Missing required data for acceptance:', inv)
           this.toast.error('Invalid invitation data - missing project or member ID')
           return
         }
 
-        // 🔥 FIXED: Sử dụng API đã sửa
         await acceptInvite(inv.project_id, inv.invitee._id, inv.invite_token)
 
-        // Cập nhật UI ngay lập tức
         this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
         this.toast.success(`You have joined the project: ${inv.projectName}`)
 
-        // Refresh project lists
         this.fetchInitialData()
       } catch (err) {
         console.error('❌ Accept invitation error:', {
@@ -585,7 +570,6 @@ export default {
           this.toast.error(`Failed to accept: ${errorMsg}`)
         } else if (err.response?.status === 404) {
           this.toast.error('Invitation not found or already processed.')
-          // Xóa invitation khỏi danh sách nếu không tìm thấy
           this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
         } else if (err.response?.status === 403) {
           this.toast.error('Invalid or expired token.')
@@ -595,7 +579,6 @@ export default {
         }
       }
     },
-
     async handleRejectInvitation(inv) {
       try {
         console.log('🎯 Rejecting invitation:', {
@@ -605,17 +588,14 @@ export default {
           token: inv.invite_token ? '***' : 'MISSING',
         })
 
-        // 🔥 FIXED: Kiểm tra kỹ dữ liệu trước khi gọi API
         if (!inv.project_id || !inv.invitee?._id) {
           console.error('❌ Missing required data for rejection:', inv)
           this.toast.error('Invalid invitation data - missing project or member ID')
           return
         }
 
-        // 🔥 FIXED: Sử dụng API đã sửa
         await rejectInvite(inv.project_id, inv.invitee._id, inv.invite_token)
 
-        // Cập nhật UI ngay lập tức
         this.myInvitations = this.myInvitations.filter((i) => i.id !== inv.id)
         this.toast.info('You have declined the invitation.')
       } catch (err) {
@@ -639,22 +619,17 @@ export default {
         }
       }
     },
-
-    // --- MODAL METHODS ---
     openPersonalInfo() {
       this.showPersonalInfo = true
     },
-
     openShareModal(project) {
       this.selectedProject = project
       this.isShareModalVisible = true
     },
-
     closeShareModal() {
       this.isShareModalVisible = false
       this.fetchInitialData()
     },
-
     showNotification(title, message) {
       this.modalContent = {
         title,
@@ -663,7 +638,6 @@ export default {
       }
       this.isAppModalVisible = true
     },
-
     showConfirmation(title, message, onConfirm) {
       this.modalContent = {
         title,
@@ -673,12 +647,9 @@ export default {
       }
       this.isAppModalVisible = true
     },
-
-    // --- PROJECT CREATION METHODS ---
     openNewProjectModal() {
       this.isNewProjectModalVisible = true
     },
-
     closeNewProjectModal() {
       this.isNewProjectModalVisible = false
       if (this.creationSuccess) {
@@ -686,7 +657,6 @@ export default {
         this.creationSuccess = false
       }
     },
-
     handleCloseDuringCreation(creationData) {
       console.log('📝 Received creation data:', creationData)
 
@@ -721,8 +691,6 @@ export default {
         this.navigateTo('my-projects')
       }
     },
-
-    // Khôi phục retry processes từ localStorage
     restoreRetryProcesses() {
       const retryKeys = Object.keys(localStorage).filter((key) => key.startsWith('retry_'))
 
@@ -769,7 +737,6 @@ export default {
         }
       })
     },
-
     startPollingForProject(tempProjectId, pollingData) {
       console.log('🚀 Starting polling for project:', tempProjectId, pollingData)
 
@@ -785,14 +752,12 @@ export default {
             stage: version?.stage,
           })
 
-          // Cập nhật tiến độ lên project card
           this.updateCreatingProjectProgress(tempProjectId, {
             processingProgress: version?.progress || 0,
             currentStage: version?.stage || 'Processing',
             creationStatus: status,
           })
 
-          // Cập nhật localStorage cho retry processes
           if (pollingData.type === 'retry') {
             const retryState = {
               projectId: pollingData.projectId,
@@ -818,7 +783,6 @@ export default {
               clearInterval(interval)
               delete this.pollingIntervals[tempProjectId]
 
-              // Xóa khỏi localStorage khi hoàn thành
               if (pollingData.type === 'retry') {
                 localStorage.removeItem(`retry_${pollingData.projectId}`)
               }
@@ -852,7 +816,6 @@ export default {
         retryCount: 0,
       }
     },
-
     updateCreatingProjectProgress(tempProjectId, progressData) {
       const projectIndex = this.creatingProjects.findIndex((p) => p._id === tempProjectId)
       if (projectIndex !== -1) {
@@ -865,7 +828,6 @@ export default {
         }
       }
     },
-
     moveCreatingToRealProject(tempProjectId, realProject) {
       const projectIndex = this.creatingProjects.findIndex((p) => p._id === tempProjectId)
       if (projectIndex !== -1) {
@@ -875,7 +837,6 @@ export default {
         this.toast.success(`Project created successfully!`)
       }
     },
-
     markCreatingProjectFailed(tempProjectId) {
       const projectIndex = this.creatingProjects.findIndex((p) => p._id === tempProjectId)
       if (projectIndex !== -1) {
@@ -886,7 +847,6 @@ export default {
           processingProgress: 0,
         }
 
-        // Xóa khỏi localStorage khi failed
         const project = this.creatingProjects[projectIndex]
         if (project.pollingData?.type === 'retry') {
           localStorage.removeItem(`retry_${project.pollingData.projectId}`)
@@ -897,7 +857,6 @@ export default {
         }, 30000)
       }
     },
-
     handleProjectCreated(newProject) {
       if (newProject) {
         this.creatingProjects = this.creatingProjects.filter(
@@ -908,11 +867,9 @@ export default {
       }
       this.creationSuccess = true
     },
-
     navigateTo(view) {
       this.currentView = view
     },
-
     async handleEditProject({ projectId, data }) {
       try {
         await updateProject(projectId, data)
@@ -923,7 +880,6 @@ export default {
         this.toast.error(`Failed to update project!`)
       }
     },
-
     updateProjectInLists(projectId, newData) {
       const updateProjectInArray = (array) => {
         const index = array.findIndex((p) => (p._id || p.id) === projectId)
@@ -937,7 +893,6 @@ export default {
       updateProjectInArray(this.sharedProjects)
       updateProjectInArray(this.creatingProjects)
     },
-
     cleanupOldCreatingProjects() {
       const now = new Date().getTime()
       this.creatingProjects = this.creatingProjects.filter((p) => {
@@ -948,13 +903,11 @@ export default {
         return true
       })
     },
-
     openProject(project) {
       if (project.isTemp) return
       const id = project._id || project.id
       if (id) this.$router.push({ name: 'Editor', params: { id } })
     },
-
     confirmMoveToTrash(projectId) {
       this.showConfirmation(
         'Confirm Move to Trash',
@@ -962,7 +915,6 @@ export default {
         () => this.moveToTrash(projectId)
       )
     },
-
     async moveToTrash(projectId) {
       try {
         await deleteProject(projectId)
@@ -973,7 +925,6 @@ export default {
         this.toast.error(`Failed to trash project!`)
       }
     },
-
     async restoreProject(projectId) {
       try {
         await apiRestoreProject(projectId)
@@ -984,7 +935,6 @@ export default {
         this.toast.error(`Failed to restore project!`)
       }
     },
-
     confirmDeletePermanently(projectId) {
       this.showConfirmation(
         'Confirm Permanent Deletion',
@@ -992,7 +942,6 @@ export default {
         () => this.deleteProjectPermanently(projectId)
       )
     },
-
     async deleteProjectPermanently(projectId) {
       try {
         await deleteProject(projectId)
@@ -1003,7 +952,6 @@ export default {
         this.toast.error(`Failed to permanently delete project!`)
       }
     },
-
     async logout() {
       console.log('🚪 Logged out')
       if (socket && socket.connected) {
@@ -1013,7 +961,6 @@ export default {
       await authLogout()
       this.$router.push('/login')
     },
-
     handleAvatarUpdated(avatarData) {
       console.log('🔄 Avatar updated in PersonalInfo:', avatarData)
 
@@ -1023,7 +970,6 @@ export default {
         this.fetchUserData()
       }
     },
-
     async fetchUserData() {
       try {
         const userRes = await getCurrentUser()
@@ -1033,17 +979,14 @@ export default {
         console.error('❌ Failed to refresh user data:', error)
       }
     },
-
     // INVITATION MODAL METHODS
     openInvitationsModal() {
       this.isInvitationsModalVisible = true
       this.loadSentInvitations()
     },
-
     closeInvitationsModal() {
       this.isInvitationsModalVisible = false
     },
-
     async loadSentInvitations() {
       try {
         const myProjects = await getMyProjects()
@@ -1062,7 +1005,6 @@ export default {
             }
           } catch (error) {
             console.warn(`Cannot get invites for project ${project._id}:`, error.message)
-            // Fallback: lấy từ members có status pending
             const pendingMembers = project.members?.filter((m) => m.status === 'pending') || []
             const projectInvites = pendingMembers.map((member) => ({
               invite_id: member._id || `temp-${Date.now()}`,
@@ -1092,7 +1034,6 @@ export default {
         this.toast.error('Failed to load sent invitations')
       }
     },
-
     async handleCancelInvite(invitation) {
       try {
         await cancelInvite(invitation.project_id, invitation.invitee._id)
@@ -1110,7 +1051,7 @@ export default {
     },
     async retryCreatingProject(projectData) {
       try {
-        const userId = localStorage.getItem('userId') // LẤY userId
+        const userId = localStorage.getItem('userId')
         if (!userId) {
           console.error('❌ User ID not found for retry')
           this.toast.error('User identification required for retry')
@@ -1119,21 +1060,18 @@ export default {
 
         console.log('🔄 Retrying project creation:', projectData)
 
-        // Gọi API retry với userId
         await retryProjectAnalysis(
           projectData.pollingData.projectId,
           projectData.pollingData.versionId,
-          userId // TRUYỀN userId
+          userId
         )
 
-        // Cập nhật trạng thái project đang tạo
         this.updateCreatingProjectProgress(projectData._id, {
           processingProgress: 0,
           currentStage: 'Initializing...',
           creationStatus: 'polling',
         })
 
-        // Bắt đầu polling lại
         this.startPollingForProject(projectData._id, projectData.pollingData)
 
         this.toast.success('Retry started successfully!')
@@ -1151,12 +1089,51 @@ export default {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: #f9fafb;
   min-height: 100vh;
+  overflow: hidden;
 }
 
-/* ✨ NEW: Styles for Notifications Dropdown */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.main-content {
+  flex: 1;
+  background-color: #ffffff;
+  margin-left: 250px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE và Edge */
+}
+
+.main-content::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
 .page-header {
+  padding: 20px 30px;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #ffffff;
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.page-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a365d;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
   align-items: center;
 }
 
@@ -1164,11 +1141,27 @@ export default {
   position: relative;
 }
 
-.notifications-btn {
+.notifications-btn,
+.invitations-btn {
   position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background-color 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.notification-badge {
+.notifications-btn:hover,
+.invitations-btn:hover {
+  background-color: #f3f4f6;
+}
+
+.notification-badge,
+.invitation-badge {
   position: absolute;
   top: -5px;
   right: -8px;
@@ -1182,6 +1175,10 @@ export default {
   align-items: center;
   justify-content: center;
   font-weight: bold;
+}
+
+.invitation-badge {
+  background-color: #3b82f6;
 }
 
 .notifications-dropdown {
@@ -1213,6 +1210,16 @@ export default {
   margin: 0;
   max-height: 400px;
   overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.invitations-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.invitations-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
 }
 
 .invitation-item {
@@ -1253,74 +1260,17 @@ export default {
   font-size: 0.8rem;
 }
 
-.app-container {
-  display: flex;
-  min-height: 100vh;
-}
-
-.main-content {
-  flex: 1;
-  background-color: #ffffff;
-  margin-left: 250px;
-  display: flex;
-  flex-direction: column;
-}
-
-.page-header {
-  padding: 20px 30px;
-  border-bottom: 1px solid #e5e7eb;
-  background-color: #ffffff;
-}
-
-.page-header h1 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1a365d;
-  margin: 0;
-}
-
-/* Navigation Tabs */
-.navigation-tabs {
-  display: flex;
-  gap: 12px;
-  margin: 0 30px 24px;
-  padding: 0 8px;
-  border-bottom: 1px solid #e5e7eb;
-  padding-bottom: 16px;
-}
-
-.tab-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-weight: 600;
-  color: #6b7280;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.tab-button:hover {
-  border-color: #1a365d;
-  color: #1a365d;
-}
-
-.tab-button.active {
-  background: #1a365d;
-  border-color: #1a365d;
-  color: white;
-}
-
-.tab-button .material-symbols-outlined {
-  font-size: 20px;
-}
-
 .content-area {
   padding: 0 30px 30px;
   flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.content-area::-webkit-scrollbar {
+  display: none;
 }
 
 /* Filter Section */
@@ -1333,13 +1283,14 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .filter-controls {
   display: flex;
   gap: 12px;
   align-items: center;
-  margin-left: 0;
 }
 
 .search-input-container {
@@ -1362,6 +1313,7 @@ export default {
   font-size: 0.875rem;
   width: 300px;
   transition: border-color 0.3s ease;
+  box-sizing: border-box;
 }
 
 .search-input:focus {
@@ -1377,6 +1329,7 @@ export default {
   background: white;
   cursor: pointer;
   transition: border-color 0.3s ease;
+  box-sizing: border-box;
 }
 
 .filter-select:focus {
@@ -1391,6 +1344,8 @@ export default {
 }
 
 .stat-text {
+  position: relative;
+  top: 100px;
   font-size: 0.875rem;
   color: #6b7280;
   font-weight: 500;
@@ -1420,6 +1375,7 @@ export default {
 .section-header {
   margin-bottom: 30px;
   text-align: left;
+  max-width: 100%;
 }
 
 .section-header h2 {
@@ -1440,6 +1396,8 @@ export default {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 24px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Creating Projects Section */
@@ -1447,6 +1405,7 @@ export default {
   border-bottom: 2px solid #e3f2fd;
   padding-bottom: 30px;
   margin-bottom: 30px;
+  max-width: 100%;
 }
 
 .creating-projects-section .section-header h2 {
@@ -1465,6 +1424,8 @@ export default {
   background: white;
   border-radius: 12px;
   margin-top: 20px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .empty-icon {
@@ -1508,13 +1469,14 @@ export default {
   font-weight: 600;
   cursor: pointer;
   transition: background 0.3s ease;
+  margin: 0 auto;
 }
 
 .btn-primary:hover {
   background: #2d4a8a;
 }
 
-/* Responsive Design */
+/* ===== RESPONSIVE STYLES ===== */
 @media (max-width: 768px) {
   .app-container {
     flex-direction: column;
@@ -1522,67 +1484,190 @@ export default {
 
   .main-content {
     margin-left: 0;
+    margin-top: 60px;
   }
 
-  .projects-grid {
-    grid-template-columns: 1fr;
+  .page-header {
+    padding: 16px 20px;
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .page-header h1 {
+    font-size: 1.25rem;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .content-area {
+    padding: 0 16px 16px;
   }
 
   .filter-section {
     flex-direction: column;
     gap: 16px;
     align-items: stretch;
+    padding: 16px;
   }
 
   .filter-controls {
     flex-direction: column;
+    width: 100%;
+    gap: 12px;
+  }
+
+  .stat-text {
+    position: relative;
+    top: 230px;
+    font-size: 12px;
+    left: 70%;
+  }
+
+  .search-input-container {
+    width: 100%;
   }
 
   .search-input {
     width: 100%;
   }
 
+  .filter-select {
+    width: 100%;
+  }
+
   .filter-stats {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .projects-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .section-header {
+    margin-bottom: 20px;
+  }
+
+  .section-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .empty-state {
+    padding: 40px 16px;
+    margin-top: 0;
+  }
+
+  .empty-icon {
+    width: 60px;
+    height: 60px;
+  }
+
+  .empty-icon .material-symbols-outlined {
+    font-size: 32px;
+  }
+
+  .empty-state h3 {
+    font-size: 1.1rem;
+  }
+
+  .notifications-dropdown {
+    width: 300px;
+    right: -50px;
+  }
+
+  .invitation-item {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .invitation-actions {
+    width: 100%;
     justify-content: space-between;
   }
 
-  .navigation-tabs {
-    flex-wrap: wrap;
-    margin: 0 16px 16px;
+  .btn-sm {
+    flex: 1;
+    padding: 8px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header {
+    padding: 12px 16px;
   }
 
   .content-area {
-    padding: 0 16px 16px;
+    padding: 0 12px 12px;
+  }
+
+  .filter-section {
+    padding: 12px;
+  }
+
+  .section-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .section-header p {
+    font-size: 0.8rem;
+  }
+
+  .notifications-dropdown {
+    width: 280px;
+    right: 0px;
+  }
+
+  .empty-state {
+    padding: 30px 12px;
+  }
+
+  .empty-icon {
+    width: 50px;
+    height: 50px;
+  }
+
+  .empty-icon .material-symbols-outlined {
+    font-size: 28px;
+  }
+
+  .btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .invitations-btn,
+  .notifications-btn {
+    padding: 6px;
+  }
+
+  .invitation-badge,
+  .notification-badge {
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
   }
 }
 
-.invitations-btn {
-  position: relative;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 8px;
-  transition: background-color 0.3s;
-}
-
-.invitations-btn:hover {
-  background-color: #f3f4f6;
-}
-
-.invitation-badge {
-  position: absolute;
-  top: -5px;
-  right: -8px;
-  background-color: #3b82f6;
-  color: white;
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
+@media (max-width: 360px) {
+  .notifications-dropdown {
+    width: 260px;
+    right: 0px;
+  }
+  .stat-text {
+    top: 240px;
+    left: 70%;
+    font-size: 12px;
+  }
+  .filter-stats {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
 }
 </style>

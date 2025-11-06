@@ -7,7 +7,8 @@
       editing: isEditing,
       creating: isCreating,
       failed: project.creationStatus === 'failed',
-      retrying: project.isRetry, // THÊM class retrying
+      retrying: project.isRetry,
+      mobile: isMobile,
     }"
   >
     <!-- TRẠNG THÁI ĐANG TẠO HOẶC RETRY -->
@@ -22,7 +23,6 @@
           }"
         >
           {{ creatingLabel }}
-          <!-- SỬ DỤNG computed property -->
         </span>
       </div>
 
@@ -63,6 +63,7 @@
         </span>
       </div>
     </div>
+
     <div v-if="!isEditing" class="project-content">
       <div class="project-header">
         <h3>{{ project.name }}</h3>
@@ -83,7 +84,7 @@
         <div class="meta-right">
           <span class="project-members">
             <span class="material-symbols-outlined">group</span>
-            {{ project.members?.length || 0 }}
+            {{ project.members?.filter((member) => member.status === 'accepted').length || 0 }}
           </span>
 
           <div class="fab-container" @click.stop v-click-outside="closeFab">
@@ -142,7 +143,7 @@
       </div>
     </div>
   </div>
-</template>''
+</template>
 
 <script>
 // Custom directive for click outside
@@ -178,6 +179,7 @@ export default {
         name: '',
         description: '',
       },
+      isMobile: false,
     }
   },
   computed: {
@@ -198,29 +200,23 @@ export default {
         this.project.isTemp ||
         this.project.creationStatus === 'creating' ||
         this.project.creationStatus === 'polling' ||
-        this.project.status === 'retrying' || // THÊM điều kiện này
-        this.project.isRetry // THÊM điều kiện này
+        this.project.status === 'retrying' ||
+        this.project.isRetry
       )
     },
-
-    // COMPUTED PROPERTY MỚI: Hiển thị label phù hợp
     creatingLabel() {
       if (this.project.isRetry) {
         return 'Retrying...'
       }
       return this.project.creationStatus === 'failed' ? 'Failed' : 'Creating...'
     },
-
     projectType() {
       return this.isOwner ? 'my' : 'shared'
     },
-
     isViewer() {
       return !this.isOwner
     },
-
     normalActions() {
-      // Nếu là viewer (không phải owner), chỉ có nút Leave
       if (this.isViewer) {
         return [
           {
@@ -232,8 +228,6 @@ export default {
           },
         ]
       }
-
-      // Nếu là owner, có đầy đủ quyền
       return [
         {
           icon: 'edit',
@@ -265,7 +259,6 @@ export default {
         },
       ]
     },
-
     trashedActions() {
       return [
         {
@@ -285,15 +278,28 @@ export default {
       ]
     },
   },
+  mounted() {
+    this.checkMobile()
+    window.addEventListener('resize', this.checkMobile)
+  },
+  beforeUnmount() {
+    window.removeEventListener('resize', this.checkMobile)
+  },
   methods: {
-    toggleFab() {
-      this.open = !this.open
+    checkMobile() {
+      this.isMobile = window.innerWidth <= 768
     },
-
+    toggleFab() {
+      if (this.isMobile) {
+        // Trên mobile, hiển thị menu đơn giản
+        this.open = !this.open
+      } else {
+        this.open = !this.open
+      }
+    },
     closeFab() {
       this.open = false
     },
-
     startEditing() {
       this.editForm = {
         name: this.project.name,
@@ -307,23 +313,19 @@ export default {
       })
     },
     retryCreation() {
-      // Emit event để parent xử lý retry
       this.$emit('retry-creation', this.project._id)
     },
     changeColor() {
       alert('Change color clicked')
     },
-
     shareProject() {
       this.$emit('share', this.project)
       this.closeFab()
     },
-
     leaveProject() {
       this.$emit('leave', this.project._id || this.project.id)
       this.closeFab()
     },
-
     cancelEdit(event) {
       if (event) {
         event.stopPropagation()
@@ -334,7 +336,6 @@ export default {
         description: '',
       }
     },
-
     async saveProject(event) {
       if (event) {
         event.stopPropagation()
@@ -360,8 +361,18 @@ export default {
         alert('Failed to update project')
       }
     },
-
     getStyle(index, total) {
+      if (this.isMobile) {
+        // Trên mobile, hiển thị menu dạng list thẳng đứng
+        return {
+          transform: 'none',
+          position: 'static',
+          margin: '4px 0',
+          width: '100%',
+          borderRadius: '6px',
+        }
+      }
+
       const angle = (360 / total) * index
       const rad = (angle * Math.PI) / 180
       const radius = 50
@@ -371,28 +382,22 @@ export default {
         transform: `translate(${x}px, ${-y}px)`,
       }
     },
-
-    // Trong methods
     openProject() {
       if (this.isTrashed || this.isEditing || this.isCreating) return
       this.$emit('open', this.project)
     },
-
     confirmDelete() {
       this.$emit('delete', this.project._id || this.project.id)
       this.closeFab()
     },
-
     restoreProject() {
       this.$emit('restore', this.project._id || this.project.id)
       this.closeFab()
     },
-
     deletePermanently() {
       this.$emit('delete-permanently', this.project._id || this.project.id)
       this.closeFab()
     },
-
     formatDate(dateStr) {
       if (!dateStr) return ''
       const date = new Date(dateStr)
@@ -400,74 +405,6 @@ export default {
       const m = String(date.getMonth() + 1).padStart(2, '0')
       const y = date.getFullYear()
       return `${d}/${m}/${y}`
-    },
-    async handleAvatarUpload(e) {
-      const file = e.target.files[0]
-      if (!file) return
-
-      // Validate file
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-      if (!allowedTypes.includes(file.type)) {
-        this.showNotification({
-          type: 'error',
-          title: 'Invalid File',
-          message: 'Only JPEG, PNG, GIF, and WebP images are allowed.',
-        })
-        return
-      }
-
-      // Validate file size (5MB)
-      const maxSize = 5 * 1024 * 1024
-      if (file.size > maxSize) {
-        this.showNotification({
-          type: 'error',
-          title: 'File Too Large',
-          message: 'File size must be less than 5MB.',
-        })
-        return
-      }
-
-      this.isUploadingAvatar = true
-
-      try {
-        // Tạo FormData
-        const formData = new FormData()
-        formData.append('avatar', file)
-
-        // Gọi API upload
-        const response = await axiosClient.post('/api/users/upload-avatar', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        })
-
-        // Cập nhật avatar_url từ response
-        const newAvatarUrl = response.data.data.avatar_url
-        this.localUser.avatar_url = newAvatarUrl
-
-        // 🔥 QUAN TRỌNG: Emit event để thông báo avatar đã thay đổi
-        this.$emit('avatar-updated', {
-          avatar_url: newAvatarUrl,
-          user: this.localUser,
-        })
-
-        this.showNotification({
-          type: 'success',
-          title: 'Success',
-          message: 'Avatar uploaded successfully!',
-        })
-      } catch (err) {
-        console.error('Error uploading avatar:', err.response?.data || err.message)
-        this.showNotification({
-          type: 'error',
-          title: 'Upload Failed',
-          message: err.response?.data?.message || 'Failed to upload avatar.',
-        })
-      } finally {
-        this.isUploadingAvatar = false
-        // Reset file input
-        this.$refs.fileInput.value = ''
-      }
     },
   },
 }
@@ -599,6 +536,7 @@ export default {
 .fab-container {
   position: relative;
   display: inline-block;
+  background: transparent;
 }
 
 .fab-main {
@@ -638,6 +576,7 @@ export default {
   border: 1px solid #ddd;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(6px);
+  z-index: 1;
 }
 
 .fab-btn {
@@ -839,7 +778,7 @@ export default {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
   transform: scale(1);
 }
-/* Creating State Styles */
+
 /* Creating State Styles */
 .project-card.creating {
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
@@ -985,5 +924,143 @@ export default {
 .project-card.creating .project-content,
 .project-card.creating .fab-container {
   display: none !important;
+}
+
+/* ===== RESPONSIVE STYLES ===== */
+@media (max-width: 768px) {
+  .project-card {
+    margin-right: 0;
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    min-height: 120px;
+  }
+
+  .project-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .project-header h3 {
+    font-size: 16px;
+    max-width: 100%;
+  }
+
+  .project-type {
+    font-size: 7px;
+    padding: 1px 6px;
+  }
+
+  .project-description {
+    font-size: 12px;
+    margin: 4px 0 8px;
+  }
+
+  .project-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .meta-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Mobile FAB menu */
+  .fab-options {
+    position: fixed;
+    top: auto !important;
+    left: 50% !important;
+    bottom: 20px;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 300px;
+    height: auto;
+    border-radius: 12px;
+    background: transparent;
+    margin: 0;
+  }
+
+  .fab-options.open .fab-btn {
+    position: static;
+    transform: none !important;
+    width: 100%;
+    height: 44px;
+    border-radius: 8px;
+    margin: 2px 0;
+    opacity: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0 16px;
+    gap: 12px;
+  }
+
+  .fab-btn span {
+    font-size: 20px;
+  }
+
+  .creating-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .creating-title {
+    font-size: 16px;
+  }
+
+  .creating-badge {
+    align-self: flex-start;
+  }
+
+  .edit-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .project-card {
+    padding: 10px 12px;
+    min-height: 110px;
+  }
+
+  .project-header h3 {
+    font-size: 15px;
+  }
+
+  .project-description {
+    font-size: 11px;
+    -webkit-line-clamp: 3;
+  }
+
+  .creating-title {
+    font-size: 15px;
+  }
+
+  .creating-description {
+    font-size: 12px;
+  }
+  .fab-options.open {
+    position: fixed;
+    top: 0;
+    min-width: 90vw;
+  }
+  .fab-main {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .fab-main span {
+    font-size: 24px;
+  }
 }
 </style>

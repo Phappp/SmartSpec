@@ -1,107 +1,121 @@
 <template>
-  <div class="sidebar">
-    <div class="brand-section">
-      <div class="brand">
-        <h2>
-          <router-link class="logo-link">
-            <i class="fa-brands fa-slack"></i>
-          </router-link>
-          SMART SPEC
-        </h2>
-        <p>Generate professional software documentation using AI</p>
-      </div>
-      <button class="new-project-btn" @click="$emit('new')">
-        <i class="fa-solid fa-plus"></i> New Project
+  <div class="sidebar" :class="{ 'mobile-open': isMobileOpen, mobile: isMobile }">
+    <!-- Mobile Header -->
+    <div v-if="isMobile" class="mobile-header">
+      <button class="mobile-toggle" @click="toggleMobile">
+        <span class="material-symbols-outlined">menu</span>
       </button>
+      <div class="mobile-brand">
+        <h2>SMART SPEC</h2>
+      </div>
     </div>
 
-    <nav class="navigation">
-      <ul>
-        <li>
-          <a
-            class="sidebar-link"
-            href="#"
-            :class="{ active: activeSection === 'recent-projects' }"
-            @click.prevent="navigate('recent-projects')"
-          >
-            <i class="fa-solid fa-clock"></i>
-            Recent
-          </a>
-        </li>
-        <li>
-          <a
-            class="sidebar-link"
-            href="#"
-            :class="{ active: activeSection === 'my-projects' }"
-            @click.prevent="navigate('my-projects')"
-          >
-            <i class="fa-brands fa-space-awesome"></i>
-            Projects
-          </a>
-        </li>
-        <li>
-          <a
-            class="sidebar-link"
-            href="#"
-            :class="{ active: activeSection === 'shared-projects' }"
-            @click.prevent="navigate('shared-projects')"
-          >
-            <i class="fa-regular fa-star"></i>
-            Shared
-          </a>
-        </li>
-        <li>
-          <a
-            class="sidebar-link"
-            href="#"
-            :class="{ active: activeSection === 'trash' }"
-            @click.prevent="navigate('trash')"
-          >
-            <i class="fa-solid fa-trash-can"></i>
-            Trashed
-          </a>
-        </li>
-      </ul>
-    </nav>
-
-    <div @click="toggleUserMenu" class="user-account">
-      <div class="avatar">
-        <!-- FIX: Thêm safe checking và full URL -->
-        <img
-          v-if="user && user.avatar_url"
-          :src="getFullAvatarUrl(user.avatar_url)"
-          @error="handleAvatarError"
-          alt="User Avatar"
-        />
-        <div v-else class="avatar-placeholder">
-          {{ userInitials }}
+    <div class="sidebar-content" :class="{ 'mobile-hidden': isMobile && !isMobileOpen }">
+      <div class="brand-section">
+        <div class="brand">
+          <h2>
+            <router-link class="logo-link">
+              <i class="fa-brands fa-slack"></i>
+            </router-link>
+            SMART SPEC
+          </h2>
+          <p>Generate professional software documentation using AI</p>
         </div>
+        <button class="new-project-btn" @click="$emit('new')">
+          <i class="fa-solid fa-plus"></i> New Project
+        </button>
       </div>
 
-      <div v-if="user" class="user-info">
-        <div class="user-name">{{ user.name || 'User' }}</div>
-        <div class="user-email">{{ user.email || 'user@example.com' }}</div>
-      </div>
-      <div v-else class="user-info">
-        <div class="user-name">Loading...</div>
-        <div class="user-email">...</div>
-      </div>
+      <nav class="navigation">
+        <ul>
+          <li>
+            <a
+              class="sidebar-link"
+              href="#"
+              :class="{ active: activeSection === 'recent-projects' }"
+              @click.prevent="navigate('recent-projects')"
+            >
+              <i class="fa-solid fa-clock"></i>
+              Recent
+            </a>
+          </li>
+          <li>
+            <a
+              class="sidebar-link"
+              href="#"
+              :class="{ active: activeSection === 'my-projects' }"
+              @click.prevent="navigate('my-projects')"
+            >
+              <i class="fa-brands fa-space-awesome"></i>
+              Projects
+            </a>
+          </li>
+          <li>
+            <a
+              class="sidebar-link"
+              href="#"
+              :class="{ active: activeSection === 'shared-projects' }"
+              @click.prevent="navigate('shared-projects')"
+            >
+              <i class="fa-regular fa-star"></i>
+              Shared
+            </a>
+          </li>
+          <li>
+            <a
+              class="sidebar-link"
+              href="#"
+              :class="{ active: activeSection === 'trash' }"
+              @click.prevent="navigate('trash')"
+            >
+              <i class="fa-solid fa-trash-can"></i>
+              Trashed
+            </a>
+          </li>
+        </ul>
+      </nav>
 
-      <transition name="fade-slide">
-        <div v-if="showUserMenu" class="user-menu">
-          <ul class="menu-list">
-            <li><span class="material-symbols-outlined">help</span> Help</li>
-            <li @click.stop="$emit('open-personal')">
-              <span class="material-symbols-outlined">settings</span> Settings
-            </li>
-            <hr />
-            <li @click.stop="handleLogout">
-              <span class="material-symbols-outlined">logout</span> Logout
-            </li>
-          </ul>
+      <div @click="toggleUserMenu" class="user-account">
+        <div class="avatar">
+          <img
+            v-if="user && user.avatar_url"
+            :src="getFullAvatarUrl(user.avatar_url)"
+            @error="handleAvatarError"
+            alt="User Avatar"
+          />
+          <div v-else class="avatar-placeholder">
+            {{ userInitials }}
+          </div>
         </div>
-      </transition>
+
+        <div v-if="user" class="user-info">
+          <div class="user-name">{{ user.name || 'User' }}</div>
+          <div class="user-email">{{ user.email || 'user@example.com' }}</div>
+        </div>
+        <div v-else class="user-info">
+          <div class="user-name">Loading...</div>
+          <div class="user-email">...</div>
+        </div>
+
+        <transition name="fade-slide">
+          <div v-if="showUserMenu" class="user-menu">
+            <ul class="menu-list">
+              <li><span class="material-symbols-outlined">help</span> Help</li>
+              <li @click.stop="$emit('open-personal')">
+                <span class="material-symbols-outlined">settings</span> Settings
+              </li>
+              <hr />
+              <li @click.stop="handleLogout">
+                <span class="material-symbols-outlined">logout</span> Logout
+              </li>
+            </ul>
+          </div>
+        </transition>
+      </div>
     </div>
+
+    <!-- Mobile Overlay -->
+    <div v-if="isMobile && isMobileOpen" class="mobile-overlay" @click="closeMobile"></div>
   </div>
 </template>
 
@@ -122,7 +136,9 @@ export default {
       showUserMenu: false,
       activeSection: 'recent-projects',
       avatarLoadError: false,
-      localUser: null, // Backup user data
+      localUser: null,
+      isMobile: false,
+      isMobileOpen: false,
     }
   },
   computed: {
@@ -139,7 +155,6 @@ export default {
     },
   },
   watch: {
-    // Watch for user prop changes
     user: {
       handler(newUser) {
         console.log('🔄 Sidebar user prop changed:', newUser?.avatar_url)
@@ -147,38 +162,51 @@ export default {
           this.localUser = { ...newUser }
         }
       },
-      deep: true, // 🔥 Quan trọng: watch nested changes
+      deep: true,
       immediate: true,
     },
   },
   mounted() {
-    // 🔹 Đọc lại từ localStorage
+    this.checkMobile()
+    window.addEventListener('resize', this.checkMobile)
+
     const savedSection = localStorage.getItem('activeSection')
     if (savedSection) {
       this.activeSection = savedSection
-      this.$emit('navigate', savedSection) // gọi navigate ngay để đồng bộ
+      this.$emit('navigate', savedSection)
     }
 
-    // 🔹 Fetch user data if not provided via props
     if (!this.user) {
       this.fetchUser()
     }
   },
+  beforeUnmount() {
+    window.removeEventListener('resize', this.checkMobile)
+  },
   methods: {
-    // FIX: Hàm tạo full avatar URL
+    checkMobile() {
+      this.isMobile = window.innerWidth <= 768
+      if (!this.isMobile) {
+        this.isMobileOpen = false
+      }
+    },
+    toggleMobile() {
+      this.isMobileOpen = !this.isMobileOpen
+    },
+    closeMobile() {
+      this.isMobileOpen = false
+    },
     getFullAvatarUrl(avatarUrl) {
       if (!avatarUrl) {
         console.log('❌ No avatar_url provided')
         return ''
       }
 
-      // Nếu đã là full URL hoặc blob URL
       if (avatarUrl.startsWith('http') || avatarUrl.startsWith('blob:')) {
         console.log('✅ Already full URL:', avatarUrl)
         return avatarUrl
       }
 
-      // Đảm bảo giữ nguyên toàn bộ URL
       const cleanUrl = avatarUrl.startsWith('/') ? avatarUrl : `/${avatarUrl}`
       const baseUrl = 'http://localhost:8000'
       const fullUrl = `${baseUrl}${cleanUrl}`
@@ -186,18 +214,12 @@ export default {
       console.log('🔗 Sidebar constructed avatar URL:', fullUrl)
       return fullUrl
     },
-
-    // FIX: Xử lý lỗi load avatar
     handleAvatarError(event) {
       console.error('❌ Sidebar avatar load failed:', event.target.src)
       this.avatarLoadError = true
-
-      // Fallback to placeholder
       const img = event.target
       img.style.display = 'none'
     },
-
-    // FIX: Fetch user data với error handling
     async fetchUser() {
       try {
         console.log('🔄 Sidebar fetching user data...')
@@ -213,7 +235,6 @@ export default {
         }
       }
     },
-
     toggleUserMenu() {
       this.showUserMenu = !this.showUserMenu
 
@@ -223,7 +244,6 @@ export default {
         document.removeEventListener('click', this.handleClickOutside)
       }
     },
-
     handleClickOutside(event) {
       const userMenu = this.$el.querySelector('.user-menu')
       const userAccount = this.$el.querySelector('.user-account')
@@ -233,16 +253,17 @@ export default {
         document.removeEventListener('click', this.handleClickOutside)
       }
     },
-
     handleLogout() {
       this.showUserMenu = false
       this.$emit('logout')
     },
-
     navigate(section) {
       this.activeSection = section
       localStorage.setItem('activeSection', section)
       this.$emit('navigate', section)
+      if (this.isMobile) {
+        this.closeMobile()
+      }
     },
   },
 }
@@ -261,10 +282,18 @@ export default {
   background: #fff;
   display: flex;
   flex-direction: column;
-  padding: 20px 16px 20px 0;
-  border-radius: 0 0px 16px 0; /* bo góc phải */
+  padding: 20px 16px 0 0;
+  border-radius: 0 0px 16px 0;
   transition: all 0.3s ease;
   border-right: 1px solid #e0e0e0;
+  z-index: 30;
+}
+
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
 }
 
 .brand h2 {
@@ -325,6 +354,8 @@ export default {
 .navigation ul {
   list-style: none;
   padding: 0;
+  margin: 0;
+  flex: 1;
 }
 
 .navigation li {
@@ -363,18 +394,17 @@ export default {
 
 /* User Account Section */
 .user-account {
-  position: absolute;
   gap: 12px;
   width: 100%;
   display: flex;
   padding: 12px;
-  bottom: 0;
   border-top: 1px solid #e0e0e0;
   align-items: center;
   justify-content: flex-start;
   transition: 0.1s ease;
   cursor: pointer;
   background: #fff;
+  margin-top: auto;
 }
 
 .user-account:hover {
@@ -470,7 +500,7 @@ export default {
   align-items: flex-start;
   justify-content: center;
   flex: 1;
-  min-width: 0; /* Important for text overflow */
+  min-width: 0;
 }
 
 .user-name {
@@ -520,12 +550,128 @@ export default {
   }
 }
 
-/* Responsive */
+/* ===== RESPONSIVE STYLES ===== */
 @media (max-width: 768px) {
   .sidebar {
+    position: fixed;
     width: 100%;
+    height: 60px;
+    padding: 0;
+    border-radius: 0;
     border-right: none;
     border-bottom: 1px solid #e0e0e0;
+  }
+
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 60px;
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .mobile-toggle {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 8px;
+    color: #333;
+  }
+
+  .mobile-brand h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #333;
+  }
+
+  .sidebar-content {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    width: 280px;
+    height: calc(100vh - 60px);
+    background: white;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    padding: 20px 16px;
+    border-right: 1px solid #e0e0e0;
+    overflow-y: auto;
+  }
+
+  .sidebar.mobile-open .sidebar-content {
+    transform: translateX(0);
+  }
+
+  .mobile-overlay {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    z-index: 999;
+  }
+
+  .brand h2 {
+    font-size: 16px;
+  }
+
+  .brand p {
+    font-size: 11px;
+  }
+
+  .new-project-btn {
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+
+  .navigation a {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .user-account {
+    padding: 16px 12px;
+  }
+
+  .user-menu {
+    bottom: 70px;
+    left: 16px;
+    right: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar-content {
+    width: 100%;
+  }
+
+  .mobile-header {
+    padding: 0 12px;
+  }
+
+  .mobile-brand h2 {
+    font-size: 16px;
+  }
+
+  .brand-section {
+    padding: 0 8px;
+  }
+
+  .navigation a {
+    padding: 12px 16px;
+    font-size: 15px;
+  }
+
+  .user-account {
+    flex-direction: column;
+    text-align: center;
+    gap: 8px;
+  }
+
+  .user-info {
+    align-items: center;
   }
 }
 </style>

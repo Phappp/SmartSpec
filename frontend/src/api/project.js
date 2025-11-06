@@ -28,43 +28,6 @@ export const retryProjectAnalysis = (projectId, versionId, userId) => {
     });
 };
 
-// ========== SHARE - COMPLETELY FIXED APIS ====================
-export const getProjectInvites = (projectId) => {
-  return axiosClient.get(`/api/projects/${projectId}/members/invites`);
-};
-
-export const cancelInvite = (projectId, memberId) => {
-  return axiosClient.delete(`/api/projects/${projectId}/members/${memberId}/cancel`);
-};
-
-// 🔥 FIXED: Sửa hoàn toàn cách gọi API accept và reject
-export const acceptInvite = (projectId, memberId, token = null) => {
-  // Gửi token trong request body
-  const data = token ? { token } : {};
-  return axiosClient.post(`/api/projects/${projectId}/members/${memberId}/accept`, data);
-};
-
-export const rejectInvite = (projectId, memberId, token = null) => {
-  // Gửi token trong request body  
-  const data = token ? { token } : {};
-  return axiosClient.post(`/api/projects/${projectId}/members/${memberId}/reject`, data);
-};
-
-export const removeMember = (projectId, memberId) => {
-  return axiosClient.delete(`/api/projects/${projectId}/members/${memberId}`);
-};
-
-export const leaveProject = (projectId) => {
-  return axiosClient.post(`/api/projects/${projectId}/leave`);
-};
-
-export const inviteMember = (projectId, email, role) => {
-  return axiosClient.post(`/api/projects/${projectId}/members/invite`, {
-    email,
-    role
-  });
-};
-
 // ================== USECASE MANAGEMENT ============================
 export const usecaseApi = {
   getUsecases: (versionId) => axiosClient.get(`/api/usecaseManagement/versions/${versionId}/usecases`),
@@ -204,7 +167,7 @@ export const addInputsToVersion = (versionId, data) => axiosClient.post(`/api/in
 export const deleteSpecificInput = (versionId, inputId) => axiosClient.delete(`/api/input/versions/${versionId}/inputs/${inputId}`);
 export const getVersionStatus = (versionId) => axiosClient.get(`/api/projects/versions/${versionId}/status`);
 export const getVersionInProject = (projectId) => axiosClient.get(`/api/versions/project/${projectId}`);
-export const switchCurrentVersion = (projectId, versionId) => {return axiosClient.patch(`/api/versions/projects/${projectId}/current-version/${versionId}`);}
+export const switchCurrentVersion = (projectId, versionId) => { return axiosClient.patch(`/api/versions/projects/${projectId}/current-version/${versionId}`); }
 // Attachments
 export const uploadAttachments = (projectId, formData) =>
   axiosClient.post(`/api/projects/${projectId}/attachments`, formData, {
@@ -220,34 +183,6 @@ export function getCurrentUser() {
 export const generateDocumentation = (projectId, payload = {}) =>
   axiosClient.post(`/api/projects/${projectId}/generate`, payload);
 
-// Invitations
-export const getMyInvitations = () => {
-  return axiosClient.get('/api/users/me/invites');
-}
-
-// 🔥 THÊM DEBUG FUNCTION ĐỂ KIỂM TRA API CALLS
-export const debugInvitationAPI = async (action, projectId, memberId, token = null) => {
-  console.log(`🔍 DEBUG ${action}:`, {
-    projectId,
-    memberId,
-    token,
-    endpoint: `/api/projects/${projectId}/members/${memberId}/${action}`
-  });
-
-  try {
-    const data = token ? { token } : {};
-    const response = await axiosClient.post(`/api/projects/${projectId}/members/${memberId}/${action}`, data);
-    console.log(`✅ ${action} SUCCESS:`, response.data);
-    return response;
-  } catch (error) {
-    console.error(`❌ ${action} ERROR:`, {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    });
-    throw error;
-  }
-};
 
 export default {
   getMyProjects,
@@ -292,16 +227,4 @@ export default {
   exportDatabaseSQL,
   validateTableStructure,
 
-  // SHARE - COMPLETELY FIXED APIS
-  getProjectInvites,
-  cancelInvite,
-  acceptInvite,
-  rejectInvite,
-  removeMember,
-  leaveProject,
-  inviteMember,
-  getMyInvitations,
-
-  // 🔥 DEBUG FUNCTION
-  debugInvitationAPI
 };

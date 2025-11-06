@@ -765,7 +765,7 @@ export default {
 
       // Check for existing draft - SỬA THÀNH checkDraft()
       if (checkDraft()) {
-        toast.info('Draft found for this project. You can restore it from the draft section.')
+        toast.info('Draft found for this project')
       }
     })
 

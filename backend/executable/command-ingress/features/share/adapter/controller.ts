@@ -24,7 +24,7 @@ export class ShareProjectController extends BaseController {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
         return;
       }
-    const dto = plainToClass(InviteMemberByEmailDto, req.body);
+      const dto = plainToClass(InviteMemberByEmailDto, req.body);
 
       const errors = await validate(dto);
       if (errors.length > 0) {
@@ -87,13 +87,13 @@ export class ShareProjectController extends BaseController {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
         return;
       }
-      const { projectId} = req.params;
+      const { projectId } = req.params;
       const token = (req.query.token as string) || (req.body.token as string);
       if (!token) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Token is required", null, 400), res);
         return;
       }
-      const result = await this.service.acceptInvite(projectId, userId,token);
+      const result = await this.service.acceptInvite(projectId, userId, token);
       handleServiceResponse(result, res);
     });
   };
@@ -115,11 +115,11 @@ export class ShareProjectController extends BaseController {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Token is required", null, 400), res);
         return;
       }
-      const result = await this.service.rejectInvite(projectId, userId,token);
+      const result = await this.service.rejectInvite(projectId, userId, token);
       handleServiceResponse(result, res);
     });
   };
-  
+
   public cancelInvite = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async () => {
       const userId = req.getSubject();
@@ -128,17 +128,17 @@ export class ShareProjectController extends BaseController {
         return;
       }
 
-      const { projectId,memberId } = req.params;
-      const result = await this.service.cancelInvite(projectId,memberId, userId);
+      const { projectId, memberId } = req.params;
+      const result = await this.service.cancelInvite(projectId, memberId, userId);
       handleServiceResponse(result, res);
     });
   }
-  
+
   public removeMember = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async () => {
       const userId = req.getSubject();
       if (!userId) {
-        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401),res);
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
         return;
       }
 
@@ -162,6 +162,33 @@ export class ShareProjectController extends BaseController {
 
       const { projectId } = req.params;
       const result = await this.service.leaveProject(projectId, userId);
+      handleServiceResponse(result, res);
+    });
+  };
+  /**
+ * Tìm kiếm user trong hệ thống (có thể kèm thông tin member trong project)
+ * GET /api/projects/:projectId/members/search?q=searchTerm
+ */
+  /**
+  * Tìm kiếm user toàn hệ thống
+  * GET /api/users/search?q=searchTerm
+  */
+  public searchUsers = async (req: HttpRequest, res: Response, next: NextFunction) => {
+    await this.execWithTryCatchBlock(req, res, next, async () => {
+      const userId = req.getSubject();
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
+        return;
+      }
+
+      const searchTerm = req.query.q as string;
+
+      if (!searchTerm || searchTerm.trim() === '') {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Search term is required', null, 400), res);
+        return;
+      }
+
+      const result = await this.service.searchUsers(userId, searchTerm.trim());
       handleServiceResponse(result, res);
     });
   };

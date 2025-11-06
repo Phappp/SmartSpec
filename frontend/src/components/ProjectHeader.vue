@@ -326,6 +326,21 @@ export default {
       return fullUrl
     },
 
+    handleResize() {
+      // Đóng dropdown khi resize để tránh vị trí không chính xác
+      if (window.innerWidth < 768) {
+        this.isOpen = false
+        this.showActiveUsers = false
+      }
+    },
+
+    // Tối ưu touch events cho mobile
+    handleTouchStart(event) {
+      // Ngăn chặn double tap zoom trên các interactive elements
+      if (event.target.closest('.selector-header, .active-users-trigger, .version-option')) {
+        event.preventDefault()
+      }
+    },
     // THÊM: Xử lý lỗi load avatar (từ Sidebar)
     handleAvatarError(event) {
       console.error('❌ Header avatar load failed:', event.target.src)
@@ -343,9 +358,14 @@ export default {
   },
   mounted() {
     document.addEventListener('click', this.handleClickOutside)
+    window.addEventListener('resize', this.handleResize)
+    document.addEventListener('touchstart', this.handleTouchStart, { passive: false })
   },
+
   beforeUnmount() {
     document.removeEventListener('click', this.handleClickOutside)
+    window.removeEventListener('resize', this.handleResize)
+    document.removeEventListener('touchstart', this.handleTouchStart)
   },
 }
 </script>
@@ -1059,19 +1079,19 @@ export default {
 
   .project-title-section {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
     gap: 8px;
   }
 
   .header-right {
-    flex-direction: column;
+    flex-direction: row;
     gap: 12px;
   }
 
   .version-control,
   .progress-indicator,
   .active-users-indicator {
-    width: 100%;
+    width: 30%;
   }
 
   .active-users-dropdown {
@@ -1095,6 +1115,273 @@ export default {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+/* Thêm vào phần responsive hiện tại */
+
+/* Tablet breakpoint */
+@media (max-width: 1024px) {
+  .header-content {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .header-left {
+    width: 100%;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .version-control,
+  .active-users-indicator,
+  .members-btn {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .project-title {
+    font-size: 1.5rem;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Mobile breakpoint */
+@media (max-width: 768px) {
+  .project-header-modern {
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .header-left {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .back-btn {
+    align-self: flex-start;
+    padding: 8px 12px;
+  }
+
+  .project-info {
+    align-items: stretch;
+  }
+
+  .project-title-section {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .project-title {
+    font-size: 1.25rem;
+    line-height: 1.3;
+  }
+
+  .header-right {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .version-control,
+  .active-users-indicator,
+  .members-btn {
+    width: 100%;
+    min-width: auto;
+  }
+
+  /* Cải thiện dropdown trên mobile */
+  .active-users-dropdown {
+    right: 0;
+    left: 0;
+    width: 100%;
+    max-height: 50vh;
+  }
+
+  .dropdown-menu {
+    right: 0;
+    left: 0;
+    width: 100%;
+  }
+
+  /* Tối ưu text và icon trên mobile */
+  .btn-text {
+    font-size: 0.75rem;
+  }
+
+  .selector-content,
+  .active-users-count,
+  .members-count {
+    font-size: 0.875rem;
+  }
+
+  .material-symbols-outlined {
+    font-size: 20px;
+  }
+}
+
+/* Small mobile breakpoint */
+@media (max-width: 480px) {
+  .project-header-modern {
+    padding: 12px;
+    margin-bottom: 16px;
+  }
+
+  .header-content {
+    gap: 16px;
+  }
+  .header-right {
+    flex-direction: row;
+    gap: 2px;
+    justify-content: space-around;
+  }
+  .back-btn {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  .project-title {
+    font-size: 1.125rem;
+    position: absolute;
+    top: 10px;
+  }
+  .header-left {
+    position: relative;
+  }
+  .version-control,
+  .progress-indicator,
+  .active-users-indicator,
+  .members-btn {
+    max-width: calc(30% - 2px);
+  }
+  .material-symbols-outlined{
+    font-size: 14px;
+  }
+  .selector-header {
+    max-height: 50px;
+  }
+  .dropdown-arrow {
+    display: none;
+  }
+  .arrow {
+    display: none;
+  }
+  .toggle-description-btn {
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    position: absolute;
+    top: 0px;
+    right: 0px;
+  }
+
+  /* Ẩn text dài, chỉ hiện icon trên mobile nhỏ */
+  .back-btn .btn-text,
+  .toggle-description-btn .btn-text {
+    display: none;
+  }
+
+  .back-btn,
+  .toggle-description-btn {
+    padding: 8px;
+  }
+
+  /* Tối ưu version selector */
+  .selector-header {
+    padding: 8px 12px;
+  }
+
+  .selector-label {
+    font-size: 0.7rem;
+  }
+
+  .version-label {
+    font-size: 0.8rem;
+  }
+
+  /* Tối ưu active users và members */
+  .active-users-trigger,
+  .members-btn {
+    padding: 8px 12px;
+  }
+
+  .count {
+    font-size: 0.9rem;
+  }
+
+  .label {
+    font-size: 0.7rem;
+  }
+}
+
+/* Xử lý text overflow cho tên dự án dài */
+.project-title {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Đảm bảo dropdown không bị tràn */
+.dropdown-menu,
+.active-users-dropdown {
+  max-width: 100vw;
+  box-sizing: border-box;
+}
+
+/* Touch-friendly improvements */
+@media (hover: none) and (pointer: coarse) {
+  .selector-header,
+  .active-users-trigger,
+  .members-btn,
+  .back-btn,
+  .toggle-description-btn {
+    min-height: 44px; /* Kích thước touch tối thiểu */
+  }
+
+  .version-option,
+  .active-user-item {
+    min-height: 40px;
+    padding: 12px 16px;
+  }
+}
+
+/* Landscape mobile optimization */
+@media (max-width: 768px) and (orientation: landscape) {
+  .project-header-modern {
+    padding: 12px;
+  }
+  .project-title-section {
+    align-items: center;
+  }
+  .project-title {
+    width: 100%;
+    text-align: center;
+  }
+  .header-content {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .header-left {
+    flex: 1;
+    min-width: 60%;
+  }
+
+  .header-right {
+    flex: 1;
+    min-width: 35%;
+  }
+
+  .active-users-dropdown,
+  .dropdown-menu {
+    max-height: 40vh;
   }
 }
 </style>
