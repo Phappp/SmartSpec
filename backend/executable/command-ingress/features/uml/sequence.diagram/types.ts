@@ -1,61 +1,67 @@
-interface UseCaseDiagramResponse {
+// types.ts (cho Sequence Diagram)
+
+// Interface phản hồi đầy đủ cho một Sequence Diagram từ API
+interface SequenceDiagramResponse {
   id: string;
+  project_id: string;
+  version_id: string;
+  usecase_ref_id: string; // Tham chiếu đến Usecase mà biểu đồ này minh họa
   name: string;
-  description: string;
-  actors: any[];
-  usecases: any[];
-  associations: any[];
-  relationships: any[];
-  diagram_svg?: string;
+  description?: string;
+  
+  // Các thành phần nghiệp vụ cốt lõi
+  lifelines: any[]; // Mảng chứa các đối tượng Lifeline (đã có _id)
+  messages: any[];  // Mảng chứa các đối tượng Message (đã có _id)
+  fragments: any[]; // Mảng chứa các đối tượng Fragment (đã có _id)
+  
+  // Dữ liệu hiển thị (Layout JSON)
+  layout_data?: any; // { nodes: [], edges: [] }
+  
+  // Metadata khác
   related_requirements: string[];
-  linked_testcases: string[];
-  created_by: string;
+  linked_testcases: string[]; // Mảng các ID testcase
+  created_by: string;         // ID người tạo
+  created_at: string;         // ISO Date string
+  updated_at: string;         // ISO Date string
 }
-interface GenerateUsecaseDiagrambasePayload {
+
+// Payload gửi lên để yêu cầu LLM sinh biểu đồ
+interface GenerateSequenceDiagramPayload {
   versionId: string;
   projectId: string;
-  requirements: any[];
-  lang: string;
+  usecaseId: string;   // BẮT BUỘC: ID của Usecase cần vẽ Sequence
+  requirements: any[]; // Danh sách requirements (hoặc các bước của Usecase)
+  lang: string;        // Ngôn ngữ ('vi-VN' hoặc 'en-US')
 }
-interface UseCaseDiagramService {
+
+// Interface định nghĩa các phương thức của Service
+interface SequenceDiagramService {
+  /**
+   * Sinh schema Sequence Diagram từ danh sách yêu cầu/các bước use case.
+   */
   generateSchemaFromRequirements(
-    payload: GenerateUsecaseDiagrambasePayload,
+    payload: GenerateSequenceDiagramPayload,
     userId: string
-  ): Promise<UseCaseDiagramResponse>;
-  getUsecaseDiagrams(versionId: string): Promise<UseCaseDiagramResponse[]>;
-  getUsecaseDiagramsById(ucId: string): Promise<UseCaseDiagramResponse>;
-  editActorById(
-    ucId: string,
-    actorId: string,
-    data: { name: string; description?: string }
-  ): Promise<UseCaseDiagramResponse>;
-  deleteActorById(ucId: string, actorId: string): Promise<void>;
-  editUsecaseById(
-    ucId: string,
-    usecaseId: string,
-    data: { title: string; description?: string }
-  ): Promise<UseCaseDiagramResponse>;
-  deleteUsecaseById(ucId: string, usecaseId: string): Promise<void>;
-  createRelationship(
-    ucId: string,
-    data: { source: string; target: string; type: string }
-  ): Promise<UseCaseDiagramResponse>;
-  editRelationshipById(
-    ucId: string,
-    relationshipId: string,
-    data: { source: string; target: string; type: string }
-  ): Promise<UseCaseDiagramResponse>;
-  deleteRelationshipById(ucId: string, relationshipId: string): Promise<void>;
-  editAssociationById(
-    ucId: string,
-    associationId: string,
-    data: { actor_id: string; usecase_id: string }
-  ): Promise<UseCaseDiagramResponse>;
-  deleteAssociationById(ucId: string, associationId: string): Promise<void>;
+  ): Promise<SequenceDiagramResponse>;
+
+  /**
+   * Lấy danh sách tất cả Sequence Diagrams thuộc một Version.
+   */
+  getSequenceDiagrams(versionId: string): Promise<SequenceDiagramResponse[]>;
+
+  /**
+   * Lấy chi tiết một Sequence Diagram theo ID.
+   */
+  getSequenceDiagramById(seqId: string): Promise<SequenceDiagramResponse>;
+  
+  /**
+   * (Tùy chọn thêm) Lấy tất cả Sequence Diagrams của một Usecase cụ thể.
+   */
+  getSequenceDiagramsByUsecaseId(usecaseId: string): Promise<SequenceDiagramResponse[]>;
 }
 
 export {
-  UseCaseDiagramService,
-  UseCaseDiagramResponse,
-  GenerateUsecaseDiagrambasePayload,
+  SequenceDiagramService,
+  SequenceDiagramResponse,
+  GenerateSequenceDiagramPayload,
 };

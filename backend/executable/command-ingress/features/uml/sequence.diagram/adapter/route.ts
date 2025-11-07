@@ -1,83 +1,33 @@
 import { Router } from "express";
-import { UsecaseDiagramController } from "./controller";
+import { SequenceDiagramController } from "./controller";
 import { requireAuthorizedUser } from "../../../../middlewares/auth";
 import express from "express";
 
-const initUsecaseDiagramRoute: (
-  controller: UsecaseDiagramController
+const initSequenceDiagramRoute: (
+  controller: SequenceDiagramController
 ) => express.Router = (controller) => {
   const router = express.Router();
 
   //UCD
   router
-    .route("/versions/:versionId/generate-usecase-diagram")
+    .route("/versions/:versionId/generate-sequence-diagram")
     .post(
       requireAuthorizedUser,
-      controller.generateUsecaseDiagram.bind(controller)
+      controller.generateSchemaFromRequirements.bind(controller)
     );
   router
     .route("/versions/:versionId/")
-    .get(requireAuthorizedUser, controller.getUsecaseDiagrams.bind(controller));
+    .get(
+      requireAuthorizedUser,
+      controller.getSequenceDiagrams.bind(controller)
+    );
   router
     .route("/:ucId")
     .get(
       requireAuthorizedUser,
-      controller.getUsecaseDiagramsById.bind(controller)
-    );
-
-  //actor
-  router
-    .route("/:ucId/actors/:actorId")
-    .patch(requireAuthorizedUser, controller.editActorById.bind(controller));
-  router
-    .route("/:ucId/actors/:actorId")
-    .delete(requireAuthorizedUser, controller.deleteActorById.bind(controller));
-
-  //usecase
-  router
-    .route("/:ucId/usecases/:usecaseId")
-    .patch(requireAuthorizedUser, controller.editUsecaseById.bind(controller));
-  router
-    .route("/:ucId/usecases/:usecaseId")
-    .delete(
-      requireAuthorizedUser,
-      controller.deleteUsecaseById.bind(controller)
-    );
-
-  //relationship
-  router
-    .route("/:ucId/relationship")
-    .post(
-      requireAuthorizedUser,
-      controller.createRelationship.bind(controller)
-    );
-  router
-    .route("/:ucId/relationships/:relationshipId")
-    .patch(
-      requireAuthorizedUser,
-      controller.editRelationshipById.bind(controller)
-    );
-  router
-    .route("/:ucId/relationships/:relationshipId")
-    .delete(
-      requireAuthorizedUser,
-      controller.deleteRelationshipById.bind(controller)
-    );
-
-  //association
-  router
-    .route("/:ucId/associations/:associationId")
-    .patch(
-      requireAuthorizedUser,
-      controller.editAssociationById.bind(controller)
-    );
-  router
-    .route("/:ucId/associations/:associationId")
-    .delete(
-      requireAuthorizedUser,
-      controller.deleteAssociationById.bind(controller)
+      controller.getSequenceDiagramById.bind(controller)
     );
   return router;
 };
 
-export default initUsecaseDiagramRoute;
+export default initSequenceDiagramRoute;

@@ -21,7 +21,7 @@ const requirementModelSchema = new Schema({
     stakeholders: { type: [String], default: [] },
     constraints: { type: [String], default: [] },
     related_usecases: { type: [String], default: [] },
-}, { _id: false });
+}, { _id: true });
 
 const conflictSchema = new Schema({
     conflict_id: {
