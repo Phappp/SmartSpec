@@ -11,13 +11,13 @@ export class ActivityDiagramController {
   public generateFromUsecase = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { versionId, requirementId } = req.params as { [k: string]: string };
-      const { language, actor } = req.query as { [k: string]: string };
+      const { language} = req.query as { [k: string]: string };
       if (!versionId || !requirementId) {
         res.status(400).json({ message: 'versionId và requirementId là bắt buộc.' });
         return;
       }
       const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
-      const result = await this.service.generateFromUsecase(requirementId, lang, versionId, actor);
+      const result = await this.service.generateFromUsecase(requirementId, lang, versionId);
       res.status(201).json({ message: 'Tạo activity diagram từ usecase thành công!', data: result });
     } catch (err) {
       next(err);

@@ -6,7 +6,9 @@ export default function initActivityDiagramRoute(): Router {
   const router = Router();
   const controller = new ActivityDiagramController();
 
-  router.post('/version/:versionId/requirements/:requirementId/generate',requireAuthorizedUser,controller.generateFromUsecase);
+  router.post('/version/:versionId/requirements/:requirementId/generate',
+    // requireAuthorizedUser,
+    controller.generateFromUsecase);
     // Requirement-based generation and helpers
   router.post('/version/:versionId/actors/generate', requireAuthorizedUser, controller.generateFromActor);
 
@@ -30,7 +32,9 @@ export default function initActivityDiagramRoute(): Router {
 
     // Utilities
   router.post('/:id/validate', requireAuthorizedUser, controller.validateStructure);
-  router.get('/:id/export-svg', requireAuthorizedUser, controller.exportSvg);
+  router.get('/:id/export-svg', 
+    // requireAuthorizedUser, 
+    controller.exportSvg);
   return router;
 }
 

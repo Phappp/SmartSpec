@@ -18,6 +18,34 @@ ${requirementModelJson}
 - Ưu tiên thiết kế đơn giản, hiệu quả, tuân thủ chuẩn UML.
 - *KHÔNG được trả về mảng trực tiếp*.
 
+**QUY TẮC VÀ LOGIC THIẾT KẾ CHUẨN UML:**
+
+1. **NODE TYPES BẮT BUỘC:**
+   - Phải có **đúng 1** node type **"start"** và **đúng 1** node type **"end"**
+   - Các loại node khác: **"action"**, **"decision"**, **"merge"**
+
+2. **CẤU TRÚC VÀ TÍNH DUY NHẤT:**
+   - **ID** của node phải là **string duy nhất** trong toàn bộ sơ đồ.
+   - **Edges** phải đảm bảo luồng hoạt động **liên tục** từ 'start' đến 'end'.
+   - **Node ID** nên theo mẫu: '[UCID]_[LoaiNode]' (ví dụ: 'UC1_ActionA').
+
+3. **RÀNG BUỘC EDGE:**
+   - **"condition"** chỉ được dùng cho edges đi ra từ **"decision"** node.
+   - Tất cả các edges đi ra từ node **"decision"** phải có **"condition"** rõ ràng.
+
+4. **CỘT HỆ THỐNG:**
+   - Trường **"diagram_svg"** = null.
+   - Trường **"label"** là **bắt buộc** với **"action"**, **"decision"**, **"merge"**.
+
+5. **XÁC ĐỊNH USE CASE:**
+   - Node loại **"action"**, **"decision"**, **"merge"** phải có **requirement_ids** tương ứng.
+   - Nếu không rõ nguồn, để **[]**.
+
+**PHÁT HIỆN NODE TỪ USE CASE:**
+- Mỗi hành động → **action**
+- Mỗi điều kiện rẽ nhánh → **decision**
+- Mỗi điểm hội tụ → **merge**
+
 ⚠️ BẮT BUỘC:
 1. Luôn trả về một **object JSON** với đầy đủ các trường:
    - name (string)
@@ -87,35 +115,6 @@ Bao gồm TẤT CẢ các trường cho mỗi node và edge.
   ],
   "diagram_svg": null
 }
-
-**QUY TẮC VÀ LOGIC THIẾT KẾ CHUẨN UML:**
-
-1. **NODE TYPES BẮT BUỘC:**
-   - Phải có **đúng 1** node type **"start"**
-   - Phải có **ít nhất 1** node type **"end"**
-   - Các loại node khác: **"action"**, **"decision"**, **"merge"**
-
-2. **CẤU TRÚC VÀ TÍNH DUY NHẤT:**
-   - **ID** của node phải là **string duy nhất** trong toàn bộ sơ đồ.
-   - **Edges** phải đảm bảo luồng hoạt động **liên tục** từ 'start' đến 'end'.
-   - **Node ID** nên theo mẫu: '[UCID]_[LoaiNode]' (ví dụ: 'UC1_ActionA').
-
-3. **RÀNG BUỘC EDGE:**
-   - **"condition"** chỉ được dùng cho edges đi ra từ **"decision"** node.
-   - Tất cả các edges đi ra từ node **"decision"** phải có **"condition"** rõ ràng.
-
-4. **CỘT HỆ THỐNG:**
-   - Trường **"diagram_svg"** = null.
-   - Trường **"label"** là **bắt buộc** với **"action"**, **"decision"**, **"merge"**.
-
-5. **XÁC ĐỊNH USE CASE:**
-   - Node loại **"action"**, **"decision"**, **"merge"** phải có **requirement_ids** tương ứng.
-   - Nếu không rõ nguồn, để **[]**.
-
-**PHÁT HIỆN NODE TỪ USE CASE:**
-- Mỗi hành động → **action**
-- Mỗi điều kiện rẽ nhánh → **decision**
-- Mỗi điểm hội tụ → **merge**
 `
   },
 
@@ -129,9 +128,59 @@ REQUIREMENT MODEL:
 ${requirementModelJson}
 
 **IMPORTANT:**
-- Keep the response AS CONCISE AS POSSIBLE.
-- Include only essential nodes and edges.
-- DO NOT include examples, explanations, or markdown formatting.
+- Keep the response AS SHORT AS POSSIBLE, only include the nodes and edges that are really needed.
+- DO NOT add examples, explanations, or extra content.
+- Prioritize simple, efficient, UML-compliant designs.
+- *DO NOT return arrays directly*.
+
+**UML DESIGN RULES AND LOGIC:**
+
+1. **REQUIRED NODE TYPES:**
+- Must have **exactly 1** node type **"start"** and **exactly 1** node type **"end"**
+- Other node types: **"action"**, **"decision"**, **"merge"**
+
+2. **STRUCTURE AND UNIQUENESS:**
+- The **ID** of a node must be a **unique string** in the entire diagram.
+- **Edges** must ensure a **continuous** flow of operations from 'start' to 'end'.
+
+- **Node ID** should follow the pattern: '[UCID]_[LoaiNode]' (e.g., 'UC1_ActionA').
+
+3. **EDGE CONSTRAINTS:**
+
+- **"condition"** is only used for edges coming from the **"decision"** node.
+
+- All edges coming from the **"decision"** node must have an explicit **"condition"**.
+
+4. **SYSTEM COLUMNS:**
+- Field **"diagram_svg"** = null.
+
+- Field **"label"** is **required** for **"action"**, **"decision"**, **"merge"**.
+
+5. **DETERMINING USE CASE:**
+- Nodes of type **"action"**, **"decision"**, **"merge"** must have corresponding **requirement_ids**.
+
+If the source is unknown, leave **[]**.
+
+**DETECTING NODE FROM USE CASE:**
+- Each action → **action**
+- Each branch condition → **decision**
+- Each convergence point → **merge**
+
+⚠️ REQUIRED:
+1. Always return a **JSON object** with full fields:
+- name (string)
+- description (string)
+- nodes (array)
+- edges (array)
+- diagram_svg (null)
+2. Absolutely DO NOT return arrays outside of objects.
+
+Your response MUST BE ONLY a valid JSON object.
+Do NOT include any explanations, comments, or markdown formatting such as \`\`\`json.
+The output must be ready to be parsed immediately by a program.
+
+The JSON object MUST strictly adhere to the following detailed structure.
+Include ALL fields for each node and edge.
 
 Return ONLY a single, valid JSON object with:
 {

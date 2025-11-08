@@ -46,12 +46,12 @@ export class ActivityDiagramService {
       nodes,
       edges,
       diagram_svg,
-      //linked_usecase
-      userId,
+      //linked_usecase,
+      //userId,
     } as any);
   }
 
-  public async generateFromActor(actor: string, versionId: string, language: string,userId?: string) {
+  public async generateFromActor( versionId: string,actor: string, language: string,userId?: string) {
     const version = await VersionModel.findById(versionId).lean();
     if (!version) throw new Error('Không tìm thấy version');
     const requirements = ((version.requirement_model || []) as any[]).filter(r => (r.role || '').toLowerCase() === actor.toLowerCase());
@@ -83,8 +83,8 @@ export class ActivityDiagramService {
       nodes,
       edges,
       diagram_svg,
-      //linked_usecase
-      userId,
+      //linked_usecase,
+      //userId,
     } as any);
   }
 

@@ -1,13 +1,17 @@
 import Testcase from "../../../../../internal/model/testcase";
 import Database from "../../../../../internal/model/database";
 import Version from "../../../../../internal/model/version";
+import User from "../../../../../internal/model/user";
 import { TestcaseGeminiService } from "./GeminiService";
 import { VersionService } from "../../version/domain/service";
+import { LogService } from "../../log/domain/service";
 import {PreviewChangeDto} from "../../version/adapter/preview.dto";
 
 export class TestcaseService {
     private testcaseGeminiService = new TestcaseGeminiService();
+    private logService = new LogService();
     private versionService = new VersionService();
+
     /**
      * Generate ENTERPRISE test cases từ requirements và database schema với selection
      */
@@ -171,12 +175,38 @@ export class TestcaseService {
             updateData.updated_by = updatedBy;
         }
         
-        return await Testcase.findByIdAndUpdate(
-            id,
-            { $set: updateData },
-            { new: true, runValidators: true }
-        ).populate('created_by', 'name email')
-            .populate('executed_by', 'name email');
+        const updatedTestcase = await Testcase.findByIdAndUpdate(
+        id,
+        { $set: updateData },
+        { new: true, runValidators: true }
+        )
+        .populate('created_by', 'name email')
+        .populate('executed_by', 'name email');
+
+        const version = await Version.findById(updatedTestcase.version_id);
+        const versionNumber = version?.version_number?.toString() || 'unknown';
+
+        // Lấy username từ User model
+        let username = 'Unknown User';
+        if (updatedBy) {
+            const user = await User.findById(updatedBy);
+            username = user?.name || username;
+        }
+
+        await this.logService.createLog({
+            project_id: updatedTestcase.project_id.toString(),
+            user_id: updatedBy,
+            action: "update_output",
+            target_id: id,
+            target_type: "testcases",
+            version_number: versionNumber,
+            affects_requirement: true,
+            level: "info",
+            details: {
+                message: `${username} updated testcase ${updatedTestcase?.title || id}`
+            }
+        });
+        return updatedTestcase;
     }
 
     /**
