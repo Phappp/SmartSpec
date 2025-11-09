@@ -658,6 +658,7 @@ export class VersionService {
 
       await Input.deleteMany({ version_id: versionId });
       await Output.deleteMany({ version_id: versionId });
+      await Preview.deleteOne({ base_version_id: versionId });
       await Version.deleteOne({ _id: versionId });
 
       const project = await Project.findById(version.project_id);

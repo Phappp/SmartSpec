@@ -10,7 +10,9 @@ export default function initActivityDiagramRoute(): Router {
     // requireAuthorizedUser,
     controller.generateFromUsecase);
     // Requirement-based generation and helpers
-  router.post('/version/:versionId/actors/generate', requireAuthorizedUser, controller.generateFromActor);
+  router.post('/version/:versionId/actors/:actor/generate', 
+    // requireAuthorizedUser, 
+    controller.generateFromActor);
 
   // List & Read
   router.get('/:versionId', requireAuthorizedUser, controller.getListActivityDiagram);
@@ -31,10 +33,10 @@ export default function initActivityDiagramRoute(): Router {
   // router.patch('/:id/svg', requireAuthorizedUser, controller.updateSvg);
 
     // Utilities
-  router.post('/:id/validate', requireAuthorizedUser, controller.validateStructure);
-  router.get('/:id/export-svg', 
+  router.post('/:activityDiagramId/validate', requireAuthorizedUser, controller.validateStructure);
+  router.get('/:activityDiagramId/export', 
     // requireAuthorizedUser, 
-    controller.exportSvg);
+    controller.export);
   return router;
 }
 

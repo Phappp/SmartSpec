@@ -6,6 +6,7 @@ import UsecaseDiagramModel from '../../../../../internal/model/usecase_diagram';
 import VersionModel from '../../../../../internal/model/version';
 import { Types } from "mongoose";
 import { ActivityNodeType,ActivityNode,ActivityEdge,ActivityDiagramDTO} from './interfaces';
+import sharp from 'sharp';
 
 export class ActivityDiagramService {
   private core = new ActivityCoreService();
@@ -102,74 +103,37 @@ export class ActivityDiagramService {
     return ActivityDiagramModel.findById(id).lean();
   }
   
-  // // Diagram-level CRUD operations
-  // public async addNode(id: string, node: any) {
-  //   const doc = await ActivityDiagramModel.findByIdAndUpdate(id, { $push: { nodes: node } }, { new: true }).lean();
-  //   return doc;
-  // }
-  // public async updateNode(id: string, nodeId: string, node: any) {
-  //   const doc: any = await ActivityDiagramModel.findById(id);
-  //   if (!doc) throw new Error('Diagram not found');
-  //   const idx = (doc.nodes || []).findIndex((n: any) => n.id === nodeId);
-  //   if (idx === -1) throw new Error('Node not found');
-  //   doc.nodes[idx] = { ...doc.nodes[idx].toObject?.() || doc.nodes[idx], ...node, id: nodeId };
-  //   await doc.save();
-  //   return doc.toObject();
-  // }
-  // public async removeNode(id: string, nodeId: string) {
-  //   const doc = await ActivityDiagramModel.findByIdAndUpdate(id, { $pull: { nodes: { id: nodeId } } }, { new: true }).lean();
-  //   return doc;
-  // }
-  // public async addEdge(id: string, edge: any) {
-  //   const doc = await ActivityDiagramModel.findByIdAndUpdate(id, { $push: { edges: edge } }, { new: true }).lean();
-  //   return doc;
-  // }
-  // public async updateEdge(id: string, index: number, edge: any) {
-  //   const doc: any = await ActivityDiagramModel.findById(id);
-  //   if (!doc) throw new Error('Diagram not found');
-  //   if (!doc.edges || index < 0 || index >= doc.edges.length) throw new Error('Edge index out of range');
-  //   doc.edges[index] = { ...(doc.edges[index].toObject?.() || doc.edges[index]), ...edge };
-  //   await doc.save();
-  //   return doc.toObject();
-  // }
-  // public async removeEdge(id: string, index: number) {
-  //   const doc: any = await ActivityDiagramModel.findById(id);
-  //   if (!doc) throw new Error('Diagram not found');
-  //   if (!doc.edges || index < 0 || index >= doc.edges.length) throw new Error('Edge index out of range');
-  //   doc.edges.splice(index, 1);
-  //   await doc.save();
-  //   return doc.toObject();
-  // }
-  // public async updateSvg(id: string, svg: string) {
-  //   const doc = await ActivityDiagramModel.findByIdAndUpdate(id, { diagram_svg: svg }, { new: true }).lean();
-  //   return doc;
-  // }
-
-  // public async create(payload: CreatePayload) {
-  //   return ActivityDiagramModel.create(payload);
-  // }
-
-  // public async update(id: string, payload: Partial<CreatePayload>) {
-  //   return ActivityDiagramModel.findByIdAndUpdate(id, payload, { new: true }).lean();
-  // }
-
-  // public async remove(id: string) {
-  //   const res = await ActivityDiagramModel.findByIdAndDelete(id);
-  //   return !!res;
-  // }
-
   public async validateStructure(id: string) {
     const diagram = await ActivityDiagramModel.findById(id).lean();
     if (!diagram) throw new Error('Không tìm thấy activity diagram');
     return this.core.validate(diagram.nodes as any, diagram.edges as any);
   }
 
-  public async exportSvg(id: string) {
+  public async export(id: string): Promise<Buffer | null> {
     const diagram = await ActivityDiagramModel.findById(id).lean();
-    if (!diagram) return '';
-    if (diagram.diagram_svg) return diagram.diagram_svg as unknown as string;
-    // render on the fly if missing
-    return this.core.renderSvg({ name: diagram.name, nodes: diagram.nodes as any, edges: diagram.edges as any });
+    if (!diagram) return null;
+
+    let svg: string;
+    if (diagram.diagram_svg) {
+      svg = diagram.diagram_svg as unknown as string;
+    } else {
+      svg = this.core.renderSvg({
+        name: diagram.name,
+        nodes: diagram.nodes as any,
+        edges: diagram.edges as any
+      });
+    }
+
+    // Convert SVG to PNG
+    try {
+      const pngBuffer = await sharp(Buffer.from(svg))
+        .png()
+        .toBuffer();
+      return pngBuffer;
+    } catch (error) {
+      console.error('Error converting SVG to PNG:', error);
+      return null;
+    }
   }
 }
 

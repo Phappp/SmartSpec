@@ -17,53 +17,44 @@ ${requirementModelJson}
 - KHÔNG thêm ví dụ, giải thích, hoặc nội dung thừa.
 - Ưu tiên thiết kế đơn giản, hiệu quả, tuân thủ chuẩn UML.
 - *KHÔNG được trả về mảng trực tiếp*.
-
 **QUY TẮC VÀ LOGIC THIẾT KẾ CHUẨN UML:**
-
 1. **NODE TYPES BẮT BUỘC:**
    - Phải có **đúng 1** node type **"start"** và **đúng 1** node type **"end"**
    - Các loại node khác: **"action"**, **"decision"**, **"merge"**
-
 2. **CẤU TRÚC VÀ TÍNH DUY NHẤT:**
    - **ID** của node phải là **string duy nhất** trong toàn bộ sơ đồ.
    - **Edges** phải đảm bảo luồng hoạt động **liên tục** từ 'start' đến 'end'.
    - **Node ID** nên theo mẫu: '[UCID]_[LoaiNode]' (ví dụ: 'UC1_ActionA').
-
+   - mỗi decision đều phải có ít nhất 2 edges với condition(đúng/sai hoặc có/không)
 3. **RÀNG BUỘC EDGE:**
    - **"condition"** chỉ được dùng cho edges đi ra từ **"decision"** node.
-   - Tất cả các edges đi ra từ node **"decision"** phải có **"condition"** rõ ràng.
-
+   - Tất cả các edges đi ra từ node **"decision"** phải có **"condition"** rõ ràng, mỗi decision đều phải có ít nhất 2 edges(đúng/sai hoặc có/không)
+   - Với các node là action thì chỉ được có 1 Edges để đi đến node khác hoặc đến node end khi đã kết thúc.
 4. **CỘT HỆ THỐNG:**
    - Trường **"diagram_svg"** = null.
    - Trường **"label"** là **bắt buộc** với **"action"**, **"decision"**, **"merge"**.
-
 5. **XÁC ĐỊNH USE CASE:**
    - Node loại **"action"**, **"decision"**, **"merge"** phải có **requirement_ids** tương ứng.
    - Nếu không rõ nguồn, để **[]**.
-
 **PHÁT HIỆN NODE TỪ USE CASE:**
 - Mỗi hành động → **action**
 - Mỗi điều kiện rẽ nhánh → **decision**
 - Mỗi điểm hội tụ → **merge**
-
 ⚠️ BẮT BUỘC:
 1. Luôn trả về một **object JSON** với đầy đủ các trường:
-   - name (string)
+   - name (string) 
    - description (string)
    - nodes (array)
    - edges (array)
    - diagram_svg (null)
 2. Tuyệt đối KHÔNG trả về mảng ngoài object.
-
 Phản hồi của bạn BẮT BUỘC CHỈ LÀ một đối tượng JSON hợp lệ.
 KHÔNG bao gồm bất kỳ lời giải thích, bình luận, hay định dạng markdown nào như \`\`\`json.
 Đầu ra phải sẵn sàng để được một chương trình phân tích ngay lập tức.
-
 Đối tượng JSON BẮT BUỘC phải tuân thủ nghiêm ngặt cấu trúc chi tiết sau.
 Bao gồm TẤT CẢ các trường cho mỗi node và edge.
-
 {
-  "name": "TenSoDoHoatDong",
+  "name": "Ten-So-Do-Hoat-Dong",
   "description": "Mô tả ngắn gọn nhưng rõ ràng về luồng hoạt động được mô hình hóa.",
   "nodes": [
     { 
@@ -104,8 +95,8 @@ Bao gồm TẤT CẢ các trường cho mỗi node và edge.
     },
     { 
       "from": "UC2_DecisionB", 
-      "to": "end", "condition": 
-      "Nếu đúng (True)" 
+      "to": "end", 
+      "condition": "Nếu đúng (True)" 
     },
     { 
       "from": "UC2_DecisionB", 
@@ -121,9 +112,7 @@ Bao gồm TẤT CẢ các trường cho mỗi node và edge.
   'en-US': {
     activityDiagram: (requirementModelJson: string) => `
 YOU ARE A WORLD-CLASS UML EXPERT AND SYSTEM ARCHITECT, specializing in creating optimal, logical Activity Diagrams from business requirement models.
-
 Your task is to analyze the following requirement model and design a complete and logical Activity Diagram structure.
-
 REQUIREMENT MODEL:
 ${requirementModelJson}
 
@@ -132,40 +121,29 @@ ${requirementModelJson}
 - DO NOT add examples, explanations, or extra content.
 - Prioritize simple, efficient, UML-compliant designs.
 - *DO NOT return arrays directly*.
-
 **UML DESIGN RULES AND LOGIC:**
-
 1. **REQUIRED NODE TYPES:**
 - Must have **exactly 1** node type **"start"** and **exactly 1** node type **"end"**
 - Other node types: **"action"**, **"decision"**, **"merge"**
-
 2. **STRUCTURE AND UNIQUENESS:**
 - The **ID** of a node must be a **unique string** in the entire diagram.
 - **Edges** must ensure a **continuous** flow of operations from 'start' to 'end'.
-
+- Each decision must have at least 2 edges with a condition (true/false or yes/no).
 - **Node ID** should follow the pattern: '[UCID]_[LoaiNode]' (e.g., 'UC1_ActionA').
-
 3. **EDGE CONSTRAINTS:**
-
 - **"condition"** is only used for edges coming from the **"decision"** node.
-
-- All edges coming from the **"decision"** node must have an explicit **"condition"**.
-
+- All edges coming from the **"decision"** node must have an explicit **"condition"**,Each decision must have at least two branches (true/false or yes/no).
+- For action nodes, there can only be 1 Edge to go to another node or to the end node when finished.
 4. **SYSTEM COLUMNS:**
 - Field **"diagram_svg"** = null.
-
 - Field **"label"** is **required** for **"action"**, **"decision"**, **"merge"**.
-
 5. **DETERMINING USE CASE:**
 - Nodes of type **"action"**, **"decision"**, **"merge"** must have corresponding **requirement_ids**.
-
 If the source is unknown, leave **[]**.
-
 **DETECTING NODE FROM USE CASE:**
 - Each action → **action**
 - Each branch condition → **decision**
 - Each convergence point → **merge**
-
 ⚠️ REQUIRED:
 1. Always return a **JSON object** with full fields:
 - name (string)
@@ -174,17 +152,14 @@ If the source is unknown, leave **[]**.
 - edges (array)
 - diagram_svg (null)
 2. Absolutely DO NOT return arrays outside of objects.
-
 Your response MUST BE ONLY a valid JSON object.
 Do NOT include any explanations, comments, or markdown formatting such as \`\`\`json.
 The output must be ready to be parsed immediately by a program.
-
 The JSON object MUST strictly adhere to the following detailed structure.
 Include ALL fields for each node and edge.
-
 Return ONLY a single, valid JSON object with:
 {
-  "name": "ActivityDiagramName",
+  "name": "Activity-Diagram-Name",
   "description": "A brief but clear description of the modeled activity flow.",
   "nodes": [
     { 
@@ -310,9 +285,7 @@ export class ActivityGeminiService {
     console.log('Input requirements:', JSON.stringify(requirements, null, 2));
 
     const simplified = requirements.map(r => ({
-      id: r.id,
       name: r.name,
-      role: r.role,
       goal: r.goal,
       tasks: r.tasks,
       inputs: r.inputs,
