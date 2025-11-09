@@ -141,8 +141,20 @@ export class VersionService {
       // ✅ Kiểm tra có owner nào đã approve không
       const ownerApproved = approvedUsers.some((a: any) => a.role === "owner");
 
-      // 🔸 Điều kiện: ít nhất 2 người và phải có owner
-      if (approvedCount >= 2 && ownerApproved) {
+      // 🔹 Lấy tổng số thành viên dự án
+      const projectMembersCount = preview.approvers.length;
+
+      // 🔸 Điều kiện approve
+      let canUpgradeVersion = false;
+      if (projectMembersCount === 1) {
+        // Nếu chỉ có 1 thành viên, chỉ cần owner approve
+        canUpgradeVersion = ownerApproved;
+      } else {
+        // Nếu >=2 thành viên, cần ít nhất 2 approver và có owner
+        canUpgradeVersion = approvedCount >= 2 && ownerApproved;
+      }
+
+      if (canUpgradeVersion) {
         preview.status = "approved";
         await preview.save();
 
@@ -156,13 +168,15 @@ export class VersionService {
         preview.status = "version_upgraded";
         await preview.save();
 
-        return new ServiceResponse(ResponseStatus.Success,"At least 2 approvers (including owner) have approved. New version created successfully.",preview,200);
+        return new ServiceResponse(ResponseStatus.Success,"Approval complete. New version created successfully.",preview,200);
       }
 
       // ❗Chưa đủ điều kiện
-      const remaining = ownerApproved
-        ? `Need at least ${2 - approvedCount} more approver(s).`
-        : "Need owner approval to complete.";
+      const remaining = projectMembersCount === 1
+        ? "Need owner approval to complete."
+        : ownerApproved
+          ? `Need at least ${2 - approvedCount} more approver(s).`
+          : "Need owner approval to complete.";
 
       return new ServiceResponse(ResponseStatus.Success,`You have successfully approved. ${remaining}`,preview,200);
 
@@ -195,25 +209,6 @@ export class VersionService {
 
       // 2️⃣ Lấy preview (ở đây sửa lỗi logic: nên dùng base_version_id, không phải _id)
       const preview = await Preview.findOne({ base_version_id: baseVersionId }).session(session);
-      if (!preview) {
-        console.error("❌ Preview not found for base_version_id:", baseVersionId);
-        await session.abortTransaction();
-        return new ServiceResponse(ResponseStatus.Failed, "Preview not found", null, 404);
-      }
-
-      console.log("✅ Found preview:", preview._id);
-
-      // 3️⃣ Kiểm tra approvers
-      const approved = preview.approvers?.filter((a: any) => a.status === "approved") || [];
-      const ownerApproved = approved.some((a: any) => a.role === "owner");
-      console.log("👥 Approved count:", approved.length, "| Owner approved:", ownerApproved);
-
-      if (!ownerApproved) {
-        console.error("❌ Preview chưa đủ người phê duyệt");
-        await session.abortTransaction();
-        return new ServiceResponse(ResponseStatus.Failed,"Preview chưa đủ người phê duyệt (cần ít nhất 1 owner + 1 member)",null,400);
-      }
-
       // 4️⃣ Lấy số version mới
       const { major, minor } = await this.getNextVersion(baseVersion, changeType);
       console.log("📈 Next version:", { major, minor });
