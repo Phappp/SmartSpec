@@ -19,7 +19,6 @@ const activityDiagramSchema = new Schema({
     nodes: [nodeSchema],
     edges: [edgeSchema],
     diagram_svg: String,
-    linked_usecase: { type: Schema.Types.ObjectId, ref: "usecase_diagrams" },
     created_by: { type: Schema.Types.ObjectId, ref: "users" }
 }, { timestamps: true });
 
