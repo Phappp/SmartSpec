@@ -15,7 +15,7 @@ export interface CreateLogDTO {
     | "delete_column" | "create_relation" | "update_relation" | "delete_relation"
   
   target_id?: string;
-  target_type: "input" | "output" | "project" | "version" | "system" | "requirement_model" | "member" | "databases" | "testcases" | "activity_diagrams" | "usecase_diagrams" | "sequence_diagrams" ;
+  target_type: "input" | "output" | "project" | "version" | "system" | "requirement_model" | "member" | "databases" | "tables" | "coulumn" | "relationship" | "testcases" | "activity_diagrams" | "usecase_diagrams" | "sequence_diagrams" ;
   version_number?: string;
   affects_requirement?: boolean;
   level: "info" | "warning" | "error";

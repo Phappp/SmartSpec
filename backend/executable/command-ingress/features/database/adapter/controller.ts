@@ -3,6 +3,9 @@
 import { Request, Response, NextFunction } from "express";
 import { DatabaseService } from "../domain/service";
 import VersionModel from "../../../../../internal/model/version";
+import { HttpRequest } from "../../../types";
+import { handleServiceResponse } from "../../../services/httpHandlerResponse";
+import { ServiceResponse, ResponseStatus } from "../../../services/serviceResponse";
 
 export class DatabaseController {
     private databaseService: DatabaseService;
@@ -14,8 +17,13 @@ export class DatabaseController {
     /**
      * Endpoint để sinh schema database từ một version_id.
      */
-    public generateDatabaseSchema = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    public generateDatabaseSchema = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { versionId } = req.params;
 
             if (!versionId) {
@@ -35,7 +43,7 @@ export class DatabaseController {
                 requirements: version.requirement_model,
             };
 
-            const newDatabase = await this.databaseService.generateSchemaFromRequirements(payload);
+            const newDatabase = await this.databaseService.generateSchemaFromRequirements(userId,payload);
 
             res.status(201).json({
                 message: "Tạo database schema thành công!",
@@ -78,10 +86,15 @@ export class DatabaseController {
     }
 
     // [U] - UPDATE: Cập nhật DB theo ID
-    public updateDatabase = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    public updateDatabase = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { databaseId } = req.params;
-            const updatedDatabase = await this.databaseService.updateDatabase(databaseId, req.body);
+            const updatedDatabase = await this.databaseService.updateDatabase(userId,databaseId, req.body);
             if (!updatedDatabase) {
                 res.status(404).json({ message: "Không tìm thấy database schema để cập nhật." });
                 return;
@@ -100,10 +113,15 @@ export class DatabaseController {
     }
 
     // [D] - DELETE: Xóa DB theo ID
-    public deleteDatabase = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    public deleteDatabase = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { databaseId } = req.params;
-            const deletedDatabase = await this.databaseService.deleteDatabase(databaseId);
+            const deletedDatabase = await this.databaseService.deleteDatabase(userId,databaseId);
             if (!deletedDatabase) {
                 res.status(404).json({ message: "Không tìm thấy database schema để xóa." });
                 return;
@@ -117,8 +135,13 @@ export class DatabaseController {
     // --- CÁC HÀM CRUD CHO TỪNG BẢNG (THÊM MỚI) ---
 
     // [C] - CREATE: Thêm một bảng mới vào DB schema
-    public addTable = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    public addTable = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { databaseId } = req.params;
             const tableData = req.body;
 
@@ -145,7 +168,7 @@ export class DatabaseController {
                 }
             }
 
-            const updatedDatabase = await this.databaseService.addTableToDatabase(databaseId, tableData);
+            const updatedDatabase = await this.databaseService.addTableToDatabase(userId,databaseId, tableData);
 
             res.status(201).json({
                 message: "Thêm bảng thành công!",
@@ -176,8 +199,13 @@ export class DatabaseController {
     }
 
     // [U] - UPDATE: Cập nhật một bảng
-    public updateTable = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    public updateTable = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { databaseId, tableName } = req.params;
             const tableData = req.body;
 
@@ -204,6 +232,7 @@ export class DatabaseController {
             }
 
             const updatedDatabase = await this.databaseService.updateTableInDatabase(
+                userId,
                 databaseId,
                 tableName,
                 tableData
@@ -245,11 +274,16 @@ export class DatabaseController {
     }
 
     // [D] - DELETE: Xóa một bảng
-    public deleteTable = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    public deleteTable = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { databaseId, tableName } = req.params;
 
-            const updatedDatabase = await this.databaseService.deleteTableFromDatabase(databaseId, tableName);
+            const updatedDatabase = await this.databaseService.deleteTableFromDatabase(userId,databaseId, tableName);
 
             if (!updatedDatabase) {
                 res.status(404).json({ message: `Không tìm thấy bảng '${tableName}' để xóa.` });

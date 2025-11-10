@@ -22,30 +22,12 @@ export class VersionService {
   private logService = new LogService();
 
   async createOrUpdatePreview(base_version_id: string,created_by: string,change: PreviewChangeDto) {
-    
-  try {
-    let version = await Version.findById(base_version_id);
-    if (!version) {
-      return new ServiceResponse(ResponseStatus.Failed,"Version not found",null,404);
-    }
-
-    // ✅ Nếu version hiện tại là version chính thức → tự động bump thành version tạm
-    if (version.version_temporary === false) {
-      console.log("🔄 Base version is permanent → auto bump temporary version");
-
-      const bumped = await this.bumpVersion(
-        version._id.toString(),
-        created_by,
-        "minor"
-      );
-
-      if (!bumped.data) {
-        return new ServiceResponse(ResponseStatus.Failed,"Auto bump temporary version failed",null,500);
+    try {
+      let version = await Version.findById(base_version_id);
+      if (!version) {
+        return new ServiceResponse(ResponseStatus.Failed,"Version not found",null,404);
       }
 
-      version = bumped.data;
-     } // ✅ replace base version with new temporary version
-  
       // 2️⃣ Chuẩn hoá 1 thay đổi
       const normalizedChange = {
         change_id: change.change_id ?? randomUUID(),
@@ -82,7 +64,8 @@ export class VersionService {
       // 5️⃣ Nếu chưa có preview → tạo mới
       preview = new Preview({
         project_id : version.project_id,
-        base_version_id : version._id,
+        base_version_id :  base_version_id,
+        target_version_id : version._id,
         created_by : created_by,
         changes: [normalizedChange],
         approvers : approvers, // gắn danh sách approvers
@@ -92,7 +75,7 @@ export class VersionService {
 
       await preview.save();
 
-      return new ServiceResponse(ResponseStatus.Success, "Preview created successfully", preview, 200);
+      return new ServiceResponse(ResponseStatus.Success, "Preview created successfully", {preview,versionId: version._id.toString()}, 200);
     } catch (error: any) {
       console.error("Error creating/updating preview:", error);
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
@@ -192,7 +175,6 @@ export class VersionService {
 
       // ✅ update preview
       preview.status = "version_upgraded";
-      preview.target_version_id = baseVersion._id;
       await preview.save();
 
       // ✅ Kết thúc
@@ -206,7 +188,7 @@ export class VersionService {
    * Nâng version từ 1 preview (đã được duyệt)
    * BaseVersion => NewVersion (copy toàn bộ data)
    */
-  public async bumpVersion(baseVersionId: string,userId: string,changeType: "major" | "minor"): Promise<ServiceResponse<any>> {
+  public async bumpVersion(baseVersionId: string, userId: string, changeType: "major" | "minor"): Promise<ServiceResponse<any>> {
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -234,23 +216,31 @@ export class VersionService {
         progress: 100,
         requirement_model: JSON.parse(JSON.stringify(baseVersion.requirement_model || [])),
         pending_conflicts: JSON.parse(JSON.stringify(baseVersion.pending_conflicts || [])),
-        processing_errors:  JSON.parse(JSON.stringify(baseVersion.processing_errors || [])),
+        processing_errors: JSON.parse(JSON.stringify(baseVersion.processing_errors || [])),
         affects_requirement: baseVersion.affects_requirement || false,
       });
 
       await newVersion.save({ session });
 
-      // 4️⃣ Maps để remap ID khi clone entities
+      // ✅ 4️⃣ Maps
+      const inputMap = new Map<string, string>();
       const dbMap = new Map<string, string>();
       const tcMap = new Map<string, string>();
       const umlMap = new Map<string, string>();
+
+      const usecaseUMLmap = new Map<string, string>();
+      const activityUMLmap = new Map<string, string>();
+      const sequenceUMLmap = new Map<string, string>();
+
       const inputIds: Types.ObjectId[] = [];
       const outputIds: Types.ObjectId[] = [];
 
-      // 5️⃣ Clone Inputs
+      // ✅ 5️⃣ Clone Inputs → NHỚ LƯU MAP
       const baseInputs = await Input.find({ version_id: baseVersion._id }).lean();
       for (const inp of baseInputs) {
         const newId = new Types.ObjectId();
+        inputMap.set(inp._id.toString(), newId.toString());
+
         await Input.create([{
           ...inp,
           _id: newId,
@@ -258,14 +248,16 @@ export class VersionService {
           created_at: new Date(),
           updated_at: new Date()
         }], { session });
+
         inputIds.push(newId);
       }
 
-      // 6️⃣ Clone Databases
+      // ✅ 6️⃣ Clone Databases → map
       const baseDatabases = await Database.find({ version_id: baseVersion._id }).lean();
       for (const db of baseDatabases) {
         const newId = new Types.ObjectId();
         dbMap.set(db._id.toString(), newId.toString());
+
         await Database.create([{
           ...db,
           _id: newId,
@@ -275,11 +267,12 @@ export class VersionService {
         }], { session });
       }
 
-      // 7️⃣ Clone Testcases
+      // ✅ 7️⃣ Clone Testcases → map
       const baseTestcases = await Testcase.find({ version_id: baseVersion._id }).lean();
       for (const tc of baseTestcases) {
         const newId = new Types.ObjectId();
         tcMap.set(tc._id.toString(), newId.toString());
+
         await Testcase.create([{
           ...tc,
           _id: newId,
@@ -289,11 +282,12 @@ export class VersionService {
         }], { session });
       }
 
-      // 8️⃣ Clone UML
+      // ✅ 8️⃣ Clone UML → map
       const baseUmls = await Uml.find({ version_id: baseVersion._id }).lean();
       for (const uml of baseUmls) {
         const newId = new Types.ObjectId();
         umlMap.set(uml._id.toString(), newId.toString());
+
         await Uml.create([{
           ...uml,
           _id: newId,
@@ -303,13 +297,16 @@ export class VersionService {
         }], { session });
       }
 
-      // 9️⃣ Clone Usecase / Activity / Sequence Diagrams
-      const cloneDiagramByUml = async (Model: any) => {
-        const baseItems = await Model.find({ uml_id: { $in: Array.from(umlMap.keys()) }}).lean();
+      // ✅ 9️⃣ Clone diagrams theo từng loại + tạo MAP riêng
+      const cloneDiagram = async (Model: any, targetMap: Map<string, string>) => {
+        const baseItems = await Model.find({ uml_id: { $in: Array.from(umlMap.keys()) } }).lean();
         for (const item of baseItems) {
+          const newId = new Types.ObjectId();
+          targetMap.set(item._id.toString(), newId.toString());
+
           await Model.create([{
             ...item,
-            _id: new Types.ObjectId(),
+            _id: newId,
             uml_id: new Types.ObjectId(umlMap.get(item.uml_id.toString())),
             created_at: new Date(),
             updated_at: new Date()
@@ -317,14 +314,15 @@ export class VersionService {
         }
       };
 
-      await cloneDiagramByUml(UsecaseDiagram);
-      await cloneDiagramByUml(ActivityDiagram);
-      await cloneDiagramByUml(SequenceDiagram);
+      await cloneDiagram(UsecaseDiagram, usecaseUMLmap);
+      await cloneDiagram(ActivityDiagram, activityUMLmap);
+      await cloneDiagram(SequenceDiagram, sequenceUMLmap);
 
-      // 10️⃣ Clone Outputs
+      // ✅ 10️⃣ Clone Outputs với map
       const baseOutputs = await Output.find({ version_id: baseVersion._id }).lean();
       for (const out of baseOutputs) {
         const newOutId = new Types.ObjectId();
+
         const copy: any = {
           ...out,
           _id: newOutId,
@@ -333,60 +331,42 @@ export class VersionService {
           updated_at: new Date()
         };
 
-        if (out.type === "database" && out.database_id)
-          copy.database_id = new Types.ObjectId(dbMap.get(out.database_id.toString()));
-
-        if (out.type === "testcase" && out.testcase_id)
-          copy.testcase_id = new Types.ObjectId(tcMap.get(out.testcase_id.toString()));
-
-        if (out.type === "uml" && out.uml_id)
-          copy.uml_id = new Types.ObjectId(umlMap.get(out.uml_id.toString()));
+        if (out.type === "database") copy.database_id = new Types.ObjectId(dbMap.get(out.database_id.toString()));
+        if (out.type === "testcase") copy.testcase_id = new Types.ObjectId(tcMap.get(out.testcase_id.toString()));
+        if (out.type === "uml") copy.uml_id = new Types.ObjectId(umlMap.get(out.uml_id.toString()));
 
         await Output.create([copy], { session });
         outputIds.push(newOutId);
       }
 
-      // 11️⃣ Update newVersion với Input/Output mới
+      // ✅ 11️⃣ Update version
       newVersion.inputs = inputIds;
       newVersion.outputs = outputIds;
       await newVersion.save({ session });
 
-      // 12️⃣ Cập nhật project.current_version
-      await Project.findByIdAndUpdate(
-        baseVersion.project_id,
-        { current_version: newVersion._id },
-        { session }
-      );
+      // ✅ 12️⃣ Project update current_version
+      await Project.findByIdAndUpdate(baseVersion.project_id, { current_version: newVersion._id }, { session });
 
       await session.commitTransaction();
-      console.log("✅ [bumpVersion] TRANSACTION COMMITTED");
 
-      // 🔔 Log action
-      const user = await User.findById(userId).select("name email").lean();
-      await this.logService.createLog({
-        project_id: baseVersion.project_id.toString(),
-        user_id: userId,
-        action: "create_version",
-        target_id: newVersion._id.toString(),
-        target_type: "version",
-        version_number: newVersion.version_number,
-        affects_requirement: false,
-        level: "info",
-        details: {
-          message: `${user?.name || "System"} created version ${newVersion.version_number} from base ${baseVersion.version_number}`,
+      return new ServiceResponse(
+        ResponseStatus.Success,
+        "New version created with cloned entities",
+        {
+          newVersion,
+          idMaps: {
+            inputMap,
+            dbMap,
+            tcMap,
+            umlMap,
+            usecaseUMLmap,
+            activityUMLmap,
+            sequenceUMLmap
+          }
         },
-      });
-
-      versionSocketService.emitVersionCreated(
-        baseVersion.project_id.toString(),
-        newVersion._id.toString(),
-        userId,
-        newVersion
+        201
       );
 
-      console.log("🏁 [bumpVersion] FINISHED SUCCESSFULLY");
-      console.log("==================================================");
-      return new ServiceResponse(ResponseStatus.Success,"New version created with cloned entities",newVersion,201);
     } catch (e: any) {
       await session.abortTransaction();
       return new ServiceResponse(ResponseStatus.Failed, e.message, null, 500);
@@ -394,6 +374,7 @@ export class VersionService {
       session.endSession();
     }
   }
+
 
   async setCurrentVersion(projectId: string,versionId: string,userId: string): Promise<ServiceResponse<any>> {
     try {

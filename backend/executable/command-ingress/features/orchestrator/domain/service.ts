@@ -194,25 +194,25 @@ export class OrchestratorService {
         );
 
         try {
-            if (result) {
+            if (result && version.version_temporary==false) {
                 for (const req of result.newRequirements) {
-                await this.versionService.createOrUpdatePreview(
-                    versionId,
-                    userId,
-                    {
-                    entity_type: "requirement",
-                    entity_id: req.id,
-                    change_type: "added",
-                    before_snapshot: null,
-                    after_snapshot: req,
+                    await this.versionService.createOrUpdatePreview(
+                        versionId,
+                        userId,
+                        {
+                        entity_type: "requirement",
+                        entity_id: req.id,
+                        change_type: "added",
+                        before_snapshot: null,
+                        after_snapshot: req,
+                        }
+                    );
                     }
-                );
-                }
                 console.log(`✅ Preview logged for ${result.newRequirements.length} generated requirements.`);
             }
-            } catch (previewErr: any) {
-                console.error("⚠️ Error logging preview:", previewErr);
-            }
+        } catch (previewErr: any) {
+            console.error("⚠️ Error logging preview:", previewErr);
+        }
             
         // 6️⃣ Hoàn tất
         await Version.findByIdAndUpdate(versionId, {

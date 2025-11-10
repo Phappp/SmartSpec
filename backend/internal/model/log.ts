@@ -58,7 +58,8 @@ const projectLogSchema = new Schema({
         "system", 
         "requirement_model", // thuộc version
         "member", // thuộc project
-        "databases","testcases", "activity_diagrams", "usecase_diagrams", "sequence_diagrams" // thuộc output
+        "databases","testcases", "activity_diagrams", "usecase_diagrams", "sequence_diagrams", // thuộc output\
+        "tables","cloumn","relationship"
         ],
         required: true
     },

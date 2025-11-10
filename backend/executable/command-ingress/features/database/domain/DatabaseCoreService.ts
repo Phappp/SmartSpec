@@ -2,23 +2,53 @@ import DatabaseModel from "../../../../../internal/model/database";
 import { DatabaseGeminiService } from "../domain/GeminiService";
 import { GenerateDatabasePayload, Table } from "./interfaces";
 import { TableValidationService } from "./TableValidationService";
+import { VersionService } from "../../version/domain/service";
+import { LogService } from "../../log/domain/service";
+import {PreviewChangeDto} from "../../version/adapter/preview.dto";
+import { ServiceResponse, ResponseStatus } from '../../../services/serviceResponse';
+import Version from "../../../../../internal/model/version";
+import User from "../../../../../internal/model/user";
 
 export class DatabaseCoreService {
     private geminiService: DatabaseGeminiService;
     private validationService: TableValidationService;
-
+    private versionService: VersionService;
+    private logService: LogService;
     constructor() {
         this.geminiService = new DatabaseGeminiService();
         this.validationService = new TableValidationService();
+        this.versionService = new VersionService();
+        this.logService = new LogService();
+
     }
 
-    public async generateSchemaFromRequirements(payload: GenerateDatabasePayload) {
+    public async generateSchemaFromRequirements(userId:string, payload: GenerateDatabasePayload) {
         const { versionId, projectId, requirements } = payload;
 
         if (!requirements || requirements.length === 0) {
             throw new Error("Không có requirements để sinh database.");
         }
+        // 1️⃣ Lấy version
+        let version = await Version.findById(versionId);
+        if (!version) {
+            return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+        }
 
+        // 2️⃣ Auto bump version nếu không phải temporary
+        if (version.version_temporary === false) {
+            const bumpRes = await this.versionService.bumpVersion(
+                versionId,
+                userId,
+                "minor"
+            );
+
+            if (!bumpRes.data) {
+            return new ServiceResponse(ResponseStatus.Failed, "Auto bump failed", null, 500);
+            }
+
+            version = bumpRes.data.newVersion;
+            payload.versionId = version._id.toString(); // update versionId
+        }
         const databaseSchema = await this.geminiService.generateDatabaseSchema(requirements, 'vi-VN');
 
         // Validate generated schema
@@ -36,6 +66,37 @@ export class DatabaseCoreService {
         });
 
         await newDatabase.save();
+        const changePayload: PreviewChangeDto = {
+            entity_type: "database",
+            change_type: "added",
+            entity_id: newDatabase._id.toString(),
+            before_snapshot: null,
+            after_snapshot: newDatabase.toObject()
+        };
+
+        await this.versionService.createOrUpdatePreview(
+            version._id.toString(),
+            userId,
+            changePayload
+        );
+
+        // 7️⃣ GHI LOG
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+
+        await this.logService.createLog({
+            project_id: projectId,
+            user_id: userId,
+            action: "generate_output",
+            target_id: newDatabase._id.toString(),
+            target_type: "databases",
+            version_number: version.version_number,
+            affects_requirement: true,
+            level: "info",
+            details: {
+            message: `${username} generated database ${newDatabase.name} for version ${version.version_number}`
+            }
+        });
         return newDatabase;
     }
 
@@ -50,31 +111,169 @@ export class DatabaseCoreService {
     /**
      * Cập nhật Database
      */
-    public async updateDatabase(databaseId: string, updateData: any) {
+    public async updateDatabase(userId:string, databaseId: string, updateData: any) {
         // Validate foreign key relationships if tables are being updated
+        // 1️⃣ Lấy database hiện tại
+        const db = await DatabaseModel.findById(databaseId);
+        if (!db) {
+            throw new Error("Database not found");
+        }
+
+        let version = await Version.findById(db.version_id);
+        if (!version) {
+            throw new Error("Version not found");
+        }
+        // 2️⃣ Auto bump version nếu không phải temporary
+        if (version.version_temporary === false) {
+            const bumpRes = await this.versionService.bumpVersion(
+                version._id.toString(),
+                userId,
+                "minor"
+            );
+
+            if (!bumpRes.data) {
+            throw new Error("Auto bump failed");
+            }
+
+            version = bumpRes.data.newVersion;
+
+            // Map databaseId sang version mới nếu cần
+            const dbMap = bumpRes.data.idMaps.databaseMap;
+            if (dbMap && dbMap.has(databaseId)) {
+                databaseId = dbMap.get(databaseId).toString();
+            } else {
+             return new ServiceResponse(ResponseStatus.Failed,"Database no longer exists in new version after bump",null,404);
+            }
+        }
         if (updateData.tables) {
             updateData.tables.forEach((table: Table) => {
                 this.validationService.validateTableStructure(table);
             });
         }
-
+        const beforeUpdate = await DatabaseModel.findById(databaseId).lean();
         const result = await DatabaseModel.updateOne(
             { _id: databaseId },
             { $set: updateData }
         );
-
+        
         if (result.matchedCount === 0) {
             throw new Error("Database not found");
         }
+        const updatedDb = await DatabaseModel.findById(databaseId).lean(); 
+        // 6️⃣ GHI PREVIEW
+        const changePayload: PreviewChangeDto = {
+            entity_type: "database",
+            change_type: "updated",
+            entity_id: databaseId,
+            before_snapshot: beforeUpdate,
+            after_snapshot: updatedDb
+        };
 
+        await this.versionService.createOrUpdatePreview(
+            version._id.toString(),
+            userId,
+            changePayload
+        );
+
+        // 7️⃣ GHI LOG
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+
+        await this.logService.createLog({
+            project_id: db.project_id.toString(),
+            user_id: userId,
+            action: "update_output",
+            target_id: databaseId,
+            target_type: "databases",
+            version_number: version.version_number,
+            affects_requirement: true,
+            level: "info",
+            details: {
+                before: beforeUpdate,
+                after: updatedDb,
+                message: `${username} updated database ${databaseId} on version ${version.version_number}`
+            }
+        });
         return await DatabaseModel.findById(databaseId);
     }
 
     /**
      * Xóa database
      */
-    public async deleteDatabase(databaseId: string) {
-        return DatabaseModel.findByIdAndDelete(databaseId);
+    public async deleteDatabase(userId:string, databaseId: string) {
+        // 1️⃣ Lấy database hiện tại
+        const db = await DatabaseModel.findById(databaseId);
+        if (!db) {
+            throw new Error("Database not found");
+        }
+
+        let version = await Version.findById(db.version_id);
+        if (!version) {
+            throw new Error("Version not found");
+        }
+
+        // 2️⃣ Auto bump version nếu không phải temporary
+        if (version.version_temporary === false) {
+            const bumpRes = await this.versionService.bumpVersion(
+                version._id.toString(),
+                userId,
+                "minor"
+            );
+
+            if (!bumpRes.data) {
+                throw new Error("Auto bump failed");
+            }
+
+            version = bumpRes.data.newVersion;
+
+            // Map databaseId sang version mới nếu cần
+            const dbMap = bumpRes.data.idMaps.databaseMap;
+            if (dbMap && dbMap.has(databaseId)) {
+                databaseId = dbMap.get(databaseId).toString();
+            } else {
+             return new ServiceResponse(ResponseStatus.Failed,"Database no longer exists in new version after bump",null,404);
+            }
+        }
+
+        // 3️⃣ Lấy snapshot trước delete
+        const beforeDelete = await DatabaseModel.findById(databaseId).lean();
+
+        // 4️⃣ Xóa database
+        const deletedDb = await DatabaseModel.findByIdAndDelete(databaseId);
+
+        // 5️⃣ GHI PREVIEW
+        if (beforeDelete) {
+            const changePayload: PreviewChangeDto = {
+                entity_type: "database",
+                change_type: "deleted",
+                entity_id: databaseId,
+                before_snapshot: beforeDelete,
+                after_snapshot: null
+            };
+
+            await this.versionService.createOrUpdatePreview(version._id.toString(),userId,changePayload);
+        }
+
+        // 6️⃣ GHI LOG
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+
+        await this.logService.createLog({
+            project_id: db.project_id.toString(),
+            user_id: userId,
+            action: "delete_output",
+            target_id: databaseId,
+            target_type: "databases",
+            version_number: version.version_number,
+            affects_requirement: true,
+            level: "warning",
+            details: {
+                before: beforeDelete,
+                message: `${username} deleted database ${databaseId} on version ${version.version_number}`
+            }
+        });
+
+        return deletedDb;
     }
 
     /**

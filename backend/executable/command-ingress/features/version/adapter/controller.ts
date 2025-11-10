@@ -1,4 +1,4 @@
- import { Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import { HttpRequest } from "../../../types";
 import { BaseController } from "../../../shared/base-controller";
 import { VersionService } from "../domain/service";
@@ -55,45 +55,6 @@ export class VersionController extends BaseController {
       handleServiceResponse(result, res);
     });
   };
-
-
-  /**
-   * ✅ Đánh dấu version là ổn định
-   */
-  // public markVersionAsStable = async (req: HttpRequest, res: Response, next: NextFunction) => {
-  //   await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
-  //     const userId = req.getSubject();
-  //     const { versionId } = req.body;
-  //     if (!userId) {
-  //       handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
-  //       return;
-  //     }
-
-  //     const result = await this.service.markVersionAsStable(versionId, userId);
-  //     handleServiceResponse(result, res);
-  //   });
-  // };
-
-  /**
-   * 🔒 Khóa version
-   */
-  // public lockVersion = async (req: HttpRequest, res: Response, next: NextFunction) => {
-  //   await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
-  //     const userId = req.getSubject();
-  //     const { versionId } = req.body;
-
-  //     if (!userId) {
-  //       handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
-  //       return;
-  //     }
-
-  //     const result = await this.service.lockVersion(versionId, userId);
-  //     handleServiceResponse(result, res);
-  //   });
-  // };
-    /**
-   * 🗑️ Xóa version và các version con của nó
-   */
   public deleteVersion = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
       const userId = req.getSubject();
@@ -199,10 +160,35 @@ export class VersionController extends BaseController {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing previewId", null, 400), res);
         return;
       }
-
-      // changeType được truyền vào bumpVersion và sẽ được lưu vào preview.upgrade_type
       const result = await this.service.bumpVersion(previewId, userId, changeType);
       handleServiceResponse(result, res);
+    });
+  };
+
+  public markEditingController = async (req: HttpRequest, res: Response,next: NextFunction) => {
+    await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
+      const userId = req.getSubject();
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+        return;
+      }
+      const { versionId } = req.params;
+
+      const result = await this.service.markEditing(versionId, userId);
+
+      res.status(result.code || 200).json(result);
+    });
+  };
+  public markLockedController = async (req: HttpRequest, res: Response,next: NextFunction) => {
+    await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
+      const userId = req.getSubject();
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+        return;
+      }
+      const { versionId } = req.params;
+      const result = await this.service.markLocked(versionId, userId);
+      res.status(result.code || 200).json(result);
     });
   };
 } 

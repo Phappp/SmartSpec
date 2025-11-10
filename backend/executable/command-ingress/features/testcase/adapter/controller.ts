@@ -5,6 +5,8 @@ import { TestcaseService } from "../domain/service";
 import { HttpRequest } from "../../../types/http_request";
 import Database from "../../../../../internal/model/database";
 import Version from "../../../../../internal/model/version";
+import { handleServiceResponse } from "../../../services/httpHandlerResponse";
+import { ServiceResponse, ResponseStatus } from '../../../services/serviceResponse';
 
 export class TestcaseController {
     private testcaseService: TestcaseService;
@@ -18,6 +20,11 @@ export class TestcaseController {
      */
     public generateTestCases = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { projectId, versionId } = req.params;
             const {
                 selectedRequirementIds,
@@ -43,6 +50,7 @@ export class TestcaseController {
             const testCases = await this.testcaseService.generateTestCases(
                 projectId,
                 versionId,
+                userId,
                 selectedRequirementIds,
                 language
             );
@@ -95,6 +103,11 @@ export class TestcaseController {
      */
     public generateTestCasesFromDatabase = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { projectId, versionId } = req.params;
             const { language = 'vi-VN', selectedTableNames } = req.body;
 
@@ -147,6 +160,7 @@ export class TestcaseController {
             const testCases = await this.testcaseService.generateTestCases(
                 projectId,
                 versionId,
+                userId,
                 requirementIds,
                 language
             );
@@ -657,6 +671,11 @@ export class TestcaseController {
      */
     public deleteTestCase = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { testCaseId } = req.params;
 
             if (!testCaseId) {
@@ -666,7 +685,7 @@ export class TestcaseController {
 
             console.log(`🗑️ Deleting ENTERPRISE test case ${testCaseId}`);
 
-            const deletedTestCase = await this.testcaseService.deleteTestCase(testCaseId);
+            const deletedTestCase = await this.testcaseService.deleteTestCase(userId, testCaseId);
 
             if (!deletedTestCase) {
                 res.status(404).json({ message: `Không tìm thấy ENTERPRISE test case với id: ${testCaseId}` });
@@ -726,6 +745,11 @@ export class TestcaseController {
      */
     public bulkExecuteTestCases = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { projectId } = req.params;
             const { testCaseIds, executionData } = req.body;
 

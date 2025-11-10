@@ -10,7 +10,7 @@ const previewChangeSchema = new Schema({
   },
   entity_type: {
     type: String,
-    enum: ["requirement", "input","output", "database", "testcase","uml", "activity_diagram","sequence_diagram","usecase_diagram"],
+    enum: ["requirement", "input","output", "database","table","column","relationship", "testcase","uml", "activity_diagram","sequence_diagram","usecase_diagram"],
     required: true
   },
   entity_id: { type: String, required: false },
