@@ -59,7 +59,13 @@ const versionSchema = new Schema({
     affects_requirement: { type: Boolean, default: false },
     requirement_model: { type: [requirementModelSchema], default: [] },
     pending_conflicts: { type: [conflictSchema], default: [] },
-    processing_errors: { type: [String], default: [] }
+    processing_errors: { type: [String], default: [] },
+    // ===== TRƯỜNG MỚI: CỜ VERSION =====
+    edit_flag: { 
+        type: String, 
+        enum: ["editing", "locked", "none"], 
+        default: "none" 
+    }
 }, {
     timestamps: true
 });

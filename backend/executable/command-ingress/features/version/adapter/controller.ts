@@ -145,6 +145,11 @@ export class VersionController extends BaseController {
    */
   public getPreview = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
+      const userId = req.getSubject();
+      if (!userId){
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+        return;
+      } 
       const { versionId } = req.params;
       if (!versionId) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing versionId", null, 400), res);

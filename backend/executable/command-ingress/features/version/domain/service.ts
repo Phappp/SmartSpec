@@ -768,4 +768,70 @@ export class VersionService {
       session.endSession();
     }
   }
+
+  /**
+   * Đánh dấu version là đang chỉnh sửa (editing)
+   * Chỉ cho phép 1 version editing cùng lúc trong project
+   */
+  public async markEditing(versionId: string, userId: string): Promise<ServiceResponse<any>> {
+    try {
+      const version = await Version.findById(versionId);
+      if (!version) return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+
+      // Nếu đang là "editing" → toggle về "none"
+      if (version.edit_flag === "editing") {
+        version.edit_flag = "none";
+      } else {
+        // Xoá cờ "editing" ở các version khác cùng project
+        await Version.updateMany(
+          { project_id: version.project_id, edit_flag: "editing", _id: { $ne: versionId } },
+          { $set: { edit_flag: "none" } }
+        );
+        // Đánh dấu version hiện tại là editing
+        version.edit_flag = "editing";
+      }
+
+      await version.save();
+
+      return new ServiceResponse(
+        ResponseStatus.Success,
+        version.edit_flag === "editing" ? "Version marked as editing" : "Version flag cleared",
+        version,
+        200
+      );
+    } catch (error: any) {
+      return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
+    }
+  }
+
+  /**
+   * Đánh dấu version là khóa (locked) hoặc gỡ cờ nếu đang locked
+   */
+  public async markLocked(versionId: string, userId: string): Promise<ServiceResponse<any>> {
+    try {
+      const version = await Version.findById(versionId);
+      if (!version) return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+
+      // Nếu đang là "locked" → toggle về "none"
+      if (version.edit_flag === "locked") {
+        version.edit_flag = "none";
+      } else {
+        // Đặt cờ locked
+        version.edit_flag = "locked";
+        // Nếu muốn, có thể tự động gỡ "editing" của version này
+        // version.edit_flag = "locked" sẽ ghi đè trực tiếp
+      }
+
+      await version.save();
+
+      return new ServiceResponse(
+        ResponseStatus.Success,
+        version.edit_flag === "locked" ? "Version marked as locked" : "Version flag cleared",
+        version,
+        200
+      );
+    } catch (error: any) {
+      return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
+    }
+  }
 }
