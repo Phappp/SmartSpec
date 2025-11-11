@@ -79,10 +79,15 @@ import { LogController } from "../command-ingress/features/log/adapter/controlle
 import initDatabaseRoute from "./features/database/adapter/route";
 import { InputService } from "./features/orchestrator/domain/InputService";
 
-import initinitUsecaseDiagramRoute from "./features/uml/usecase.diagram/adapter/route";
+
 import { UsecaseDiagramController } from "./features/uml/usecase.diagram/adapter/controller";
 import { UsecaseDiagramServiceImpl } from "./features/uml/usecase.diagram/domain/service";
 import initUsecaseDiagramRoute from "./features/uml/usecase.diagram/adapter/route";
+
+import { SequenceDiagramController } from "./features/uml/sequence.diagram/adapter/controller";
+import { SequenceDiagramServiceImpl } from "./features/uml/sequence.diagram/domain/service";
+import initSequenceDiagramRoute from "./features/uml/sequence.diagram/adapter/route";
+
 
 const app = express();
 
@@ -189,9 +194,18 @@ const createHttpServer = (redisClient: any) => {
     initUserRoute(new UserController(new UserServiceImpl()))
   );
 
-   app.use(
+  app.use(
     "/api/usecase-diagram",
-    initUsecaseDiagramRoute(new UsecaseDiagramController(new UsecaseDiagramServiceImpl()))
+    initUsecaseDiagramRoute(
+      new UsecaseDiagramController(new UsecaseDiagramServiceImpl())
+    )
+  );
+
+  app.use(
+    "/api/sequence-diagram",
+    initSequenceDiagramRoute(
+      new SequenceDiagramController(new SequenceDiagramServiceImpl())
+    )
   );
 
   app.use(
@@ -235,7 +249,7 @@ const createHttpServer = (redisClient: any) => {
     )
   );
   app.use("/api/logs", initLogRoute(new LogController(new LogService())));
-  
+
   app.use(recoverMiddleware);
 
   return server;

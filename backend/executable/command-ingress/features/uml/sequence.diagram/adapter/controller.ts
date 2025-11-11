@@ -26,6 +26,7 @@ export class SequenceDiagramController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
+        // 1. Xác thực User
         const userId = req.getSubject();
         if (!userId) {
           res.status(StatusCodes.UNAUTHORIZED).json({
@@ -34,41 +35,76 @@ export class SequenceDiagramController extends BaseController {
           });
           return;
         }
-        const { lang } = req.body;
+
+        // 2. Xác thực Payload (Body và Params)
+        const { lang, usecaseId } = req.body;
         if (!lang) {
-          res.status(400).json({ message: "Language is required." });
+          res
+            .status(StatusCodes.BAD_REQUEST)
+            .json({ message: "Language is required." });
           return;
         }
+        if (!usecaseId) {
+          res
+            .status(StatusCodes.BAD_REQUEST)
+            .json({ message: "usecaseId is required in the body." });
+          return;
+        }
+
         const { versionId } = req.params;
         if (!versionId) {
-          res.status(400).json({ message: "VersionId are require." });
+          res
+            .status(StatusCodes.BAD_REQUEST)
+            .json({ message: "VersionId (as URL param) is required." });
           return;
         }
 
+        // 3. Lấy dữ liệu Version
         const version = await VersionModel.findById(versionId);
         if (!version) {
-          res.status(404).json({ message: `Version not found: ${versionId}` });
+          res
+            .status(StatusCodes.NOT_FOUND)
+            .json({ message: `Version not found: ${versionId}` });
           return;
         }
 
+        // 4. <-- SỬA ĐỔI QUAN TRỌNG: Tìm Usecase Context (Ngữ cảnh)
+        // Tìm 'usecase' cụ thể mà người dùng muốn vẽ
+        // từ bên trong mảng 'requirement_model' của version
+        const useCaseContext = version.requirement_model.find(
+          (uc: any) => uc._id?.toString() === usecaseId
+        );
+
+        // Nếu không tìm thấy Usecase đó
+        if (!useCaseContext) {
+          res.status(StatusCodes.NOT_FOUND).json({
+            message: `Usecase with id ${usecaseId} not found in version ${versionId}`,
+          });
+          return;
+        }
+
+        // 5. Tạo Payload cho Service
+        // (Payload giờ đã chính xác)
         const payload = {
           versionId: version._id.toString(),
           projectId: version.project_id.toString(),
-          usecaseId: req.body.usecaseId, 
-          requirements: version.requirement_model,
+          usecaseId: usecaseId,
+          useCaseContext: useCaseContext, // <-- FIX: Giờ là 1 object, không phải mảng
           lang: lang,
         };
 
-        const newDatabase =
+        // 6. Gọi Service
+        const newSequenceDiagram =
           await this.sequenceDiagramService.generateSchemaFromRequirements(
             payload,
             userId
           );
 
+        // 7. Trả về thành công
         res.status(StatusCodes.OK).json({
           status: "Success",
           message: "Created Sequence diagram Successfully",
-          data: newDatabase,
+          data: newSequenceDiagram,
         });
       }
     );
@@ -128,5 +164,4 @@ export class SequenceDiagramController extends BaseController {
       }
     );
   }
-
 }

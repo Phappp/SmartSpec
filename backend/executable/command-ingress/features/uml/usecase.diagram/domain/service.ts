@@ -27,8 +27,6 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       throw new Error("User not found");
     }
 
-    const description = `Usecase diagram generated for project ${projectId} by ${user.name}`;
-
     if (!requirements || requirements.length === 0) {
       throw new Error(
         "There are no requirements to generate usecase diagrams."

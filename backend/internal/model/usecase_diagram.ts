@@ -49,7 +49,7 @@ const usecaseDiagramSchema = new Schema(
       ref: "versions",
       required: true,
     },
-
+    lang: { type: String, required: true },
     name: { type: String, required: true },
     description: String,
 

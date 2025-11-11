@@ -22,7 +22,7 @@ const fragmentSchema = new Schema(
   {
     type: {
       type: String,
-      enum: ["loop", "alt", "opt", "par", "region"], // par: song song, region: critical
+      enum: ["loop", "alt", "opt", "par", "region", "else"], // par: song song, region: critical
       required: true,
     },
     guard_condition: { type: String, default: "" }, // Ví dụ: "[Thanh toán thành công]" hoặc "For each item"
@@ -77,7 +77,7 @@ const sequenceDiagramSchema = new Schema(
       ref: "versions",
       required: true,
     },
-
+    lang: { type: String, required: true },
     // Thông tin biểu đồ
     name: { type: String, required: true }, // Ví dụ: "Kịch bản Thanh toán Thành công"
     description: String,
