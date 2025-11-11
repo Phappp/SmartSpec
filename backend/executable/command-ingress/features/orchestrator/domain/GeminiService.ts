@@ -2,48 +2,79 @@ import { ApiKeyService } from "./ApiKeyService";
 
 // THÊM MỚI: Tập trung hóa toàn bộ prompt để hỗ trợ đa ngôn ngữ
 const prompts = {
-    'vi-VN': {
-        schemaDescription: (batchSize: number, offset: number) => `BẮT BUỘC: CHỈ trả về JSON array hợp lệ và KHÔNG GÌ KHÁC.
-KHÔNG giải thích, KHÔNG markdown, KHÔNG code fence, KHÔNG text thừa.
+   'vi-VN': {
+    schemaDescription: (batchSize: number, offset: number) => ` **MỤC TIÊU**: Chuyển đổi văn bản thành danh sách use case phần mềm dạng JSON
+ **PHẠM VI**: CHỈ tập trung vào chức năng PHẦN MỀM - LOẠI BỎ hoàn toàn thủ tục giấy tờ thực tế
 
-Phân tích văn bản sau và CHUYỂN THÀNH DANH SÁCH use case CỦA HỆ THỐNG PHẦN MỀM.
-❌ KHÔNG mô tả thủ tục hành chính/giấy tờ ngoài đời thật.
-✅ CHỈ mô tả các CHỨC NĂNG mà PHẦN MỀM cần hỗ trợ.
+ **HÀNH VI CẦN TRÁNH**:
+• "Cán bộ ký văn bản giấy" →  SAI
+• "Nộp hồ sơ bản cứng" →  SAI  
+• "Gửi công văn giấy tờ" →  SAI
 
-Ví dụ: thay vì "Cán bộ UBND xem xét điều chỉnh quy hoạch",
-hãy mô tả thành "Người dùng nộp hồ sơ điều chỉnh quy hoạch qua hệ thống"
-hoặc "Hệ thống thẩm định và phê duyệt yêu cầu điều chỉnh".
+ **HÀNH VI PHẦN MỀM ĐÚNG**:
+• "Hệ thống xác thực chữ ký số" →  ĐÚNG
+• "Upload hồ sơ điện tử" →  ĐÚNG
+• "Gửi thông báo qua hệ thống" →  ĐÚNG
 
-Mỗi use case là một object JSON với các trường:
-- id
-- name (mô tả chức năng phần mềm, ví dụ: "Đăng nhập hệ thống", "Gửi yêu cầu phê duyệt")
-- role (object với id và name - vai trò trong phần mềm: Người dùng, Quản trị viên, Cán bộ thẩm định…)
-- goal (mục tiêu chính của chức năng)
-- reason (tại sao chức năng này tồn tại)
-- tasks[] (danh sách các bước tương tác phần mềm hỗ trợ người dùng thực hiện mục tiêu, KHÔNG phải thủ tục giấy tờ ngoài đời)
-- inputs[] (dữ liệu đầu vào người dùng cung cấp hoặc hệ thống yêu cầu)
-- outputs[] (dữ liệu, thông báo hoặc hành động hệ thống trả về)
-- context (ngữ cảnh hoạt động hoặc mô-đun phần mềm mà use case này thuộc v)
-- priority ("low"|"medium"|"high")
-- feedback (phản hồi, mong đợi hoặc tiêu chí chấp nhận từ người dùng khi sử dụng chức năng)
-- rules[] (quy tắc, logic xử lý hoặc điều kiện rẽ nhánh liên quan đến chức năng)
-- triggers[] (sự kiện hoặc hành động khởi tạo use case này)
-- preconditions[] (điều kiện phải có trước khi thực hiện)
-- postconditions[] (trạng thái hệ thống sau khi hoàn tất)
-- exceptions[] (các trường hợp lỗi hoặc điều kiện bất thường có thể xảy ra)
-- stakeholders[] (các bên liên quan hưởng lợi hoặc bị ảnh hưởng)
-- constraints[] (giới hạn, điều kiện kỹ thuật hoặc nghiệp vụ áp dụng cho chức năng)
-- related_usecases[]
+ **YÊU CẦU ĐẦU RA**:
+• CHỈ trả về JSON array hợp lệ
+• KHÔNG giải thích, KHÔNG markdown, KHÔNG code fence
+• Parse được ngay bằng JSON.parse()
 
-YÊU CẦU QUAN TRỌNG:
-- OUTPUT PHẢI LÀ JSON ARRAY HỢP LỆ, PARSE ĐƯỢC NGAY.
-- Nếu chỉ có 1 use case thì array vẫn phải có 1 phần tử.
-- Các trường dạng danh sách luôn là array chuỗi [].
-- role PHẢI là object với id và name (ví dụ: {"id": "role_1", "name": "Người dùng"})
-- related_usecases phải là một mảng chuỗi CHỈ chứa ID của các use case liên quan (ví dụ: ["UC1", "UC5"]). KHÔNG được bao gồm tên của use case.
-- Mỗi lần chỉ trả về TỐI ĐA ${batchSize} use case.
-- BẮT ĐẦU từ use case số ${offset + 1}.
-- Nếu không còn use case nào thì trả về [].
+🛠 **CẤU TRÚC USE CASE BẮT BUỘC**:
+Mỗi use case PHẢI có đầy đủ các trường sau:
+[
+  {
+    "id": "UC${offset + 1}",
+    "name": "Đăng ký tài khoản hệ thống",
+    "role": {
+      "id": "guest",
+      "name": "Người dùng chưa đăng ký",
+      "description": "Người dùng chưa có tài khoản trong hệ thống"
+    },
+    "goal": "Tạo tài khoản truy cập hệ thống",
+    "reason": "Cho phép người dùng sử dụng các chức năng được bảo vệ",
+    "tasks": [
+      "Truy cập trang đăng ký",
+      "Nhập thông tin cá nhân",
+      "Xác thực email", 
+      "Kích hoạt tài khoản"
+    ],
+    "inputs": ["email", "mật khẩu", "họ tên", "số điện thoại"],
+    "outputs": ["tài khoản đã kích hoạt", "email xác nhận", "thông báo thành công"],
+    "context": "Module quản lý người dùng",
+    "priority": "high",
+    "feedback": "Giao diện thân thiện, hướng dẫn rõ ràng",
+    "rules": [
+      "Email phải có định dạng hợp lệ",
+      "Mật khẩu tối thiểu 8 ký tự",
+      "Không trùng email đã đăng ký"
+    ],
+    "triggers": ["Người dùng click nút 'Đăng ký'"],
+    "preconditions": ["Người dùng chưa có tài khoản", "Hệ thống hoạt động bình thường"],
+    "postconditions": ["Tài khoản được tạo", "Email xác nhận được gửi"],
+    "exceptions": ["Email đã tồn tại", "Mất kết nối mạng", "Server lỗi"],
+    "stakeholders": ["Người dùng mới", "Quản trị viên hệ thống"],
+    "constraints": ["Hỗ trợ đa ngôn ngữ", "Tương thích mobile"],
+    "related_usecases": ["UC${offset + 2}"]
+  }
+]
+
+ **QUY TẮC XỬ LÝ**:
+• Mỗi lần trả về TỐI ĐA ${batchSize} use case
+• Bắt đầu từ use case số ${offset + 1}
+• Không còn use case nào → trả về []
+• Ưu tiên chức năng phần mềm cốt lõi
+• Quy trình phức tạp → tách thành nhiều use case
+• Không rõ vai trò → mặc định "Người dùng hệ thống"
+
+ **KIỂM TRA CUỐI**:
+✓ KHÔNG có thao tác thủ công ngoài đời
+✓ CHỈ có tương tác phần mềm
+✓ Role là object đầy đủ {id, name, description}
+✓ Tất cả trường đều theo đúng schema
+✓ Related usecases chỉ chứa ID (ví dụ: ["UC1", "UC3"])
+
 `,
         relatedUseCases: (simplified: any, incremental?: boolean) => `Đây là danh sách use case phần mềm đã có:\n${JSON.stringify(simplified, null, 2)}\n\nNhiệm vụ của bạn:\n${incremental ? `- KHÔNG được xóa hoặc ghi đè related_usecases cũ.\n- Chỉ bổ sung liên kết giữa use case mới và use case cũ.` : `- Phân tích và sinh lại toàn bộ related_usecases cho tất cả use case.`}\n\nYÊU CẦU:\n- related_usecases[] chỉ tham chiếu tới use case trong danh sách trên.\n- Format: CHỈ chứa ID của use case (ví dụ: "UC1").\n- Nếu không có liên quan, để mảng rỗng [].\n- Trả về toàn bộ danh sách use case với related_usecases được cập nhật.`,
         conflictCheck: (textA: string, textB: string) => `
@@ -95,48 +126,77 @@ Ví dụ output:
 
     },
     'en-US': {
-        schemaDescription: (batchSize: number, offset: number) => `REQUIRED: ONLY return a valid JSON array and NOTHING ELSE.
-NO explanations, NO markdown, NO code fences, NO extra text.
+         schemaDescription: (batchSize: number, offset: number) => ` **OBJECTIVE**: Convert text into software use cases in JSON format
+ **SCOPE**: FOCUS ONLY on SOFTWARE functions - COMPLETELY REMOVE real-world paperwork procedures
 
-Analyze the following text and CONVERT IT INTO a LIST of SOFTWARE SYSTEM use cases.
-❌ DO NOT describe real-world administrative/paperwork procedures.
-✅ ONLY describe FUNCTIONS that the SOFTWARE needs to support.
+ **BEHAVIORS TO AVOID**:
+• "Officer signs paper documents" →  WRONG
+• "Submit hard copy documents" →  WRONG  
+• "Send paper official letters" →  WRONG
 
-Example: instead of "The officer reviews the planning adjustment",
-describe it as "User submits a planning adjustment request through the system"
-or "The system validates and approves the adjustment request".
+ **CORRECT SOFTWARE BEHAVIORS**:
+• "System verifies digital signature" →  CORRECT
+• "Upload electronic documents" →  CORRECT
+• "Send notifications via system" →  CORRECT
 
-Each use case is a JSON object with these fields:
-- id
-- name (describes a software function, e.g., "Log into the system", "Submit approval request")
-- role (object with id and name - role in the software: User, Administrator, Approver...)
-- goal (the main objective or intended outcome of this function)
-- reason (the rationale or purpose for why this function exists)
-- tasks[] (list of interaction steps the software supports the user to perform, NOT real-world paperwork)
-- inputs[] (data or parameters provided by the user or required by the system)
-- outputs[] (data, messages, or system actions produced as a result)
-- context (operational context or software module this use case belongs to)
-- priority ("low"|"medium"|"high")
-- feedback (expected user feedback, satisfaction criteria, or acceptance conditions when using this function)
-- rules[] (processing logic, validation rules, or conditional branches involved in this function)
-- triggers[] (events or actions that initiate this use case)
-- preconditions[] (conditions that must be true before execution)
-- postconditions[] (system state after successful completion)
-- exceptions[] (error cases or abnormal situations that may occur)
-- stakeholders[] (parties who benefit from or are affected by this function)
-- constraints[] (technical or business limitations applied to this function)
-- related_usecases[]
+ **OUTPUT REQUIREMENTS**:
+• Return ONLY valid JSON array
+• NO explanations, NO markdown, NO code fence
+• Immediately parseable with JSON.parse()
 
-CRITICAL REQUIREMENTS:
-- THE OUTPUT MUST BE A VALID, IMMEDIATELY PARSABLE JSON ARRAY.
-- If there is only one use case, the array must still contain one element.
-- List-type fields must always be a string array [].
-- role MUST be an object with id and name (e.g., {"id": "role_1", "name": "User"})
-- related_usecases must be a string array containing ONLY the IDs of related use cases (e.g., ["UC1", "UC5"]). DO NOT include the use case name.
-- Return a MAXIMUM of ${batchSize} use cases at a time.
-- START from use case number ${offset + 1}.
-- If no more use cases are found, return [].
-`,
+🛠 **REQUIRED USE CASE STRUCTURE**:
+[
+  {
+    "id": "UC${offset + 1}",
+    "name": "System Account Registration",
+    "role": {
+      "id": "guest",
+      "name": "Unregistered User",
+      "description": "User without system account"
+    },
+    "goal": "Create system access account",
+    "reason": "Allow users to use protected features",
+    "tasks": [
+      "Access registration page",
+      "Enter personal information",
+      "Verify email",
+      "Activate account"
+    ],
+    "inputs": ["email", "password", "full name", "phone number"],
+    "outputs": ["activated account", "confirmation email", "success notification"],
+    "context": "User management module",
+    "priority": "high",
+    "feedback": "User-friendly interface, clear instructions",
+    "rules": [
+      "Email must have valid format",
+      "Minimum 8-character password",
+      "No duplicate email registration"
+    ],
+    "triggers": ["User clicks 'Register' button"],
+    "preconditions": ["User has no account", "System is operational"],
+    "postconditions": ["Account created", "Confirmation email sent"],
+    "exceptions": ["Email already exists", "Network connection lost", "Server error"],
+    "stakeholders": ["New user", "System administrator"],
+    "constraints": ["Multi-language support", "Mobile compatibility"],
+    "related_usecases": ["UC${offset + 2}"]
+  }
+]
+
+ **PROCESSING RULES**:
+• Return MAXIMUM ${batchSize} use cases per batch
+• Start from use case number ${offset + 1}
+• No more use cases → return []
+• Prioritize core software functions
+• Complex processes → split into multiple use cases
+• Unclear role → default to "System User"
+
+ **FINAL CHECK**:
+✓ NO manual real-world operations
+✓ ONLY software interactions
+✓ Role is complete object {id, name, description}
+✓ All fields follow exact schema
+✓ Related usecases contain ONLY IDs (example: ["UC1", "UC3"])
+:`,
         relatedUseCases: (simplified: any, incremental?: boolean) => `Here is a list of existing software use cases:\n${JSON.stringify(simplified, null, 2)}\n\nYour task:\n${incremental ? `- DO NOT delete or overwrite existing related_usecases.\n- Only add links between new and old use cases.` : `- Analyze and regenerate all related_usecases for all use cases.`}\n\nREQUIREMENTS:\n- related_usecases[] must only reference use cases from the list above.\n- Format: ONLY the use case ID (e.g., "UC1").\n- If a use case has no relations, return an empty array [].\n- Return the entire list of use cases with the 'related_usecases' field updated.`,
         conflictCheck: (textA: string, textB: string) => `
 You are a strict use case comparison engine.
@@ -395,7 +455,7 @@ export class GeminiService {
                 }
                 return useCases;
             } catch (err: any) {
-                console.error("❌ addRelatedUseCases error:", err);
+                console.error(" addRelatedUseCases error:", err);
                 const retryInfo = err?.errorDetails?.find(
                     (d: any) => d["@type"]?.includes("RetryInfo")
                 );
@@ -413,7 +473,7 @@ export class GeminiService {
     }
 
     async analyzeRequirements(cleanText: string, language: string): Promise<any[]> {
-        console.log(`🔍 Analyzing text with Gemini (lang: ${language}). Text length: ${cleanText?.length ?? 0}`);
+        console.log(` Analyzing text with Gemini (lang: ${language}). Text length: ${cleanText?.length ?? 0}`);
 
         const keys = await this.apiKeyService.getAllActiveKeys("gemini");
         if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
@@ -467,7 +527,7 @@ export class GeminiService {
                             return it;
                         });
                         allResults = allResults.concat(normalized);
-                        console.log(`✅ Parsed ${normalized.length} items (incomplete=${parsed.incomplete}). total=${allResults.length}`);
+                        console.log(` Parsed ${normalized.length} items (incomplete=${parsed.incomplete}). total=${allResults.length}`);
                         offset += normalized.length;
                         gotBatch = true;
 
@@ -487,7 +547,7 @@ export class GeminiService {
                 } catch (err: any) {
                     lastError = err;
                     const msg = (err?.message || "").toLowerCase();
-                    console.error(`❌ Gemini key ${k._id} failed:`, err?.message || err);
+                    console.error(` Gemini key ${k._id} failed:`, err?.message || err);
                     if (msg.includes("invalid") || msg.includes("unauthorized")) {
                         try {
                             await this.apiKeyService.disableKey(k._id);
@@ -529,14 +589,14 @@ export class GeminiService {
                 let text: string = resp?.response?.text?.() || "{}";
                 text = this.cleanJsonString(text);
 
-                // 🔍 Debug log
+                //  Debug log
                 console.log("🔎 Gemini conflict check raw response:", text);
 
                 const parsed = JSON.parse(text.trim());
 
                 if (typeof parsed.conflict === "boolean") {
                     console.log(
-                        `✅ Gemini conflict decision: ${parsed.conflict ? "CONFLICT" : "NO CONFLICT"} | A="${textA}" | B="${textB}"`
+                        ` Gemini conflict decision: ${parsed.conflict ? "CONFLICT" : "NO CONFLICT"} | A="${textA}" | B="${textB}"`
                     );
                     return parsed.conflict;
                 } else {
@@ -544,7 +604,7 @@ export class GeminiService {
                 }
             } catch (err) {
                 lastError = err;
-                console.error("❌ Gemini checkConflictWithGemini error:", err);
+                console.error(" Gemini checkConflictWithGemini error:", err);
                 continue;
             }
         }
@@ -585,14 +645,14 @@ export class GeminiService {
                 const parsed = JSON.parse(text.trim());
 
                 if (Array.isArray(parsed) && (parsed.length === 0 || Array.isArray(parsed[0]))) {
-                    console.log(`✅ Gemini found ${parsed.length} conflict groups.`);
+                    console.log(` Gemini found ${parsed.length} conflict groups.`);
                     return parsed;
                 } else {
                     console.warn("⚠️ Gemini did not return a valid array of arrays:", text);
                 }
             } catch (err) {
                 lastError = err;
-                console.error("❌ Gemini findConflictGroups error:", err);
+                console.error(" Gemini findConflictGroups error:", err);
                 continue;
             }
         }

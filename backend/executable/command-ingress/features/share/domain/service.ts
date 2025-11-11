@@ -1012,7 +1012,9 @@ export class ShareProjectService {
     searchTerm: string
   ): Promise<ServiceResponse<any>> {
     try {
-      if (!searchTerm || searchTerm.trim().length < 2) {
+      const trimmedTerm = searchTerm?.trim();
+
+      if (!trimmedTerm || trimmedTerm.length < 2) {
         return new ServiceResponse(
           ResponseStatus.Failed,
           "Search term must be at least 2 characters",
@@ -1021,14 +1023,14 @@ export class ShareProjectService {
         );
       }
 
-      // ✅ SỬA: select 'avatar_url' thay vì 'avatar'
       const users = await User.find({
+        _id: { $ne: new mongoose.Types.ObjectId(userId) }, // Loại bỏ chính mình
         $or: [
-          { name: { $regex: searchTerm, $options: 'i' } },
-          { email: { $regex: searchTerm, $options: 'i' } }
+          { name: { $regex: trimmedTerm, $options: 'i' } },
+          { email: { $regex: trimmedTerm, $options: 'i' } }
         ]
       })
-        .select('_id name email avatar_url') // ✅ SỬA THÀNH avatar_url
+        .select('_id name email avatar_url')
         .limit(20)
         .lean();
 
@@ -1037,7 +1039,8 @@ export class ShareProjectService {
         _id: user._id,
         name: user.name || user.email.split('@')[0],
         email: user.email,
-        avatar_url: user.avatar_url || null // ✅ SỬA THÀNH avatar_url
+        avatar_url: user.avatar_url || null,
+        display_name: user.name ? `${user.name} (${user.email})` : user.email
       }));
 
       return new ServiceResponse(
@@ -1052,7 +1055,7 @@ export class ShareProjectService {
       return new ServiceResponse(
         ResponseStatus.Failed,
         "Internal Server Error",
-        err.message,
+        null, // Không trả về error message cho client
         500
       );
     }

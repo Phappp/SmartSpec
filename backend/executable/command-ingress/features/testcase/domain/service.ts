@@ -240,7 +240,20 @@ export class TestcaseService {
         };
 
         if (executionData.environment) updateData.environment = executionData.environment;
-        if (executionData.execution_logs) updateData.execution_logs = executionData.execution_logs;
+
+        // SỬA LỖI: Chuyển execution_logs thành object
+        if (executionData.execution_logs) {
+            updateData.$push = {
+                execution_logs: {
+                    $each: executionData.execution_logs.map((log: string) => ({
+                        message: log,
+                        timestamp: new Date(),
+                        type: 'execution'
+                    }))
+                }
+            };
+        }
+
         if (executionData.exceptions) updateData.exceptions = executionData.exceptions;
         if (executedBy) updateData.executed_by = executedBy;
 
@@ -718,4 +731,5 @@ export class TestcaseService {
             totalCount: testCasesToImport.length
         };
     }
+
 }

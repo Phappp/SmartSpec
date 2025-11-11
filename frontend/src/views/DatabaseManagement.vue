@@ -58,7 +58,7 @@
       <div v-else-if="database" class="database-main-content">
         <div class="content-header">
           <div class="header-left">
-            <h2>{{ database.name }}</h2>
+            <h2>Database Management</h2>
             <p class="description">{{ database.description }}</p>
             <div class="database-meta">
               <span class="meta-item">
@@ -1442,7 +1442,9 @@ export default {
   color: #374151;
   font-weight: 500;
 }
-
+.database-main-content {
+  margin-top: 20px;
+}
 .dialect-select {
   padding: 8px 12px;
   border: 1px solid #d1d5db;

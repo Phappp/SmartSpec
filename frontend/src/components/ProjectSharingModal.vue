@@ -887,7 +887,7 @@ watch(searchQuery, (newValue) => {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #4f46e5;
+  /* background: #4f46e5; */
   color: white;
   display: flex;
   align-items: center;

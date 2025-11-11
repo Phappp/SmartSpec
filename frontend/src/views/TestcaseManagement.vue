@@ -93,6 +93,27 @@
         </div>
       </div>
 
+      <!-- Export Modal -->
+      <ExportOptionsPanel
+        v-if="showExportModal"
+        :project-id="project._id"
+        :version-id="selectedVersionId"
+        :filters="currentFilters"
+        :loading="exportLoading"
+        @export="handleExport"
+        @close="showExportModal = false"
+        @clearFilters="clearFilters"
+      />
+      <div class="export-section">
+        <button
+          class="btn-secondary export-btn"
+          @click="showExportModal = true"
+          :disabled="loading"
+        >
+          <span class="material-symbols-outlined">download</span>
+          Export Test Cases
+        </button>
+      </div>
       <!-- Filters and Search -->
       <div class="filters-section">
         <div class="filter-group">
@@ -155,10 +176,22 @@
           <button class="btn-icon" @click="loadTestCases" title="Refresh" :disabled="loading">
             <span class="material-symbols-outlined" :class="{ spinning: loading }">refresh</span>
           </button>
-          <button class="btn-icon" @click="exportTestCases" title="Export" :disabled="loading">
+          <button
+            class="btn-icon"
+            @click="showExportPanel = !showExportPanel"
+            title="Export Options"
+          >
             <span class="material-symbols-outlined">download</span>
           </button>
         </div>
+      </div>
+
+      <!-- Export Panel Toggle -->
+      <div v-if="showExportPanel" class="export-panel-toggle">
+        <button class="btn-text" @click="showExportPanel = false">
+          <span class="material-symbols-outlined">close</span>
+          Hide Export Options
+        </button>
       </div>
 
       <!-- Sorting Options -->
@@ -240,6 +273,7 @@
                     :disabled="testCases.length === 0"
                   />
                 </th>
+                <th class="id-column">ID</th>
                 <th class="title-column">Title</th>
                 <th class="type-column">Type</th>
                 <th class="priority-column">Priority</th>
@@ -252,9 +286,13 @@
             </thead>
             <tbody>
               <tr
-                v-for="testcase in paginatedTestCases"
+                v-for="(testcase, index) in paginatedTestCases"
                 :key="testcase._id"
-                :class="{ selected: selectedTestCases.includes(testcase._id) }"
+                :class="{
+                  selected: selectedTestCases.includes(testcase._id),
+                  'row-even': index % 2 === 0,
+                  'row-odd': index % 2 !== 0,
+                }"
                 class="testcase-row"
               >
                 <td class="checkbox-column">
@@ -264,6 +302,9 @@
                     v-model="selectedTestCases"
                     :disabled="testcase.status === 'in_progress'"
                   />
+                </td>
+                <td class="id-column">
+                  <span class="testcase-id">{{ getTestcaseIndex(index) }}</span>
                 </td>
                 <td class="title-column">
                   <div class="testcase-title">
@@ -284,9 +325,14 @@
                   </span>
                 </td>
                 <td class="status-column">
-                  <span class="status-badge" :class="testcase.status || 'not_executed'">
-                    {{ testcase.status || 'not_executed' }}
-                  </span>
+                  <div class="status-icon-wrapper" :title="testcase.status || 'not_executed'">
+                    <span
+                      class="material-symbols-outlined status-icon"
+                      :class="testcase.status || 'not_executed'"
+                    >
+                      {{ getStatusIcon(testcase.status) }}
+                    </span>
+                  </div>
                 </td>
                 <td class="tables-column">
                   <div class="database-tags">
@@ -490,6 +536,13 @@
       @close="executingTestcase = null"
       @execute="handleExecuteTestcase"
     />
+
+    <!-- Export Progress Modal -->
+    <ExportProgressModal
+      v-if="exportProgress.show"
+      :progress="exportProgress"
+      @cancel="cancelExport"
+    />
   </div>
 </template>
 
@@ -502,6 +555,8 @@ import GenerateTestcaseModal from '@/components/testcase/GenerateTestcaseModal.v
 import TestcaseFormModal from '@/components/testcase/TestcaseFormModal.vue'
 import TestcaseDetailModal from '@/components/testcase/TestcaseDetailModal.vue'
 import TestcaseExecutionModal from '@/components/testcase/TestcaseExecutionModal.vue'
+import ExportOptionsPanel from '@/components/testcase/ExportOptionsPanel.vue'
+import ExportProgressModal from '@/components/testcase/ExportProgressModal.vue'
 import { useActiveMembers } from '@/utils/useActiveMembers'
 import { getProjectDetail, usecaseApi, getDatabasesByVersion } from '@/api/project'
 import { testcaseApi } from '@/api/testcase'
@@ -514,6 +569,8 @@ export default {
     TestcaseFormModal,
     TestcaseDetailModal,
     TestcaseExecutionModal,
+    ExportOptionsPanel,
+    ExportProgressModal,
   },
   setup() {
     const route = useRoute()
@@ -529,6 +586,8 @@ export default {
     const databaseSchema = ref(null)
     const testCases = ref([])
     const loading = ref(false)
+    const exportLoading = ref(false)
+    const showExportPanel = ref(false)
 
     // UI states
     const showGenerateModal = ref(false)
@@ -547,6 +606,15 @@ export default {
     const selectedTestCases = ref([])
     const selectAll = ref(false)
 
+    const showExportModal = ref(false)
+    // Export progress
+    const exportProgress = ref({
+      show: false,
+      title: '',
+      progress: 0,
+      status: 'idle',
+    })
+
     // Pagination
     const pagination = ref({
       currentPage: 1,
@@ -560,6 +628,13 @@ export default {
     const hasActiveFilters = computed(() => {
       return searchQuery.value || statusFilter.value || testTypeFilter.value || priorityFilter.value
     })
+
+    const currentFilters = computed(() => ({
+      test_type: testTypeFilter.value,
+      status: statusFilter.value,
+      priority: priorityFilter.value,
+      versionId: selectedVersionId.value,
+    }))
 
     const statistics = computed(() => {
       const total = testCases.value.length
@@ -673,6 +748,22 @@ export default {
     })
 
     // Methods
+    const getStatusIcon = (status) => {
+      const statusIcons = {
+        passed: 'check_circle',
+        failed: 'cancel',
+        blocked: 'block',
+        not_executed: 'schedule',
+        in_progress: 'hourglass_empty',
+      }
+      return statusIcons[status] || 'schedule'
+    }
+
+    const getTestcaseIndex = (index) => {
+      const startIndex = (pagination.value.currentPage - 1) * pagination.value.pageSize
+      return startIndex + index + 1
+    }
+
     const fetchProjectData = async () => {
       try {
         const projectId = route.params.id
@@ -757,21 +848,65 @@ export default {
       }
     }
 
+    // Export Methods
+    const handleExport = async (exportConfig) => {
+      exportLoading.value = true
+      exportProgress.value = {
+        show: true,
+        title: exportConfig.title,
+        progress: 0,
+        status: 'preparing',
+      }
+
+      try {
+        exportProgress.value.status = 'exporting'
+        exportProgress.value.progress = 30
+
+        // Chỉ xử lý export test cases
+        const result = await testcaseApi.handleExcelExport(
+          testcaseApi.exportTestCasesToExcel,
+          project.value._id,
+          exportConfig.options,
+          `testcases-${project.value._id}-${Date.now()}.xlsx`
+        )
+
+        exportProgress.value.progress = 100
+        exportProgress.value.status = 'completed'
+
+        toast.success(`Successfully exported ${exportConfig.title}`)
+        showExportModal.value = false
+
+        // Auto-close progress modal after 2 seconds
+        setTimeout(() => {
+          exportProgress.value.show = false
+        }, 2000)
+      } catch (error) {
+        console.error('Export error:', error)
+        exportProgress.value.status = 'error'
+        toast.error(`Export failed: ${error.message}`)
+      } finally {
+        exportLoading.value = false
+      }
+    }
+
+    const cancelExport = () => {
+      exportProgress.value.show = false
+      exportLoading.value = false
+      toast.info('Export cancelled')
+    }
+
     const formatTestCaseTitle = (testcase) => {
-      // Kiểm tra nếu title đã có format [UC_ID] - [Tên use case] - thì không format lại
       const existingFormatRegex = /^\[.*\] - .* - .*/
       if (existingFormatRegex.test(testcase.title)) {
         return testcase.title
       }
 
-      // Format mới chỉ khi title chưa có format trên
       const requirementIds = testcase.source_requirement_ids || []
 
       if (requirementIds.length === 0) {
         return testcase.title || 'Untitled Test Case'
       }
 
-      // Get the first requirement ID and name
       const firstReqId = requirementIds[0]
       const requirementName = getRequirementName(firstReqId)
       const baseTitle = testcase.title || 'Test Scenario'
@@ -791,7 +926,6 @@ export default {
       }
 
       try {
-        // Format titles before saving
         const formattedTestCases = generatedTestCases.map((tc) => ({
           ...tc,
           title: formatGeneratedTestCaseTitle(tc),
@@ -861,7 +995,7 @@ export default {
 
       try {
         await testcaseApi.executeTestCase(executingTestcase.value._id, executionData)
-        toast.success('Test case executed successfully')
+        // toast.success('Test case executed successfully')
         await loadTestCases()
         executingTestcase.value = null
       } catch (error) {
@@ -1002,32 +1136,6 @@ export default {
       pagination.value.currentPage = 1
     }
 
-    const exportTestCases = async () => {
-      try {
-        const response = await testcaseApi.exportTestCases(
-          project.value._id,
-          selectedVersionId.value
-        )
-        toast.success('Export completed successfully')
-      } catch (error) {
-        console.error('Error exporting test cases:', error)
-        toast.error('Failed to export test cases')
-      }
-    }
-
-    const formatDate = (dateString) => {
-      if (!dateString) return null
-      try {
-        return new Date(dateString).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        })
-      } catch (error) {
-        return 'Invalid Date'
-      }
-    }
-
     const handleVersionSelect = (versionId) => {
       selectedVersionId.value = versionId
       loadAllData()
@@ -1047,6 +1155,19 @@ export default {
 
     const goBack = () => {
       router.push('/dashboard')
+    }
+
+    const formatDate = (dateString) => {
+      if (!dateString) return null
+      try {
+        return new Date(dateString).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        })
+      } catch (error) {
+        return 'Invalid Date'
+      }
     }
 
     const loadAllData = async () => {
@@ -1108,7 +1229,9 @@ export default {
       databaseSchema,
       testCases,
       loading,
+      exportLoading,
       activeUsers,
+      showExportPanel,
 
       // UI states
       showGenerateModal,
@@ -1127,6 +1250,10 @@ export default {
       selectedTestCases,
       selectAll,
 
+      // Export
+      exportProgress,
+      currentFilters,
+
       // Pagination
       pagination,
       paginatedTestCases,
@@ -1136,6 +1263,9 @@ export default {
       statistics,
       hasActiveFilters,
       coveragePercentage,
+
+      //Export
+      showExportModal,
 
       // Methods
       handleVersionSelect,
@@ -1161,146 +1291,44 @@ export default {
       previousPage,
       nextPage,
       handlePageSizeChange,
-      exportTestCases,
+      handleExport,
+      cancelExport,
       formatDate,
       formatTestCaseTitle,
       getRequirementName,
+      getStatusIcon,
+      getTestcaseIndex,
     }
   },
 }
 </script>
 
 <style scoped>
-/* Các styles giữ nguyên từ phiên bản trước, chỉ thêm styles mới cho pagination và requirement tags */
+/* Giữ nguyên tất cả các styles từ phiên bản trước và thêm styles mới */
 
-/* Pagination Styles */
-.pagination {
+.export-panel-toggle {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--border-color);
-  background: white;
+  justify-content: center;
+  margin: 1rem 0;
 }
 
-.pagination-info {
+.btn-text {
+  background: none;
+  border: none;
   color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.page-numbers {
-  display: flex;
-  gap: 0.25rem;
-}
-
-.page-number {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-color);
-  background: white;
-  color: var(--text-primary);
-  border-radius: 6px;
   cursor: pointer;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-}
-
-.page-number:hover {
-  border-color: #1a365d;
-  color: #1a365d;
-}
-
-.page-number.active {
-  background: #1a365d;
-  border-color: #1a365d;
-  color: white;
-}
-
-.page-number:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-size-selector {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.page-size-selector label {
-  color: var(--text-secondary);
   font-size: 0.875rem;
-}
-
-.page-size-select {
   padding: 0.5rem;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: white;
+}
+
+.btn-text:hover {
   color: var(--text-primary);
-  font-size: 0.875rem;
 }
 
-/* Requirement Tags */
-.requirement-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-
-.requirement-tag {
-  display: inline-block;
-  padding: 0.25rem 0.5rem;
-  background: var(--primary-light);
-  color: #1a365d;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-family: 'Courier New', monospace;
-}
-
-.no-requirements {
-  color: var(--text-tertiary);
-  font-style: italic;
-}
-
-/* Thêm column mới cho requirements */
-.requirements-column {
-  min-width: 150px;
-}
-
-/* Responsive adjustments */
-@media (max-width: 1024px) {
-  .pagination {
-    flex-direction: column;
-    gap: 1rem;
-    text-align: center;
-  }
-
-  .requirements-column {
-    display: none;
-  }
-}
-
-@media (max-width: 768px) {
-  .pagination-controls {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .page-numbers {
-    order: -1;
-    width: 100%;
-    justify-content: center;
-    margin-bottom: 0.5rem;
-  }
-}
-
-/* Giữ nguyên tất cả các styles khác từ phiên bản trước */
+/* Các styles khác giữ nguyên từ phiên bản trước */
 .testcase-management-view {
   padding: 30px;
   min-height: 100vh;
@@ -1742,6 +1770,13 @@ td {
   text-align: center;
 }
 
+.id-column {
+  width: 60px;
+  text-align: center;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
 .title-column {
   min-width: 250px;
 }
@@ -1772,6 +1807,14 @@ td {
   transition: background-color 0.2s ease;
 }
 
+.testcase-row.row-even {
+  background-color: #ffffff;
+}
+
+.testcase-row.row-odd {
+  background-color: #f8fafc;
+}
+
 .testcase-row:hover {
   background: var(--background-color);
 }
@@ -1792,10 +1835,60 @@ td {
   line-height: 1.4;
 }
 
+.testcase-id {
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* Status Icons */
+.status-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-icon {
+  font-size: 1.5rem;
+  border-radius: 50%;
+}
+
+.status-icon.passed {
+  color: #10b981;
+}
+
+.status-icon.failed {
+  color: #ef4444;
+}
+
+.status-icon.blocked {
+  color: #f59e0b;
+}
+
+.status-icon.not_executed {
+  color: #6b7280;
+}
+
+.status-icon.in_progress {
+  color: #3b82f6;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 /* Badges */
 .type-badge,
-.priority-badge,
-.status-badge {
+.priority-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
   border-radius: 12px;
@@ -1854,31 +1947,6 @@ td {
   color: var(--success-color);
 }
 
-.status-badge.passed {
-  background: var(--success-light);
-  color: var(--success-color);
-}
-
-.status-badge.failed {
-  background: var(--error-light);
-  color: var(--error-color);
-}
-
-.status-badge.blocked {
-  background: var(--warning-light);
-  color: var(--warning-color);
-}
-
-.status-badge.not_executed {
-  background: var(--gray-light);
-  color: var(--gray-color);
-}
-
-.status-badge.in_progress {
-  background: var(--info-light);
-  color: var(--info-color);
-}
-
 .database-tags {
   display: flex;
   flex-wrap: wrap;
@@ -1895,6 +1963,27 @@ td {
 }
 
 .no-tables {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.requirement-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.requirement-tag {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: var(--primary-light);
+  color: #1a365d;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-family: 'Courier New', monospace;
+}
+
+.no-requirements {
   color: var(--text-tertiary);
   font-style: italic;
 }
@@ -2018,6 +2107,79 @@ td {
   gap: 0.5rem;
 }
 
+/* Pagination Styles */
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-color);
+  background: white;
+}
+
+.pagination-info {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.page-numbers {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.page-number {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  background: white;
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.page-number:hover {
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.page-number.active {
+  background: #1a365d;
+  border-color: #1a365d;
+  color: white;
+}
+
+.page-number:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.page-size-selector label {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.page-size-select {
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: white;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .testcase-content {
@@ -2045,6 +2207,10 @@ td {
 
   .search-input-wrapper {
     max-width: none;
+  }
+
+  .requirements-column {
+    display: none;
   }
 }
 
@@ -2094,5 +2260,36 @@ td {
   .page-size-selector {
     order: 1;
   }
+}
+.export-section {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1.5rem;
+  padding: 0 1.5rem;
+}
+
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: white;
+  color: #1a365d;
+  border: 1px solid #1a365d;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-btn:hover:not(:disabled) {
+  background: #1a365d;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.export-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

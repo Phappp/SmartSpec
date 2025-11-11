@@ -231,6 +231,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 30px;
+  margin-top: 20px;
   padding: 0;
 }
 

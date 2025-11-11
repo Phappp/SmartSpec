@@ -186,6 +186,117 @@ export const extractRequirementsCoverage = (testCases) => {
     return Array.from(requirements);
 };
 
+/**
+ * Export test cases to Excel with filters
+ */
+export const exportTestCasesToExcel = (projectId, params = {}) => {
+    return axiosClient.get(`/api/testcases/projects/${projectId}/export-excel`, {
+        params,
+        responseType: 'blob' // QUAN TRỌNG: để nhận file binary
+    });
+};
+
+
+// ==================== FILE DOWNLOAD UTILITIES ====================
+
+/**
+ * Download Excel file from blob response
+ */
+export const downloadExcelFile = (blobData, filename) => {
+    // Tạo URL từ blob data
+    const url = window.URL.createObjectURL(new Blob([blobData]));
+
+    // Tạo link element
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+
+    // Trigger download
+    document.body.appendChild(link);
+    link.click();
+
+    // Cleanup
+    link.remove();
+    window.URL.revokeObjectURL(url);
+};
+
+/**
+ * Handle Excel export with automatic download
+ */
+export const handleExcelExport = async (exportFunction, projectId, params = {}, customFilename = null) => {
+    try {
+        const response = await exportFunction(projectId, params);
+
+        // Tạo filename mặc định nếu không có custom
+        const filename = customFilename || `export-${projectId}-${Date.now()}.xlsx`;
+
+        // Download file
+        downloadExcelFile(response.data, filename);
+
+        return { success: true, filename };
+    } catch (error) {
+        console.error('Excel export error:', error);
+        throw error;
+    }
+};
+
+// ==================== EXPORT FILTER UTILITIES ====================
+
+/**
+ * Build export filters for Excel export
+ */
+export const buildExportFilters = (filters = {}) => {
+    const {
+        test_type,
+        status,
+        priority,
+        database_tables,
+        source_requirement_ids,
+        startDate,
+        endDate,
+        versionId
+    } = filters;
+
+    const params = {};
+
+    if (test_type) params.test_type = test_type;
+    if (status) params.status = status;
+    if (priority) params.priority = priority;
+    if (versionId) params.versionId = versionId;
+
+    // Array parameters
+    if (database_tables && Array.isArray(database_tables)) {
+        params.database_tables = database_tables.join(',');
+    }
+
+    if (source_requirement_ids && Array.isArray(source_requirement_ids)) {
+        params.source_requirement_ids = source_requirement_ids.join(',');
+    }
+
+    // Date range
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+
+    return params;
+};
+
+/**
+ * Quick export functions for common scenarios
+ */
+export const quickExports = {
+    // Export all test cases
+    allTestCases: (projectId, versionId = null) =>
+        exportTestCasesToExcel(projectId, { versionId }),
+
+    // Export only failed test cases
+    failedTestCases: (projectId, versionId = null) =>
+        exportTestCasesToExcel(projectId, { versionId, status: 'failed' }),
+
+    // Export only automated test cases
+    automatedTestCases: (projectId, versionId = null) =>
+        exportTestCasesToExcel(projectId, { versionId, test_type: 'api' }),
+};
+
 // ==================== API OBJECT ====================
 
 export const testcaseApi = {
@@ -217,10 +328,20 @@ export const testcaseApi = {
     exportTestCases,
     importTestCases,
 
+    // ====== NEW EXPORT EXCEL APIs ======
+    exportTestCasesToExcel,
+
+    // Export Utilities
+    downloadExcelFile,
+    handleExcelExport,
+    buildExportFilters,
+    quickExports,
+
     // Utilities
     validateTestCaseData,
     extractDatabaseTablesCoverage,
     extractRequirementsCoverage
 };
+
 
 export default testcaseApi;

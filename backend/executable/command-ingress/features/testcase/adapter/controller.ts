@@ -3,14 +3,18 @@
 import { Response, NextFunction } from "express";
 import { TestcaseService } from "../domain/service";
 import { HttpRequest } from "../../../types/http_request";
+import { TestcaseExportService, ExportFilters } from '../domain/exportService';
 import Database from "../../../../../internal/model/database";
 import Version from "../../../../../internal/model/version";
+import * as ExcelJS from 'exceljs';
 
 export class TestcaseController {
     private testcaseService: TestcaseService;
+    private exportService: TestcaseExportService
 
     constructor() {
         this.testcaseService = new TestcaseService();
+        this.exportService = new TestcaseExportService();
     }
 
     /**
@@ -870,5 +874,218 @@ export class TestcaseController {
             }
         });
         return Array.from(requirements);
+    }
+
+    // ==================== EXPORT EXCEL METHODS ====================
+
+    /**
+     * Export test cases to Excel
+     */
+    public exportTestCasesToExcel = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { projectId } = req.params;
+            const { versionId, test_type, status, priority, startDate, endDate } = req.query;
+
+            if (!projectId) {
+                res.status(400).json({ message: "projectId is required" });
+                return;
+            }
+
+            console.log(`📊 Exporting test cases to Excel for project ${projectId}`);
+
+            // Build filters
+            const filters: ExportFilters = {};
+
+            if (test_type) filters.test_type = test_type as string;
+            if (status) filters.status = status as string;
+            if (priority) filters.priority = priority as string;
+
+            // Date range filter
+            if (startDate && endDate) {
+                filters.date_range = {
+                    start: new Date(startDate as string),
+                    end: new Date(endDate as string)
+                };
+            }
+
+            const excelBuffer = await this.exportService.exportTestCasesToExcel(
+                projectId,
+                versionId as string,
+                filters
+            );
+
+            // Set response headers for file download
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename="testcases-${projectId}-${Date.now()}.xlsx"`);
+
+            res.send(excelBuffer);
+
+        } catch (error) {
+            console.error("❌ Error exporting test cases to Excel:", error);
+            next(error);
+        }
+    }
+
+    /**
+     * Export comprehensive test report (all reports in one Excel file)
+     */
+    public exportComprehensiveReport = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { projectId } = req.params;
+            const { versionId } = req.query;
+
+            if (!projectId) {
+                res.status(400).json({ message: "projectId is required" });
+                return;
+            }
+
+            console.log(`📑 Exporting comprehensive report for project ${projectId}`);
+
+            // Tạo workbook tổng hợp
+            const workbook = new ExcelJS.Workbook();
+            workbook.creator = 'Test Management System';
+            workbook.created = new Date();
+
+            // Lấy dữ liệu từ các service
+            const testCases = await this.testcaseService.getTestCasesByProject(projectId, versionId as string);
+            const executionStats = await this.testcaseService.getTestStatistics(projectId, versionId as string);
+            const dbCoverage = await this.testcaseService.getDatabaseCoverageReport(projectId, versionId as string);
+            const reqCoverage = await this.testcaseService.getRequirementCoverageReport(projectId, versionId as string);
+
+            // Tạo các sheet
+            await this.createComprehensiveSummarySheet(workbook, executionStats, dbCoverage, reqCoverage);
+            await this.createComprehensiveTestCasesSheet(workbook, testCases);
+            await this.createComprehensiveCoverageSheet(workbook, dbCoverage, reqCoverage);
+
+            const buffer = await workbook.xlsx.writeBuffer();
+
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename="comprehensive-report-${projectId}-${Date.now()}.xlsx"`);
+
+            res.send(Buffer.from(buffer));
+
+        } catch (error) {
+            console.error("❌ Error exporting comprehensive report:", error);
+            next(error);
+        }
+    }
+
+    // ==================== HELPER METHODS FOR COMPREHENSIVE REPORT ====================
+
+    private async createComprehensiveSummarySheet(
+        workbook: ExcelJS.Workbook,
+        executionStats: any,
+        dbCoverage: any,
+        reqCoverage: any
+    ): Promise<void> {
+        const sheet = workbook.addWorksheet('Executive Summary');
+
+        sheet.columns = [
+            { header: 'Category', key: 'category', width: 25 },
+            { header: 'Metric', key: 'metric', width: 30 },
+            { header: 'Value', key: 'value', width: 20 },
+            { header: 'Status', key: 'status', width: 15 }
+        ];
+
+        this.applyExcelHeaderStyle(sheet, '4472C4');
+
+        const summaryData = [
+            { category: 'Test Coverage', metric: 'Total Test Cases', value: executionStats.total, status: '' },
+            { category: 'Test Coverage', metric: 'Requirements Coverage', value: `${reqCoverage.coverage_percentage}%`, status: this.getCoverageStatus(reqCoverage.coverage_percentage) },
+            { category: 'Test Coverage', metric: 'Database Coverage', value: `${dbCoverage.coverage_percentage}%`, status: this.getCoverageStatus(dbCoverage.coverage_percentage) },
+            { category: 'Execution', metric: 'Pass Rate', value: `${executionStats.passed_rate || 0}%`, status: this.getPassRateStatus(executionStats.passed_rate) },
+            { category: 'Execution', metric: 'Automation Rate', value: `${executionStats.automation_rate || 0}%`, status: this.getAutomationStatus(executionStats.automation_rate) }
+        ];
+
+        summaryData.forEach(item => {
+            sheet.addRow(item);
+        });
+    }
+
+    private async createComprehensiveTestCasesSheet(workbook: ExcelJS.Workbook, testCases: any[]): Promise<void> {
+        const sheet = workbook.addWorksheet('Test Cases');
+
+        sheet.columns = [
+            { header: 'ID', key: 'id', width: 12 },
+            { header: 'Title', key: 'title', width: 40 },
+            { header: 'Type', key: 'type', width: 15 },
+            { header: 'Priority', key: 'priority', width: 12 },
+            { header: 'Status', key: 'status', width: 15 },
+            { header: 'Automated', key: 'automated', width: 12 }
+        ];
+
+        this.applyExcelHeaderStyle(sheet, '70AD47');
+
+        testCases.forEach(testCase => {
+            sheet.addRow({
+                id: testCase._id,
+                title: testCase.title,
+                type: testCase.test_type,
+                priority: testCase.priority,
+                status: testCase.status,
+                automated: testCase.automation?.is_automated ? 'Yes' : 'No'
+            });
+        });
+    }
+
+    private async createComprehensiveCoverageSheet(workbook: ExcelJS.Workbook, dbCoverage: any, reqCoverage: any): Promise<void> {
+        const sheet = workbook.addWorksheet('Coverage Analysis');
+
+        sheet.columns = [
+            { header: 'Coverage Type', key: 'type', width: 20 },
+            { header: 'Covered', key: 'covered', width: 15 },
+            { header: 'Total', key: 'total', width: 15 },
+            { header: 'Percentage', key: 'percentage', width: 15 },
+            { header: 'Quality', key: 'quality', width: 15 }
+        ];
+
+        this.applyExcelHeaderStyle(sheet, 'FFC000');
+
+        const coverageData = [
+            { type: 'Requirements', covered: reqCoverage.covered_requirements, total: reqCoverage.total_requirements, percentage: `${reqCoverage.coverage_percentage}%`, quality: this.getCoverageQuality(reqCoverage.coverage_percentage) },
+            { type: 'Database Tables', covered: dbCoverage.covered_tables, total: dbCoverage.total_tables, percentage: `${dbCoverage.coverage_percentage}%`, quality: this.getCoverageQuality(dbCoverage.coverage_percentage) }
+        ];
+
+        coverageData.forEach(item => {
+            sheet.addRow(item);
+        });
+    }
+
+    private applyExcelHeaderStyle(sheet: any, color: string): void {
+        const headerRow = sheet.getRow(1);
+        headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+        headerRow.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: color }
+        };
+    }
+
+    private getCoverageStatus(percentage: number): string {
+        if (percentage >= 90) return 'Excellent';
+        if (percentage >= 70) return 'Good';
+        if (percentage >= 50) return 'Fair';
+        return 'Poor';
+    }
+
+    private getPassRateStatus(percentage: number): string {
+        if (percentage >= 95) return 'Excellent';
+        if (percentage >= 85) return 'Good';
+        if (percentage >= 70) return 'Fair';
+        return 'Poor';
+    }
+
+    private getAutomationStatus(percentage: number): string {
+        if (percentage >= 80) return 'Excellent';
+        if (percentage >= 60) return 'Good';
+        if (percentage >= 40) return 'Fair';
+        return 'Low';
+    }
+
+    private getCoverageQuality(percentage: number): string {
+        if (percentage >= 90) return 'High';
+        if (percentage >= 70) return 'Medium';
+        if (percentage >= 50) return 'Low';
+        return 'Very Low';
     }
 }

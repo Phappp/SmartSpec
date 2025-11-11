@@ -142,5 +142,22 @@ export default function initTestcaseRoute(): Router {
         testcaseController.importTestCases
     );
 
+    // ==================== EXPORT EXCEL ROUTES ====================
+
+    // Export test cases to Excel
+    router.get(
+        "/projects/:projectId/export-excel",
+        requireAuthorizedUser,
+        testcaseController.exportTestCasesToExcel
+    );
+
+    // Export comprehensive report (all in one)
+    router.get(
+        "/projects/:projectId/export-comprehensive-report",
+        requireAuthorizedUser,
+        testcaseController.exportComprehensiveReport
+    );
+
+
     return router;
 }
