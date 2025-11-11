@@ -17,7 +17,7 @@ export class InputService {
         rawText: string | undefined,
         projectId: string,
         versionId: string
-    ): Promise<{ newFilesCount: number; newTextProvided: boolean }> {
+    ): Promise<{ newFilesCount: number; newTextProvided: boolean;newInputs :any }> {
         const existingInputs = await Input.find(
             { version_id: versionId },
             { file_hash: 1, text_hash: 1, is_processed: 1 }
@@ -28,7 +28,7 @@ export class InputService {
 
         let newFilesCount = 0;
         let newTextProvided = false;
-
+        const newInputs: any[] = [];
         // --- xử lý files ---
         if (files && files.length > 0) {
             const nonDuplicateFiles = files.filter((file) => {
@@ -38,8 +38,9 @@ export class InputService {
 
             if (nonDuplicateFiles.length > 0) {
                 console.log(`Starting file extraction for ${nonDuplicateFiles.length} new files...`);
-                await this.extractor.extractFiles(nonDuplicateFiles, projectId, versionId);
+                const savedInputs = await this.extractor.extractFiles(nonDuplicateFiles, projectId, versionId);
                 newFilesCount = nonDuplicateFiles.length;
+                newInputs.push(...savedInputs);
             } else {
                 console.log("All files are duplicates, skipping extraction");
             }
@@ -51,14 +52,15 @@ export class InputService {
 
             if (!existingTextHashes.includes(textHash)) {
                 console.log("Saving new raw text...");
-                await this.text.saveText(rawText, projectId, versionId);
+                const savedTextInput = await this.text.saveText(rawText, projectId, versionId);
                 newTextProvided = true;
+                newInputs.push(savedTextInput);
             } else {
                 console.log("Raw text is duplicate, skipping save");
             }
         }
 
-        return { newFilesCount, newTextProvided };
+        return { newFilesCount, newTextProvided, newInputs};
     }
 
     /**

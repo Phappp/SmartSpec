@@ -72,9 +72,9 @@ const projectLogSchema = new Schema({
         default: false
     },
     level: {
-    type: String,
-    enum:["info","warning","error"],
-    required:true
+        type: String,
+        enum:["info","warning","error"],
+        required:true
     },
     performed_by_ai: { type: Boolean, default: false },
     details: detailsSchema,

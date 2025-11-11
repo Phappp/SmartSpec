@@ -61,7 +61,7 @@ export class InputHandleService {
 
     const projectId = version.project_id.toString();
     
-    const { newFilesCount, newTextProvided } = await this.inputService.handleInputs(
+    const { newFilesCount, newTextProvided, newInputs} = await this.inputService.handleInputs(
       files,
       rawText,
       projectId,
@@ -124,12 +124,6 @@ export class InputHandleService {
 
       // Chỉ emit summary nếu có inputs mới
       if (newFilesCount > 0 || newTextProvided) {
-        
-        const newInputs = await Input.find({ version_id: versionId })
-            .sort({ created_at: -1 })
-            .limit(newFilesCount + (newTextProvided ? 1 : 0))
-            .lean();
-
         for (const input of newInputs) {
           const changePayload : PreviewChangeDto  = {
             entity_type: "input",

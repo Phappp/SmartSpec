@@ -18,6 +18,7 @@ export class TestcaseService {
     async generateTestCases(
         projectId: string,
         versionId: string,
+        userId: string,
         selectedRequirementIds: string[],
         language: string = 'vi-VN'
     ) {
@@ -106,14 +107,77 @@ export class TestcaseService {
      * Lưu ENTERPRISE test cases vào database
      */
     async saveTestCases(projectId: string, versionId: string, testCases: any[], createdBy?: string) {
-        const testCasesToSave = testCases.map(testCase => ({
-            project_id: projectId,
-            version_id: versionId,
-            created_by: createdBy,
-            ...testCase
-        }));
+       
+            let version = await Version.findById(versionId);
+            if (!version) {
+                throw new Error("Version not found");
+            }
 
-        return await Testcase.insertMany(testCasesToSave, { ordered: false });
+            /** ✅ 1. Nếu version là permanent → bump trước */
+            let testcaseIdMap = new Map<string, string>();
+
+            if (version.version_temporary === false) {
+                const bumpRes = await this.versionService.bumpVersion(
+                    versionId,
+                    createdBy!,
+                    "minor"
+                );
+
+                if (!bumpRes.data) throw new Error("Auto bump version failed");
+
+                version = bumpRes.data.newVersion;
+                versionId = version._id.toString();
+
+                // map testcase cũ → testcase mới (nếu cần update/delete sau này)
+                testcaseIdMap = bumpRes.data.idMaps.tcMap || new Map();
+            }
+
+            /** ✅ 2. Chuẩn hoá payload testcase */
+            const testCasesToSave = testCases.map(testCase => ({
+                project_id: projectId,
+                version_id: versionId,
+                created_by: createdBy,
+                ...testCase
+            }));
+
+            /** ✅ 3. Insert testcases trong version mới */
+            const inserted = await Testcase.insertMany(testCasesToSave, { ordered: false });
+
+            /** ✅ 4. Tạo preview change cho từng testcase */
+            for (const tc of inserted) {
+                const changePayload : PreviewChangeDto  = {
+                    entity_type: "testcase",
+                    change_type: "added",
+                    entity_id: tc._id.toString(),
+                    before_snapshot: null,
+                    after_snapshot: tc.toObject()
+                };
+
+            const previewRes = await this.versionService.createOrUpdatePreview(
+                versionId,
+                createdBy,
+                changePayload
+            );
+        }
+
+        /** ✅ 5. Ghi log */
+        const user = await User.findById(createdBy).lean();
+        const username = user?.name || "Unknown User";
+
+        await this.logService.createLog({
+            project_id: projectId,
+            user_id: createdBy,
+            action: "generate_output",
+            target_id: versionId,
+            target_type: "testcases",
+            version_number: version.version_number,
+            affects_requirement: true,
+            level: "info",
+            details: {
+                message: `${username} added ${inserted.length} new testcases to version ${version.version_number}`
+            }
+        });
+        return inserted
     }
 
     /**
@@ -174,7 +238,42 @@ export class TestcaseService {
         if (updatedBy) {
             updateData.updated_by = updatedBy;
         }
-        
+        /* -------------------------------------------------------
+        * 1️⃣ Lấy test case hiện tại
+        * -----------------------------------------------------*/
+        const oldTestcase = await Testcase.findById(id).lean();
+        if (!oldTestcase) throw new Error("Testcase not found");
+
+        let version = await Version.findById(oldTestcase.version_id);
+        if (!version) throw new Error("Version not found");
+
+        let versionId = version._id.toString();
+        let testcaseIdMap = new Map<string, string>();
+
+        /* -------------------------------------------------------
+        * 2️⃣ Nếu version permanent → BUMP trước
+        * -----------------------------------------------------*/
+        if (version.version_temporary === false) {
+            const bumpRes = await this.versionService.bumpVersion(
+                versionId,
+                updatedBy!,
+                "minor"
+            );
+
+            if (!bumpRes.data) throw new Error("Auto bump failed");
+
+            version = bumpRes.data.newVersion;
+            versionId = version._id.toString();
+
+            // lấy map testcase cũ → mới (tcMap)
+            testcaseIdMap = bumpRes.data.idMaps.tcMap || new Map();
+
+            // lấy ID testcase mới sau bump
+            const newId = testcaseIdMap.get(id);
+            if (!newId) throw new Error("Updated testcase ID not found in bump map");
+
+            id = newId;
+        }
         const updatedTestcase = await Testcase.findByIdAndUpdate(
         id,
         { $set: updateData },
@@ -182,10 +281,23 @@ export class TestcaseService {
         )
         .populate('created_by', 'name email')
         .populate('executed_by', 'name email');
+        if (!updatedTestcase) throw new Error("Failed to update testcase after bump");
+        /* -------------------------------------------------------
+        * 4️⃣ Tạo PREVIEW CHANGE cho update
+        * -----------------------------------------------------*/
+        const changePayload : PreviewChangeDto = {
+            entity_type: "testcase",
+            change_type: "updated",
+            entity_id: id,
+            before_snapshot: oldTestcase,
+            after_snapshot: updatedTestcase.toObject()
+        };
 
-        const version = await Version.findById(updatedTestcase.version_id);
-        const versionNumber = version?.version_number?.toString() || 'unknown';
-
+        const previewRes = await this.versionService.createOrUpdatePreview(
+            versionId,
+            updatedBy,
+            changePayload
+        );
         // Lấy username từ User model
         let username = 'Unknown User';
         if (updatedBy) {
@@ -199,8 +311,8 @@ export class TestcaseService {
             action: "update_output",
             target_id: id,
             target_type: "testcases",
-            version_number: versionNumber,
-            affects_requirement: true,
+            version_number: version.version_number,
+            affects_requirement: false,
             level: "info",
             details: {
                 message: `${username} updated testcase ${updatedTestcase?.title || id}`
@@ -247,9 +359,95 @@ export class TestcaseService {
     /**
      * Xóa test case
      */
-    async deleteTestCase(id: string) {
-        return await Testcase.findByIdAndDelete(id);
+    async deleteTestCase(userId: string, id: string) {
+        /* -------------------------------------------------------
+        * 1️⃣ Load test case cũ
+        * -----------------------------------------------------*/
+        const oldTestcase = await Testcase.findById(id).lean();
+        if (!oldTestcase) throw new Error("Testcase not found");
+
+        let version = await Version.findById(oldTestcase.version_id);
+        if (!version) throw new Error("Version not found for testcase");
+
+        let versionId = version._id.toString();
+        let testcaseIdMap = new Map<string, string>();
+
+        /* -------------------------------------------------------
+        * 2️⃣ Nếu version permanent → BUMP trước khi xoá
+        * -----------------------------------------------------*/
+        if (version.version_temporary === false) {
+            const bumpRes = await this.versionService.bumpVersion(
+                versionId,
+                userId,
+                "minor"
+            );
+
+            if (!bumpRes.data) throw new Error("Auto bump failed");
+
+            version = bumpRes.data.newVersion;
+            versionId = version._id.toString();
+
+            // Map ID testcase cũ → testcase mới (tcMap)
+            testcaseIdMap = bumpRes.data.idMaps.tcMap || new Map();
+
+            // tìm ID mới của testcase cần xoá
+            const newId = testcaseIdMap.get(id);
+            if (!newId) throw new Error("Testcase to delete not found in bumped version map");
+
+            id = newId;
+        }
+
+        /* -------------------------------------------------------
+        * 3️⃣ Xoá testcase trong version sau bump
+        * -----------------------------------------------------*/
+        const deletedTC = await Testcase.findByIdAndDelete(id).lean();
+        if (!deletedTC) throw new Error("Failed to delete testcase");
+
+        /* -------------------------------------------------------
+        * 4️⃣ Tạo PREVIEW CHANGE cho delete
+        * -----------------------------------------------------*/
+        const changePayload : PreviewChangeDto = {
+            entity_type: "testcase",
+            change_type: "deleted",
+            entity_id: id,
+            before_snapshot: oldTestcase,  // before = data cũ
+            after_snapshot: null           // after = null
+        };
+
+        const previewRes = await this.versionService.createOrUpdatePreview(
+            versionId,
+            userId,
+            changePayload
+        );
+
+        versionId = previewRes.data.versionId;
+
+        /* -------------------------------------------------------
+        * 5️⃣ Ghi LOG Enterprise
+        * -----------------------------------------------------*/
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+
+        await this.logService.createLog({
+            project_id: oldTestcase.project_id.toString(),
+            user_id: userId,
+            action: "delete_output",
+            target_id: id,
+            target_type: "testcases",
+            version_number: version.version_number,
+            affects_requirement: false,
+            level: "warning",
+            details: {
+                message: `${username} deleted testcase ${oldTestcase.title}`
+            }
+        });
+
+        /* -------------------------------------------------------
+        * 6️⃣ Trả về đầy đủ
+        * -----------------------------------------------------*/
+        return deletedTC
     }
+
 
     /**
      * Lấy ENTERPRISE test statistics với database coverage

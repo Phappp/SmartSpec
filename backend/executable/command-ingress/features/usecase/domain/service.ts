@@ -24,9 +24,15 @@ export class UsecaseService {
 
     try {
       // Kiểm tra version tồn tại
-      const  version = await Version.findById(versionId).session(session);
-      if (!version) {
-        throw new Error("Version not found");
+      let version = await Version.findById(versionId).session(session);
+      if (!version) throw new Error("Version not found");
+
+      // ✅ Nếu version không phải temporary → bump trước
+      if (version.version_temporary === false) {
+          const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
+          if (!bumpRes.data) throw new Error("Auto bump failed");
+          version = bumpRes.data.newVersion;
+          versionId = version._id.toString();
       }
 
       // 🔥 THÊM VALIDATION: Kiểm tra các trường bắt buộc
@@ -100,7 +106,8 @@ export class UsecaseService {
         details: {
           after: newUsecase,
           message: `${userId} created usecase ${newUsecase.name} in version ${version.version_number}`
-        }
+        },
+        performed_by_ai:true
       });
       await session.commitTransaction();
 
@@ -150,8 +157,16 @@ export class UsecaseService {
 
     try {
       // 🔍 1. Kiểm tra version tồn tại
-      const version = await Version.findById(versionId).session(session);
+      let version = await Version.findById(versionId).session(session);
       if (!version) throw new Error("Version not found");
+
+      // ✅ Nếu version không phải temporary → bump trước
+      if (version.version_temporary === false) {
+          const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
+          if (!bumpRes.data) throw new Error("Auto bump failed");
+          version = bumpRes.data.newVersion;
+          versionId = version._id.toString();
+      }
 
       // 🔍 2. Kiểm tra project & quyền truy cập
       const project = await Project.findById(version.project_id).session(session);
@@ -293,6 +308,14 @@ export class UsecaseService {
       // 🔍 Bước 1: Kiểm tra version tồn tại
       let version = await Version.findById(versionId).session(session);
       if (!version) throw new Error("Version not found");
+
+      // ✅ Nếu version không phải temporary → bump trước
+      if (version.version_temporary === false) {
+          const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
+          if (!bumpRes.data) throw new Error("Auto bump failed");
+          version = bumpRes.data.newVersion;
+          versionId = version._id.toString();
+      }
 
       // 🔍 Bước 2: Kiểm tra project & quyền truy cập
       const project = await Project.findById(version.project_id).session(session);
