@@ -7,7 +7,7 @@ export default function initActivityDiagramRoute(): Router {
   const controller = new ActivityDiagramController();
 
   router.post('/version/:versionId/requirements/:requirementId/generate',
-    // requireAuthorizedUser,
+    requireAuthorizedUser,
     controller.generateFromUsecase);
     // Requirement-based generation and helpers
   router.post('/version/:versionId/actors/:actor/generate', 

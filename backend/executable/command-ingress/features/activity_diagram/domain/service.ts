@@ -2,10 +2,8 @@ import ActivityDiagramModel from '../../../../../internal/model/activity_diagram
 import UmlModel from '../../../../../internal/model/uml';
 import { ActivityCoreService } from './ActivityCoreService';
 import { ActivityGeminiService } from './ActivityGeminiService';
-import UsecaseDiagramModel from '../../../../../internal/model/usecase_diagram';
 import VersionModel from '../../../../../internal/model/version';
 import { Types } from "mongoose";
-import { ActivityNodeType,ActivityNode,ActivityEdge,ActivityDiagramDTO} from './interfaces';
 import sharp from 'sharp';
 
 export class ActivityDiagramService {
@@ -47,8 +45,7 @@ export class ActivityDiagramService {
       nodes,
       edges,
       diagram_svg,
-      //linked_usecase,
-      //userId,
+      userId,
     } as any);
   }
 
@@ -84,8 +81,7 @@ export class ActivityDiagramService {
       nodes,
       edges,
       diagram_svg,
-      //linked_usecase,
-      //userId,
+      userId,
     } as any);
   }
 

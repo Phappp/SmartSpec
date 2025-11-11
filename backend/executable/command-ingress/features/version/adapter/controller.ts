@@ -165,6 +165,31 @@ export class VersionController extends BaseController {
     });
   };
 
+  public revertChangeController = async (req: HttpRequest, res: Response, next: NextFunction) => {
+    await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
+      const userId = req.getSubject();
+      const { versionId } = req.params;
+      const { changeId } = req.params;
+
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+        return;
+      }
+
+      if (!versionId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing versionId", null, 400), res);
+        return;
+      }
+
+      if (!changeId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing changeId", null, 400), res);
+        return;
+      }
+      const result = await this.service.revertChange(versionId, userId, changeId);
+      handleServiceResponse(result, res);
+    });
+  };
+
   public markEditingController = async (req: HttpRequest, res: Response,next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
       const userId = req.getSubject();

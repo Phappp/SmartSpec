@@ -1,5 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { ActivityDiagramService } from '../domain/service';
+import { handleServiceResponse } from "../../../services/httpHandlerResponse";
+import { ServiceResponse, ResponseStatus } from "../../../services/serviceResponse";
+import { HttpRequest } from '@/executable/command-ingress/types';
 
 export class ActivityDiagramController {
   private service: ActivityDiagramService;
@@ -8,8 +11,13 @@ export class ActivityDiagramController {
     this.service = new ActivityDiagramService();
   }
 
-  public generateFromUsecase = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public generateFromUsecase = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const userId = req.getSubject();
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+        return;
+      }
       const { versionId, requirementId } = req.params as { [k: string]: string };
       const { language} = req.query as { [k: string]: string };
       if (!versionId || !requirementId) {
@@ -17,15 +25,20 @@ export class ActivityDiagramController {
         return;
       }
       const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
-      const result = await this.service.generateFromUsecase(requirementId, lang, versionId);
+      const result = await this.service.generateFromUsecase(requirementId, lang, versionId,userId);
       res.status(201).json({ message: 'Tạo activity diagram từ usecase thành công!', data: result });
     } catch (err) {
       next(err);
     }
   }
 
-  public generateFromActor = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public generateFromActor = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const userId = req.getSubject();
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+        return;
+      }
       const { versionId,actor } = req.params as { [k: string]: string };
       const { language } = req.query as { [k: string]: string };
       if (!versionId || !actor) {
@@ -33,7 +46,7 @@ export class ActivityDiagramController {
         return;
       }
       const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
-      const result = await this.service.generateFromActor(versionId, actor, lang);
+      const result = await this.service.generateFromActor(versionId, actor, lang,userId);
       res.status(201).json({ message: 'Tạo activity diagram từ actor thành công!', data: result });
     } catch (err) {
       next(err);
@@ -41,7 +54,7 @@ export class ActivityDiagramController {
   }
 
   
-  public getListActivityDiagram = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public getListActivityDiagram = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const {versionId} = req.params;
       const result = await this.service.getListActivityDiagram(versionId);

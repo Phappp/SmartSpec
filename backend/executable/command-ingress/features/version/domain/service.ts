@@ -480,13 +480,19 @@ export class VersionService {
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     }
   }
-  public async revertChange(versionId: string, userId: string, change: any) {
+
+  public async revertChange(versionId: string, userId: string, changeId: string) {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
       const baseVersion = await Version.findById(versionId).session(session);
       if (!baseVersion) throw new Error("Base version not found");
+      const preview = await Preview.findOne({ base_version_id: versionId }).session(session);
+      if (!preview) throw new Error("Preview not found");
+
+      const change = preview.changes.find((c: any) => c.change_id === changeId);
+      if (!change) throw new Error(`Change with id ${changeId} not found`);
 
       const entityType = change.entity_type;
       const changeType = change.change_type;
@@ -740,7 +746,7 @@ export class VersionService {
       await session.commitTransaction();
 
       console.log(`✔ Successfully reverted change ${change._id || entityId}`);
-      return true;
+      return new ServiceResponse(ResponseStatus.Success,"New version created with cloned entities",null,201);
     } catch (error) {
       await session.abortTransaction();
       console.error(`❌ Failed to revert change:`, error);

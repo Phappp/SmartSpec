@@ -53,13 +53,20 @@ export default function initVersionRoute(controller: VersionController) {
     (req: Request, res: Response, next: NextFunction) =>
       controller.approve(req as any, res, next)
   );
-  router.patch("/versions/:versionId/editing",
+
+  router.post(
+    "/:versionId/changeId/:changeId/revert",
+    requireAuthorizedUser,
+    controller.revertChangeController
+  );
+
+  router.patch("/:versionId/editing",
     requireAuthorizedUser,
     (req: Request, res: Response, next: NextFunction) =>
       controller.markEditingController(req as any, res, next)
   );
 
-  router.patch("/versions/:versionId/locked", 
+  router.patch("/:versionId/locked", 
     requireAuthorizedUser,
     (req: Request, res: Response, next: NextFunction) =>
       controller.markLockedController(req as any, res, next)
