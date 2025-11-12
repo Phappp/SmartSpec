@@ -25,6 +25,11 @@ export class TestcaseController {
  */
     public generateTestCases = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { projectId, versionId } = req.params;
             const {
                 selectedRequirementIds,
@@ -60,6 +65,7 @@ export class TestcaseController {
             const testCases = await this.testcaseService.generateTestCases(
                 projectId,
                 versionId,
+                userId,
                 selectedRequirementIds,
                 language,
                 testType
@@ -130,6 +136,11 @@ export class TestcaseController {
      */
     public saveTestCases = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { projectId, versionId } = req.params;
             const { testCases } = req.body;
             const createdBy = req.getSubject ? req.getSubject() : undefined;
@@ -168,6 +179,9 @@ export class TestcaseController {
                 versionId,
                 testCases,
                 createdBy
+                userId,
+                requirementIds,
+                language
             );
 
             console.log('✅ Controller: Test cases saved successfully', savedTestCases.length);
@@ -579,6 +593,11 @@ export class TestcaseController {
      */
     public bulkExecuteTestCases = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
+            const userId = req.getSubject();
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
             const { projectId } = req.params;
             const { testCaseIds, executionData } = req.body;
             const executedBy = req.getSubject ? req.getSubject() : undefined;

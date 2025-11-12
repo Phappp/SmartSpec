@@ -86,6 +86,10 @@ import { TestcaseService } from './features/testcase/domain/service';
 import initVersionRoute from "./features/version/adapter/route";
 import { VersionController } from "./features/version/adapter/controller";
 import { VersionService } from "./features/version/domain/service";
+
+import initActivityDiagramRoute from "./features/activity_diagram/adapter/route";
+import { ActivityDiagramController } from "./features/activity_diagram/adapter/controller";
+import { ActivityDiagramService } from "./features/activity_diagram/domain/service";
 // import initOcrRoute from "./features/handle_image/adapter/route";
 // import { OcrController } from "./features/handle_image/adapter/controller";
 // import { OcrService } from "./features/handle_image/domain/service";
@@ -207,6 +211,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/usecaseManagement', initUsecaseRoute(usecaseController));
   app.use('/api/databases', initDatabaseRoute())
   app.use('/api/testcases', initTestcaseRoute());
+  app.use('/api/activity-diagrams', initActivityDiagramRoute());
   app.use(
     "/api/keys",
     initApiKeyRoute(new ApiKeyController(new ApiKeyServiceImpl()))

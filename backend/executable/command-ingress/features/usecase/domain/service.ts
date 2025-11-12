@@ -144,9 +144,15 @@ export class UsecaseService {
 
     try {
       // Kiểm tra version tồn tại
-      const version = await Version.findById(versionId).session(session);
-      if (!version) {
-        throw new Error("Version not found");
+      let version = await Version.findById(versionId).session(session);
+      if (!version) throw new Error("Version not found");
+
+      // ✅ Nếu version không phải temporary → bump trước
+      if (version.version_temporary === false) {
+          const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
+          if (!bumpRes.data) throw new Error("Auto bump failed");
+          version = bumpRes.data.newVersion;
+          versionId = version._id.toString();
       }
 
       // Kiểm tra project & quyền truy cập
@@ -196,7 +202,18 @@ export class UsecaseService {
 
       await version.save({ session });
 
-      // Log action
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "requirement",
+          entity_id: newUsecase.id,
+          change_type: "added",
+          before_snapshot: null,
+          after_snapshot: newUsecase
+        }
+      );
+
       await this.logService.createLog({
         project_id: version.project_id.toString(),
         user_id: userId,
@@ -209,7 +226,8 @@ export class UsecaseService {
         details: {
           after: newUsecase,
           message: `${userId} created usecase ${newUsecase.name} in version ${version.version_number}`
-        }
+        },
+        performed_by_ai:true
       });
 
       await session.commitTransaction();
@@ -255,13 +273,19 @@ export class UsecaseService {
     session.startTransaction();
 
     try {
-      // Kiểm tra version tồn tại
-      const version = await Version.findById(versionId).session(session);
-      if (!version) {
-        throw new Error("Version not found");
+      // 🔍 1. Kiểm tra version tồn tại
+      let version = await Version.findById(versionId).session(session);
+      if (!version) throw new Error("Version not found");
+
+      // ✅ Nếu version không phải temporary → bump trước
+      if (version.version_temporary === false) {
+          const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
+          if (!bumpRes.data) throw new Error("Auto bump failed");
+          version = bumpRes.data.newVersion;
+          versionId = version._id.toString();
       }
 
-      // Kiểm tra project & quyền truy cập
+      // 🔍 2. Kiểm tra project & quyền truy cập
       const project = await Project.findById(version.project_id).session(session);
       if (!project) {
         throw new Error("Project not found");
@@ -319,7 +343,18 @@ export class UsecaseService {
 
       await version.save({ session });
 
-      // Log action
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "requirement",
+          entity_id: updatedUsecase.id,
+          change_type: "updated",
+          before_snapshot: originalUsecase,
+          after_snapshot: updatedUsecase
+        }
+      );
+
       await this.logService.createLog({
         project_id: project._id.toString(),
         user_id: userId,
@@ -377,12 +412,20 @@ export class UsecaseService {
 
     try {
       // Kiểm tra version tồn tại
-      const version = await Version.findById(versionId).session(session);
+      let version = await Version.findById(versionId).session(session);
       if (!version) {
         throw new Error("Version not found");
       }
 
-      // Kiểm tra project & quyền truy cập
+      // ✅ Nếu version không phải temporary → bump trước
+      if (version.version_temporary === false) {
+          const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
+          if (!bumpRes.data) throw new Error("Auto bump failed");
+          version = bumpRes.data.newVersion;
+          versionId = version._id.toString();
+      }
+
+      // 🔍 Bước 2: Kiểm tra project & quyền truy cập
       const project = await Project.findById(version.project_id).session(session);
       if (!project) {
         throw new Error("Project not found");
@@ -420,7 +463,19 @@ export class UsecaseService {
 
       await version.save({ session });
 
-      // Log action
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "requirement",
+          entity_id: usecaseId,
+          change_type: "deleted",
+          before_snapshot: deletedUsecase,
+          after_snapshot: null
+        }
+      );
+
+
       await this.logService.createLog({
         project_id: project._id.toString(),
         user_id: userId,

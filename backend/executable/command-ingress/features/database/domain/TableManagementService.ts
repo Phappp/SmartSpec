@@ -2,20 +2,29 @@ import DatabaseModel from "../../../../../internal/model/database";
 import { Table, TablePositionUpdate } from "./interfaces";
 import { TableValidationService } from "./TableValidationService";
 import { KeyManagementService } from "./KeyManagementService";
+import { VersionService } from "../../version/domain/service";
+import { LogService } from "../../log/domain/service";
+import {PreviewChangeDto} from "../../version/adapter/preview.dto";
+import { ServiceResponse, ResponseStatus } from '../../../services/serviceResponse';
+import Version from "../../../../../internal/model/version";
+import User from "../../../../../internal/model/user";
 
 export class TableManagementService {
     private validationService: TableValidationService;
     private keyService: KeyManagementService;
-
+    private versionService: VersionService;
+    private logService: LogService;
     constructor() {
         this.validationService = new TableValidationService();
         this.keyService = new KeyManagementService();
+        this.versionService = new VersionService();
+        this.logService = new LogService();
     }
 
     /**
      * [C] Thêm một bảng mới với validation đầy đủ
      */
-    public async addTableToDatabase(databaseId: string, tableData: Table) {
+    public async addTableToDatabase(userId:string, databaseId: string, tableData: Table) {
         // Validate table structure (includes composite key validation)
         this.validationService.validateTableStructure(tableData);
 
@@ -42,18 +51,59 @@ export class TableManagementService {
                 );
             }
         }
+        // 1️⃣ Bump version nếu cần
+        let version = await Version.findById(database.version_id);
+        if (!version) throw new Error("Version not found");
 
-        return DatabaseModel.findByIdAndUpdate(
+        if (!version.version_temporary) {
+            const bumpRes = await this.versionService.bumpVersion(version._id.toString(), userId, "minor");
+            if (!bumpRes.data) throw new Error("Auto bump failed");
+            version = bumpRes.data.newVersion;
+        }
+
+        // 2️⃣ Ghi preview
+        const changePayload: PreviewChangeDto = {
+            entity_type: "table",
+            change_type: "added",
+            entity_id: databaseId,
+            before_snapshot: null,
+            after_snapshot: tableData
+        };
+        await this.versionService.createOrUpdatePreview(version._id.toString(), userId, changePayload);
+
+        // 3️⃣ Thêm table
+        const updatedDb = await DatabaseModel.findByIdAndUpdate(
             databaseId,
             { $push: { tables: tableData } },
             { new: true }
         );
+
+        // 4️⃣ Ghi log
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+
+        await this.logService.createLog({
+            project_id: database.project_id.toString(),
+            user_id: userId,
+            action: "create_table",
+            target_id: tableData.name,
+            target_type: "tables",
+            version_number: version.version_number,
+            affects_requirement: true,
+            level: "info",
+            details: {
+                after: tableData,
+                message: `${username} added table ${tableData.name}`
+            }
+        });
+
+    return updatedDb;
     }
 
     /**
      * [U] Cập nhật một bảng với validation đầy đủ
      */
-    public async updateTableInDatabase(databaseId: string, tableName: string, tableData: Table) {
+    public async updateTableInDatabase(userId:string, databaseId: string, tableName: string, tableData: Table) {
         // Guard: tránh payload nhầm route
         if ((tableName || '').toLowerCase() === 'positions') {
             console.warn('[updateTableInDatabase] Received reserved name "positions". Skip update.');
@@ -108,6 +158,25 @@ export class TableManagementService {
             existingTable,
             updatedTableData
         );
+        // 1️⃣ Bump version nếu cần
+        let version = await Version.findById(database.version_id);
+        if (!version) throw new Error("Version not found");
+
+        if (!version.version_temporary) {
+            const bumpRes = await this.versionService.bumpVersion(version._id.toString(), userId, "minor");
+            if (!bumpRes.data) throw new Error("Auto bump failed");
+            version = bumpRes.data.newVersion;
+        }
+
+        // 2️⃣ Ghi preview
+        const changePayload: PreviewChangeDto = {
+            entity_type: "table",
+            change_type: "updated",
+            entity_id: databaseId,
+            before_snapshot: existingTable,
+            after_snapshot: updatedTableData
+        };
+        await this.versionService.createOrUpdatePreview(version._id.toString(), userId, changePayload);
 
         // 8. Thực hiện update với data đã giữ position
         const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -125,6 +194,24 @@ export class TableManagementService {
             console.warn(`[updateTableInDatabase] Table not found by name="${tableName}". Skipping update.`);
             return await DatabaseModel.findById(databaseId);
         }
+        // 4️⃣ Ghi log
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+        await this.logService.createLog({
+            project_id: database.project_id.toString(),
+            user_id: userId,
+            action: "update_table",
+            target_id: databaseId,
+            target_type: "tables",
+            version_number: version.version_number,
+            affects_requirement: true,
+            level: "info",
+            details: {
+                before: existingTable,
+                after: updatedTableData,
+                message: `${username} updated table ${tableName}`
+            }
+        });
 
         return await DatabaseModel.findById(databaseId);
     }
@@ -132,15 +219,38 @@ export class TableManagementService {
     /**
      * [D] Xóa một bảng với validation constraints
      */
-    public async deleteTableFromDatabase(databaseId: string, tableName: string) {
+    public async deleteTableFromDatabase(userId: string, databaseId: string, tableName: string) {
         // Validate modification constraints
+        const database = await DatabaseModel.findById(databaseId);
+        if (!database) throw new Error("Database not found");
         await this.validationService.validateTableModification(databaseId, tableName, 'delete');
-
-        return DatabaseModel.findByIdAndUpdate(
+        const existingTable = database.tables.find(t => t.name === tableName);
+        if (!existingTable) throw new Error("Table not found");
+        // 1️⃣ Bump version nếu cần
+        let version = await Version.findById(database.version_id);
+        if (!version) throw new Error("Version not found");
+        const deleteTable = DatabaseModel.findByIdAndUpdate(
             databaseId,
             { $pull: { tables: { name: tableName } } },
             { new: true }
         );
+        if (!version.version_temporary) {
+            const bumpRes = await this.versionService.bumpVersion(version._id.toString(), userId, "minor");
+            if (!bumpRes.data) throw new Error("Auto bump failed");
+            version = bumpRes.data.newVersion;
+        }
+
+        // 2️⃣ Ghi preview
+        const changePayload: PreviewChangeDto = {
+            entity_type: "table",
+            change_type: "deleted",
+            entity_id: databaseId,
+            before_snapshot: existingTable,
+            after_snapshot: null
+        };
+        await this.versionService.createOrUpdatePreview(version._id.toString(), userId, changePayload);
+
+        return deleteTable;
     }
 
     /**

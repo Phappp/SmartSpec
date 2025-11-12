@@ -8,6 +8,7 @@ import { RequirementService } from "./RequirementService";
 import { UtilService } from "./UtilService";
 import { inputSocketService } from '../../input/domain/input.socket.service';
 import { VersionService } from "../../../features/version/domain/service";
+import { LogService } from "../../log/domain/service";
 
 export class OrchestratorService {
     private inputService = new InputService();
@@ -15,7 +16,7 @@ export class OrchestratorService {
     private requirementService = new RequirementService();
     private util = new UtilService();
     private versionService = new VersionService();
-
+    private logService = new LogService();
     async run(
         projectId: string,
         versionId: string,
@@ -23,6 +24,17 @@ export class OrchestratorService {
         language: string,
         userId: string // ✅ THÊM: userId để broadcast
     ) {
+        let version = await Version.findById(versionId);
+        if (!version) throw new Error("Version not found");
+
+        // ✅ Nếu version không phải temporary → bump trước
+        if (version.version_temporary === false) {
+            const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
+            if (!bumpRes.data) throw new Error("Auto bump failed");
+            version = bumpRes.data.newVersion;
+            versionId = version._id.toString();
+        }
+
         // Hàm để tạo độ trễ ngẫu nhiên
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
         const randomDelay = 2000;
@@ -50,9 +62,6 @@ export class OrchestratorService {
             "initializing",
             true
         );
-
-        const version = await Version.findById(versionId).lean();
-        if (!version) throw new Error("Version not found");
 
         // 🧠 AUTO SWITCH MODE
         if (opts.mode === "full") {
@@ -193,6 +202,42 @@ export class OrchestratorService {
             language
         );
 
+        try {
+            if (result) {
+                for (const req of result.newRequirements) {
+                    await this.versionService.createOrUpdatePreview(
+                        versionId,
+                        userId,
+                        {
+                        entity_type: "requirement",
+                        entity_id: req.id,
+                        change_type: "added",
+                        before_snapshot: null,
+                        after_snapshot: req,
+                        }
+                    );
+                }
+                await this.logService.createLog({
+                    project_id: version.project_id.toString(),
+                    user_id: userId,
+                    action: "generate_data",
+                    target_id: versionId,
+                    target_type: "requirement_model",
+                    version_number: version.version_number,
+                    affects_requirement: true,
+                    level: "info",
+                    details: {
+                        after: result.newRequirements,
+                        message: `${userId} generate usecase by AI in version ${version.version_number}`
+                    }
+                    
+                });
+                console.log(`✅ Preview logged for ${result.newRequirements.length} generated requirements.`);
+            }
+        } catch (previewErr: any) {
+            console.error("⚠️ Error logging preview:", previewErr);
+        }
+            
         // 6️⃣ Hoàn tất
         await Version.findByIdAndUpdate(versionId, {
             $set: { stage: "completed", progress: 100 }
@@ -206,12 +251,6 @@ export class OrchestratorService {
             100,
             "completed",
             false
-        );
-
-        const bumpResult = await this.versionService.bumpVersion(
-            versionId,
-            userId,
-            "minor"
         );
         return result;
     }

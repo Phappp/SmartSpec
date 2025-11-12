@@ -13,6 +13,7 @@ import User from '../../../../../internal/model/user'
 import { inputSocketService } from '../../input/domain/input.socket.service';
 import { io } from '../../../socket';
 import { VersionService } from "../../version/domain/service";
+import {PreviewChangeDto} from "../../version/adapter/preview.dto";
 
 export class InputHandleService {
   private logService: LogService;
@@ -32,11 +33,14 @@ export class InputHandleService {
     files: UploadedFile[] | undefined,
     rawText: string | undefined
   ): Promise<ServiceResponse<any>> {
-    const version = await Version.findById(versionId);
+    let version = await Version.findById(versionId);
     if (!version) {
       return new ServiceResponse(ResponseStatus.Failed, 'Version not found', null, 404);
     }
-
+    if(version.version_temporary == false){
+      version = (await this.versionService.bumpVersion(versionId,userId,"minor")).data.newVersion;
+      versionId = version._id.toString();
+    }
     const project = await Project.findOne({
       _id: version.project_id,
       'members': {
@@ -57,7 +61,7 @@ export class InputHandleService {
 
     const projectId = version.project_id.toString();
     
-    const { newFilesCount, newTextProvided } = await this.inputService.handleInputs(
+    const { newFilesCount, newTextProvided, newInputs} = await this.inputService.handleInputs(
       files,
       rawText,
       projectId,
@@ -120,6 +124,21 @@ export class InputHandleService {
 
       // Chỉ emit summary nếu có inputs mới
       if (newFilesCount > 0 || newTextProvided) {
+        for (const input of newInputs) {
+          const changePayload : PreviewChangeDto  = {
+            entity_type: "input",
+            change_type: "added",
+            entity_id: input._id.toString(),
+            before_snapshot: null,
+            after_snapshot: input,
+          };
+
+          const previewRes = await this.versionService.createOrUpdatePreview(
+            versionId,
+            userId,
+            changePayload
+          );
+        }
         const summaryEvent = {
           type: 'INPUTS_ADDED_SUMMARY',
           projectId,
@@ -172,12 +191,31 @@ export class InputHandleService {
         throw new Error("Input does not belong to the specified version");
       }
 
-      const version = await Version.findById(versionId).session(session);
+      let version = await Version.findById(versionId).session(session);
       if (!version) {
         await session.abortTransaction();
-        return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+        return new ServiceResponse(ResponseStatus.Failed, 'Version not found', null, 404);
       }
-      
+      if (version.version_temporary === false) {
+        const bumpRes = await this.versionService.bumpVersion(
+          versionId,
+          userId,
+          "minor"
+        );
+
+        if (!bumpRes.data) throw new Error("Auto bump failed");
+
+        version = bumpRes.data.newVersion;
+        versionId = version._id.toString();
+
+        const inputMap = bumpRes.data.idMaps.inputMap;
+
+        // ✅ Chuyển inputId cũ sang inputId mới
+        if (!inputMap.has(inputId)) {
+          throw new Error("Input not found in new version after bump");
+        }
+        inputId = inputMap.get(inputId)!.toString();
+      }
       const project = await Project.findOne({
         _id: version.project_id,
         'members': {
@@ -195,11 +233,29 @@ export class InputHandleService {
       }
 
       const beforeDelete = await Input.findById(inputId).lean();
-      await Input.findByIdAndDelete(inputId).session(session);
+      // 🧩 Ghi preview change cho xóa input
+      if (beforeDelete) {
+        const changePayload : PreviewChangeDto = {
+          entity_type: "input",
+          change_type: "deleted",
+          entity_id: beforeDelete._id.toString(),
+          before_snapshot: beforeDelete,
+          after_snapshot: null,
+        };
+
+        const previewRes = await this.versionService.createOrUpdatePreview(
+          versionId,
+          userId,
+          changePayload
+        );
+        console.log(`🗑️ Preview updated for deleted input ${inputId}:`, previewRes.data);
+      }
+
+      await Input.findByIdAndDelete(inputId);
 
       await Version.findByIdAndUpdate(
         versionId,
-        { $pull: { inputs: inputId } },
+        { $pull: { inputs: inputId }},
         { session }
       );
 
@@ -261,10 +317,11 @@ export class InputHandleService {
 
     } catch (error: any) {
       await session.abortTransaction();
+      const version = await Version.findById(versionId).session(session);
       const user = await User.findById(userId).lean();
       const username = user?.name || "Unknown User";
       await this.logService.createLog({
-        project_id: "unknown",
+        project_id: version.project_id.toString(),
         user_id: userId,
         action: "delete_input",
         target_id: versionId,

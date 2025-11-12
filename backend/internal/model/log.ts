@@ -58,7 +58,8 @@ const projectLogSchema = new Schema({
         "system", 
         "requirement_model", // thuộc version
         "member", // thuộc project
-        "databases","testcases", "activity_diagrams", "usecase_diagrams", "sequence_diagrams" // thuộc output
+        "databases","testcases", "activity_diagrams", "usecase_diagrams", "sequence_diagrams", // thuộc output\
+        "tables","cloumn","relationship"
         ],
         required: true
     },
@@ -71,9 +72,9 @@ const projectLogSchema = new Schema({
         default: false
     },
     level: {
-    type: String,
-    enum:["info","warning","error"],
-    required:true
+        type: String,
+        enum:["info","warning","error"],
+        required:true
     },
     performed_by_ai: { type: Boolean, default: false },
     details: detailsSchema,
