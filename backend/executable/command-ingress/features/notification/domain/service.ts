@@ -13,36 +13,45 @@ import user from "../../../../../internal/model/user";
 
 export class NotificationServiceImpl implements NotificationService {
   async createNotification(
-    recipient_id: string,
+    recipient_id: string | string[],
     sender_id: string,
     type: string,
     title: string,
     message: string,
     link: string
   ): Promise<any> {
-    const recipient = User.findOne({ _id: recipient_id });
-    if (!recipient) {
-      throw new Error("Recipient not found");
-    }
-    const notification = new Notification({
-      recipient_id: recipient_id,
-      sender_id: sender_id,
-      type: type,
-      title: title,
-      message: message,
-      link: link,
-    });
-    await notification.save();
+    const recipients = Array.isArray(recipient_id)
+      ? recipient_id
+      : [recipient_id];
 
-    return {
-      recipient_id: recipient_id,
-      sender_id: sender_id,
-      type: type,
-      title: title,
-      message: message,
-      link: link,
-      created_at: new Date().toISOString(),
-    };
+    const foundRecipients = await User.find({ _id: { $in: recipients } });
+    if (foundRecipients.length === 0) {
+      throw new Error("Recipients not found");
+    }
+    // ✅ Tạo danh sách notification
+    const notifications = recipients.map((rid) => ({
+      recipient_id: rid,
+      sender_id,
+      type,
+      title,
+      message,
+      link,
+      created_at: new Date(),
+    }));
+
+    // ✅ Lưu hàng loạt
+    await Notification.insertMany(notifications);
+    // return {
+    //   recipient_id: recipient_id,
+    //   sender_id: sender_id,
+    //   type: type,
+    //   title: title,
+    //   message: message,
+    //   link: link,
+    //   created_at: new Date().toISOString(),
+    // };
+
+    return notifications;
   }
 
   async getNotificationById(
@@ -147,7 +156,7 @@ export class NotificationServiceImpl implements NotificationService {
     notification.is_read = is_read;
 
     await notification.save();
-    
+
     return {
       id: notification.id,
       recipient_id: notification.recipient_id,

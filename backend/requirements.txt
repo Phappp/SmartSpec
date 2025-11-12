@@ -16,3 +16,14 @@ opencv-python
 # Hướng dẫn sử dụng
 # cd backend
 # pip install -r requirements.txt
+
+# cai moi truong ao bang lenh:
+# cd vao thu muc backend
+# python3 -m venv venv
+# source venv/bin/activate  # MacOS/Linux
+# venv\Scripts\activate    # Windows
+# pip install -r requirements.txt
+
+#sau khi cai moi truong ao thanh cong, lan sau chi can chay cac lenh sau
+# cd backend
+# source venv/bin/activate  # hoặc venv\Scripts\activate

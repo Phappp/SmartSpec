@@ -76,8 +76,17 @@ Mỗi use case PHẢI có đầy đủ các trường sau:
 ✓ Related usecases chỉ chứa ID (ví dụ: ["UC1", "UC3"])
 
 `,
-        relatedUseCases: (simplified: any, incremental?: boolean) => `Đây là danh sách use case phần mềm đã có:\n${JSON.stringify(simplified, null, 2)}\n\nNhiệm vụ của bạn:\n${incremental ? `- KHÔNG được xóa hoặc ghi đè related_usecases cũ.\n- Chỉ bổ sung liên kết giữa use case mới và use case cũ.` : `- Phân tích và sinh lại toàn bộ related_usecases cho tất cả use case.`}\n\nYÊU CẦU:\n- related_usecases[] chỉ tham chiếu tới use case trong danh sách trên.\n- Format: CHỈ chứa ID của use case (ví dụ: "UC1").\n- Nếu không có liên quan, để mảng rỗng [].\n- Trả về toàn bộ danh sách use case với related_usecases được cập nhật.`,
-        conflictCheck: (textA: string, textB: string) => `
+    relatedUseCases: (simplified: any, incremental?: boolean) =>
+      `Đây là danh sách use case phần mềm đã có:\n${JSON.stringify(
+        simplified,
+        null,
+        2
+      )}\n\nNhiệm vụ của bạn:\n${
+        incremental
+          ? `- KHÔNG được xóa hoặc ghi đè related_usecases cũ.\n- Chỉ bổ sung liên kết giữa use case mới và use case cũ.`
+          : `- Phân tích và sinh lại toàn bộ related_usecases cho tất cả use case.`
+      }\n\nYÊU CẦU:\n- related_usecases[] chỉ tham chiếu tới use case trong danh sách trên.\n- Format: CHỈ chứa ID của use case (ví dụ: "UC1").\n- Nếu không có liên quan, để mảng rỗng [].\n- Trả về toàn bộ danh sách use case với related_usecases được cập nhật.`,
+    conflictCheck: (textA: string, textB: string) => `
 Bạn là một công cụ kiểm tra trùng lặp use case, cần đánh giá thật nghiêm ngặt.
 
 Nhiệm vụ: Xác định xem hai mô tả use case sau đây có thực sự diễn tả CÙNG một chức năng hay không.
@@ -216,7 +225,7 @@ Respond ONLY with JSON, no explanation:
 { "conflict": true }   // same meaning
 { "conflict": false }  // different meaning
 `,
-        groupConflicts: (useCasesJson: string) => `
+    groupConflicts: (useCasesJson: string) => `
 You are an extremely accurate software requirements analyst.
 Your task is to read the following list of use cases and GROUP the ones that are functional DUPLICATES.
 
@@ -245,111 +254,278 @@ Example output:
 };
 
 export class GeminiService {
-    private apiKeyService = new ApiKeyService();
-    // config
-    private readonly BATCH_SIZE = 20;
-    private readonly MAX_BATCHES = 100;
-    private readonly MAX_ATTEMPTS_PER_OFFSET = 3;
+  private apiKeyService = new ApiKeyService();
+  // config
+  private readonly BATCH_SIZE = 20;
+  private readonly MAX_BATCHES = 100;
+  private readonly MAX_ATTEMPTS_PER_OFFSET = 3;
 
-    private cleanJsonString(text: string): string {
-        const pattern = /```(?:json)?\s*([\s\S]*?)\s*```/g;
-        const match = pattern.exec(text.trim());
-        // Nếu tìm thấy khối mã, trả về nội dung bên trong, nếu không, trả về chuỗi gốc
-        return match ? match[1].trim() : text.trim();
+  private repairTruncatedJson(text: string): string {
+    let result = text.trim();
+    const openBraces = (result.match(/\{/g) || []).length;
+    const closeBraces = (result.match(/\}/g) || []).length;
+    const openBrackets = (result.match(/\[/g) || []).length;
+    const closeBrackets = (result.match(/\]/g) || []).length;
+
+    while (openBraces > closeBraces) {
+      result += "}";
+    }
+    while (openBrackets > closeBrackets) {
+      result += "]";
     }
 
-    private tryParseWhole(text: string): any[] | null {
+    try {
+      JSON.parse(result);
+      return result;
+    } catch {
+      return "[]";
+    }
+  }
+
+  private cleanJsonString(text: string): string {
+    if (!text) return "";
+    let cleanedText = text.trim();
+
+    // Bước 1: Tìm khối JSON được bọc trong markdown ```json ... ```
+    const markdownMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+
+    if (markdownMatch && markdownMatch[1]) {
+      // Đã tìm thấy khối JSON trong markdown
+      cleanedText = markdownMatch[1];
+    } else {
+      // Không có markdown, thử tìm JSON object đầu tiên
+      const jsonStart = cleanedText.indexOf("{");
+      const jsonEnd = cleanedText.lastIndexOf("}");
+
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        cleanedText = cleanedText.substring(jsonStart, jsonEnd + 1);
+      } else {
+        // Thử tìm array đầu tiên
+        const arrayStart = cleanedText.indexOf("[");
+        const arrayEnd = cleanedText.lastIndexOf("]");
+        if (arrayStart !== -1 && arrayEnd !== -1 && arrayEnd > arrayStart) {
+          cleanedText = cleanedText.substring(arrayStart, arrayEnd + 1);
+        }
+      }
+    }
+
+    // Bước 2: Thử parse để kiểm tra
+    try {
+      JSON.parse(cleanedText);
+      return cleanedText; // JSON hợp lệ
+    } catch (e) {
+      // Lỗi: Có thể JSON bị cắt hoặc lỗi
+      console.warn(
+        "⚠️ cleanJsonString: Could not parse cleaned JSON, falling back to repair."
+      );
+      // Gửi nó đến hàm repair để thử sửa (ví dụ: đóng ngoặc bị thiếu)
+      return this.repairTruncatedJson(cleanedText);
+    }
+  }
+
+  private tryParseWhole(text: string): any[] | null {
+    try {
+      const v = JSON.parse(text);
+      if (Array.isArray(v)) return v;
+      return [v];
+    } catch {
+      return null;
+    }
+  }
+
+  private extractBalancedArray(text: string): {
+    jsonText?: string;
+    complete: boolean;
+  } {
+    const start = text.indexOf("[");
+    if (start === -1) return { complete: false };
+
+    let depth = 0;
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === "[") depth++;
+      else if (ch === "]") {
+        depth--;
+        if (depth === 0) {
+          const slice = text.slice(start, i + 1);
+          return { jsonText: slice, complete: true };
+        }
+      }
+    }
+    const partial = text.slice(start);
+    return { jsonText: partial, complete: false };
+  }
+
+  private tryParseNdjson(text: string): any[] | null {
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const out: any[] = [];
+    let success = false;
+    for (const line of lines) {
+      try {
+        const v = JSON.parse(line);
+        out.push(v);
+        success = true;
+      } catch {
+        // skip non-json lines
+      }
+    }
+    return success ? out : null;
+  }
+
+  private safeJsonParseRobust(txt: string): {
+    items: any[];
+    incomplete: boolean;
+  } {
+    if (!txt || txt.trim().length === 0) {
+      return { items: [], incomplete: false };
+    }
+
+    // Chiến lược 1: Thử phân tích toàn bộ chuỗi dưới dạng JSON array/object
+    const whole = this.tryParseWhole(txt);
+    if (whole) {
+      const filtered = this.filterValidUseCases(whole);
+      // Chỉ trả về nếu lọc ra có kết quả, hoặc nếu chuỗi gốc là một mảng rỗng '[]'
+      if (filtered.length > 0 || txt.trim() === "[]") {
+        return { items: filtered, incomplete: false };
+      }
+    }
+
+    // Chiến lược 2: Trích xuất một mảng JSON cân bằng (thường nằm trong markdown)
+    const extracted = this.extractBalancedArray(txt);
+    if (extracted.jsonText) {
+      try {
+        const parsed = JSON.parse(extracted.jsonText);
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        const filtered = this.filterValidUseCases(items);
+        return { items: filtered, incomplete: !extracted.complete };
+      } catch {
+        // Nếu thất bại và chuỗi không hoàn chỉnh, thử thêm ký tự đóng mảng ']'
+        if (!extracted.complete) {
+          try {
+            const attempt = JSON.parse(extracted.jsonText + "]");
+            const items = Array.isArray(attempt) ? attempt : [attempt];
+            const filtered = this.filterValidUseCases(items);
+            return { items: filtered, incomplete: false };
+          } catch {
+            // Thất bại, tiếp tục các chiến lược khác
+          }
+        }
+      }
+    }
+
+    // Chiến lược 3: Thử phân tích dưới dạng JSON mỗi dòng (ndjson)
+    const nd = this.tryParseNdjson(txt);
+    if (nd) {
+      const filtered = this.filterValidUseCases(nd);
+      if (filtered.length > 0) {
+        return { items: filtered, incomplete: false };
+      }
+    }
+
+    // Chiến lược 4 (Fallback): Dùng regex để tìm tất cả các object JSON có thể có
+    const objMatches = txt.match(/\{[\s\S]*?\}/g);
+    if (objMatches && objMatches.length > 0) {
+      const parsedObjs: any[] = [];
+      for (const m of objMatches) {
         try {
-            const v = JSON.parse(text);
-            if (Array.isArray(v)) return v;
-            return [v];
+          parsedObjs.push(JSON.parse(m));
         } catch {
-            return null;
+          // Bỏ qua các object không thể parse
         }
+      }
+      if (parsedObjs.length > 0) {
+        const filtered = this.filterValidUseCases(parsedObjs);
+        if (filtered.length > 0) {
+          return { items: filtered, incomplete: true };
+        }
+      }
     }
 
-    private extractBalancedArray(text: string): { jsonText?: string; complete: boolean } {
-        const start = text.indexOf("[");
-        if (start === -1) return { complete: false };
+    // Nếu tất cả các chiến lược đều thất bại, trả về mảng rỗng
+    return { items: [], incomplete: true };
+  }
+  private filterValidUseCases(items: any[]): any[] {
+    if (!Array.isArray(items)) return [];
+    return items.filter(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        ((typeof item.name === "string" && item.name.trim() !== "") ||
+          (typeof item.goal === "string" && item.goal.trim() !== ""))
+    );
+  }
 
-        let depth = 0;
-        for (let i = start; i < text.length; i++) {
-            const ch = text[i];
-            if (ch === "[") depth++;
-            else if (ch === "]") {
-                depth--;
-                if (depth === 0) {
-                    const slice = text.slice(start, i + 1);
-                    return { jsonText: slice, complete: true };
-                }
-            }
+  private safeJsonParse(txt: string): any[] {
+    const result = this.safeJsonParseRobust(txt);
+    if (!Array.isArray(result.items)) return [];
+
+    return result.items
+      .map((it: any) => {
+        if (typeof it === "string") {
+          return { name: it };
         }
-        const partial = text.slice(start);
-        return { jsonText: partial, complete: false };
+        return it;
+      })
+      .filter(Boolean);
+  }
+
+  private buildPrompt(
+    cleanText: string,
+    language: string,
+    offset = 0,
+    batchSize = 20
+  ): string {
+    const lang = language === "en-US" ? "en-US" : "vi-VN";
+    const schemaDescription = prompts[lang].schemaDescription(
+      batchSize,
+      offset
+    );
+    return `${schemaDescription}\n\nVăn bản nguồn (Source text):\n${cleanText}`;
+  }
+
+  async addRelatedUseCases(
+    useCases: any[],
+    options: { incremental?: boolean } | undefined,
+    language: string
+  ): Promise<any[]> {
+    if (!useCases || useCases.length <= 1) {
+      console.log("⏩ Skipping addRelatedUseCases: Not enough use cases.");
+      return useCases;
     }
 
-    private tryParseNdjson(text: string): any[] | null {
-        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        const out: any[] = [];
-        let success = false;
-        for (const line of lines) {
-            try {
-                const v = JSON.parse(line);
-                out.push(v);
-                success = true;
-            } catch {
-                // skip non-json lines
-            }
-        }
-        return success ? out : null;
-    }
+    const simplified = useCases.map((u) => ({
+      id: u.id,
+      name: u.name,
+      goal: u.goal,
+    }));
+    const lang = language === "en-US" ? "en-US" : "vi-VN";
+    const basePrompt = prompts[lang].relatedUseCases(
+      simplified,
+      options?.incremental
+    );
 
-    private safeJsonParseRobust(txt: string): { items: any[]; incomplete: boolean } {
-        if (!txt || txt.trim().length === 0) {
-            return { items: [], incomplete: false };
-        }
+    const keys = await this.apiKeyService.getAllActiveKeys("gemini");
+    if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
 
-        // Chiến lược 1: Thử phân tích toàn bộ chuỗi dưới dạng JSON array/object
-        const whole = this.tryParseWhole(txt);
-        if (whole) {
-            const filtered = this.filterValidUseCases(whole);
-            // Chỉ trả về nếu lọc ra có kết quả, hoặc nếu chuỗi gốc là một mảng rỗng '[]'
-            if (filtered.length > 0 || txt.trim() === '[]') {
-                return { items: filtered, incomplete: false };
-            }
-        }
+    for (const k of keys) {
+      try {
+        const { GoogleGenerativeAI } = await import("@google/generative-ai");
+        const client = new GoogleGenerativeAI(k.key_value);
+        const model = client.getGenerativeModel({
+          model: "gemini-2.0-flash-001",
+        });
 
-        // Chiến lược 2: Trích xuất một mảng JSON cân bằng (thường nằm trong markdown)
-        const extracted = this.extractBalancedArray(txt);
-        if (extracted.jsonText) {
-            try {
-                const parsed = JSON.parse(extracted.jsonText);
-                const items = Array.isArray(parsed) ? parsed : [parsed];
-                const filtered = this.filterValidUseCases(items);
-                return { items: filtered, incomplete: !extracted.complete };
-            } catch {
-                // Nếu thất bại và chuỗi không hoàn chỉnh, thử thêm ký tự đóng mảng ']'
-                if (!extracted.complete) {
-                    try {
-                        const attempt = JSON.parse(extracted.jsonText + "]");
-                        const items = Array.isArray(attempt) ? attempt : [attempt];
-                        const filtered = this.filterValidUseCases(items);
-                        return { items: filtered, incomplete: false };
-                    } catch {
-                        // Thất bại, tiếp tục các chiến lược khác
-                    }
-                }
-            }
-        }
+        const resp: any = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: basePrompt }] }],
+        });
 
-        // Chiến lược 3: Thử phân tích dưới dạng JSON mỗi dòng (ndjson)
-        const nd = this.tryParseNdjson(txt);
-        if (nd) {
-            const filtered = this.filterValidUseCases(nd);
-            if (filtered.length > 0) {
-                return { items: filtered, incomplete: false };
-            }
-        }
+        let text: string = resp?.response?.text?.() || "[]";
+        text = this.cleanJsonString(text);
+        const parsed = this.safeJsonParse(text);
 
         // Chiến lược 4 (Fallback): Dùng regex để tìm tất cả các object JSON có thể có
         const objMatches = txt.match(/\{[\s\S]*?\}/g);
@@ -470,46 +646,74 @@ export class GeminiService {
             }
         }
         return useCases;
+      } catch (err: any) {
+        console.error("❌ addRelatedUseCases error:", err);
+        const retryInfo = err?.errorDetails?.find((d: any) =>
+          d["@type"]?.includes("RetryInfo")
+        );
+        if (retryInfo?.retryDelay) {
+          const seconds = parseInt(retryInfo.retryDelay);
+          if (!isNaN(seconds) && seconds > 0) {
+            console.log(`⏳ Waiting ${seconds}s before trying next key...`);
+            await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+          }
+        }
+        continue;
+      }
     }
+    return useCases;
+  }
 
     async analyzeRequirements(cleanText: string, language: string): Promise<any[]> {
         console.log(` Analyzing text with Gemini (lang: ${language}). Text length: ${cleanText?.length ?? 0}`);
 
-        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-        if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
+    const keys = await this.apiKeyService.getAllActiveKeys("gemini");
+    if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
 
-        let allResults: any[] = [];
-        let offset = 0;
-        let batchCount = 0;
-        let lastError: any = null;
+    let allResults: any[] = [];
+    let offset = 0;
+    let batchCount = 0;
+    let lastError: any = null;
 
-        while (batchCount < this.MAX_BATCHES) {
-            batchCount++;
-            let gotBatch = false;
-            let attemptsForThisOffset = 0;
+    while (batchCount < this.MAX_BATCHES) {
+      batchCount++;
+      let gotBatch = false;
+      let attemptsForThisOffset = 0;
 
-            for (const k of keys) {
-                if (attemptsForThisOffset >= this.MAX_ATTEMPTS_PER_OFFSET) break;
-                attemptsForThisOffset++;
+      for (const k of keys) {
+        if (attemptsForThisOffset >= this.MAX_ATTEMPTS_PER_OFFSET) break;
+        attemptsForThisOffset++;
 
-                const key = k.key_value;
-                try {
-                    console.log(`🔑 Trying Gemini key: ${key.slice(0, 12)}... (offset=${offset})`);
-                    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-                    const client = new GoogleGenerativeAI(key);
-                    const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
+        const key = k.key_value;
+        try {
+          console.log(
+            `🔑 Trying Gemini key: ${key.slice(0, 12)}... (offset=${offset})`
+          );
+          const { GoogleGenerativeAI } = await import("@google/generative-ai");
+          const client = new GoogleGenerativeAI(key);
+          const model = client.getGenerativeModel({
+            model: "gemini-2.0-flash-001",
+          });
 
                     const prompt = this.buildPrompt(cleanText, language, offset, this.BATCH_SIZE);
 
-                    const resp: any = await model.generateContent({
-                        contents: [{ role: "user", parts: [{ text: prompt }] }],
-                    });
+          let text: string = resp?.response?.text?.() || "";
+          text = this.cleanJsonString(text);
+          console.log(`🤖 Gemini response length: ${text.length}`);
 
-                    let text: string = resp?.response?.text?.() || "";
-                    text = this.cleanJsonString(text);
-                    console.log(`🤖 Gemini response length: ${text.length}`);
+          const parsed = this.safeJsonParseRobust(text);
 
-                    const parsed = this.safeJsonParseRobust(text);
+          if (parsed.items.length > 0) {
+            const normalized = parsed.items.map((it: any) => {
+              if (typeof it === "string") return { name: it };
+              return it;
+            });
+            allResults = allResults.concat(normalized);
+            console.log(
+              `✅ Parsed ${normalized.length} items (incomplete=${parsed.incomplete}). total=${allResults.length}`
+            );
+            offset += normalized.length;
+            gotBatch = true;
 
                     if (parsed.items.length > 0) {
                         const normalized = parsed.items.map((it: any) => {
@@ -562,21 +766,24 @@ export class GeminiService {
                 console.warn("⚠️ Could not fetch a valid batch for current offset. Stopping further attempts.");
                 break;
             }
-        } // end while
-
-        if (allResults.length > 0) return allResults;
-        throw lastError || new Error("All Gemini API keys failed or no parsable output");
-    }
-
-    async checkConflictWithGemini(textA: string, textB: string, language: string): Promise<boolean> {
-        const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
-        const prompt = prompts[lang].conflictCheck(textA, textB);
-
-        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-        if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
-
-        let lastError: any;
-        for (const k of keys) {
+          } else {
+            console.warn(
+              `⚠️ No parsable items from key ${key.slice(
+                0,
+                12
+              )}. Response preview: ${text.slice(0, 200)}`
+            );
+            if (text.trim() === "[]") {
+              return allResults;
+            }
+            lastError = new Error("No parsable items");
+            continue;
+          }
+        } catch (err: any) {
+          lastError = err;
+          const msg = (err?.message || "").toLowerCase();
+          console.error(`❌ Gemini key ${k._id} failed:`, err?.message || err);
+          if (msg.includes("invalid") || msg.includes("unauthorized")) {
             try {
                 const { GoogleGenerativeAI } = await import("@google/generative-ai");
                 const client = new GoogleGenerativeAI(k.key_value);
@@ -607,8 +814,75 @@ export class GeminiService {
                 console.error(" Gemini checkConflictWithGemini error:", err);
                 continue;
             }
+          }
+          continue;
         }
-        throw lastError || new Error("All Gemini API keys failed for conflict check");
+      } // end for keys
+
+      if (!gotBatch) {
+        console.warn(
+          "⚠️ Could not fetch a valid batch for current offset. Stopping further attempts."
+        );
+        break;
+      }
+    } // end while
+
+    if (allResults.length > 0) return allResults;
+    throw (
+      lastError || new Error("All Gemini API keys failed or no parsable output")
+    );
+  }
+
+  async checkConflictWithGemini(
+    textA: string,
+    textB: string,
+    language: string
+  ): Promise<boolean> {
+    const lang = language === "en-US" ? "en-US" : "vi-VN";
+    const prompt = prompts[lang].conflictCheck(textA, textB);
+
+    const keys = await this.apiKeyService.getAllActiveKeys("gemini");
+    if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
+
+    let lastError: any;
+    for (const k of keys) {
+      try {
+        const { GoogleGenerativeAI } = await import("@google/generative-ai");
+        const client = new GoogleGenerativeAI(k.key_value);
+        const model = client.getGenerativeModel({
+          model: "gemini-2.0-flash-001",
+        });
+
+        const resp: any = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+        });
+
+        let text: string = resp?.response?.text?.() || "{}";
+        text = this.cleanJsonString(text);
+
+        // 🔍 Debug log
+        console.log("🔎 Gemini conflict check raw response:", text);
+
+        const parsed = JSON.parse(text.trim());
+
+        if (typeof parsed.conflict === "boolean") {
+          console.log(
+            `✅ Gemini conflict decision: ${
+              parsed.conflict ? "CONFLICT" : "NO CONFLICT"
+            } | A="${textA}" | B="${textB}"`
+          );
+          return parsed.conflict;
+        } else {
+          console.warn(
+            "⚠️ Gemini did not return a valid { conflict: boolean } object:",
+            text
+          );
+        }
+      } catch (err) {
+        lastError = err;
+        console.error("❌ Gemini checkConflictWithGemini error:", err);
+        continue;
+      }
     }
 
     // --- HÀM MỚI: Gọi Gemini để tìm các nhóm ID xung đột ---
@@ -658,4 +932,58 @@ export class GeminiService {
         }
         throw lastError || new Error("All Gemini API keys failed for conflict grouping");
     }
+
+    const simplifiedUseCases = useCases.map((uc) => ({
+      id: uc.id,
+      name: uc.name,
+      goal: uc.goal,
+    }));
+
+    const lang = language === "en-US" ? "en-US" : "vi-VN";
+    const prompt = prompts[lang].groupConflicts(
+      JSON.stringify(simplifiedUseCases, null, 2)
+    );
+
+    const keys = await this.apiKeyService.getAllActiveKeys("gemini");
+    if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
+
+    let lastError: any;
+    for (const k of keys) {
+      try {
+        const { GoogleGenerativeAI } = await import("@google/generative-ai");
+        const client = new GoogleGenerativeAI(k.key_value);
+        const model = client.getGenerativeModel({
+          model: "gemini-2.0-flash-001",
+        });
+
+        const resp: any = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+        });
+
+        let text: string = resp?.response?.text?.() || "[]";
+        text = this.cleanJsonString(text);
+        const parsed = JSON.parse(text.trim());
+
+        if (
+          Array.isArray(parsed) &&
+          (parsed.length === 0 || Array.isArray(parsed[0]))
+        ) {
+          console.log(`✅ Gemini found ${parsed.length} conflict groups.`);
+          return parsed;
+        } else {
+          console.warn(
+            "⚠️ Gemini did not return a valid array of arrays:",
+            text
+          );
+        }
+      } catch (err) {
+        lastError = err;
+        console.error("❌ Gemini findConflictGroups error:", err);
+        continue;
+      }
+    }
+    throw (
+      lastError || new Error("All Gemini API keys failed for conflict grouping")
+    );
+  }
 }

@@ -6,7 +6,7 @@ const socket = io("http://localhost:8000", {
 });
 
 // giả lập userId bạn muốn test
-const userId = "68ee63c0e8f7c01bfb234d90"; // thay bằng ObjectId thực tế
+const userId = "6905d11b7ac62dd2f7140588"; // thay bằng ObjectId thực tế
 
 socket.on("connect", () => {
   console.log("Connected to socket server!");

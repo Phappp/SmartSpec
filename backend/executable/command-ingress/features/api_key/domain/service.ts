@@ -9,7 +9,6 @@ import mailService from "../../../services/sendMail.service";
 
 export class ApiKeyServiceImpl implements ApiKeyService {
   async searchAPIKeys(content: string): Promise<APIKeysResponse[]> {
-    console.log("Searching for content:", content); // Debug log
     const regex = new RegExp(content, "i");
     const keys = await Key.find({
       $or: [
@@ -26,6 +25,7 @@ export class ApiKeyServiceImpl implements ApiKeyService {
     return keys.map((key) => ({
       id: key.id,
       key_value: key.key_value,
+      model_name: key.model_name,
       provider: key.provider,
       is_active: key.is_active,
       created_by: key.created_by?.toString(),
@@ -46,6 +46,7 @@ export class ApiKeyServiceImpl implements ApiKeyService {
   async createAPIKey(
     key_value: string,
     provider: string,
+    model_name: string,
     is_active: boolean,
     created_by: string
   ): Promise<APIKeysResponse> {
@@ -65,6 +66,7 @@ export class ApiKeyServiceImpl implements ApiKeyService {
     const newKey = new Key({
       key_value,
       provider,
+      model_name,
       is_active,
       created_by,
     });
@@ -72,6 +74,7 @@ export class ApiKeyServiceImpl implements ApiKeyService {
     return {
       id: newKey.id,
       key_value: newKey.key_value,
+      model_name: newKey.model_name,
       provider: newKey.provider,
       is_active: newKey.is_active,
       created_by: newKey.created_by?.toString(),
@@ -86,6 +89,7 @@ export class ApiKeyServiceImpl implements ApiKeyService {
       id: key.id,
       key_value: key.key_value,
       provider: key.provider,
+      model_name: key.model_name,
       is_active: key.is_active,
       created_by: key.created_by?.toString(),
       createAt: key.createdAt,
@@ -101,6 +105,7 @@ export class ApiKeyServiceImpl implements ApiKeyService {
       id: key.id,
       key_value: key.key_value,
       provider: key.provider,
+      model_name: key.model_name,
       is_active: key.is_active,
       created_by: key.created_by?.toString(),
       createAt: key.createdAt,
@@ -109,7 +114,12 @@ export class ApiKeyServiceImpl implements ApiKeyService {
   }
   async updateAPIKey(
     id: string,
-    body: { key_value?: string; provider?: string; is_active?: boolean }
+    body: {
+      key_value?: string;
+      provider?: string;
+      model_name?: string;
+      is_active?: boolean;
+    }
   ): Promise<APIKeysResponse> {
     const key = await Key.findOne({ _id: id });
     if (!key) {

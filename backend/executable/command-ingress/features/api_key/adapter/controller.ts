@@ -28,7 +28,7 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        const { key_value, provider, is_active } = req.body;
+        const { key_value, provider, model_name, is_active } = req.body;
         if (!key_value || !provider) {
           res.status(StatusCodes.BAD_REQUEST).json({
             status: "Error",
@@ -43,6 +43,7 @@ class ApiKeyController extends BaseController {
         const serviceResponse = await this.service.createAPIKey(
           key_value,
           provider,
+          model_name,
           is_active,
           created_by
         );
@@ -66,7 +67,7 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        const {content} = req.body;
+        const { content } = req.body;
         if (!content) {
           res.status(StatusCodes.BAD_REQUEST).json({
             status: "Error",
@@ -74,7 +75,9 @@ class ApiKeyController extends BaseController {
           });
           return;
         }
-        const serviceResponse = await this.service.searchAPIKeys(String(content));
+        const serviceResponse = await this.service.searchAPIKeys(
+          String(content)
+        );
 
         res.status(StatusCodes.CREATED).json({
           status: "Success",
@@ -94,9 +97,7 @@ class ApiKeyController extends BaseController {
       req,
       res,
       next,
-      async (req, res, _next) => {
-        
-      }
+      async (req, res, _next) => {}
     );
   }
 
@@ -175,7 +176,7 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        const { key_value, provider, is_active } = req.body;
+        const { key_value, provider, model_name, is_active } = req.body;
         const { id } = req.params;
         if (!id) {
           res.status(StatusCodes.BAD_REQUEST).json({
@@ -187,6 +188,7 @@ class ApiKeyController extends BaseController {
         const serviceResponse = await this.service.updateAPIKey(id, {
           key_value,
           provider,
+          model_name,
           is_active,
         });
 

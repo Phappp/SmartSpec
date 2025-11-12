@@ -12,6 +12,7 @@ type ExchangeTokenRequest = {
 interface APIKeysResponse {
   id: string;
   key_value: string;
+  model_name: string;
   provider: string;
   is_active: boolean;
   created_by: string;
@@ -30,6 +31,7 @@ interface ApiKeyService {
   createAPIKey(
     key_value: string,
     provider: string,
+    model_name: string,
     is_active: boolean,
     created_by: string
   ): Promise<APIKeysResponse>;
@@ -37,7 +39,7 @@ interface ApiKeyService {
   getAPIKeyById(id: string): Promise<APIKeysResponse>;
   updateAPIKey(
     id: string,
-    body: { key_value?: string; provider?: string; is_active?: boolean }
+    body: { key_value?: string; provider?: string; model_name?: string,  is_active?: boolean }
   ): Promise<APIKeysResponse>;
   deleteAPIKey(id: string): Promise<string>;
 }
