@@ -137,14 +137,9 @@ export class TestcaseController {
      */
     public saveTestCases = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const userId = req.getSubject();
-            if (!userId) {
-                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
-                return;
-            }
             const { projectId, versionId } = req.params;
             const { testCases } = req.body;
-            const createdBy = userId; // Sử dụng userId đã lấy
+            const createdBy = req.getSubject ? req.getSubject() : undefined;
 
             console.log('📥 Controller received:', {
                 projectId,
@@ -175,14 +170,11 @@ export class TestcaseController {
 
             console.log(`💾 Saving ${testCases.length} test cases`);
 
-            // SỬA LẠI: Chỉ truyền các tham số cần thiết
             const savedTestCases = await this.testcaseService.saveTestCases(
                 projectId,
                 versionId,
                 testCases,
-                createdBy,
-                userId // Thêm userId cho version bump
-                // XOÁ requirementIds và language vì không cần thiết
+                createdBy
             );
 
             console.log('✅ Controller: Test cases saved successfully', savedTestCases.length);
