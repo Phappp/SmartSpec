@@ -220,7 +220,6 @@ export class RequirementService {
         return {
             version_id: versionId,
             requirement_model: requirementsWithRelations,
-            newRequirements : newRequirements,
         };
     }
 
