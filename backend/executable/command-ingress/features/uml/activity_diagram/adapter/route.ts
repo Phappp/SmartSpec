@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { ActivityDiagramController } from '../adapter/controller';
-import { requireAuthorizedUser } from '../../../middlewares/auth';
+import { requireAuthorizedUser } from '../../../../middlewares/auth';
 
 export default function initActivityDiagramRoute(): Router {
   const router = Router();

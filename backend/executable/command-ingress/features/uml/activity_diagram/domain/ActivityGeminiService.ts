@@ -1,5 +1,5 @@
 import { ActivityEdge, ActivityNode, ActivityDiagramDTO } from './interfaces';
-import { ApiKeyService } from '../../orchestrator/domain/ApiKeyService';
+import { ApiKeyService } from '../../../orchestrator/domain/ApiKeyService';
 import { Types } from 'mongoose';
 
 const prompts = {

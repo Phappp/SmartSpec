@@ -87,9 +87,9 @@ import initVersionRoute from "./features/version/adapter/route";
 import { VersionController } from "./features/version/adapter/controller";
 import { VersionService } from "./features/version/domain/service";
 
-import initActivityDiagramRoute from "./features/activity_diagram/adapter/route";
-import { ActivityDiagramController } from "./features/activity_diagram/adapter/controller";
-import { ActivityDiagramService } from "./features/activity_diagram/domain/service";
+import initActivityDiagramRoute from "./features/uml/activity_diagram/adapter/route";
+import { ActivityDiagramController } from "./features/uml/activity_diagram/adapter/controller";
+import { ActivityDiagramService } from "./features/uml/activity_diagram/domain/service";
 // import initOcrRoute from "./features/handle_image/adapter/route";
 // import { OcrController } from "./features/handle_image/adapter/controller";
 // import { OcrService } from "./features/handle_image/domain/service";

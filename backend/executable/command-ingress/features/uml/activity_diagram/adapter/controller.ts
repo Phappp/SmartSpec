@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ActivityDiagramService } from '../domain/service';
-import { handleServiceResponse } from "../../../services/httpHandlerResponse";
-import { ServiceResponse, ResponseStatus } from "../../../services/serviceResponse";
+import { handleServiceResponse } from "../../../../services/httpHandlerResponse";
+import { ServiceResponse, ResponseStatus } from "../../../../services/serviceResponse";
 import { HttpRequest } from '@/executable/command-ingress/types';
 
 export class ActivityDiagramController {
