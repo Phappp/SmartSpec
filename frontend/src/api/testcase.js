@@ -240,6 +240,39 @@ export const handleExcelExport = async (exportFunction, projectId, params = {}, 
     }
 };
 
+// ==================== SEARCH OPERATIONS ====================
+
+/**
+ * Search test cases với text search
+ */
+export const searchTestCases = (projectId, searchQuery, filters = {}) => {
+    const params = {
+        search: searchQuery,
+        ...filters
+    };
+
+    return axiosClient.get(`/api/testcases/projects/${projectId}/testcases`, { params });
+};
+
+/**
+ * Advanced search với multiple criteria
+ */
+export const advancedSearchTestCases = (projectId, searchCriteria) => {
+    return axiosClient.post(`/api/testcases/projects/${projectId}/testcases/search`, searchCriteria);
+};
+
+/**
+ * Quick search - chỉ cần search query đơn giản
+ */
+export const quickSearchTestCases = (projectId, searchQuery, versionId = null) => {
+    const params = {
+        search: searchQuery,
+        versionId: versionId || undefined
+    };
+
+    return axiosClient.get(`/api/testcases/projects/${projectId}/testcases`, { params });
+};
+
 // ==================== EXPORT FILTER UTILITIES ====================
 
 /**
@@ -323,6 +356,11 @@ export const testcaseApi = {
     getTestCasesByDatabaseTable,
     findDuplicateTestCases,
     getDashboardMetrics,
+
+    // ======  SEARCH APIs ======
+    searchTestCases,
+    advancedSearchTestCases,
+    quickSearchTestCases,
 
     // Import/Export
     exportTestCases,

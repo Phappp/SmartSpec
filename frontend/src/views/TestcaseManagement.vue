@@ -830,8 +830,10 @@ export default {
           status: statusFilter.value || undefined,
           test_type: testTypeFilter.value || undefined,
           priority: priorityFilter.value || undefined,
+          search: searchQuery.value || undefined, // Thêm search parameter
         }
 
+        // Sử dụng hàm getTestCasesByProject thông thường (vì đã hỗ trợ search)
         const { data } = await testcaseApi.getTestCasesByProject(project.value._id, params)
         testCases.value = data.data || data || []
 
@@ -1093,7 +1095,16 @@ export default {
     const handleSearch = () => {
       clearTimeout(window.searchTimeout)
       window.searchTimeout = setTimeout(() => {
-        loadTestCases()
+        // Lưu reference đến input trước khi search
+        const searchInput = document.querySelector('.search-input')
+
+        pagination.value.currentPage = 1
+        loadTestCases().finally(() => {
+          // Khôi phục focus sau khi search hoàn thành
+          if (searchInput) {
+            searchInput.focus()
+          }
+        })
       }, 500)
     }
 

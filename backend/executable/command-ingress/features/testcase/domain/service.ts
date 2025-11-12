@@ -179,8 +179,16 @@ export class TestcaseService {
     /**
      * Lưu ENTERPRISE test cases vào database
      */
-    async saveTestCases(projectId: string, versionId: string, testCases: any[], createdBy?: string) {
-
+    /**
+ * Lưu ENTERPRISE test cases vào database
+ */
+    async saveTestCases(
+        projectId: string,
+        versionId: string,
+        testCases: any[],
+        createdBy?: string,
+        userId?: string
+    ) {
         let version = await Version.findById(versionId);
         if (!version) {
             throw new Error("Version not found");
@@ -192,7 +200,7 @@ export class TestcaseService {
         if (version.version_temporary === false) {
             const bumpRes = await this.versionService.bumpVersion(
                 versionId,
-                createdBy!,
+                userId || createdBy!,
                 "minor"
             );
 
@@ -205,10 +213,10 @@ export class TestcaseService {
             testcaseIdMap = bumpRes.data.idMaps.tcMap || new Map();
         }
 
-        /** ✅ 2. Chuẩn hoá payload testcase */
+        /** ✅ 2. Chuẩn hoá payload testcase - QUAN TRỌNG: XÓA _id và id */
         const testCasesToSave = testCases.map(testCase => {
-            // XÓA id nếu có để MongoDB tự generate _id
-            const { id, ...cleanTestCase } = testCase;
+            // Tạo object mới, loại bỏ hoàn toàn _id và id
+            const { _id, id, ...cleanTestCase } = testCase;
 
             return {
                 project_id: projectId,
@@ -216,48 +224,94 @@ export class TestcaseService {
                 created_by: createdBy,
                 created_at: new Date(),
                 updated_at: new Date(),
-                ...cleanTestCase  // KHÔNG có id
+                ...cleanTestCase  // KHÔNG có _id và id
             };
         });
 
-        /** ✅ 3. Insert testcases trong version mới */
-        const inserted = await Testcase.insertMany(testCasesToSave, { ordered: false });
+        console.log('📦 Test cases ready for save (first item):', {
+            has_id: testCasesToSave[0]?.id,
+            has__id: testCasesToSave[0]?._id,
+            title: testCasesToSave[0]?.title
+        });
 
-        /** ✅ 4. Tạo preview change cho từng testcase */
+        /** ✅ 3. Insert testcases trong version mới với error handling */
+        let inserted;
+        try {
+            inserted = await Testcase.insertMany(testCasesToSave, {
+                ordered: false,
+                rawResult: false
+            });
+            console.log(`✅ Successfully inserted ${inserted.length} test cases`);
+        } catch (error: any) {
+            console.error('❌ Error inserting test cases:', error);
+
+            // Xử lý bulk write error - chỉ lấy các documents insert thành công
+            if (error.writeErrors && error.insertedDocs) {
+                console.warn(`⚠️ Partial success: ${error.insertedDocs.length} test cases inserted`);
+                inserted = error.insertedDocs;
+            } else {
+                // Fallback: thử insert từng cái một
+                console.log('🔄 Trying individual inserts...');
+                inserted = [];
+                for (const testCase of testCasesToSave) {
+                    try {
+                        // Đảm bảo không có _id trước khi insert
+                        const { _id, ...safeTestCase } = testCase;
+                        const doc = new Testcase(safeTestCase);
+                        const saved = await doc.save();
+                        inserted.push(saved);
+                    } catch (individualError) {
+                        console.warn(`⚠️ Failed to insert test case:`, individualError.message);
+                        // Bỏ qua lỗi và tiếp tục với test case tiếp theo
+                    }
+                }
+            }
+        }
+
+        /** ✅ 4. Tạo preview change cho từng testcase đã insert thành công */
         for (const tc of inserted) {
-            const changePayload: PreviewChangeDto = {
-                entity_type: "testcase",
-                change_type: "added",
-                entity_id: tc._id.toString(),
-                before_snapshot: null,
-                after_snapshot: tc.toObject()
-            };
+            try {
+                const changePayload: PreviewChangeDto = {
+                    entity_type: "testcase",
+                    change_type: "added",
+                    entity_id: tc._id.toString(),
+                    before_snapshot: null,
+                    after_snapshot: tc.toObject()
+                };
 
-            const previewRes = await this.versionService.createOrUpdatePreview(
-                versionId,
-                createdBy,
-                changePayload
-            );
+                await this.versionService.createOrUpdatePreview(
+                    versionId,
+                    userId || createdBy,
+                    changePayload
+                );
+            } catch (error) {
+                console.warn(`⚠️ Failed to create preview for testcase ${tc._id}:`, error);
+            }
         }
 
         /** ✅ 5. Ghi log */
-        const user = await User.findById(createdBy).lean();
-        const username = user?.name || "Unknown User";
+        try {
+            const user = await User.findById(userId || createdBy).lean();
+            const username = user?.name || "Unknown User";
 
-        await this.logService.createLog({
-            project_id: projectId,
-            user_id: createdBy,
-            action: "generate_output",
-            target_id: versionId,
-            target_type: "testcases",
-            version_number: version.version_number,
-            affects_requirement: true,
-            level: "info",
-            details: {
-                message: `${username} added ${inserted.length} new testcases to version ${version.version_number}`
-            }
-        });
-        return inserted
+            await this.logService.createLog({
+                project_id: projectId,
+                user_id: userId || createdBy,
+                action: "generate_output",
+                target_id: versionId,
+                target_type: "testcases",
+                version_number: version.version_number,
+                affects_requirement: true,
+                level: "info",
+                details: {
+                    message: `${username} added ${inserted.length} new testcases to version ${version.version_number}`
+                }
+            });
+        } catch (logError) {
+            console.warn('⚠️ Failed to create log:', logError);
+        }
+
+        return inserted;
     }
 
     /**
@@ -273,6 +327,20 @@ export class TestcaseService {
         if (filters.priority) query.priority = filters.priority;
         if (filters.database_tables) query.database_tables = { $in: filters.database_tables };
         if (filters.source_requirement_ids) query.source_requirement_ids = { $in: filters.source_requirement_ids };
+
+        if (filters.search && filters.search.trim() !== '') {
+            const searchRegex = new RegExp(filters.search, 'i'); // Case-insensitive search
+
+            query.$or = [
+                { title: searchRegex },
+                { description: searchRegex },
+                { 'steps.action': searchRegex },
+                { 'steps.expected_result': searchRegex },
+                { expected_results: searchRegex },
+                { actual_result: searchRegex },
+                { database_tables: searchRegex }
+            ];
+        }
 
         return await Testcase.find(query)
             .populate('created_by', 'name email')

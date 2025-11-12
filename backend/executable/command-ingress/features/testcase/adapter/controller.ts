@@ -3,9 +3,10 @@
 import { Response, NextFunction } from "express";
 import { TestcaseService } from "../domain/service";
 import { HttpRequest } from "../../../types/http_request";
-import { TestcaseExportService, ExportFilters } from '../domain/exportService';
-import Database from "../../../../../internal/model/database";
-import Version from "../../../../../internal/model/version";
+import { TestcaseExportService, ExportFilters } from '../domain/ExportService';
+import { handleServiceResponse } from "../../../services/httpHandlerResponse";
+import { ServiceResponse } from "../../../services/serviceResponse";
+import { ResponseStatus } from "../../../services/serviceResponse";
 import * as ExcelJS from 'exceljs';
 
 export class TestcaseController {
@@ -143,7 +144,7 @@ export class TestcaseController {
             }
             const { projectId, versionId } = req.params;
             const { testCases } = req.body;
-            const createdBy = req.getSubject ? req.getSubject() : undefined;
+            const createdBy = userId; // Sử dụng userId đã lấy
 
             console.log('📥 Controller received:', {
                 projectId,
@@ -174,14 +175,14 @@ export class TestcaseController {
 
             console.log(`💾 Saving ${testCases.length} test cases`);
 
+            // SỬA LẠI: Chỉ truyền các tham số cần thiết
             const savedTestCases = await this.testcaseService.saveTestCases(
                 projectId,
                 versionId,
                 testCases,
-                createdBy
-                userId,
-                requirementIds,
-                language
+                createdBy,
+                userId // Thêm userId cho version bump
+                // XOÁ requirementIds và language vì không cần thiết
             );
 
             console.log('✅ Controller: Test cases saved successfully', savedTestCases.length);
@@ -223,7 +224,14 @@ export class TestcaseController {
     public getTestCasesByProject = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { projectId } = req.params;
-            const { versionId, test_type, status, priority, database_tables } = req.query;
+            const {
+                versionId,
+                test_type,
+                status,
+                priority,
+                database_tables,
+                search  // Thêm search parameter
+            } = req.query;
 
             if (!projectId) {
                 res.status(400).json({ message: "projectId is required" });
@@ -235,8 +243,12 @@ export class TestcaseController {
             if (status) filters.status = status;
             if (priority) filters.priority = priority;
             if (database_tables) filters.database_tables = database_tables;
+            if (search) filters.search = search;  // Thêm search vào filters
 
-            console.log(`📋 Getting test cases for project ${projectId}`);
+            console.log(`📋 Getting test cases for project ${projectId}`, {
+                filters,
+                searchQuery: search
+            });
 
             const testCases = await this.testcaseService.getTestCasesByProject(
                 projectId,
@@ -404,15 +416,22 @@ export class TestcaseController {
     public deleteTestCase = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { testCaseId } = req.params;
+            const userId = req.getSubject(); // Thêm dòng này
 
             if (!testCaseId) {
                 res.status(400).json({ message: "testCaseId is required" });
                 return;
             }
 
+            if (!userId) {
+                handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+                return;
+            }
+
             console.log(`🗑️ Deleting test case ${testCaseId}`);
 
-            const deletedTestCase = await this.testcaseService.deleteTestCase(testCaseId);
+            // SỬA LẠI: Thêm userId làm tham số đầu tiên
+            const deletedTestCase = await this.testcaseService.deleteTestCase(userId, testCaseId);
 
             if (!deletedTestCase) {
                 res.status(404).json({ message: `Test case not found: ${testCaseId}` });
