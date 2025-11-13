@@ -1,21 +1,17 @@
-import Project from "../../../../../internal/model/project";
-import Input from "../../../../../internal/model/input";
-import Output from "../../../../../internal/model/output";
-import Version from "../../../../../internal/model/version";
-import ProjectLog from "../../../../../internal/model/log";
+import Project from '../../../../../internal/model/project';
+import Input from '../../../../../internal/model/input';
+import Output from '../../../../../internal/model/output';
+import Version from '../../../../../internal/model/version';
+import ProjectLog from '../../../../../internal/model/log';
 import { OrchestratorService } from "../../orchestrator/domain/service";
 import { UploadedFile } from "express-fileupload";
-import {
-  ServiceResponse,
-  ResponseStatus,
-} from "../../../services/serviceResponse";
-import mongoose, { Types } from "mongoose";
-import { CreateProjectDto, UpdateProjectDto } from "../adapter/dto";
-import { InputService } from "../../orchestrator/domain/InputService";
-import { LogService } from "../../log/domain/service";
-import User from "../../../../../internal/model/user";
-import { notificationService } from "../../../services/notification.service";
-import { NotificationServiceImpl } from "../../notification/domain/service";
+import { ServiceResponse, ResponseStatus } from '../../../services/serviceResponse';
+import mongoose, { Types } from 'mongoose';
+import { CreateProjectDto, UpdateProjectDto } from '../adapter/dto';
+import { InputService } from '../../orchestrator/domain/InputService';
+import { LogService } from '../../log/domain/service';
+import User from '../../../../../internal/model/user'
+
 export class ProjectService {
   private logService: LogService;
 
@@ -41,33 +37,27 @@ export class ProjectService {
         name,
         description,
         owner_id: ownerId,
-        language: language || "vi-VN",
-        members: [
-          {
-            user_id: ownerId,
-            role: "owner",
-            status: "accepted",
-            invited_by: ownerId,
-            invited_at: new Date(),
-            responded_at: new Date(),
-            history: [{ action: "accepted", by: ownerId, at: new Date() }],
-          },
-        ],
+        language: language || 'vi-VN',
+        members: [{
+          user_id: ownerId,
+          role: 'owner',
+          status: 'accepted',
+          invited_by: ownerId,
+          invited_at: new Date(),
+          responded_at: new Date(),
+          history: [{ action: 'accepted', by: ownerId, at: new Date() }]
+        }]
       };
 
-      const createdProjects = await Project.create([newProjectData], {
-        session,
-      });
+      const createdProjects = await Project.create([newProjectData], { session });
       const newProject = createdProjects[0];
 
       const newVersionData = {
         project_id: newProject._id,
         version_number: 1,
-        created_by: ownerId,
+        created_by: ownerId
       };
-      const createdVersions = await Version.create([newVersionData], {
-        session,
-      });
+      const createdVersions = await Version.create([newVersionData], { session });
       const newVersion = createdVersions[0];
 
       newProject.current_version = newVersion._id;
@@ -76,25 +66,17 @@ export class ProjectService {
       await session.commitTransaction();
 
       // Xử lý nền
-      this.orchestratorService
-        .run(
-          newProject._id.toString(),
-          newVersion._id.toString(),
-          { files, rawText, mode: "full" },
-          newProject.language,
-          ownerId
-        )
-        .catch(async (err) => {
-          const errorMessage = `Lỗi xử lý nền: ${
-            err.message || "Lỗi không xác định"
-          }`;
-          console.error(
-            `[SERVICE] ${errorMessage} cho version ${newVersion._id}`
-          );
-          await Version.findByIdAndUpdate(newVersion._id, {
-            $push: { processing_errors: errorMessage },
-          });
-        });
+      this.orchestratorService.run(
+        newProject._id.toString(),
+        newVersion._id.toString(),
+        { files, rawText, mode: "full" },
+        newProject.language,
+        ownerId
+      ).catch(async (err) => {
+        const errorMessage = `Lỗi xử lý nền: ${err.message || 'Lỗi không xác định'}`;
+        console.error(`[SERVICE] ${errorMessage} cho version ${newVersion._id}`);
+        await Version.findByIdAndUpdate(newVersion._id, { $push: { processing_errors: errorMessage } });
+      });
 
       // Log action
       const owner = await User.findById(ownerId).select("name email").lean();
@@ -116,12 +98,7 @@ export class ProjectService {
         level: "info",
       });
 
-      return new ServiceResponse(
-        ResponseStatus.Success,
-        "Project created successfully",
-        newProject,
-        201
-      );
+      return new ServiceResponse(ResponseStatus.Success, 'Project created successfully', newProject, 201);
     } catch (error: any) {
       await session.abortTransaction();
       console.error("[SERVICE] ❌ Transaction đã được rollback.");
@@ -134,49 +111,40 @@ export class ProjectService {
   async getMyProjects(userId: string): Promise<ServiceResponse<any>> {
     const projects = await Project.find({
       owner_id: new Types.ObjectId(userId),
-      "status.is_trashed": { $ne: true },
+      'status.is_trashed': { $ne: true },
       // RÀNG BUỘC MỚI: Chỉ lấy projects mà user có status accepted
-      members: {
+      'members': {
         $elemMatch: {
           user_id: new Types.ObjectId(userId),
-          status: "accepted",
-        },
-      },
+          status: 'accepted'
+        }
+      }
     })
-      .populate("owner_id", "full_name email avatar_url")
-      .populate("members.user_id", "full_name email avatar_url")
+      .populate('owner_id', 'full_name email avatar_url')
+      .populate('members.user_id', 'full_name email avatar_url')
       .sort({ last_accessed_at: -1, updated_at: -1 })
       .lean();
 
-    return new ServiceResponse(ResponseStatus.Success, "OK", projects, 200);
+    return new ServiceResponse(ResponseStatus.Success, 'OK', projects, 200);
   }
 
-  async updateProject(
-    projectId: string,
-    userId: string,
-    data: UpdateProjectDto
-  ): Promise<ServiceResponse<any>> {
+  async updateProject(projectId: string, userId: string, data: UpdateProjectDto): Promise<ServiceResponse<any>> {
     // THÊM RÀNG BUỘC: Kiểm tra user có status accepted trong project
     const project = await Project.findOne({
       _id: new Types.ObjectId(projectId),
-      "status.is_trashed": { $ne: true },
-      members: {
+      'status.is_trashed': { $ne: true },
+      'members': {
         $elemMatch: {
           user_id: new Types.ObjectId(userId),
-          status: "accepted",
-        },
-      },
+          status: 'accepted'
+        }
+      }
     });
 
     if (!project) {
-      return new ServiceResponse(
-        ResponseStatus.Failed,
-        "Project not found or access denied",
-        null,
-        404
-      );
+      return new ServiceResponse(ResponseStatus.Failed, 'Project not found or access denied', null, 404);
     }
-    console.log("project found:", project);
+
     const before = {
       name: project.name,
       description: project.description,
@@ -193,8 +161,7 @@ export class ProjectService {
       language: updatedProject.language,
     };
 
-    const user = await User.findById(userId);
-    const userEmail = user?.email || userId;
+    const user = await User.findById(userId).select("name email").lean();
 
     await this.logService.createLog({
       user_id: userId,
@@ -202,43 +169,11 @@ export class ProjectService {
       action: "update_project",
       target_id: projectId,
       target_type: "project",
-      details: {
-        before,
-        after,
-        message: `User ${userEmail} updated project ${project.name}`,
-      },
+      details: { before, after, message: `${user.name} updated project ${project.name}` },
       level: "info",
     });
-    const membersToNotify: string[] = (project.members || [])
-      .filter(
-        (m: any) => m.status === "accepted" && m.user_id.toString() !== userId
-      )
-      .map((m: any) => m.user_id.toString());
-    console.log("membersToNotify:", membersToNotify);
 
-    //send notification to members if members updated
-    const notificationServiceDomain = new NotificationServiceImpl();
-    await notificationService.SocketNotification(
-      membersToNotify,
-      "Project Updated",
-      `<b>${user.name}</b> updated the project <b>${project.name}</b>`
-    );
-
-    await notificationServiceDomain.createNotification(
-      membersToNotify,
-      user.id,
-      "PROJECT",
-      "Project Updated",
-      `<b>${user.name}</b> updated the project <b>${project.name}</b>`,
-      ""
-    );
-
-    return new ServiceResponse(
-      ResponseStatus.Success,
-      "Project updated successfully",
-      updatedProject,
-      200
-    );
+    return new ServiceResponse(ResponseStatus.Success, 'Project updated successfully', updatedProject, 200);
   }
 
   async deleteProject(projectId: string, userId: string) {
@@ -246,13 +181,14 @@ export class ProjectService {
     const project = await Project.findOne({
       _id: projectId,
       owner_id: new Types.ObjectId(userId),
-      members: {
+      'members': {
         $elemMatch: {
           user_id: new Types.ObjectId(userId),
-          status: "accepted",
-        },
-      },
+          status: 'accepted'
+        }
+      }
     });
+
     if (!project) return null;
 
     if (!project.status || project.status.is_trashed === false) {
@@ -269,8 +205,7 @@ export class ProjectService {
 
       await project.save();
 
-      const user = await User.findById(userId);
-      const userEmail = user?.email || userId;
+      const user = await User.findById(userId).select("name email").lean();
 
       await this.logService.createLog({
         user_id: userId,
@@ -278,35 +213,9 @@ export class ProjectService {
         action: "delete_project",
         target_id: projectId,
         target_type: "project",
-        details: {
-          message: `User ${userEmail} deleted project ${project.name}`,
-        },
+        details: { message: `${user.name} deleted project ${project.name}` },
         level: "info",
       });
-
-      const membersToNotify: string[] = (project.members || [])
-        .filter(
-          (m: any) => m.status === "accepted" && m.user_id.toString() !== userId
-        )
-        .map((m: any) => m.user_id.toString());
-      console.log("membersToNotify:", membersToNotify);
-
-      //send notification to members if members updated
-      const notificationServiceDomain = new NotificationServiceImpl();
-      await notificationService.SocketNotification(
-        membersToNotify,
-        "Project Deleted",
-        `<b>${user.name}</b> deleted the project <b>${project.name}</b>`
-      );
-
-      await notificationServiceDomain.createNotification(
-        membersToNotify,
-        user.id,
-        "PROJECT",
-        "Project Deleted",
-        `<b>${user.name}</b> deleted the project <b>${project.name}</b>`,
-        ""
-      );
 
       return true;
     }
@@ -322,30 +231,22 @@ export class ProjectService {
     return true;
   }
 
-  async restoreProject(
-    projectId: string,
-    userId: string
-  ): Promise<ServiceResponse<null>> {
+  async restoreProject(projectId: string, userId: string): Promise<ServiceResponse<null>> {
     // THÊM RÀNG BUỘC: Chỉ owner có status accepted mới được restore
     const project = await Project.findOne({
       _id: new Types.ObjectId(projectId),
       owner_id: new Types.ObjectId(userId),
-      "status.is_trashed": true,
-      members: {
+      'status.is_trashed': true,
+      'members': {
         $elemMatch: {
           user_id: new Types.ObjectId(userId),
-          status: "accepted",
-        },
-      },
+          status: 'accepted'
+        }
+      }
     });
 
     if (!project) {
-      return new ServiceResponse(
-        ResponseStatus.Failed,
-        "Project not found, not trashed, or access denied",
-        null,
-        404
-      );
+      return new ServiceResponse(ResponseStatus.Failed, 'Project not found, not trashed, or access denied', null, 404);
     }
 
     if (project.status) {
@@ -355,8 +256,7 @@ export class ProjectService {
 
     await project.save();
 
-    const user = await User.findById(userId);
-    const userEmail = user?.email || userId;
+    const user = await User.findById(userId).select("name email").lean();
 
     await this.logService.createLog({
       user_id: userId,
@@ -364,80 +264,49 @@ export class ProjectService {
       action: "restore_project",
       target_id: projectId,
       target_type: "project",
-      details: {
-        message: `User ${userEmail} restored project ${project.name}`,
-      },
+      details: { message: `${user.name} restored project ${project.name}` },
       level: "info",
     });
 
-    const membersToNotify: string[] = (project.members || [])
-      .filter(
-        (m: any) => m.status === "accepted" && m.user_id.toString() !== userId
-      )
-      .map((m: any) => m.user_id.toString());
-    console.log("membersToNotify:", membersToNotify);
-
-    //send notification to members if members updated
-    const notificationServiceDomain = new NotificationServiceImpl();
-    await notificationService.SocketNotification(
-      membersToNotify,
-      "Project Restored",
-      `<b>${user.name}</b> Restored the project <b>${project.name}</b>`
-    );
-
-    await notificationServiceDomain.createNotification(
-      membersToNotify,
-      user.id,
-      "PROJECT",
-      "Project Restored",
-      `<b>${user.name}</b> Restored the project <b>${project.name}</b>`,
-      ""
-    );
-
-    return new ServiceResponse(
-      ResponseStatus.Success,
-      "Project restored successfully",
-      null,
-      200
-    );
+    return new ServiceResponse(ResponseStatus.Success, 'Project restored successfully', null, 200);
   }
 
   async getRecentProjects(userId: string): Promise<ServiceResponse<any>> {
     const projects = await Project.find({
-      "status.is_trashed": { $ne: true },
+      'status.is_trashed': { $ne: true },
       // RÀNG BUỘC MỚI: Chỉ lấy projects mà user có status accepted
-      members: {
+      'members': {
         $elemMatch: {
           user_id: new Types.ObjectId(userId),
-          status: "accepted",
-        },
-      },
+          status: 'accepted'
+        }
+      }
     })
       .sort({ last_accessed_at: -1 })
       .limit(5)
       .lean();
 
-    return new ServiceResponse(ResponseStatus.Success, "OK", projects, 200);
+    return new ServiceResponse(ResponseStatus.Success, 'OK', projects, 200);
   }
 
   async getSharedProjects(userId: string): Promise<ServiceResponse<any>> {
     const projects = await Project.find({
       owner_id: { $ne: new Types.ObjectId(userId) },
-      "status.is_trashed": { $ne: true },
+      'status.is_trashed': { $ne: true },
       // RÀNG BUỘC MỚI: Chỉ lấy projects mà user có status accepted
-      members: {
+      'members': {
         $elemMatch: {
           user_id: new Types.ObjectId(userId),
-          status: "accepted",
-        },
-      },
+          status: 'accepted'
+        }
+      }
     })
-      .populate("owner_id", "full_name email avatar_url")
-      .populate("members.user_id", "full_name email avatar_url")
+      .populate('owner_id', 'full_name email avatar_url')
+      .populate('members.user_id', 'full_name email avatar_url')
       .sort({ last_accessed_at: -1 })
       .lean();
 
-    return new ServiceResponse(ResponseStatus.Success, "OK", projects, 200);
+    return new ServiceResponse(ResponseStatus.Success, 'OK', projects, 200);
   }
 
   async getVersionStatus(versionId: string): Promise<ServiceResponse<any>> {
@@ -445,51 +314,31 @@ export class ProjectService {
     const project = await Project.findById(version?.project_id).lean();
 
     if (!version) {
-      return new ServiceResponse(
-        ResponseStatus.Failed,
-        "Version not found",
-        null,
-        404
-      );
+      return new ServiceResponse(ResponseStatus.Failed, 'Version not found', null, 404);
     }
 
-    return new ServiceResponse(
-      ResponseStatus.Success,
-      "OK",
-      {
-        status: version.status,
-        stage: version.stage,
-        progress: version.progress,
-        version,
-        project,
-      },
-      200
-    );
+    return new ServiceResponse(ResponseStatus.Success, 'OK', {
+      status: version.status,
+      stage: version.stage,
+      progress: version.progress,
+      version,
+      project
+    }, 200);
   }
 
-  async getProjectDetail(
-    projectId: string,
-    userId: string
-  ): Promise<ServiceResponse<any>> {
+  async getProjectDetail(projectId: string, userId: string): Promise<ServiceResponse<any>> {
     const project = await Project.findById(projectId)
       .populate("owner_id", "full_name email avatar_url")
       .populate("members.user_id", "full_name email avatar_url");
 
     if (!project) {
-      return new ServiceResponse(
-        ResponseStatus.Failed,
-        "Project not found",
-        null,
-        404
-      );
+      return new ServiceResponse(ResponseStatus.Failed, 'Project not found', null, 404);
     }
 
     // THÊM RÀNG BUỘC: Kiểm tra user có status accepted trong project
-    const userMember = project.members.find(
-      (m: any) =>
-        (m.user_id._id.toString() === userId ||
-          m.user_id.toString() === userId) &&
-        m.status === "accepted"
+    const userMember = project.members.find((m: any) =>
+      (m.user_id._id.toString() === userId || m.user_id.toString() === userId) &&
+      m.status === "accepted"
     );
 
     if (!userMember) {
@@ -531,21 +380,15 @@ export class ProjectService {
       .lean();
 
     // Lấy current version (đầy đủ tất cả field)
-    const currentVersion = await Version.findById(
-      project.current_version
-    ).lean();
+    const currentVersion = await Version.findById(project.current_version).lean();
 
     let inputs: any[] = [];
     let outputs: any[] = [];
 
     if (currentVersion) {
       [inputs, outputs] = await Promise.all([
-        Input.find({ version_id: currentVersion._id })
-          .sort({ created_at: 1 })
-          .lean(),
-        Output.find({ version_id: currentVersion._id })
-          .sort({ created_at: 1 })
-          .lean(),
+        Input.find({ version_id: currentVersion._id }).sort({ created_at: 1 }).lean(),
+        Output.find({ version_id: currentVersion._id }).sort({ created_at: 1 }).lean(),
       ]);
     }
 
@@ -564,9 +407,7 @@ export class ProjectService {
         ? inputs.find((i: any) => i._id.toString() === log.input_id.toString())
         : null;
       const output = log.output_id
-        ? outputs.find(
-            (o: any) => o._id.toString() === log.output_id.toString()
-          )
+        ? outputs.find((o: any) => o._id.toString() === log.output_id.toString())
         : null;
 
       return {
@@ -589,33 +430,28 @@ export class ProjectService {
       chatLogs,
     };
 
-    return new ServiceResponse(ResponseStatus.Success, "OK", resultData, 200);
+    return new ServiceResponse(ResponseStatus.Success, 'OK', resultData, 200);
   }
 
   async getDeleteProjects(userId: string): Promise<ServiceResponse<any>> {
     try {
       const projects = await Project.find({
         owner_id: new Types.ObjectId(userId),
-        "status.is_trashed": true,
+        'status.is_trashed': true,
         // RÀNG BUỘC MỚI: Chỉ lấy projects mà user có status accepted
-        members: {
+        'members': {
           $elemMatch: {
             user_id: new Types.ObjectId(userId),
-            status: "accepted",
-          },
-        },
+            status: 'accepted'
+          }
+        }
       })
-        .populate("owner_id", "full_name email avatar_url")
-        .populate("members.user_id", "full_name email avatar_url")
-        .sort({ "status.trashed_at": -1 })
+        .populate('owner_id', 'full_name email avatar_url')
+        .populate('members.user_id', 'full_name email avatar_url')
+        .sort({ 'status.trashed_at': -1 })
         .lean();
 
-      return new ServiceResponse(
-        ResponseStatus.Success,
-        "Fetched trashed projects successfully",
-        projects,
-        200
-      );
+      return new ServiceResponse(ResponseStatus.Success, 'Fetched trashed projects successfully', projects, 200);
     } catch (error) {
       throw error;
     }
@@ -624,8 +460,8 @@ export class ProjectService {
   async getAllProjectsForAdmin(): Promise<ServiceResponse<any>> {
     try {
       const projects = await Project.find()
-        .populate("owner_id", "full_name email avatar_url")
-        .populate("members.user_id", "full_name email avatar_url")
+        .populate('owner_id', 'full_name email avatar_url')
+        .populate('members.user_id', 'full_name email avatar_url')
         .sort({ updated_at: -1 })
         .lean();
 
@@ -634,21 +470,15 @@ export class ProjectService {
         name: project.name,
         description: project.description,
         language: project.language,
-        owner: project.owner_id
-          ? {
-              id: project.owner_id._id,
-              name: project.owner_id.full_name,
-              email: project.owner_id.email,
-              avatar: project.owner_id.avatar_url,
-            }
-          : null,
+        owner: project.owner_id ? {
+          id: project.owner_id._id,
+          name: project.owner_id.full_name,
+          email: project.owner_id.email,
+          avatar: project.owner_id.avatar_url
+        } : null,
         memberCount: project.members?.length || 0,
-        acceptedMembers:
-          project.members?.filter((m: any) => m.status === "accepted").length ||
-          0,
-        pendingMembers:
-          project.members?.filter((m: any) => m.status === "pending").length ||
-          0,
+        acceptedMembers: project.members?.filter((m: any) => m.status === 'accepted').length || 0,
+        pendingMembers: project.members?.filter((m: any) => m.status === 'pending').length || 0,
         isTrashed: project.status?.is_trashed || false,
         createdAt: project.created_at,
         updatedAt: project.updated_at,

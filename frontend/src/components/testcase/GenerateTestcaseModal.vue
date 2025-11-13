@@ -137,10 +137,7 @@
                 </span>
                 {{ showAllDetails ? 'Hide All' : 'Show All' }}
               </button>
-              <button
-                class="btn btn-sm btn-secondary"
-                @click="saveDraft"
-              >
+              <button class="btn btn-sm btn-secondary" @click="saveDraft">
                 <span class="material-symbols-outlined">save</span>
                 {{ savingDraft ? 'Saving...' : hasUnsavedChanges ? 'Save Draft' : 'Draft Saved' }}
               </button>
@@ -297,7 +294,7 @@
               <button
                 v-else
                 class="btn btn-primary"
-                @click="confirmGeneration"
+                @click.once="confirmGeneration"
                 :disabled="generating || saving"
               >
                 <span v-if="saving" class="spinner"></span>
@@ -524,6 +521,9 @@ export default {
       generationProgress.value = 0
       previewTestCases.value = []
 
+      // ✅ DEBUG: Log before generation
+      console.log('🔍 DEBUG - Starting generation with requirements:', selectedRequirements.value)
+
       // Simulate progress updates
       const progressInterval = setInterval(() => {
         if (generationProgress.value < 90) {
@@ -541,7 +541,18 @@ export default {
         clearInterval(progressInterval)
         generationProgress.value = 100
 
-        previewTestCases.value = response.data.data || response.data || []
+        // ✅ DEBUG: Log the API response
+        console.log('🔍 DEBUG - Generation API response:', response)
+        console.log('🔍 DEBUG - Raw response data:', response.data)
+
+        const generatedTestCases = response.data.data || response.data || []
+        console.log('🔍 DEBUG - Generated test cases count:', generatedTestCases.length)
+        console.log(
+          '🔍 DEBUG - Generated test cases:',
+          JSON.parse(JSON.stringify(generatedTestCases))
+        )
+
+        previewTestCases.value = generatedTestCases
         hasUnsavedChanges.value = true
 
         if (previewTestCases.value.length === 0) {
@@ -556,7 +567,8 @@ export default {
           }
         }
       } catch (error) {
-        console.error('Error generating test cases:', error)
+        console.error('❌ DEBUG - Error generating test cases:', error)
+        console.error('❌ DEBUG - Error response:', error.response)
         clearInterval(progressInterval)
         const errorMessage = error.response?.data?.message || 'Failed to generate test cases'
 
@@ -649,24 +661,38 @@ export default {
     }
 
     const confirmGeneration = () => {
+      // ✅ THÊM: Double click prevention
+      if (saving.value) {
+        console.log('⚠️ confirmGeneration blocked - already saving')
+        return
+      }
+
+      console.log('🔍 DEBUG - confirmGeneration called')
       showConfirmation(`Are you sure you want to create this test cases?`, executeGeneration)
     }
 
     const executeGeneration = async () => {
+      console.log('🔍 DEBUG - executeGeneration CALLED - Check if this logs twice')
+
+      // ✅ THÊM: Double execution prevention
+      if (saving.value) {
+        console.log('⚠️ BLOCKED: Already saving, ignoring duplicate call')
+        return
+      }
+
       if (previewTestCases.value.length === 0) {
         toast.error('No test cases to save')
         return
       }
 
       saving.value = true
+      console.log('🔍 DEBUG - Setting saving = true')
+
       try {
-        const formattedTestCases = previewTestCases.value.map((tc) => ({
-          ...tc,
-          title: formatTestCaseTitle(tc),
-        }))
+        console.log('🔍 DEBUG - Calling saveTestCases API...')
 
         const requestBody = {
-          testCases: formattedTestCases,
+          testCases: previewTestCases.value,
         }
 
         const response = await testcaseApi.saveTestCases(
@@ -675,24 +701,30 @@ export default {
           requestBody
         )
 
+        console.log('🔍 DEBUG - saveTestCases API response received')
+        console.log('Response count:', response.data?.count)
+
         const savedCount = response.data?.count || previewTestCases.value.length
 
         // Clear draft và reset unsaved changes
         localStorage.removeItem(draftKey.value)
         hasUnsavedChanges.value = false
+        hasDraft.value = false
+
+        console.log('✅ DEBUG - Successfully saved:', savedCount, 'test cases')
 
         toast.success(`Successfully created ${savedCount} test cases`)
-        emit('generate', response.data?.data || formattedTestCases)
+        emit('generate', response.data?.data || previewTestCases.value)
         handleClose()
       } catch (error) {
-        console.error('Error saving test cases:', error)
+        console.error('❌ DEBUG - Error in executeGeneration:', error)
         const errorMessage = error.response?.data?.message || error.message
         toast.error(`Failed to save test cases: ${errorMessage}`)
       } finally {
         saving.value = false
+        console.log('🔍 DEBUG - Setting saving = false')
       }
     }
-
     const showConfirmation = (message, confirmAction, cancelAction = null) => {
       confirmMessage.value = message
       confirmedAction.value = confirmAction

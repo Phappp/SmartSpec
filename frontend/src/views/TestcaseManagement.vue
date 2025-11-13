@@ -928,15 +928,11 @@ export default {
       }
 
       try {
-        const formattedTestCases = generatedTestCases.map((tc) => ({
-          ...tc,
-          title: formatGeneratedTestCaseTitle(tc),
-        }))
-
+        // ✅ ĐÃ SỬA: Gửi nguyên bản, không format lại title
         await testcaseApi.saveTestCases(project.value._id, selectedVersionId.value, {
-          testCases: formattedTestCases,
+          testCases: generatedTestCases, // Dùng trực tiếp không format
         })
-        toast.success(`Successfully generated ${formattedTestCases.length} test cases`)
+
         showGenerateModal.value = false
         await loadTestCases()
       } catch (error) {
@@ -946,19 +942,19 @@ export default {
       }
     }
 
-    const formatGeneratedTestCaseTitle = (testcase) => {
-      const requirementIds = testcase.source_requirement_ids || []
+    // const formatGeneratedTestCaseTitle = (testcase) => {
+    //   const requirementIds = testcase.source_requirement_ids || []
 
-      if (requirementIds.length === 0) {
-        return testcase.title || 'Generated Test Case'
-      }
+    //   if (requirementIds.length === 0) {
+    //     return testcase.title || 'Generated Test Case'
+    //   }
 
-      const firstReqId = requirementIds[0]
-      const requirementName = getRequirementName(firstReqId)
-      const testScenario = testcase.title || 'Test Scenario'
+    //   const firstReqId = requirementIds[0]
+    //   const requirementName = getRequirementName(firstReqId)
+    //   const testScenario = testcase.title || 'Test Scenario'
 
-      return `[${firstReqId}] - ${requirementName} - ${testScenario}`
-    }
+    //   return `[${firstReqId}] - ${requirementName} - ${testScenario}`
+    // }
 
     const handleSaveTestcase = async (testcaseData) => {
       try {

@@ -4,6 +4,11 @@ const actorSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
     description: String,
+    // Thêm trường position cho actor
+    position: {
+      x: { type: Number, default: 0 },
+      y: { type: Number, default: 0 }
+    }
   },
   { _id: true }
 );
@@ -12,6 +17,11 @@ const usecaseItemSchema = new Schema(
   {
     title: { type: String, required: true, trim: true },
     description: String,
+    // Thêm trường position cho use case
+    position: {
+      x: { type: Number, default: 0 },
+      y: { type: Number, default: 0 }
+    }
   },
   { _id: true }
 );

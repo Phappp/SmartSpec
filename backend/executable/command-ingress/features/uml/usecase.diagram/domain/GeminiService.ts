@@ -22,13 +22,21 @@ ${requirementsJson}
 Đối tượng JSON BẮT BUỘC phải tuân thủ nghiêm ngặt cấu trúc Mongoose Schema sau:
 
 {
-  "name": "Tên biểu đồ (Tự động tạo, ví dụ: Hệ thống Quản lý Bán hàng)",
-  "description": "Mô tả ngắn về biểu đồ(tự động tạo, ví dụ: Biểu đồ usecase cho dự án X)",
+  "name": "Tên biểu đồ",
+  "description": "Mô tả ngắn",
   "actors": [
-    { "name": "Tên Actor (ví dụ: Customer)", "description": "Mô tả ngắn về actor" }
+    { 
+      "name": "Tên Actor", 
+      "description": "Mô tả",
+      "position": { "x": 100, "y": 50 } 
+    }
   ],
   "usecases": [
-    { "title": "Tên Use Case (ví dụ: Đăng nhập)", "description": "Mô tả ngắn về use case" }
+    { 
+      "title": "Tên Use Case", 
+      "description": "Mô tả",
+      "position": { "x": 200, "y": 150 }  
+    }
   ],
   "associations": [
     { "actor_name": "Customer", "usecase_title": "Đăng nhập" }
@@ -38,11 +46,6 @@ ${requirementsJson}
       "source": "Thanh toán", 
       "target": "Xác thực thẻ", 
       "type": "include" 
-    },
-    { 
-      "source": "Admin", 
-      "target": "User", 
-      "type": "generalization" 
     }
   ]
 }
@@ -63,6 +66,12 @@ ${requirementsJson}
     +Ví dụ: "Xem danh sách sản phẩm" có thể được extend bởi "Lọc sản phẩm".
     +Ví dụ: "Xem danh sách sản phẩm" có thể được extend bởi "Tìm kiếm sản phẩm".
   Phân tích kỹ toàn bộ danh sách để tìm tất cả các mối quan hệ include và extend hợp lý.
+8. **position**: Tự động tạo vị trí hợp lý cho các thành phần:
+   - Actor: Đặt ở các góc (trái/phải) với x từ 50-100, y từ 50-400
+   - Use case: Đặt ở giữa với x từ 200-500, y từ 100-500
+   - Phân bố đều để tránh chồng chéo
+   - Đảm bảo bố cục rõ ràng, dễ theo dõi
+
 Hãy phân tích kỹ và trả về ĐÚNG đối tượng JSON này.
 `,
   },
@@ -86,10 +95,18 @@ The JSON object MUST strictly follow this Mongoose Schema structure:
   "name": "Generated Diagram Name (e.g., Sales Management System)",
   "description": "Short description of the diagram (e.g., Usecase diagram for project X)",
   "actors": [
-    { "name": "Actor Name (e.g., Customer)", "description": "Short description" }
+    { 
+      "name": "Actor Name", 
+      "description": "Description",
+      "position": { "x": 100, "y": 50 }  // ADD THIS
+    }
   ],
   "usecases": [
-    { "title": "Use Case Title (e.g., Log In)", "description": "Short description" }
+    { 
+      "title": "Use Case Title", 
+      "description": "Description",
+      "position": { "x": 200, "y": 150 }  // ADD THIS
+    }
   ],
   "associations": [
     { "actor_name": "Customer", "usecase_title": "Log In" }
@@ -124,6 +141,12 @@ The JSON object MUST strictly follow this Mongoose Schema structure:
     +For example: "View product list" can be extended by "Filter products".
     +For example: "View product list" can be extended by "Search products".
   Examine the entire list to find all the logical include and extend relationships.
+8. **position**: Automatically generate logical positions:
+   - Actors: Place at edges (left/right) with x from 500-700, y from 550-900  
+   - Use cases: Place in center with x from 700-1000, y from 600-1000
+   - Distribute evenly to avoid overlap
+   - Ensure clear, readable layout
+
 Analyze carefully and return ONLY this JSON object.`,
   },
 };
@@ -205,22 +228,31 @@ export class UsecaseDiagramGeminiService {
     const usecaseTitleMap = new Map<string, ObjectId>();
 
     // Bước 1: Tạo ID và Map cho Actors
-    const actorsWithIds = diagramJson.actors.map((actor: any) => {
-      const newId = new ObjectId(); // Tạo ID thật
+    // Bước 1: Tạo ID và Map cho Actors (THÊM position)
+    const actorsWithIds = diagramJson.actors.map((actor: any, index: number) => {
+      const newId = new ObjectId();
       actorNameMap.set(actor.name, newId);
       return {
         ...actor,
-        _id: newId, // Gán ID vào object
+        _id: newId,
+        position: actor.position || {
+          x: 50 + (index % 3) * 50,
+          y: 50 + Math.floor(index / 3) * 100
+        }
       };
     });
 
-    // Bước 2: Tạo ID và Map cho Usecases
-    const usecasesWithIds = diagramJson.usecases.map((usecase: any) => {
-      const newId = new ObjectId(); // Tạo ID thật
+    // Bước 2: Tạo ID và Map cho Usecases (THÊM position)  
+    const usecasesWithIds = diagramJson.usecases.map((usecase: any, index: number) => {
+      const newId = new ObjectId();
       usecaseTitleMap.set(usecase.title, newId);
       return {
         ...usecase,
-        _id: newId, // Gán ID vào object
+        _id: newId,
+        position: usecase.position || {
+          x: 200 + (index % 4) * 150,
+          y: 100 + Math.floor(index / 4) * 120
+        }
       };
     });
 
@@ -319,7 +351,18 @@ export class UsecaseDiagramGeminiService {
       Array.isArray(parsedResponse.actors) &&
       Array.isArray(parsedResponse.usecases)
     ) {
-      console.log("✅ JSON structure is VALID (matches Mongoose schema input)");
+      // THÊM: Đảm bảo position có giá trị mặc định nếu Gemini không trả về
+      parsedResponse.actors = parsedResponse.actors.map((actor: any) => ({
+        ...actor,
+        position: actor.position || { x: 0, y: 0 }
+      }));
+
+      parsedResponse.usecases = parsedResponse.usecases.map((usecase: any) => ({
+        ...usecase,
+        position: usecase.position || { x: 0, y: 0 }
+      }));
+
+      console.log("✅ JSON structure is VALID (with position support)");
       return parsedResponse;
     }
 

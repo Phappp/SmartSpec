@@ -357,7 +357,7 @@ export class UsecaseDiagramController extends BaseController {
 
   //relationship
 
-   async createRelationship(
+  async createRelationship(
     req: HttpRequest,
     res: Response,
     next: NextFunction
@@ -468,6 +468,156 @@ export class UsecaseDiagramController extends BaseController {
         res.status(StatusCodes.OK).json({
           status: "Success",
           message: "Delete Relationship by Id Successfully",
+        });
+      }
+    );
+  }
+  // Position adjustment methods
+  async updateActorPosition(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const ucId = req.params.ucId;
+        const actorId = req.params.actorId;
+        const position = req.body;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+        if (!actorId) {
+          res.status(400).json({ message: "ActorId is required." });
+          return;
+        }
+        if (!position || position.x === undefined || position.y === undefined) {
+          res.status(400).json({ message: "Valid position {x, y} is required." });
+          return;
+        }
+
+        const responseData = await this.usecaseDiagramService.updateActorPosition(
+          ucId,
+          actorId,
+          position
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Update Actor Position Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
+
+  async updateUsecasePosition(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const ucId = req.params.ucId;
+        const usecaseId = req.params.usecaseId;
+        const position = req.body;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+        if (!usecaseId) {
+          res.status(400).json({ message: "UsecaseId is required." });
+          return;
+        }
+        if (!position || position.x === undefined || position.y === undefined) {
+          res.status(400).json({ message: "Valid position {x, y} is required." });
+          return;
+        }
+
+        const responseData = await this.usecaseDiagramService.updateUsecasePosition(
+          ucId,
+          usecaseId,
+          position
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Update Usecase Position Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
+
+  async updateMultiplePositions(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const ucId = req.params.ucId;
+        const updates = req.body;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+        if (!updates || (!updates.actors && !updates.usecases)) {
+          res.status(400).json({
+            message: "Valid updates {actors?, usecases?} is required."
+          });
+          return;
+        }
+
+        const responseData = await this.usecaseDiagramService.updateMultiplePositions(
+          ucId,
+          updates
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Update Multiple Positions Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
+
+  async resetPositions(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const ucId = req.params.ucId;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+
+        const responseData = await this.usecaseDiagramService.resetPositions(ucId);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Reset Positions Successfully",
+          data: responseData,
         });
       }
     );

@@ -77,6 +77,27 @@ const initUsecaseDiagramRoute: (
       requireAuthorizedUser,
       controller.deleteAssociationById.bind(controller)
     );
+
+  // POSITION ADJUSTMENT ROUTES
+  // Update single actor position
+  router
+    .route("/:ucId/actors/:actorId/position")
+    .patch(requireAuthorizedUser, controller.updateActorPosition.bind(controller));
+
+  // Update single usecase position
+  router
+    .route("/:ucId/usecases/:usecaseId/position")
+    .patch(requireAuthorizedUser, controller.updateUsecasePosition.bind(controller));
+
+  // Update multiple positions (for drag & drop)
+  router
+    .route("/:ucId/positions")
+    .patch(requireAuthorizedUser, controller.updateMultiplePositions.bind(controller));
+
+  // Reset all positions to default
+  router
+    .route("/:ucId/reset-positions")
+    .patch(requireAuthorizedUser, controller.resetPositions.bind(controller));
   return router;
 };
 

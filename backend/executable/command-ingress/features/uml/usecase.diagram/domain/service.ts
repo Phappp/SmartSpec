@@ -329,4 +329,114 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     ucd.associations.splice(associationIndex, 1);
     await ucd.save();
   }
+  public async updateActorPosition(
+    ucId: string,
+    actorId: string,
+    position: { x: number; y: number }
+  ): Promise<UseCaseDiagramResponse> {
+    const uc = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!uc) {
+      throw new Error("Usecase Diagram not found");
+    }
+
+    const actorIndex = uc.actors.findIndex(
+      (actor: any) => actor._id.toString() === actorId
+    );
+    if (actorIndex === -1) {
+      throw new Error("Actor not found");
+    }
+
+    // Cập nhật position
+    uc.actors[actorIndex].position = position;
+    await uc.save();
+
+    return this.getUsecaseDiagramsById(ucId);
+  }
+  public async updateUsecasePosition(
+    ucId: string,
+    usecaseId: string,
+    position: { x: number; y: number }
+  ): Promise<UseCaseDiagramResponse> {
+    const uc = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!uc) {
+      throw new Error("Usecase Diagram not found");
+    }
+
+    const usecaseIndex = uc.usecases.findIndex(
+      (usecase: any) => usecase._id.toString() === usecaseId
+    );
+    if (usecaseIndex === -1) {
+      throw new Error("Usecase not found");
+    }
+
+    // Cập nhật position
+    uc.usecases[usecaseIndex].position = position;
+    await uc.save();
+
+    return this.getUsecaseDiagramsById(ucId);
+  }
+  public async updateMultiplePositions(
+    ucId: string,
+    updates: {
+      actors?: { id: string; position: { x: number; y: number } }[];
+      usecases?: { id: string; position: { x: number; y: number } }[];
+    }
+  ): Promise<UseCaseDiagramResponse> {
+    const uc = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!uc) {
+      throw new Error("Usecase Diagram not found");
+    }
+
+    // Cập nhật positions cho actors
+    if (updates.actors) {
+      updates.actors.forEach(({ id, position }) => {
+        const actorIndex = uc.actors.findIndex(
+          (actor: any) => actor._id.toString() === id
+        );
+        if (actorIndex !== -1) {
+          uc.actors[actorIndex].position = position;
+        }
+      });
+    }
+
+    // Cập nhật positions cho usecases
+    if (updates.usecases) {
+      updates.usecases.forEach(({ id, position }) => {
+        const usecaseIndex = uc.usecases.findIndex(
+          (usecase: any) => usecase._id.toString() === id
+        );
+        if (usecaseIndex !== -1) {
+          uc.usecases[usecaseIndex].position = position;
+        }
+      });
+    }
+
+    await uc.save();
+    return this.getUsecaseDiagramsById(ucId);
+  }
+  public async resetPositions(ucId: string): Promise<UseCaseDiagramResponse> {
+    const uc = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!uc) {
+      throw new Error("Usecase Diagram not found");
+    }
+
+    // Reset actor positions (phân bố đều bên trái)
+    uc.actors.forEach((actor: any, index: number) => {
+      actor.position = {
+        x: 50,
+        y: 50 + index * 100
+      };
+    });
+
+    // Reset usecase positions (phân bố đều ở giữa)
+    uc.usecases.forEach((usecase: any, index: number) => {
+      usecase.position = {
+        x: 200 + (index % 3) * 200,
+        y: 100 + Math.floor(index / 3) * 120
+      };
+    });
+
+    await uc.save();
+    return this.getUsecaseDiagramsById(ucId);
+  }
 }
