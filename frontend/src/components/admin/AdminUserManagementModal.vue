@@ -71,8 +71,6 @@
                 <th>Vai trò</th>
                 <th>Trạng thái</th>
                 <th>Dự án</th>
-                <th>Đăng nhập cuối</th>
-                <th>Ngày tạo</th>
                 <th>Thao tác</th>
               </tr>
             </thead>
@@ -96,11 +94,7 @@
                   <div class="user-info">
                     <div class="user-avatar">
                       <img
-                        :src="
-                          user.avatar_url ||
-                          'https://static.vecteezy.com/system/resources/previews/024/983/914/original/simple-user-default-icon-free-png.png'
-                        "
-                        alt="Avatar"
+                        :src="user.avatar_url"
                       />
                     </div>
                     <div class="user-details">
@@ -126,32 +120,12 @@
                   </div>
                 </td>
                 <td>
-                  <div class="last-login">
-                    {{ formatLastLogin(user.last_login) }}
-                  </div>
-                </td>
-                <td>
-                  <div class="created-date">
-                    {{ formatDate(user.created_at) }}
-                  </div>
-                </td>
-                <td>
                   <div class="action-buttons">
                     <button class="btn-icon" @click="editUser(user)" title="Chỉnh sửa">
                       <span class="material-symbols-outlined">edit</span>
                     </button>
                     <button class="btn-icon" @click="viewUserDetails(user)" title="Xem chi tiết">
                       <span class="material-symbols-outlined">visibility</span>
-                    </button>
-                    <button
-                      class="btn-icon"
-                      :class="{ danger: user.status === 'ACTIVE' }"
-                      @click="toggleUserStatus(user)"
-                      :title="user.status === 'ACTIVE' ? 'Vô hiệu hóa' : 'Kích hoạt'"
-                    >
-                      <span class="material-symbols-outlined">
-                        {{ user.status === 'ACTIVE' ? 'toggle_off' : 'toggle_on' }}
-                      </span>
                     </button>
                     <button class="btn-icon danger" @click="deleteUser(user)" title="Xóa">
                       <span class="material-symbols-outlined">delete</span>
@@ -280,7 +254,9 @@ import AdminAddUserModal from './AdminAddUserModal.vue'
 import AdminEditUserModal from './AdminEditUserModal.vue'
 import AdminUserDetailsModal from './AdminUserDetailsModal.vue'
 import AdminConfirmModal from './AdminConfirmModal.vue'
-
+import axiosClient from '@/utils/axiosClient'
+import { useToast } from 'vue-toastification'
+const toast = useToast()
 const emit = defineEmits(['close'])
 
 // Modal states
@@ -314,48 +290,7 @@ const pagination = reactive({
 })
 
 // Sample data - in real app, this would come from API
-const sampleUsers = [
-  {
-    id: '1',
-    name: 'Admin User',
-    email: 'admin@smartspec.com',
-    avatar_url:
-      'https://static.vecteezy.com/system/resources/previews/024/983/914/original/simple-user-default-icon-free-png.png',
-    system_role: 'ADMIN',
-    status: 'ACTIVE',
-    project_count: 15,
-    last_login: new Date('2024-01-15T08:30:00'),
-    created_at: new Date('2023-01-01'),
-    phone: '+84 123 456 789',
-    bio: 'Quản trị viên hệ thống',
-  },
-  {
-    id: '2',
-    name: 'Nguyễn Văn A',
-    email: 'nguyenvana@example.com',
-    avatar_url: null,
-    system_role: 'PARTICIPANT',
-    status: 'ACTIVE',
-    project_count: 8,
-    last_login: new Date('2024-01-14T15:20:00'),
-    created_at: new Date('2023-06-15'),
-    phone: '+84 987 654 321',
-    bio: 'Thành viên tích cực',
-  },
-  {
-    id: '3',
-    name: 'Trần Thị B',
-    email: 'tranthib@example.com',
-    avatar_url: null,
-    system_role: 'PARTICIPANT',
-    status: 'INACTIVE',
-    project_count: 3,
-    last_login: new Date('2023-12-20T10:15:00'),
-    created_at: new Date('2023-08-20'),
-    phone: '+84 456 789 123',
-    bio: '',
-  },
-]
+
 
 // Computed
 const filteredUsers = computed(() => {
@@ -400,11 +335,40 @@ const isAllSelected = computed(() => {
 
 // Methods
 const loadUsers = async () => {
-  // Simulate API call
-  await new Promise((resolve) => setTimeout(resolve, 500))
-  users.value = sampleUsers
-  updatePagination()
+  try {
+    const res = await axiosClient.get('/api/users')
+    if (res.data && res.data.status === 'Success') {
+      const BASE_URL = 'http://localhost:8000' // 👈 Thay bằng domain backend của bạn
+      console.log('🔥 Response gốc:', res)
+      users.value = res.data.data.map((u) => ({
+        id: u.id,
+        name: u.name || 'Không rõ',
+        email: u.email || '',
+        
+        // ✅ Nếu link chưa có http thì tự thêm domain backend
+        avatar_url: u.avatar_url
+          ? u.avatar_url.startsWith('http')
+            ? u.avatar_url
+            : `${BASE_URL}${u.avatar_url}`
+          : 'https://static.vecteezy.com/system/resources/previews/024/983/914/original/simple-user-default-icon-free-png.png',
+        system_role: u.system_role,
+        status: u.status,
+        project_count: u.project_count || 0,
+        phone: u.phone || '',
+        bio: u.bio || '',
+      }))
+      updatePagination()
+      console.log('✅ Users loaded:', users.value)
+    } else {
+      toast.error('Không thể tải danh sách người dùng')
+      console.warn('❌ Lỗi response:', res.data)
+    }
+  } catch (error) {
+    toast.error('Lỗi khi tải người dùng')
+    console.error('❌ loadUsers error:', error)
+  }
 }
+
 
 const updatePagination = () => {
   pagination.totalPages = Math.ceil(filteredUsers.value.length / pagination.pageSize)
@@ -446,16 +410,21 @@ const editUser = (user) => {
   showEditUserModal.value = true
 }
 
-const viewUserDetails = (user) => {
-  selectedUser.value = user
-  showUserDetailsModal.value = true
+const viewUserDetails = async (user) => {
+  try {
+    const res = await axiosClient.get(`/api/users/${user.id}`)
+    if (res.data && res.data.status === 'Success') {
+      selectedUser.value = res.data.data
+      showUserDetailsModal.value = true
+    } else {
+      toast.error('Không thể tải chi tiết người dùng')
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi xem chi tiết:', error)
+    toast.error('Lỗi khi tải chi tiết người dùng')
+  }
 }
 
-const toggleUserStatus = (user) => {
-  const newStatus = user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
-  // In real app, call API to update status
-  user.status = newStatus
-}
 
 const deleteUser = (user) => {
   deletingUser.value = user
@@ -463,9 +432,20 @@ const deleteUser = (user) => {
 }
 
 const confirmDeleteUser = async () => {
-  if (deletingUser.value) {
-    // In real app, call API to delete user
-    users.value = users.value.filter((u) => u.id !== deletingUser.value.id)
+  if (!deletingUser.value) return
+  try {
+    const res = await axiosClient.delete(`/api/users/${deletingUser.value.id}`)
+    if (res.data && res.data.status === 'Success') {
+      users.value = users.value.filter((u) => u.id !== deletingUser.value.id)
+      toast.success('Đã xóa người dùng thành công')
+    } else {
+      toast.error('Không thể xóa người dùng')
+      console.error('❌ Response:', res.data)
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi xóa người dùng:', error)
+    toast.error('Lỗi khi xóa người dùng')
+  } finally {
     showDeleteModal.value = false
     deletingUser.value = null
   }
@@ -553,22 +533,7 @@ const getStatusDisplay = (status) => {
   return statuses[status] || status
 }
 
-const formatLastLogin = (date) => {
-  if (!date) return 'Chưa đăng nhập'
-  const now = new Date()
-  const diff = now.getTime() - new Date(date).getTime()
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
 
-  if (days === 0) return 'Hôm nay'
-  if (days === 1) return '1 ngày trước'
-  if (days < 7) return `${days} ngày trước`
-  if (days < 30) return `${Math.floor(days / 7)} tuần trước`
-  return `${Math.floor(days / 30)} tháng trước`
-}
-
-const formatDate = (date) => {
-  return new Date(date).toLocaleDateString('vi-VN')
-}
 
 // Watchers - ĐÃ SỬA LỖI: Đã import watch
 watch([() => filters.role, () => filters.status, () => filters.sortBy, searchQuery], () => {
@@ -610,6 +575,7 @@ onMounted(() => {
   max-width: 1200px;
   width: 95%;
   max-height: 90vh;
+  background: white;
 }
 
 .modal-header {

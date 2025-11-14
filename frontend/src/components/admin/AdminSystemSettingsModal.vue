@@ -91,25 +91,6 @@
                       <button class="btn-logo-change" @click="triggerLogoUpload">Đổi logo</button>
                     </div>
                   </div>
-
-                  <div class="form-group">
-                    <label>Favicon</label>
-                    <div class="logo-upload">
-                      <div class="favicon-preview">
-                        <img :src="faviconPreview" alt="Favicon" />
-                      </div>
-                      <input
-                        type="file"
-                        ref="faviconInput"
-                        @change="handleFaviconUpload"
-                        accept="image/*"
-                        class="logo-input"
-                      />
-                      <button class="btn-logo-change" @click="triggerFaviconUpload">
-                        Đổi favicon
-                      </button>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -427,7 +408,7 @@ const emit = defineEmits(['save', 'close'])
 const loading = ref(false)
 const activeTab = ref('general')
 const logoInput = ref(null)
-const faviconInput = ref(null)
+
 
 const tabs = [
   { id: 'general', label: 'Chung', icon: 'settings' },
@@ -483,7 +464,7 @@ const errors = reactive({
 })
 
 const logoPreview = computed(() => formData.logo || '/default-logo.png')
-const faviconPreview = computed(() => formData.favicon || '/default-favicon.ico')
+
 
 // Initialize form data
 Object.assign(formData, props.settings)
@@ -492,9 +473,6 @@ const triggerLogoUpload = () => {
   logoInput.value?.click()
 }
 
-const triggerFaviconUpload = () => {
-  faviconInput.value?.click()
-}
 
 const handleLogoUpload = (event) => {
   const file = event.target.files[0]
@@ -507,16 +485,7 @@ const handleLogoUpload = (event) => {
   }
 }
 
-const handleFaviconUpload = (event) => {
-  const file = event.target.files[0]
-  if (file) {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      formData.favicon = e.target.result
-    }
-    reader.readAsDataURL(file)
-  }
-}
+
 
 const validateForm = () => {
   let isValid = true
@@ -589,6 +558,9 @@ const restoreBackup = async () => {
 
 .modal-content.large {
   max-width: 900px;
+  max-height: 90vh;
+  width: 100%;
+  background: white;
 }
 
 .modal-header {
@@ -629,6 +601,7 @@ const restoreBackup = async () => {
 
 .modal-body {
   padding: 0;
+  background: #e2e8f0;
 }
 
 .settings-tabs {
@@ -673,6 +646,7 @@ const restoreBackup = async () => {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
+  background: white;
 }
 
 .tab-panel {
@@ -724,11 +698,12 @@ const restoreBackup = async () => {
 }
 
 .form-input {
-  padding: 10px 12px;
+  padding: 6px 8px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   font-size: 14px;
   transition: all 0.2s;
+  max-height: 7vh;
 }
 
 .form-input:focus {
