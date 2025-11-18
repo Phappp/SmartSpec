@@ -439,4 +439,24 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     await uc.save();
     return this.getUsecaseDiagramsById(ucId);
   }
+  public async deleteUsecaseDiagram(ucId: string, userId: string): Promise<void> {
+    // Kiểm tra user có tồn tại không (tuỳ chọn)
+    const user = await new UserServiceImpl().getUserById(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Kiểm tra usecase diagram có tồn tại không
+    const ucd = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!ucd) {
+      throw new Error("Usecase Diagram not found");
+    }
+
+    // Thực hiện xóa
+    const result = await UsecaseDiagramSchema.deleteOne({ _id: ucId });
+
+    if (result.deletedCount === 0) {
+      throw new Error("Failed to delete Usecase Diagram");
+    }
+  }
 }

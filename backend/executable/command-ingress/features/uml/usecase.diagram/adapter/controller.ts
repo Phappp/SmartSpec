@@ -622,4 +622,39 @@ export class UsecaseDiagramController extends BaseController {
       }
     );
   }
+  async deleteUsecaseDiagram(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const userId = req.getSubject();
+        if (!userId) {
+          res.status(StatusCodes.UNAUTHORIZED).json({
+            status: "Error",
+            message: "Unauthorized",
+          });
+          return;
+        }
+
+        const ucId = req.params.ucId;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+
+        await this.usecaseDiagramService.deleteUsecaseDiagram(ucId, userId);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Delete Usecase Diagram Successfully",
+        });
+      }
+    );
+  }
 }

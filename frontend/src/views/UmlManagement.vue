@@ -85,24 +85,58 @@
             @click="editDiagram(diagram)"
           >
             <div class="diagram-preview">
-              <UCDRenderer
-                :diagram-data="diagram"
-                :width="200"
-                :height="200"
-                :preview-mode="true"
-                :auto-fit="true"
-                class="preview-renderer"
+              <!-- Hiển thị ảnh preview nếu có -->
+              <img
+                v-if="diagram.previewImage"
+                :src="diagram.previewImage"
+                :alt="diagram.name || 'Use Case Diagram'"
+                class="preview-image"
+                @load="onPreviewImageLoad"
+                @error="onPreviewImageError(diagram, $event)"
               />
+              <!-- Fallback: hiển thị UCDRenderer để generate preview -->
+              <div v-else class="preview-generator">
+                <UCDRenderer
+                  :ref="`previewGenerator_${diagram.id || diagram._id}`"
+                  :diagram-data="diagram"
+                  :preview-mode="true"
+                  :auto-generate-preview="true"
+                  :optimize-for-preview="true"
+                  @preview-generated="handlePreviewGenerated(diagram, $event)"
+                  class="hidden-renderer"
+                />
+                <div class="generating-preview">
+                  <div class="loading-spinner-small"></div>
+                  <span>Generating preview...</span>
+                </div>
+              </div>
+
               <div class="diagram-overlay">
-                <button class="btn-icon" @click.stop="editDiagram(diagram)" title="Edit">
-                  <span class="material-symbols-outlined">edit</span>
-                </button>
-                <button class="btn-icon" @click.stop="exportDiagram(diagram)" title="Export">
-                  <span class="material-symbols-outlined">download</span>
-                </button>
+                <div class="export-dropdown">
+                  <button
+                    class="btn-icon export-toggle"
+                    @click.stop="toggleExportDropdown(diagram)"
+                    title="Export"
+                  >
+                    <span class="material-symbols-outlined">download</span>
+                  </button>
+                  <div
+                    v-if="activeExportDropdown === (diagram.id || diagram._id)"
+                    class="export-options"
+                  >
+                    <button class="export-option" @click.stop="exportDiagramAsPNG(diagram)">
+                      <span class="material-symbols-outlined">image</span>
+                      Export PNG
+                    </button>
+                    <button class="export-option" @click.stop="exportDiagramAsSVG(diagram)">
+                      <span class="material-symbols-outlined">code</span>
+                      Export SVG
+                    </button>
+                  </div>
+                </div>
                 <button
                   class="btn-icon danger"
-                  @click.stop="deleteDiagram(diagram.id || diagram._id)"
+                  @click.stop="deleteDiagram(diagram.id || diagram._id, $event)"
                   title="Delete"
                 >
                   <span class="material-symbols-outlined">delete</span>
@@ -118,10 +152,6 @@
                 <span class="meta-item">
                   <span class="material-symbols-outlined">language</span>
                   {{ getLanguageCode(diagram.lang) }}
-                </span>
-                <span class="meta-item">
-                  <span class="material-symbols-outlined">schedule</span>
-                  {{ formatDate(diagram.updated_at || diagram.updatedAt) }}
                 </span>
               </div>
               <div class="diagram-stats">
@@ -176,7 +206,7 @@
               </div>
             </div>
             <div class="col-date">
-              {{ formatDate(diagram.updated_at || diagram.updatedAt) }}
+              {{ formatDate(diagram.updatedAt || diagram.createdAt) }}
             </div>
             <div class="col-actions">
               <button class="btn-icon" @click.stop="editDiagram(diagram)" title="Edit">
@@ -274,8 +304,6 @@
                 <UCDRenderer
                   ref="ucdEditor"
                   :diagram-data="editingDiagram"
-                  :width="editorWidth"
-                  :height="editorHeight"
                   :editable="true"
                   :show-labels="showElementLabels"
                   :show-relationship-labels="showRelationshipLabels"
@@ -298,9 +326,8 @@ import { getProjectDetail } from '@/api/project'
 import {
   getUsecaseDiagrams,
   generateUsecaseDiagram,
-  deleteUsecase,
+  deleteUsecaseDiagram,
   updateMultiplePositions,
-  resetPositions,
 } from '@/api/ucd'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
@@ -334,7 +361,6 @@ export default {
       showGenerateModal: false,
       editingDiagram: null,
       generating: false,
-      saveTimeout: null,
 
       generateForm: {
         description: '',
@@ -350,12 +376,42 @@ export default {
       showRelationshipLabels: true,
       zoomLevel: 1,
 
-      // Dimensions
-      editorWidth: 8000,
-      editorHeight: 6000,
+      // Preview management
+      previewCache: new Map(),
+      generatingPreviews: new Set(),
+      needsPreviewRegeneration: false,
+      currentEditingDiagramId: null,
+
+      // Export dropdown state
+      activeExportDropdown: null,
 
       toast: useToast(),
+      saveTimeout: null,
     }
+  },
+  watch: {
+    diagrams: {
+      handler(newDiagrams) {
+        if (newDiagrams && newDiagrams.length > 0) {
+          this.$nextTick(() => {
+            setTimeout(() => {
+              this.triggerPreviewGenerationForAllDiagrams()
+            }, 500)
+          })
+        }
+      },
+      deep: true,
+      immediate: false,
+    },
+    editingDiagram: {
+      handler(newDiagram) {
+        if (newDiagram) {
+          this.currentEditingDiagramId = newDiagram.id || newDiagram._id
+        }
+      },
+      deep: true,
+      immediate: true,
+    },
   },
   async created() {
     const projectId = this.$route.params.id
@@ -364,14 +420,13 @@ export default {
       await this.loadDiagrams()
       this.initSocketConnection(projectId)
     }
+    document.addEventListener('click', this.handleClickOutside)
   },
   beforeUnmount() {
-    if (this.saveTimeout) {
-      clearTimeout(this.saveTimeout)
-    }
     if (this.project._id) {
       this.cleanupSocketConnection(this.project._id)
     }
+    document.removeEventListener('click', this.handleClickOutside)
   },
   methods: {
     // Navigation
@@ -416,13 +471,109 @@ export default {
       this.loading = true
       try {
         const { data } = await getUsecaseDiagrams(this.selectedVersionId)
-        this.diagrams = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []
+        const diagrams = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []
+
+        this.diagrams = diagrams.map((diagram) => {
+          const diagramId = diagram.id || diagram._id
+          if (this.previewCache.has(diagramId)) {
+            return {
+              ...diagram,
+              previewImage: this.previewCache.get(diagramId),
+            }
+          }
+          return diagram
+        })
+
+        this.$nextTick(() => {
+          setTimeout(() => {
+            this.triggerPreviewGenerationForAllDiagrams()
+          }, 300)
+        })
       } catch (err) {
         console.error('Error loading diagrams:', err)
         this.toast.error('Failed to load diagrams')
         this.diagrams = []
       } finally {
         this.loading = false
+      }
+    },
+
+    // Preview Generation
+    triggerPreviewGenerationForAllDiagrams() {
+      console.log('🔄 Starting preview generation for all diagrams...')
+
+      this.diagrams.forEach((diagram, index) => {
+        const diagramId = diagram.id || diagram._id
+        const needsPreview = !diagram.previewImage && !this.previewCache.has(diagramId)
+
+        if (needsPreview) {
+          setTimeout(() => {
+            this.triggerPreviewGeneration(diagram)
+          }, index * 500)
+        } else {
+          console.log(`✅ Preview already exists for diagram: ${diagramId}`)
+        }
+      })
+    },
+
+    async triggerPreviewGeneration(diagram) {
+      const diagramId = diagram.id || diagram._id
+
+      if (this.generatingPreviews.has(diagramId)) {
+        console.log(`⏳ Preview already generating for: ${diagramId}`)
+        return
+      }
+
+      this.generatingPreviews.add(diagramId)
+      console.log(`🚀 Starting preview generation for: ${diagramId}`)
+
+      try {
+        await this.$nextTick()
+        await new Promise((resolve) => setTimeout(resolve, 100))
+
+        const rendererRef = `previewGenerator_${diagramId}`
+        console.log(`🔍 Looking for renderer ref: ${rendererRef}`)
+
+        if (this.$refs[rendererRef] && this.$refs[rendererRef][0]) {
+          const renderer = this.$refs[rendererRef][0]
+          console.log(`✅ Found renderer for: ${diagramId}`)
+
+          if (typeof renderer.generatePreviewImage === 'function') {
+            console.log(`🎨 Calling generatePreviewImage for: ${diagramId}`)
+
+            const previewData = await renderer.generatePreviewImage()
+            if (previewData) {
+              console.log(`✅ Preview generated successfully for: ${diagramId}`)
+              this.handlePreviewGenerated(diagram, previewData)
+            } else {
+              console.warn(`❌ No preview data returned for: ${diagramId}`)
+            }
+          } else {
+            console.error(`❌ generatePreviewImage method not found in renderer for: ${diagramId}`)
+          }
+        } else {
+          console.error(`❌ Renderer ref not found for: ${diagramId}`, this.$refs[rendererRef])
+
+          setTimeout(() => {
+            if (!this.previewCache.has(diagramId)) {
+              console.log(`🔄 Retrying preview generation for: ${diagramId}`)
+              this.triggerPreviewGeneration(diagram)
+            }
+          }, 1000)
+          return
+        }
+      } catch (error) {
+        console.error(`💥 Error generating preview for ${diagramId}:`, error)
+
+        setTimeout(() => {
+          if (!this.previewCache.has(diagramId)) {
+            console.log(`🔄 Retrying after error for: ${diagramId}`)
+            this.triggerPreviewGeneration(diagram)
+          }
+        }, 2000)
+      } finally {
+        this.generatingPreviews.delete(diagramId)
+        console.log(`🏁 Finished preview generation attempt for: ${diagramId}`)
       }
     },
 
@@ -455,7 +606,10 @@ export default {
           this.closeGenerateModal()
           this.toast.success('Diagram generated successfully!')
 
-          // Auto open the new diagram for editing
+          setTimeout(() => {
+            this.triggerPreviewGeneration(newDiagram)
+          }, 1000)
+
           setTimeout(() => {
             this.editDiagram(newDiagram)
           }, 500)
@@ -477,130 +631,720 @@ export default {
     },
 
     editDiagram(diagram) {
-      // Sử dụng trực tiếp diagram được truyền vào, không load lại từ server
       this.editingDiagram = { ...diagram }
       this.selectedElement = null
       this.zoomLevel = 1
-
-      console.log('📝 Editing diagram:', this.editingDiagram)
     },
 
-    // Trong methods của UmlManagement.vue
     closeEditor() {
-      // Chỉ đóng editor, KHÔNG load lại dữ liệu
+      const editedDiagramId = this.editingDiagram
+        ? this.editingDiagram.id || this.editingDiagram._id
+        : null
+
       this.editingDiagram = null
       this.selectedElement = null
 
-      // Load lại dữ liệu mới từ server sau khi đóng editor
+      if (editedDiagramId) {
+        const diagram = this.diagrams.find((d) => (d.id || d._id) === editedDiagramId)
+        if (diagram) {
+          console.log('🔄 Regenerating preview for edited diagram:', editedDiagramId)
+          this.regeneratePreview(diagram)
+          this.previewCache.delete(editedDiagramId)
+        }
+      }
+
       this.loadDiagrams().then(() => {
         console.log('🔄 Diagrams reloaded after closing editor')
       })
     },
 
-    async deleteDiagram(diagramId) {
-      if (!confirm('Are you sure you want to delete this diagram?')) return
+    async deleteDiagram(diagramId, event) {
+      if (event) {
+        event.stopPropagation()
+      }
+
+      const diagram = this.diagrams.find((d) => (d.id || d._id) === diagramId)
+      const diagramName = diagram?.name || 'Unnamed Diagram'
+
+      if (
+        !confirm(`Are you sure you want to delete "${diagramName}"? This action cannot be undone.`)
+      ) {
+        return
+      }
+
+      const deleteButton = event?.target
+      const originalHTML = deleteButton?.innerHTML
+      if (deleteButton) {
+        deleteButton.innerHTML = '<span class="loading-spinner-small"></span>'
+        deleteButton.disabled = true
+      }
 
       try {
-        await deleteUsecase(diagramId)
+        await deleteUsecaseDiagram(diagramId)
         this.diagrams = this.diagrams.filter((d) => (d.id || d._id) !== diagramId)
+
+        this.previewCache.delete(diagramId)
+        this.generatingPreviews.delete(diagramId)
+
         if (
           this.editingDiagram &&
           (this.editingDiagram.id || this.editingDiagram._id) === diagramId
         ) {
           this.closeEditor()
         }
-        this.toast.success('Diagram deleted successfully')
+
+        this.toast.success(`Diagram deleted successfully`)
       } catch (err) {
         console.error('Error deleting diagram:', err)
-        this.toast.error('Failed to delete diagram')
+        this.toast.error(
+          'Failed to delete diagram: ' + (err.response?.data?.message || err.message)
+        )
+      } finally {
+        if (deleteButton) {
+          deleteButton.innerHTML = originalHTML
+          deleteButton.disabled = false
+        }
       }
     },
 
-    // Sửa lại phương thức saveDiagramPositions để KHÔNG load lại diagrams
-    async saveDiagramPositions() {
-      if (!this.editingDiagram) {
-        console.log('❌ No editing diagram to save')
-        return
-      }
-
+    // Export Methods
+    async exportDiagramAsPNG(diagram) {
       try {
-        const diagramId = this.editingDiagram.id || this.editingDiagram._id
-        if (!diagramId) {
-          console.log('❌ No diagram ID found')
+        const diagramId = diagram.id || diagram._id
+        const rendererRef = `previewGenerator_${diagramId}`
+
+        if (this.$refs[rendererRef] && this.$refs[rendererRef][0]) {
+          const renderer = this.$refs[rendererRef][0]
+          if (renderer.exportAsPNG) {
+            await renderer.exportAsPNG()
+            this.toast.success('Diagram exported as PNG successfully!')
+          } else {
+            this.toast.error('Export functionality not available')
+          }
+        } else {
+          await this.exportAsPNGFallback(diagram)
+        }
+        this.closeExportDropdown()
+      } catch (err) {
+        console.error('Error exporting PNG:', err)
+        this.toast.error('Failed to export PNG: ' + (err.message || 'Unknown error'))
+      }
+    },
+
+    async exportDiagramAsSVG(diagram) {
+      try {
+        const diagramId = diagram.id || diagram._id
+        const rendererRef = `previewGenerator_${diagramId}`
+
+        if (this.$refs[rendererRef] && this.$refs[rendererRef][0]) {
+          const renderer = this.$refs[rendererRef][0]
+          if (renderer.exportAsSVG) {
+            renderer.exportAsSVG()
+            this.toast.success('Diagram exported as SVG successfully!')
+          } else {
+            this.toast.error('SVG export functionality not available')
+          }
+        } else {
+          await this.exportAsSVGFallback(diagram)
+        }
+        this.closeExportDropdown()
+      } catch (err) {
+        console.error('Error exporting SVG:', err)
+        this.toast.error('Failed to export SVG: ' + (err.message || 'Unknown error'))
+      }
+    },
+
+    // Fallback export methods
+    async exportAsPNGFallback(diagram) {
+      try {
+        const allElements = [
+          ...this.getComputedActors(diagram),
+          ...this.getComputedUsecases(diagram),
+        ]
+        if (allElements.length === 0) {
+          this.toast.error('No content to export!')
           return
         }
 
-        console.log('💾 Saving positions for diagram:', diagramId)
-
-        const updates = {
-          actors: this.editingDiagram.actors.map((actor) => ({
-            id: actor._id || actor.id,
-            position: actor.position || { x: 0, y: 0 },
-          })),
-          usecases: this.editingDiagram.usecases.map((usecase) => ({
-            id: usecase._id || usecase.id,
-            position: usecase.position || { x: 0, y: 0 },
-          })),
-        }
-
-        console.log('🚀 Calling API with updates:', updates)
-
-        const response = await updateMultiplePositions(diagramId, updates)
-        console.log('✅ Save response:', response)
-
-        this.toast.success('Positions saved successfully')
-
-        // ❌ REMOVE THIS LINE - Không load lại diagrams khi save
-        // await this.loadDiagrams()
-      } catch (err) {
-        console.error('❌ Error saving positions:', err)
-        this.toast.error(
-          'Failed to save positions: ' + (err.response?.data?.message || err.message)
+        const bounds = allElements.reduce(
+          (acc, element) => ({
+            minX: Math.min(acc.minX, element.x - (element.width || 60)),
+            maxX: Math.max(acc.maxX, element.x + (element.width || 60)),
+            minY: Math.min(acc.minY, element.y - (element.height || 60)),
+            maxY: Math.max(acc.maxY, element.y + (element.height || 60)),
+          }),
+          { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
         )
+
+        const padding = 100
+        const contentWidth = Math.max(bounds.maxX - bounds.minX + padding * 2, 800)
+        const contentHeight = Math.max(bounds.maxY - bounds.minY + padding * 2, 600)
+
+        const svgString = this.generateExportSVG(
+          diagram,
+          bounds,
+          padding,
+          contentWidth,
+          contentHeight
+        )
+        const svgData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`
+
+        const img = new Image()
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+
+        canvas.width = contentWidth
+        canvas.height = contentHeight
+        ctx.fillStyle = 'white'
+        ctx.fillRect(0, 0, contentWidth, contentHeight)
+
+        return new Promise((resolve, reject) => {
+          img.onload = () => {
+            try {
+              ctx.drawImage(img, 0, 0, contentWidth, contentHeight)
+
+              canvas.toBlob(
+                (blob) => {
+                  if (!blob) {
+                    reject(new Error('Could not create blob from canvas'))
+                    return
+                  }
+
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `use-case-diagram-${
+                    diagram.name || 'export'
+                  }-${new Date().getTime()}.png`
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                  URL.revokeObjectURL(url)
+                  resolve()
+                },
+                'image/png',
+                1.0
+              )
+            } catch (error) {
+              console.error('Error drawing image:', error)
+              reject(error)
+            }
+          }
+          img.onerror = (error) => {
+            console.error('Error loading SVG:', error)
+            reject(new Error('Could not load SVG for export.'))
+          }
+          img.src = svgData
+        })
+      } catch (err) {
+        console.error('Error in PNG fallback export:', err)
+        throw err
       }
     },
 
-    async resetDiagramPositions() {
-      if (!this.editingDiagram) return
-
+    async exportAsSVGFallback(diagram) {
       try {
-        await resetPositions(this.editingDiagram.id || this.editingDiagram._id)
-        // Reload the diagram to get new positions
-        await this.loadDiagrams()
-        const updatedDiagram = this.diagrams.find(
-          (d) => (d.id || d._id) === (this.editingDiagram.id || this.editingDiagram._id)
-        )
-        if (updatedDiagram) {
-          this.editingDiagram = { ...updatedDiagram }
+        const allElements = [
+          ...this.getComputedActors(diagram),
+          ...this.getComputedUsecases(diagram),
+        ]
+        if (allElements.length === 0) {
+          this.toast.error('No content to export!')
+          return
         }
-        this.toast.success('Layout reset successfully')
+
+        const bounds = allElements.reduce(
+          (acc, element) => ({
+            minX: Math.min(acc.minX, element.x - (element.width || 60)),
+            maxX: Math.max(acc.maxX, element.x + (element.width || 60)),
+            minY: Math.min(acc.minY, element.y - (element.height || 60)),
+            maxY: Math.max(acc.maxY, element.y + (element.height || 60)),
+          }),
+          { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
+        )
+
+        const padding = 100
+        const contentWidth = Math.max(bounds.maxX - bounds.minX + padding * 2, 800)
+        const contentHeight = Math.max(bounds.maxY - bounds.minY + padding * 2, 600)
+
+        const svgContent = this.generateExportSVG(
+          diagram,
+          bounds,
+          padding,
+          contentWidth,
+          contentHeight
+        )
+        const blob = new Blob([svgContent], { type: 'image/svg+xml' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `use-case-diagram-${diagram.name || 'export'}-${new Date().getTime()}.svg`
+        a.click()
+        URL.revokeObjectURL(url)
       } catch (err) {
-        console.error('Error resetting positions:', err)
-        this.toast.error('Failed to reset layout')
+        console.error('Error in SVG fallback export:', err)
+        throw err
       }
     },
 
-    exportDiagram(diagram) {
-      if (this.$refs.ucdEditor) {
-        this.$refs.ucdEditor.exportAsPNG().then((blob) => {
-          if (blob) {
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `${diagram.name || 'usecase-diagram'}.png`
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
-            URL.revokeObjectURL(url)
-            this.toast.success('Diagram exported successfully')
+    // Export dropdown methods
+    toggleExportDropdown(diagram) {
+      const diagramId = diagram.id || diagram._id
+      this.activeExportDropdown = this.activeExportDropdown === diagramId ? null : diagramId
+    },
+
+    closeExportDropdown() {
+      this.activeExportDropdown = null
+    },
+
+    handleClickOutside(event) {
+      if (!event.target.closest('.export-dropdown')) {
+        this.closeExportDropdown()
+      }
+    },
+
+    // Helper methods for export
+    getComputedActors(diagram) {
+      const actors = Array.isArray(diagram?.actors) ? diagram.actors : []
+      if (actors.length === 0) return []
+
+      const virtualSpace = {
+        minX: -1000,
+        maxX: 2200,
+        minY: -1000,
+        maxY: 1800,
+        centerX: 600,
+        centerY: 400,
+      }
+
+      return actors.map((actor, index) => {
+        const position = actor.position || { x: 0, y: 0 }
+
+        return {
+          id: this.normalizeId(actor._id) || this.normalizeId(actor.id) || `actor-${index}`,
+          name: actor.name || 'Unnamed Actor',
+          description: actor.description || '',
+          x: position.x || virtualSpace.centerX - 200 + (index % 2) * 200,
+          y: position.y || virtualSpace.centerY - 100 + Math.floor(index / 2) * 120,
+          width: 80,
+          height: 80,
+          _originalData: actor,
+        }
+      })
+    },
+
+    getComputedUsecases(diagram) {
+      const usecases = Array.isArray(diagram?.usecases) ? diagram.usecases : []
+      if (!usecases || usecases.length === 0) return []
+
+      const virtualSpace = {
+        minX: -1000,
+        maxX: 2200,
+        minY: -1000,
+        maxY: 1800,
+        centerX: 600,
+        centerY: 400,
+      }
+
+      return usecases.map((uc, index) => {
+        const position = uc.position || { x: 0, y: 0 }
+
+        return {
+          id: this.normalizeId(uc._id) || this.normalizeId(uc.id) || `uc-${index}`,
+          title: uc.title || 'Unnamed Use Case',
+          description: uc.description || '',
+          x: position.x || virtualSpace.centerX + (index % 4) * 150,
+          y: position.y || virtualSpace.centerY - 150 + Math.floor(index / 4) * 100,
+          width: 120,
+          height: 40,
+          _originalData: uc,
+        }
+      })
+    },
+
+    generateExportSVG(diagram, bounds, padding, contentWidth, contentHeight) {
+      const computedActors = this.getComputedActors(diagram)
+      const computedUsecases = this.getComputedUsecases(diagram)
+      const computedAssociations = this.getComputedAssociations(diagram)
+      const computedRelationships = this.getComputedRelationships(diagram)
+
+      const viewBox = `${bounds.minX - padding} ${
+        bounds.minY - padding
+      } ${contentWidth} ${contentHeight}`
+
+      return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${contentWidth}" height="${contentHeight}" viewBox="${viewBox}">
+  <defs>
+    <marker id="association-arrow-export" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#374151" />
+    </marker>
+    <marker id="include-arrow-export" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
+    </marker>
+    <marker id="extend-arrow-export" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b5cf6" />
+    </marker>
+    <marker id="generalization-arrow-export" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 L 2.5 5 z" fill="#10b981" stroke="#10b981" stroke-width="1" />
+    </marker>
+  </defs>
+
+  <!-- Background trắng -->
+  <rect x="${bounds.minX - padding}" y="${bounds.minY - padding}" 
+        width="${contentWidth}" height="${contentHeight}" fill="white" />
+
+  <!-- Render Associations -->
+  ${computedAssociations
+    .map((assoc) => {
+      const path = this.calculateAssociationPath(assoc)
+      return `<path d="${path}" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#association-arrow-export)" />`
+    })
+    .join('')}
+
+  <!-- Render Relationships -->
+  ${computedRelationships
+    .map((rel) => {
+      const path = this.calculateRelationshipPath(rel)
+      const marker = this.getRelationshipMarkerExport(rel.type)
+      const dashArray = rel.type === 'extend' ? 'stroke-dasharray="5,3"' : ''
+      const label = this.getRelationshipLabel(rel.type)
+      const labelPos = this.getRelationshipLabelPosition(rel)
+
+      const labelContent =
+        rel.type !== 'association'
+          ? `
+      <g>
+        <rect x="${labelPos.x - 20}" y="${
+              labelPos.y - 8
+            }" width="40" height="16" rx="3" fill="white" stroke="#e5e7eb" stroke-width="1" />
+        <text x="${labelPos.x}" y="${
+              labelPos.y
+            }" font-size="9" fill="#374151" text-anchor="middle" dominant-baseline="middle">${label}</text>
+      </g>
+    `
+          : ''
+
+      return `
+      <path d="${path}" stroke="${this.getRelationshipColor(
+        rel.type
+      )}" stroke-width="1.5" fill="none" ${dashArray} marker-end="${marker}" />
+      ${labelContent}
+    `
+    })
+    .join('')}
+
+  <!-- Render Use Cases -->
+  ${computedUsecases
+    .map(
+      (uc) => `
+    <g>
+      <ellipse cx="${uc.x}" cy="${uc.y}" rx="${uc.width / 2}" ry="${
+        uc.height / 2
+      }" fill="white" stroke="#3b82f6" stroke-width="2" />
+      <text x="${uc.x}" y="${
+        uc.y
+      }" font-size="10" fill="#1e40af" text-anchor="middle" dominant-baseline="middle">${
+        uc.title
+      }</text>
+    </g>
+  `
+    )
+    .join('')}
+
+  <!-- Render Actors -->
+  ${computedActors
+    .map(
+      (actor) => `
+    <g>
+      <circle cx="${actor.x}" cy="${
+        actor.y - 20
+      }" r="12" fill="white" stroke="#1f2937" stroke-width="2" />
+      <line x1="${actor.x}" y1="${actor.y - 8}" x2="${actor.x}" y2="${
+        actor.y + 15
+      }" stroke="#1f2937" stroke-width="2" />
+      <line x1="${actor.x - 12}" y1="${actor.y + 5}" x2="${actor.x + 12}" y2="${
+        actor.y + 5
+      }" stroke="#1f2937" stroke-width="2" />
+      <line x1="${actor.x}" y1="${actor.y + 15}" x2="${actor.x - 10}" y2="${
+        actor.y + 30
+      }" stroke="#1f2937" stroke-width="2" />
+      <line x1="${actor.x}" y1="${actor.y + 15}" x2="${actor.x + 10}" y2="${
+        actor.y + 30
+      }" stroke="#1f2937" stroke-width="2" />
+      <text x="${actor.x}" y="${
+        actor.y + 50
+      }" font-size="11" fill="#374151" text-anchor="middle" dominant-baseline="middle">${
+        actor.name
+      }</text>
+    </g>
+  `
+    )
+    .join('')}
+</svg>`
+    },
+
+    // Additional helper methods for export
+    getRelationshipMarkerExport(type) {
+      const markers = {
+        include: 'url(#include-arrow-export)',
+        extend: 'url(#extend-arrow-export)',
+        generalization: 'url(#generalization-arrow-export)',
+      }
+      return markers[type] || 'url(#association-arrow-export)'
+    },
+
+    getRelationshipLabel(type) {
+      const labels = {
+        include: '«include»',
+        extend: '«extend»',
+        generalization: '«inherits»',
+      }
+      return labels[type] || ''
+    },
+
+    getRelationshipColor(type) {
+      const colors = {
+        include: '#3b82f6',
+        extend: '#8b5cf6',
+        generalization: '#10b981',
+        association: '#374151',
+      }
+      return colors[type] || '#374151'
+    },
+
+    calculateAssociationPath(association) {
+      const { actor, usecase } = association
+      const dx = usecase.x - actor.x
+      const dy = usecase.y - actor.y
+      const length = Math.sqrt(dx * dx + dy * dy)
+      if (length === 0) return ''
+
+      const nx = dx / length
+      const ny = dy / length
+      const actorOffset = 25
+      const usecaseOffset = this.calculateUsecaseOffset(usecase, -nx, -ny)
+
+      const startX = actor.x + nx * actorOffset
+      const startY = actor.y + ny * actorOffset
+      const endX = usecase.x - nx * usecaseOffset
+      const endY = usecase.y - ny * usecaseOffset
+
+      return `M ${startX} ${startY} L ${endX} ${endY}`
+    },
+
+    calculateRelationshipPath(relationship) {
+      const { source, target } = relationship
+      if (source.id === target.id) {
+        return `M ${source.x} ${source.y} C ${source.x + 50} ${source.y - 50} ${source.x + 50} ${
+          source.y - 50
+        } ${source.x} ${source.y}`
+      }
+
+      const dx = target.x - source.x
+      const dy = target.y - source.y
+      const length = Math.sqrt(dx * dx + dy * dy)
+      if (length === 0) return ''
+
+      const nx = dx / length
+      const ny = dy / length
+      const sourceOffset = this.getElementOffset(source, nx, ny)
+      const targetOffset = this.getElementOffset(target, -nx, -ny)
+
+      const startX = source.x + nx * sourceOffset
+      const startY = source.y + ny * sourceOffset
+      const endX = target.x - nx * targetOffset
+      const endY = target.y - ny * targetOffset
+
+      return `M ${startX} ${startY} L ${endX} ${endY}`
+    },
+
+    calculateUsecaseOffset(usecase, nx, ny) {
+      const rx = usecase.width / 2
+      const ry = usecase.height / 2
+      if (nx === 0) return ry
+      if (ny === 0) return rx
+
+      const angle = Math.atan2(ny, nx)
+      const cosAngle = Math.cos(angle)
+      const sinAngle = Math.sin(angle)
+      return Math.sqrt((rx * cosAngle) ** 2 + (ry * sinAngle) ** 2)
+    },
+
+    getElementOffset(element, nx, ny) {
+      if (element.width && element.height) return this.calculateUsecaseOffset(element, nx, ny)
+      else return 25
+    },
+
+    getRelationshipLabelPosition(relationship) {
+      const { source, target } = relationship
+      const midX = (source.x + target.x) / 2
+      const midY = (source.y + target.y) / 2
+
+      const dx = target.x - source.x
+      const dy = target.y - source.y
+      const length = Math.sqrt(dx * dx + dy * dy)
+      const offset = Math.min(30, length * 0.2)
+
+      const perpendicularX = (-dy / length) * offset
+      const perpendicularY = (dx / length) * offset
+
+      return { x: midX + perpendicularX, y: midY + perpendicularY }
+    },
+
+    getComputedAssociations(diagram) {
+      const associations = Array.isArray(diagram?.associations) ? diagram.associations : []
+      const actors = this.getComputedActors(diagram)
+      const usecases = this.getComputedUsecases(diagram)
+
+      if (
+        !associations ||
+        associations.length === 0 ||
+        actors.length === 0 ||
+        usecases.length === 0
+      ) {
+        return []
+      }
+
+      return associations
+        .map((assoc) => {
+          try {
+            const actorId = this.normalizeId(assoc.actor_id)
+            const usecaseId = this.normalizeId(assoc.usecase_id)
+            if (!actorId || !usecaseId) return null
+
+            const actor = actors.find((a) => a.id === actorId)
+            const usecase = usecases.find((uc) => uc.id === usecaseId)
+            if (!actor || !usecase) return null
+
+            return {
+              id:
+                this.normalizeId(assoc._id) ||
+                this.normalizeId(assoc.id) ||
+                `assoc-${actorId}-${usecaseId}`,
+              actor,
+              usecase,
+            }
+          } catch (error) {
+            console.warn('Error processing association:', error)
+            return null
           }
         })
+        .filter(Boolean)
+    },
+
+    getComputedRelationships(diagram) {
+      const relationships = Array.isArray(diagram?.relationships) ? diagram.relationships : []
+      const actors = this.getComputedActors(diagram)
+      const usecases = this.getComputedUsecases(diagram)
+
+      if (!relationships || relationships.length === 0) return []
+
+      return relationships
+        .map((rel) => {
+          try {
+            const sourceId = this.normalizeId(rel.source)
+            const targetId = this.normalizeId(rel.target)
+            if (!sourceId || !targetId) return null
+
+            let source =
+              usecases.find((uc) => uc.id === sourceId) ||
+              actors.find((actor) => actor.id === sourceId)
+            let target =
+              usecases.find((uc) => uc.id === targetId) ||
+              actors.find((actor) => actor.id === targetId)
+            if (!source || !target) return null
+
+            return {
+              id:
+                this.normalizeId(rel._id) ||
+                this.normalizeId(rel.id) ||
+                `rel-${sourceId}-${targetId}`,
+              source,
+              target,
+              type: rel.type || 'association',
+            }
+          } catch (error) {
+            console.warn('Error processing relationship:', error)
+            return null
+          }
+        })
+        .filter(Boolean)
+    },
+
+    normalizeId(id) {
+      if (!id) return null
+      if (typeof id === 'object' && id.$oid) return id.$oid
+      if (typeof id === 'string') return id
+      if (typeof id === 'object') return String(id)
+      return String(id)
+    },
+
+    // Preview Image Management
+    handlePreviewGenerated(diagram, previewData) {
+      if (previewData) {
+        const diagramId = diagram.id || diagram._id
+
+        console.log('✅ Preview generated and saved for diagram:', diagramId)
+
+        this.previewCache.set(diagramId, previewData)
+
+        const diagramIndex = this.diagrams.findIndex((d) => (d.id || d._id) === diagramId)
+        if (diagramIndex !== -1) {
+          this.diagrams[diagramIndex].previewImage = previewData
+          console.log(`🖼️ Preview image set for diagram: ${diagramId}`)
+        }
+
+        this.generatingPreviews.delete(diagramId)
+      } else {
+        console.warn('❌ No preview data received for diagram:', diagram.id || diagram._id)
       }
     },
 
-    async refreshDiagrams() {
-      await this.loadDiagrams()
-      this.toast.success('Diagrams refreshed')
+    onPreviewImageLoad(event) {
+      console.log('🖼️ Preview image loaded successfully')
+      event.target.style.opacity = '1'
+    },
+
+    onPreviewImageError(diagram, event) {
+      const diagramId = diagram.id || diagram._id
+      console.warn('❌ Preview image failed to load for diagram:', diagramId)
+      event.target.style.display = 'none'
+
+      if (!this.generatingPreviews.has(diagramId)) {
+        console.log('🔄 Regenerating preview due to image load error')
+        this.triggerPreviewGeneration(diagram)
+      }
+    },
+
+    async regeneratePreview(diagram) {
+      const diagramId = diagram.id || diagram._id
+      if (this.generatingPreviews.has(diagramId)) {
+        console.log('⏳ Preview regeneration already in progress for:', diagramId)
+        return
+      }
+
+      console.log('🔄 Manually regenerating preview for:', diagramId)
+
+      this.previewCache.delete(diagramId)
+      const diagramIndex = this.diagrams.findIndex((d) => (d.id || d._id) === diagramId)
+      if (diagramIndex !== -1) {
+        delete this.diagrams[diagramIndex].previewImage
+      }
+
+      this.triggerPreviewGeneration(diagram)
+    },
+
+    forceRegenerateAllPreviews() {
+      console.log('🔄 Force regenerating all previews')
+
+      this.previewCache.clear()
+      this.generatingPreviews.clear()
+
+      this.diagrams.forEach((diagram) => {
+        delete diagram.previewImage
+      })
+
+      this.triggerPreviewGenerationForAllDiagrams()
     },
 
     // Editor Methods
@@ -623,84 +1367,80 @@ export default {
           (a) => (a._id || a.id) === (element._id || element.id)
         )
         if (actorIndex !== -1) {
-          this.editingDiagram.actors[actorIndex].position = position
+          if (!this.editingDiagram.actors[actorIndex].position) {
+            this.editingDiagram.actors[actorIndex].position = {}
+          }
+          this.editingDiagram.actors[actorIndex].position.x = Math.round(position.x)
+          this.editingDiagram.actors[actorIndex].position.y = Math.round(position.y)
         }
       } else if (type === 'usecase') {
         const usecaseIndex = this.editingDiagram.usecases.findIndex(
           (uc) => (uc._id || uc.id) === (element._id || element.id)
         )
         if (usecaseIndex !== -1) {
-          this.editingDiagram.usecases[usecaseIndex].position = position
+          if (!this.editingDiagram.usecases[usecaseIndex].position) {
+            this.editingDiagram.usecases[usecaseIndex].position = {}
+          }
+          this.editingDiagram.usecases[usecaseIndex].position.x = Math.round(position.x)
+          this.editingDiagram.usecases[usecaseIndex].position.y = Math.round(position.y)
         }
       }
+
+      if (this.$refs.ucdEditor && this.$refs.ucdEditor.onSaveStart) {
+        this.$refs.ucdEditor.onSaveStart()
+      }
+
+      this.debounceSave()
     },
 
     handleElementDrag({ element, type, newPosition }) {
       this.handlePositionUpdate({ element, type, position: newPosition })
     },
 
-    updateElementProperty() {
-      // Properties are updated reactively through v-model
-    },
-
-    updateElementPosition() {
-      if (this.selectedElement && this.selectedElementType) {
-        this.handlePositionUpdate({
-          element: this.selectedElement,
-          type: this.selectedElementType,
-          position: this.selectedElement.position,
-        })
+    debounceSave() {
+      if (this.saveTimeout) {
+        clearTimeout(this.saveTimeout)
       }
+      this.saveTimeout = setTimeout(() => {
+        this.saveDiagramPositions()
+      }, 1500)
     },
 
-    deleteSelectedElement() {
-      if (!this.selectedElement || !this.selectedElementType || !this.editingDiagram) return
+    async saveDiagramPositions() {
+      if (!this.editingDiagram) return
 
-      const id = this.selectedElement._id || this.selectedElement.id
+      try {
+        const diagramId = this.editingDiagram.id || this.editingDiagram._id
+        if (!diagramId) return
 
-      if (this.selectedElementType === 'actor') {
-        this.editingDiagram.actors = this.editingDiagram.actors.filter(
-          (a) => (a._id || a.id) !== id
-        )
-        // Also remove associated associations
-        this.editingDiagram.associations = this.editingDiagram.associations.filter(
-          (assoc) => (assoc.actor_id || assoc.actor) !== id
-        )
-      } else if (this.selectedElementType === 'usecase') {
-        this.editingDiagram.usecases = this.editingDiagram.usecases.filter(
-          (uc) => (uc._id || uc.id) !== id
-        )
-        // Also remove associated associations and relationships
-        this.editingDiagram.associations = this.editingDiagram.associations.filter(
-          (assoc) => (assoc.usecase_id || assoc.usecase) !== id
-        )
-        this.editingDiagram.relationships = this.editingDiagram.relationships.filter(
-          (rel) => rel.source !== id && rel.target !== id
-        )
+        const updates = {
+          actors: this.editingDiagram.actors.map((actor) => ({
+            id: actor._id || actor.id,
+            position: actor.position || { x: 0, y: 0 },
+          })),
+          usecases: this.editingDiagram.usecases.map((usecase) => ({
+            id: usecase._id || usecase.id,
+            position: usecase.position || { x: 0, y: 0 },
+          })),
+        }
+
+        await updateMultiplePositions(diagramId, updates)
+
+        if (this.$refs.ucdEditor && this.$refs.ucdEditor.onSaveComplete) {
+          this.$refs.ucdEditor.onSaveComplete(true)
+        }
+
+        console.log('💾 Positions saved successfully')
+        this.needsPreviewRegeneration = true
+      } catch (err) {
+        console.error('❌ Error saving positions:', err)
+
+        if (this.$refs.ucdEditor && this.$refs.ucdEditor.onSaveComplete) {
+          this.$refs.ucdEditor.onSaveComplete(false)
+        }
+
+        this.toast.error('Failed to save positions')
       }
-
-      this.selectedElement = null
-      this.selectedElementType = null
-      this.toast.success('Element deleted')
-    },
-
-    // Zoom and View Controls
-    fitToViewport() {
-      if (this.$refs.ucdEditor) {
-        this.$refs.ucdEditor.fitToViewport()
-      }
-    },
-
-    zoomIn() {
-      this.zoomLevel = Math.min(2, this.zoomLevel + 0.1)
-    },
-
-    zoomOut() {
-      this.zoomLevel = Math.max(0.5, this.zoomLevel - 0.1)
-    },
-
-    resetZoom() {
-      this.zoomLevel = 1
     },
 
     // Helper methods
@@ -723,109 +1463,8 @@ export default {
     },
 
     formatDate(dateString) {
-      if (!dateString) return 'Unknown'
-      try {
-        return new Date(dateString).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        })
-      } catch (error) {
-        return 'Invalid Date'
-      }
-    },
-    async handlePositionUpdate({ element, type, position }) {
-      if (!this.editingDiagram) return
-
-      console.log('📍 Position updated:', { element, type, position })
-
-      // Cập nhật vị trí trong editingDiagram
-      if (type === 'actor') {
-        const actorIndex = this.editingDiagram.actors.findIndex(
-          (a) => (a._id || a.id) === (element._id || element.id)
-        )
-        if (actorIndex !== -1) {
-          // Đảm bảo có object position
-          if (!this.editingDiagram.actors[actorIndex].position) {
-            this.editingDiagram.actors[actorIndex].position = {}
-          }
-          this.editingDiagram.actors[actorIndex].position.x = Math.round(position.x)
-          this.editingDiagram.actors[actorIndex].position.y = Math.round(position.y)
-
-          console.log('✅ Updated actor position:', this.editingDiagram.actors[actorIndex])
-        }
-      } else if (type === 'usecase') {
-        const usecaseIndex = this.editingDiagram.usecases.findIndex(
-          (uc) => (uc._id || uc.id) === (element._id || element.id)
-        )
-        if (usecaseIndex !== -1) {
-          // Đảm bảo có object position
-          if (!this.editingDiagram.usecases[usecaseIndex].position) {
-            this.editingDiagram.usecases[usecaseIndex].position = {}
-          }
-          this.editingDiagram.usecases[usecaseIndex].position.x = Math.round(position.x)
-          this.editingDiagram.usecases[usecaseIndex].position.y = Math.round(position.y)
-
-          console.log('✅ Updated usecase position:', this.editingDiagram.usecases[usecaseIndex])
-        }
-      }
-
-      // Auto-save sau 1 giây
-      this.debounceSave()
-    },
-
-    // Debounce để tránh gọi API quá nhiều
-    debounceSave() {
-      if (this.saveTimeout) {
-        clearTimeout(this.saveTimeout)
-      }
-      this.saveTimeout = setTimeout(() => {
-        this.saveDiagramPositions()
-      }, 2000)
-    },
-
-    // Sửa lại phương thức saveDiagramPositions để KHÔNG load lại diagrams
-    async saveDiagramPositions() {
-      if (!this.editingDiagram) {
-        console.log('❌ No editing diagram to save')
-        return
-      }
-
-      try {
-        const diagramId = this.editingDiagram.id || this.editingDiagram._id
-        if (!diagramId) {
-          console.log('❌ No diagram ID found')
-          return
-        }
-
-        console.log('💾 Saving positions for diagram:', diagramId)
-
-        const updates = {
-          actors: this.editingDiagram.actors.map((actor) => ({
-            id: actor._id || actor.id,
-            position: actor.position || { x: 0, y: 0 },
-          })),
-          usecases: this.editingDiagram.usecases.map((usecase) => ({
-            id: usecase._id || usecase.id,
-            position: usecase.position || { x: 0, y: 0 },
-          })),
-        }
-
-        console.log('🚀 Calling API with updates:', updates)
-
-        const response = await updateMultiplePositions(diagramId, updates)
-        console.log('✅ Save response:', response)
-
-        // ✅ CHỈ toast success, KHÔNG load lại diagrams
-        // this.toast.success('Positions saved automatically')
-
-        // ❌ ĐÃ XÓA: await this.loadDiagrams()
-      } catch (err) {
-        console.error('❌ Error saving positions:', err)
-        this.toast.error(
-          'Failed to save positions: ' + (err.response?.data?.message || err.message)
-        )
-      }
+      if (!dateString) return 'N/A'
+      return new Date(dateString).toLocaleDateString()
     },
 
     resetGenerateForm() {
@@ -843,12 +1482,20 @@ export default {
     goBack() {
       this.$router.push('/dashboard')
     },
+
+    async refreshDiagrams() {
+      await this.loadDiagrams()
+      this.toast.success('Diagrams refreshed')
+    },
+
+    async exportDiagram(diagram) {
+      await this.exportDiagramAsPNG(diagram)
+    },
   },
 }
 </script>
 
 <style scoped>
-/* Styles remain mostly the same as original, with additions for new features */
 .uml-management-view {
   padding: 30px;
   background: #f9fafb;
@@ -925,23 +1572,6 @@ export default {
   background: #e5e7eb;
 }
 
-.btn-danger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: #ef4444;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.3s ease;
-}
-
-.btn-danger:hover {
-  background: #dc2626;
-}
-
 .btn-icon {
   padding: 8px;
   background: rgba(255, 255, 255, 0.9);
@@ -975,78 +1605,6 @@ export default {
 .btn-close:hover {
   background: #f3f4f6;
   color: #374151;
-}
-
-/* Stats Grid */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
-}
-
-.stat-card {
-  background: white;
-  padding: 20px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid;
-}
-
-.stat-card.total {
-  border-left-color: #3b82f6;
-}
-.stat-card.actors {
-  border-left-color: #10b981;
-}
-.stat-card.usecases {
-  border-left-color: #8b5cf6;
-}
-.stat-card.relationships {
-  border-left-color: #f59e0b;
-}
-
-.stat-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stat-card.total .stat-icon {
-  background: #dbeafe;
-  color: #3b82f6;
-}
-
-.stat-card.actors .stat-icon {
-  background: #d1fae5;
-  color: #10b981;
-}
-
-.stat-card.usecases .stat-icon {
-  background: #ede9fe;
-  color: #8b5cf6;
-}
-
-.stat-card.relationships .stat-icon {
-  background: #fef3c7;
-  color: #f59e0b;
-}
-
-.stat-info h3 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.stat-info p {
-  color: #6b7280;
-  font-size: 0.875rem;
 }
 
 /* Navigation Tabs */
@@ -1128,10 +1686,10 @@ export default {
   margin: 0;
 }
 
-/* Diagrams Grid */
+/* Diagrams Grid - Responsive */
 .diagrams-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 24px;
 }
 
@@ -1150,17 +1708,52 @@ export default {
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
 }
 
+/* Diagram Preview với ảnh */
 .diagram-preview {
   position: relative;
+  width: 100%;
   height: 200px;
   background: #f8fafc;
   overflow: hidden;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.preview-renderer {
+.preview-image {
   width: 100%;
   height: 100%;
-  transform-origin: center;
+  object-fit: contain;
+  transition: opacity 0.3s ease;
+  opacity: 0;
+}
+
+.preview-generator {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.hidden-renderer {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+}
+
+.generating-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #6b7280;
+  font-size: 14px;
+  background: #f8fafc;
 }
 
 .diagram-overlay {
@@ -1414,56 +2007,15 @@ export default {
   padding: 20px;
 }
 
-.editor-body,
-.viewer-body {
+.editor-body {
   flex: 1;
   padding: 0;
   overflow: hidden;
 }
 
-.editor-content,
-.viewer-content {
+.editor-content {
   display: flex;
   height: 100%;
-}
-
-/* Editor Styles */
-.editor-toolbar {
-  width: 200px;
-  padding: 20px;
-  background: #f8fafc;
-  border-right: 1px solid #e5e7eb;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.toolbar-section h4 {
-  margin: 0 0 12px 0;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #374151;
-}
-
-.tool-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 12px;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  margin-bottom: 8px;
-}
-
-.tool-btn:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
 }
 
 .editor-main {
@@ -1472,78 +2024,6 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.editor-sidebar {
-  width: 0;
-  padding: 20px;
-  background: white;
-  border-left: 1px solid #e5e7eb;
-}
-
-.sidebar-placeholder {
-  text-align: center;
-  color: #6b7280;
-  padding: 40px 20px;
-}
-
-.sidebar-placeholder .material-symbols-outlined {
-  font-size: 48px;
-  margin-bottom: 12px;
-  color: #9ca3af;
-}
-
-/* Viewer Styles */
-.diagram-view {
-  flex: 1;
-  background: #f8fafc;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.viewer-sidebar {
-  width: 300px;
-  padding: 20px;
-  background: white;
-  border-left: 1px solid #e5e7eb;
-}
-
-.viewer-sidebar h4 {
-  margin: 0 0 16px 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.info-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.info-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 8px 0;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.info-label {
-  font-weight: 500;
-  color: #374151;
-  font-size: 0.875rem;
-  flex-shrink: 0;
-  margin-right: 12px;
-}
-
-.info-value {
-  color: #6b7280;
-  font-size: 0.875rem;
-  text-align: right;
-  word-break: break-word;
 }
 
 /* Form Styles */
@@ -1613,11 +2093,10 @@ export default {
   width: 16px;
   height: 16px;
   border: 2px solid #f3f4f6;
-  border-top: 2px solid #ffffff;
+  border-top: 2px solid currentColor;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   display: inline-block;
-  margin-right: 8px;
 }
 
 @keyframes spin {
@@ -1629,6 +2108,59 @@ export default {
   }
 }
 
+/* Export Dropdown Styles */
+.export-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.export-toggle {
+  z-index: 2;
+}
+
+.export-options {
+  position: absolute;
+  top: 100%;
+  left: -100%;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  min-width: 140px;
+  margin-top: 4px;
+}
+
+.export-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  color: #374151;
+  transition: background 0.3s ease;
+}
+
+.export-option:hover {
+  background: #f3f4f6;
+}
+
+.export-option:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.export-option:last-child {
+  border-radius: 0 0 8px 8px;
+}
+
+.export-option .material-symbols-outlined {
+  font-size: 16px;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .uml-management-view {
@@ -1638,6 +2170,7 @@ export default {
   .content-header {
     flex-direction: column;
     gap: 16px;
+    align-items: flex-start;
   }
 
   .header-actions {
@@ -1653,34 +2186,17 @@ export default {
     min-width: 120px;
   }
 
-  .stats-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .diagrams-grid {
     grid-template-columns: 1fr;
   }
 
   .navigation-tabs {
     flex-direction: column;
+    padding: 0;
   }
 
-  .editor-content,
-  .viewer-content {
-    flex-direction: column;
-  }
-
-  .editor-toolbar {
-    width: 100%;
-    border-right: none;
-    border-bottom: 1px solid #e5e7eb;
-  }
-
-  .editor-sidebar,
-  .viewer-sidebar {
-    width: 100%;
-    border-left: none;
-    border-top: 1px solid #e5e7eb;
+  .tab-button {
+    justify-content: center;
   }
 
   .empty-actions {
@@ -1696,116 +2212,33 @@ export default {
   .col-actions {
     justify-content: flex-end;
   }
-}
-/* New styles for editor enhancements */
-.checkbox-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
 
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.875rem;
-  color: #374151;
-  cursor: pointer;
-}
-
-.checkbox-label input[type='checkbox'] {
-  margin: 0;
-}
-
-.info-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.info-stat {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.stat-label {
-  font-size: 0.875rem;
-  color: #6b7280;
-}
-
-.stat-value {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #374151;
-}
-
-.position-inputs {
-  display: flex;
-  gap: 8px;
-}
-
-.position-inputs input {
-  flex: 1;
-}
-
-.full-width {
-  width: 100%;
-}
-
-.viewer-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.zoom-level {
-  padding: 4px 12px;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #374151;
-}
-
-.associated-actors {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
-}
-
-.actor-tag {
-  padding: 2px 8px;
-  background: #e5e7eb;
-  border-radius: 12px;
-  font-size: 11px;
-  color: #374151;
-}
-
-.no-actors {
-  font-size: 11px;
-  color: #9ca3af;
-  font-style: italic;
-}
-
-.hint {
-  font-size: 0.75rem;
-  color: #9ca3af;
-  margin-top: 8px;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .position-inputs {
-    flex-direction: column;
+  .modal-overlay.large {
+    padding: 10px;
   }
 
-  .viewer-toolbar {
+  .modal-content.fullscreen {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    border-radius: 0;
+  }
+
+  .diagram-preview {
+    height: 160px;
+  }
+}
+
+@media (max-width: 480px) {
+  .diagram-preview {
+    height: 140px;
+  }
+
+  .header-left h2 {
+    font-size: 1.5rem;
+  }
+
+  .diagram-stats {
     flex-wrap: wrap;
   }
 }

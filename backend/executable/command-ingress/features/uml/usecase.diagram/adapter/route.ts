@@ -78,6 +78,11 @@ const initUsecaseDiagramRoute: (
       controller.deleteAssociationById.bind(controller)
     );
 
+  // Thêm route xóa usecase diagram
+  router
+    .route("/:ucId")
+    .delete(requireAuthorizedUser, controller.deleteUsecaseDiagram.bind(controller));
+
   // POSITION ADJUSTMENT ROUTES
   // Update single actor position
   router
@@ -99,6 +104,8 @@ const initUsecaseDiagramRoute: (
     .route("/:ucId/reset-positions")
     .patch(requireAuthorizedUser, controller.resetPositions.bind(controller));
   return router;
+
+
 };
 
 export default initUsecaseDiagramRoute;

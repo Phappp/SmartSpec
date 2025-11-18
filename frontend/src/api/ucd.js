@@ -73,3 +73,6 @@ export const bulkDeleteDiagrams = (diagramIds) =>
     axiosClient.post(`/api/usecase-diagram/bulk/delete`, {
         diagramIds
     });
+
+export const deleteUsecaseDiagram = (ucId) =>
+    axiosClient.delete(`/api/usecase-diagram/${ucId}`);
