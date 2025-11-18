@@ -46,11 +46,11 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
       throw new Error("A valid useCaseContext object is required.");
     }
     // Kiểm tra xem usecaseId trong payload có khớp với usecase được gửi không
-    if (useCaseContext._id?.toString() !== usecaseId) {
-      throw new Error(
-        "Usecase ID mismatch between usecaseId and useCaseContext object."
-      );
-    }
+    // if (useCaseContext._id?.toString() !== usecaseId) {
+    //   throw new Error(
+    //     "Usecase ID mismatch between usecaseId and useCaseContext object."
+    //   );
+    // }
     // Kiểm tra xem usecase có 'tasks' không (GeminiService sẽ làm, nhưng check ở đây tốt hơn)
     if (!useCaseContext.tasks || useCaseContext.tasks.length === 0) {
       throw new Error(
@@ -106,19 +106,72 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
 
     return savedDocument.toObject({ getters: true }) as SequenceDiagramResponse;
   }
-  public async getSequenceDiagrams(
-    versionId: string
-  ): Promise<SequenceDiagramResponse[]> {
-    throw new Error("Method not implemented.");
+ public async getSequenceDiagrams(versionId: string): Promise<SequenceDiagramResponse[]> {
+    try {
+      const diagrams = await SequenceDiagramSchema.find({ version_id: versionId })
+        .populate('created_by', 'name email')
+        .lean();
+      
+      // Convert Mongoose documents to SequenceDiagramResponse
+      return diagrams.map(diagram => this.mapToSequenceDiagramResponse(diagram));
+    } catch (error) {
+      console.error('Error getting sequence diagrams:', error);
+      throw new Error('Failed to fetch sequence diagrams');
+    }
   }
-  public async getSequenceDiagramById(
-    ucId: string
-  ): Promise<SequenceDiagramResponse> {
-    throw new Error("Method not implemented.");
+
+  public async getSequenceDiagramById(ucId: string): Promise<SequenceDiagramResponse> {
+    try {
+      const diagram = await SequenceDiagramSchema.findById(ucId)
+        .populate('created_by', 'name email')
+        .populate('linked_testcases')
+        .lean();
+      
+      if (!diagram) {
+        throw new Error('Sequence diagram not found');
+      }
+      
+      return this.mapToSequenceDiagramResponse(diagram);
+    } catch (error) {
+      console.error('Error getting sequence diagram by id:', error);
+      throw new Error('Failed to fetch sequence diagram');
+    }
   }
-  public async getSequenceDiagramsByUsecaseId(
-    usecaseId: string
-  ): Promise<SequenceDiagramResponse[]> {
-    throw new Error("Method not implemented.");
+
+  public async getSequenceDiagramsByUsecaseId(usecaseId: string): Promise<SequenceDiagramResponse[]> {
+    try {
+      const diagrams = await SequenceDiagramSchema.find({ usecase_ref_id: usecaseId })
+        .populate('created_by', 'name email')
+        .lean();
+      
+      return diagrams.map(diagram => this.mapToSequenceDiagramResponse(diagram));
+    } catch (error) {
+      console.error('Error getting sequence diagrams by usecase:', error);
+      throw new Error('Failed to fetch sequence diagrams for usecase');
+    }
+  }
+
+  /**
+   * Map Mongoose document to SequenceDiagramResponse
+   */
+  private mapToSequenceDiagramResponse(doc: any): SequenceDiagramResponse {
+    return {
+      id: doc._id?.toString() || doc.id,
+      project_id: doc.project_id?.toString(),
+      version_id: doc.version_id?.toString(),
+      lang: doc.lang,
+      name: doc.name,
+      description: doc.description,
+      usecase_ref_id: doc.usecase_ref_id,
+      lifelines: doc.lifelines || [],
+      messages: doc.messages || [],
+      fragments: doc.fragments || [],
+      layout_data: doc.layout_data || { nodes: [], edges: [] },
+      related_requirements: doc.related_requirements || [],
+      linked_testcases: doc.linked_testcases || [],
+      created_by: doc.created_by,
+      created_at: doc.created_at || doc.createdAt,
+      updated_at: doc.updated_at || doc.updatedAt
+    } as SequenceDiagramResponse;
   }
 }

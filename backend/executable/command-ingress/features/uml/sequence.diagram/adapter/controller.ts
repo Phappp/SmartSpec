@@ -71,9 +71,17 @@ export class SequenceDiagramController extends BaseController {
         // 4. <-- SỬA ĐỔI QUAN TRỌNG: Tìm Usecase Context (Ngữ cảnh)
         // Tìm 'usecase' cụ thể mà người dùng muốn vẽ
         // từ bên trong mảng 'requirement_model' của version
+        // Trong controller.ts - method generateSchemaFromRequirements
         const useCaseContext = version.requirement_model.find(
-          (uc: any) => uc._id?.toString() === usecaseId
+          (uc: any) => uc.id === usecaseId  // ← SỬA THÀNH uc.id thay vì uc._id
         );
+
+        if (!useCaseContext) {
+          res.status(StatusCodes.NOT_FOUND).json({
+            message: `Usecase with id ${usecaseId} not found in version ${versionId}`
+          });
+          return;
+        }
 
         // Nếu không tìm thấy Usecase đó
         if (!useCaseContext) {

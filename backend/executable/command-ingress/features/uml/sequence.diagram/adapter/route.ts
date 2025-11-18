@@ -8,25 +8,30 @@ const initSequenceDiagramRoute: (
 ) => express.Router = (controller) => {
   const router = express.Router();
 
-  //UCD
+  // FIX: Thêm base path "/sequence-diagram"
   router
     .route("/versions/:versionId/generate-sequence-diagram")
     .post(
       requireAuthorizedUser,
       controller.generateSchemaFromRequirements.bind(controller)
     );
+
+  // FIX: Sửa route get all diagrams
   router
-    .route("/versions/:versionId/")
+    .route("/versions/:versionId/sequence-diagrams") // Đổi tên route
     .get(
       requireAuthorizedUser,
       controller.getSequenceDiagrams.bind(controller)
     );
+
+  // FIX: Sửa route get by id
   router
-    .route("/:ucId")
+    .route("/sequence-diagrams/:ucId") // Đổi tên route
     .get(
       requireAuthorizedUser,
       controller.getSequenceDiagramById.bind(controller)
     );
+
   return router;
 };
 

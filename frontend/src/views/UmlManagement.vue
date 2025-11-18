@@ -30,7 +30,7 @@
       <div class="content-header">
         <div class="header-left">
           <h2>UML Diagram Management</h2>
-          <p class="subtitle">Manage and visualize your system use cases</p>
+          <p class="subtitle">Manage and visualize your system diagrams</p>
         </div>
         <div class="header-actions">
           <button class="btn-secondary" @click="refreshDiagrams">
@@ -54,191 +54,424 @@
         <p>Loading diagrams...</p>
       </div>
 
-      <!-- Diagrams Grid -->
-      <div v-else class="diagrams-section">
-        <div class="section-header">
-          <h3>Use Case Diagrams</h3>
-          <div class="view-options">
-            <button
-              class="view-toggle"
-              :class="{ active: viewMode === 'grid' }"
-              @click="viewMode = 'grid'"
-            >
-              <span class="material-symbols-outlined">grid_view</span>
-            </button>
-            <button
-              class="view-toggle"
-              :class="{ active: viewMode === 'list' }"
-              @click="viewMode = 'list'"
-            >
-              <span class="material-symbols-outlined">view_list</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Grid View -->
-        <div v-if="viewMode === 'grid'" class="diagrams-grid">
-          <div
-            v-for="diagram in diagrams"
-            :key="diagram.id || diagram._id"
-            class="diagram-card"
-            @click="editDiagram(diagram)"
-          >
-            <div class="diagram-preview">
-              <!-- Hiển thị ảnh preview nếu có -->
-              <img
-                v-if="diagram.previewImage"
-                :src="diagram.previewImage"
-                :alt="diagram.name || 'Use Case Diagram'"
-                class="preview-image"
-                @load="onPreviewImageLoad"
-                @error="onPreviewImageError(diagram, $event)"
-              />
-              <!-- Fallback: hiển thị UCDRenderer để generate preview -->
-              <div v-else class="preview-generator">
-                <UCDRenderer
-                  :ref="`previewGenerator_${diagram.id || diagram._id}`"
-                  :diagram-data="diagram"
-                  :preview-mode="true"
-                  :auto-generate-preview="true"
-                  :optimize-for-preview="true"
-                  @preview-generated="handlePreviewGenerated(diagram, $event)"
-                  class="hidden-renderer"
+      <!-- Diagrams Display - 3 loại diagram trên 3 hàng -->
+      <div v-else class="diagrams-display">
+        <!-- Use Case Diagrams Section -->
+        <div class="diagram-section">
+          <div class="section-header">
+            <div class="section-title">
+              <h3>Use Case Diagrams</h3>
+              <span class="diagram-count">({{ usecaseDiagrams.length }})</span>
+            </div>
+            <div class="section-controls">
+              <div class="search-box">
+                <span class="material-symbols-outlined search-icon">search</span>
+                <input
+                  v-model="searchFilters.usecase"
+                  type="text"
+                  placeholder="Search use case diagrams..."
+                  class="search-input"
                 />
-                <div class="generating-preview">
-                  <div class="loading-spinner-small"></div>
-                  <span>Generating preview...</span>
-                </div>
               </div>
+              <div class="filter-controls">
+                <select v-model="sortFilters.usecase" class="sort-select">
+                  <option value="name">Sort by Name</option>
+                  <option value="date">Sort by Date</option>
+                  <option value="actors">Sort by Actors</option>
+                  <option value="usecases">Sort by Use Cases</option>
+                </select>
+                <select v-model="languageFilters.usecase" class="lang-select">
+                  <option value="all">All Languages</option>
+                  <option value="en-US">English</option>
+                  <option value="vi-VN">Vietnamese</option>
+                </select>
+              </div>
+            </div>
+          </div>
 
-              <div class="diagram-overlay">
-                <div class="export-dropdown">
-                  <button
-                    class="btn-icon export-toggle"
-                    @click.stop="toggleExportDropdown(diagram)"
-                    title="Export"
-                  >
-                    <span class="material-symbols-outlined">download</span>
-                  </button>
-                  <div
-                    v-if="activeExportDropdown === (diagram.id || diagram._id)"
-                    class="export-options"
-                  >
-                    <button class="export-option" @click.stop="exportDiagramAsPNG(diagram)">
-                      <span class="material-symbols-outlined">image</span>
-                      Export PNG
-                    </button>
-                    <button class="export-option" @click.stop="exportDiagramAsSVG(diagram)">
-                      <span class="material-symbols-outlined">code</span>
-                      Export SVG
+          <div class="diagrams-scroll-container">
+            <div class="diagrams-scroll-content">
+              <div
+                v-for="diagram in filteredUsecaseDiagrams"
+                :key="diagram.id || diagram._id"
+                class="diagram-card"
+                @click="editDiagram(diagram)"
+              >
+                <div class="diagram-preview">
+                  <img
+                    v-if="diagram.previewImage"
+                    :src="diagram.previewImage"
+                    :alt="diagram.name || 'Use Case Diagram'"
+                    class="preview-image"
+                    @load="onPreviewImageLoad"
+                    @error="onPreviewImageError(diagram, $event)"
+                  />
+                  <div v-else class="preview-generator">
+                    <UCDRenderer
+                      :ref="`previewGenerator_${diagram.id || diagram._id}`"
+                      :diagram-data="diagram"
+                      :preview-mode="true"
+                      :auto-generate-preview="true"
+                      :optimize-for-preview="true"
+                      @preview-generated="handlePreviewGenerated(diagram, $event)"
+                      class="hidden-renderer"
+                    />
+                    <div class="generating-preview">
+                      <div class="loading-spinner-small"></div>
+                      <span>Generating preview...</span>
+                    </div>
+                  </div>
+
+                  <div class="diagram-overlay">
+                    <div class="export-dropdown">
+                      <button
+                        class="btn-icon export-toggle"
+                        @click.stop="toggleExportDropdown(diagram)"
+                        title="Export"
+                      >
+                        <span class="material-symbols-outlined">download</span>
+                      </button>
+                      <div
+                        v-if="activeExportDropdown === (diagram.id || diagram._id)"
+                        class="export-options"
+                      >
+                        <button class="export-option" @click.stop="exportDiagramAsPNG(diagram)">
+                          <span class="material-symbols-outlined">image</span>
+                          Export PNG
+                        </button>
+                        <button class="export-option" @click.stop="exportDiagramAsSVG(diagram)">
+                          <span class="material-symbols-outlined">code</span>
+                          Export SVG
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      class="btn-icon danger"
+                      @click.stop="deleteDiagram(diagram.id || diagram._id, $event)"
+                      title="Delete"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
                     </button>
                   </div>
                 </div>
-                <button
-                  class="btn-icon danger"
-                  @click.stop="deleteDiagram(diagram.id || diagram._id, $event)"
-                  title="Delete"
-                >
-                  <span class="material-symbols-outlined">delete</span>
+                <div class="diagram-info">
+                  <h4>{{ getSafeValue(diagram.name, 'Unnamed Diagram') }}</h4>
+                  <p class="diagram-description">
+                    {{ getSafeValue(diagram.description, 'No description') }}
+                  </p>
+                  <div class="diagram-meta">
+                    <span class="meta-item">
+                      <span class="material-symbols-outlined">language</span>
+                      {{ getLanguageCode(diagram.lang) }}
+                    </span>
+                    <span class="meta-item diagram-type-badge type-usecase"> Use Case </span>
+                  </div>
+                  <div class="diagram-stats">
+                    <span class="stat-badge">
+                      <span class="material-symbols-outlined">person</span>
+                      {{ getSafeArrayLength(diagram.actors) }}
+                    </span>
+                    <span class="stat-badge">
+                      <span class="material-symbols-outlined">task</span>
+                      {{ getSafeArrayLength(diagram.usecases) }}
+                    </span>
+                    <span class="stat-badge">
+                      <span class="material-symbols-outlined">link</span>
+                      {{ getRelationshipCount(diagram) }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Empty State for Use Case Diagrams -->
+              <div v-if="filteredUsecaseDiagrams.length === 0" class="empty-section">
+                <div class="empty-icon">
+                  <span class="material-symbols-outlined">account_tree</span>
+                </div>
+                <h4>No Use Case Diagrams</h4>
+                <p>Generate your first use case diagram to visualize system requirements.</p>
+                <button class="btn-primary small" @click="generateSpecificDiagram('usecase')">
+                  <span class="material-symbols-outlined">auto_awesome</span>
+                  Generate Use Case
                 </button>
               </div>
             </div>
-            <div class="diagram-info">
-              <h4>{{ getSafeValue(diagram.name, 'Unnamed Diagram') }}</h4>
-              <p class="diagram-description">
-                {{ getSafeValue(diagram.description, 'No description') }}
-              </p>
-              <div class="diagram-meta">
-                <span class="meta-item">
-                  <span class="material-symbols-outlined">language</span>
-                  {{ getLanguageCode(diagram.lang) }}
-                </span>
-              </div>
-              <div class="diagram-stats">
-                <span class="stat-badge">
-                  <span class="material-symbols-outlined">person</span>
-                  {{ getSafeArrayLength(diagram.actors) }}
-                </span>
-                <span class="stat-badge">
-                  <span class="material-symbols-outlined">task</span>
-                  {{ getSafeArrayLength(diagram.usecases) }}
-                </span>
-                <span class="stat-badge">
-                  <span class="material-symbols-outlined">link</span>
-                  {{ getSafeArrayLength(diagram.relationships) }}
-                </span>
-              </div>
-            </div>
           </div>
         </div>
 
-        <!-- List View -->
-        <div v-else class="diagrams-list">
-          <div class="list-header">
-            <div class="col-name">Diagram Name</div>
-            <div class="col-lang">Language</div>
-            <div class="col-stats">Actors / Use Cases</div>
-            <div class="col-date">Last Updated</div>
-            <div class="col-actions">Actions</div>
+        <!-- Activity Diagrams Section -->
+        <div class="diagram-section">
+          <div class="section-header">
+            <div class="section-title">
+              <h3>Activity Diagrams</h3>
+              <span class="diagram-count">({{ activityDiagrams.length }})</span>
+            </div>
+            <div class="section-controls">
+              <div class="search-box">
+                <span class="material-symbols-outlined search-icon">search</span>
+                <input
+                  v-model="searchFilters.activity"
+                  type="text"
+                  placeholder="Search activity diagrams..."
+                  class="search-input"
+                />
+              </div>
+              <div class="filter-controls">
+                <select v-model="sortFilters.activity" class="sort-select">
+                  <option value="name">Sort by Name</option>
+                  <option value="date">Sort by Date</option>
+                  <option value="nodes">Sort by Nodes</option>
+                </select>
+                <select v-model="languageFilters.activity" class="lang-select">
+                  <option value="all">All Languages</option>
+                  <option value="en-US">English</option>
+                  <option value="vi-VN">Vietnamese</option>
+                </select>
+              </div>
+            </div>
           </div>
-          <div
-            v-for="diagram in diagrams"
-            :key="diagram.id || diagram._id"
-            class="list-item"
-            @click="editDiagram(diagram)"
-          >
-            <div class="col-name">
-              <div class="diagram-icon">
-                <span class="material-symbols-outlined">account_tree</span>
-              </div>
-              <div class="item-info">
-                <h4>{{ getSafeValue(diagram.name, 'Unnamed Diagram') }}</h4>
-                <p>{{ getSafeValue(diagram.description, 'No description') }}</p>
-              </div>
-            </div>
-            <div class="col-lang">
-              <span class="lang-badge">{{ getLanguageCode(diagram.lang) }}</span>
-            </div>
-            <div class="col-stats">
-              <div class="stats-info">
-                <span>{{ getSafeArrayLength(diagram.actors) }} Actors</span>
-                <span>{{ getSafeArrayLength(diagram.usecases) }} Use Cases</span>
-              </div>
-            </div>
-            <div class="col-date">
-              {{ formatDate(diagram.updatedAt || diagram.createdAt) }}
-            </div>
-            <div class="col-actions">
-              <button class="btn-icon" @click.stop="editDiagram(diagram)" title="Edit">
-                <span class="material-symbols-outlined">edit</span>
-              </button>
-              <button
-                class="btn-icon danger"
-                @click.stop="deleteDiagram(diagram.id || diagram._id)"
-                title="Delete"
+
+          <div class="diagrams-scroll-container">
+            <div class="diagrams-scroll-content">
+              <div
+                v-for="diagram in filteredActivityDiagrams"
+                :key="diagram.id || diagram._id"
+                class="diagram-card"
+                @click="editDiagram(diagram)"
               >
-                <span class="material-symbols-outlined">delete</span>
-              </button>
+                <div class="diagram-preview">
+                  <img
+                    v-if="diagram.previewImage"
+                    :src="diagram.previewImage"
+                    :alt="diagram.name || 'Activity Diagram'"
+                    class="preview-image"
+                    @load="onPreviewImageLoad"
+                    @error="onPreviewImageError(diagram, $event)"
+                  />
+                  <div v-else class="preview-generator">
+                    <ActivityDiagramRenderer
+                      :ref="`previewGenerator_${diagram.id || diagram._id}`"
+                      :diagram-data="diagram"
+                      :preview-mode="true"
+                      :auto-generate-preview="true"
+                      :optimize-for-preview="true"
+                      @preview-generated="handlePreviewGenerated(diagram, $event)"
+                      class="hidden-renderer"
+                    />
+                    <div class="generating-preview">
+                      <div class="loading-spinner-small"></div>
+                      <span>Generating preview...</span>
+                    </div>
+                  </div>
+
+                  <div class="diagram-overlay">
+                    <div class="export-dropdown">
+                      <button
+                        class="btn-icon export-toggle"
+                        @click.stop="toggleExportDropdown(diagram)"
+                        title="Export"
+                      >
+                        <span class="material-symbols-outlined">download</span>
+                      </button>
+                      <div
+                        v-if="activeExportDropdown === (diagram.id || diagram._id)"
+                        class="export-options"
+                      >
+                        <button class="export-option" @click.stop="exportDiagramAsPNG(diagram)">
+                          <span class="material-symbols-outlined">image</span>
+                          Export PNG
+                        </button>
+                        <button class="export-option" @click.stop="exportDiagramAsSVG(diagram)">
+                          <span class="material-symbols-outlined">code</span>
+                          Export SVG
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      class="btn-icon danger"
+                      @click.stop="deleteDiagram(diagram.id || diagram._id, $event)"
+                      title="Delete"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="diagram-info">
+                  <h4>{{ getSafeValue(diagram.name, 'Unnamed Diagram') }}</h4>
+                  <p class="diagram-description">
+                    {{ getSafeValue(diagram.description, 'No description') }}
+                  </p>
+                  <div class="diagram-meta">
+                    <span class="meta-item">
+                      <span class="material-symbols-outlined">language</span>
+                      {{ getLanguageCode(diagram.lang) }}
+                    </span>
+                    <span class="meta-item diagram-type-badge type-activity"> Activity </span>
+                  </div>
+                  <div class="diagram-stats">
+                    <span class="stat-badge">
+                      <span class="material-symbols-outlined">play_arrow</span>
+                      {{ getSafeArrayLength(diagram.nodes) }}
+                    </span>
+                    <span class="stat-badge">
+                      <span class="material-symbols-outlined">link</span>
+                      {{ getRelationshipCount(diagram) }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Empty State for Activity Diagrams -->
+              <div v-if="filteredActivityDiagrams.length === 0" class="empty-section">
+                <div class="empty-icon">
+                  <span class="material-symbols-outlined">play_arrow</span>
+                </div>
+                <h4>No Activity Diagrams</h4>
+                <p>Generate activity diagrams to visualize workflow processes.</p>
+                <button class="btn-primary small" @click="generateSpecificDiagram('activity')">
+                  <span class="material-symbols-outlined">auto_awesome</span>
+                  Generate Activity
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Empty State -->
-        <div v-if="diagrams.length === 0" class="empty-state">
-          <div class="empty-icon">
-            <span class="material-symbols-outlined">account_tree</span>
+        <!-- Sequence Diagrams Section -->
+        <div class="diagram-section">
+          <div class="section-header">
+            <div class="section-title">
+              <h3>Sequence Diagrams</h3>
+              <span class="diagram-count">({{ sequenceDiagrams.length }})</span>
+            </div>
+            <div class="section-controls">
+              <div class="search-box">
+                <span class="material-symbols-outlined search-icon">search</span>
+                <input
+                  v-model="searchFilters.sequence"
+                  type="text"
+                  placeholder="Search sequence diagrams..."
+                  class="search-input"
+                />
+              </div>
+              <div class="filter-controls">
+                <select v-model="sortFilters.sequence" class="sort-select">
+                  <option value="name">Sort by Name</option>
+                  <option value="date">Sort by Date</option>
+                  <option value="lifelines">Sort by Lifelines</option>
+                </select>
+                <select v-model="languageFilters.sequence" class="lang-select">
+                  <option value="all">All Languages</option>
+                  <option value="en-US">English</option>
+                  <option value="vi-VN">Vietnamese</option>
+                </select>
+              </div>
+            </div>
           </div>
-          <h3>No Use Case Diagrams</h3>
-          <p>Generate your first use case diagram to visualize system requirements.</p>
-          <div class="empty-actions">
-            <button class="btn-primary" @click="generateNewDiagram">
-              <span class="material-symbols-outlined">auto_awesome</span>
-              Auto Generate
-            </button>
-            <button class="btn-secondary" @click="openManualEditor">
-              <span class="material-symbols-outlined">draw</span>
-              Create Manually
-            </button>
+
+          <div class="diagrams-scroll-container">
+            <div class="diagrams-scroll-content">
+              <div
+                v-for="diagram in filteredSequenceDiagrams"
+                :key="diagram.id || diagram._id"
+                class="diagram-card"
+                @click="editDiagram(diagram)"
+              >
+                <div class="diagram-preview">
+                  <img
+                    v-if="diagram.previewImage"
+                    :src="diagram.previewImage"
+                    :alt="diagram.name || 'Sequence Diagram'"
+                    class="preview-image"
+                    @load="onPreviewImageLoad"
+                    @error="onPreviewImageError(diagram, $event)"
+                  />
+                  <div v-else class="preview-generator">
+                    <SequenceDiagramRenderer
+                      :ref="`previewGenerator_${diagram.id || diagram._id}`"
+                      :diagram-data="diagram"
+                      :preview-mode="true"
+                      :auto-generate-preview="true"
+                      :optimize-for-preview="true"
+                      @preview-generated="handlePreviewGenerated(diagram, $event)"
+                      class="hidden-renderer"
+                    />
+                    <div class="generating-preview">
+                      <div class="loading-spinner-small"></div>
+                      <span>Generating preview...</span>
+                    </div>
+                  </div>
+
+                  <div class="diagram-overlay">
+                    <div class="export-dropdown">
+                      <button
+                        class="btn-icon export-toggle"
+                        @click.stop="toggleExportDropdown(diagram)"
+                        title="Export"
+                      >
+                        <span class="material-symbols-outlined">download</span>
+                      </button>
+                      <div
+                        v-if="activeExportDropdown === (diagram.id || diagram._id)"
+                        class="export-options"
+                      >
+                        <button class="export-option" @click.stop="exportDiagramAsPNG(diagram)">
+                          <span class="material-symbols-outlined">image</span>
+                          Export PNG
+                        </button>
+                        <button class="export-option" @click.stop="exportDiagramAsSVG(diagram)">
+                          <span class="material-symbols-outlined">code</span>
+                          Export SVG
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      class="btn-icon danger"
+                      @click.stop="deleteDiagram(diagram.id || diagram._id, $event)"
+                      title="Delete"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="diagram-info">
+                  <h4>{{ getSafeValue(diagram.name, 'Unnamed Diagram') }}</h4>
+                  <p class="diagram-description">
+                    {{ getSafeValue(diagram.description, 'No description') }}
+                  </p>
+                  <div class="diagram-meta">
+                    <span class="meta-item">
+                      <span class="material-symbols-outlined">language</span>
+                      {{ getLanguageCode(diagram.lang) }}
+                    </span>
+                    <span class="meta-item diagram-type-badge type-sequence"> Sequence </span>
+                  </div>
+                  <div class="diagram-stats">
+                    <span class="stat-badge">
+                      <span class="material-symbols-outlined">timeline</span>
+                      {{ getSafeArrayLength(diagram.lifelines) }}
+                    </span>
+                    <span class="stat-badge">
+                      <span class="material-symbols-outlined">link</span>
+                      {{ getRelationshipCount(diagram) }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Empty State for Sequence Diagrams -->
+              <div v-if="filteredSequenceDiagrams.length === 0" class="empty-section">
+                <div class="empty-icon">
+                  <span class="material-symbols-outlined">timeline</span>
+                </div>
+                <h4>No Sequence Diagrams</h4>
+                <p>Generate sequence diagrams to visualize object interactions.</p>
+                <button class="btn-primary small" @click="generateSpecificDiagram('sequence')">
+                  <span class="material-symbols-outlined">auto_awesome</span>
+                  Generate Sequence
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -247,7 +480,7 @@
       <div v-if="showGenerateModal" class="modal-overlay">
         <div class="modal-content">
           <div class="modal-header">
-            <h3>Generate Use Case Diagram</h3>
+            <h3>Generate {{ getDiagramTypeName() }}</h3>
             <button class="btn-close" @click="closeGenerateModal">
               <span class="material-symbols-outlined">close</span>
             </button>
@@ -256,11 +489,82 @@
           <div class="modal-body">
             <form @submit.prevent="generateDiagram">
               <div class="form-group">
+                <label>Diagram Type</label>
+                <select v-model="generateForm.type" required>
+                  <option value="usecase">Use Case Diagram</option>
+                  <option value="activity">Activity Diagram</option>
+                  <option value="sequence">Sequence Diagram</option>
+                </select>
+              </div>
+
+              <div class="form-group">
                 <label>Language</label>
                 <select v-model="generateForm.lang" required>
                   <option value="en-US">English</option>
                   <option value="vi-VN">Vietnamese</option>
                 </select>
+              </div>
+
+              <!-- Sequence Diagram Options -->
+              <div class="form-group" v-if="generateForm.type === 'sequence'">
+                <label class="required">Use Case</label>
+                <select v-model="generateForm.usecaseId" required>
+                  <option value="">Select Use Case</option>
+                  <option
+                    v-for="usecase in availableUsecases"
+                    :key="usecase.id"
+                    :value="usecase.id"
+                  >
+                    {{ usecase.name || usecase.title }}
+                  </option>
+                </select>
+                <div v-if="!availableUsecases.length" class="field-help">
+                  No use cases available. Please create use cases first.
+                </div>
+              </div>
+
+              <!-- Activity Diagram Options -->
+              <div class="form-group" v-if="generateForm.type === 'activity'">
+                <label class="required">Generation Source</label>
+                <select v-model="generateForm.sourceType" required>
+                  <option value="usecase">From Use Case</option>
+                  <option value="actor">From Actor</option>
+                </select>
+              </div>
+
+              <!-- Activity Diagram - Use Case Source -->
+              <div
+                class="form-group"
+                v-if="generateForm.type === 'activity' && generateForm.sourceType === 'usecase'"
+              >
+                <label class="required">Use Case</label>
+                <select v-model="generateForm.requirementId" required>
+                  <option value="">Select Use Case</option>
+                  <option
+                    v-for="usecase in availableUsecases"
+                    :key="usecase.id"
+                    :value="usecase.id"
+                  >
+                    {{ usecase.name || usecase.title }}
+                  </option>
+                </select>
+                <div v-if="!availableUsecases.length" class="field-help">
+                  No use cases available. Please create use cases first.
+                </div>
+              </div>
+
+              <!-- Activity Diagram - Actor Source -->
+              <div
+                class="form-group"
+                v-if="generateForm.type === 'activity' && generateForm.sourceType === 'actor'"
+              >
+                <label class="required">Actor</label>
+                <input
+                  v-model="generateForm.actor"
+                  type="text"
+                  placeholder="Enter actor name"
+                  required
+                />
               </div>
 
               <div class="form-group">
@@ -276,9 +580,9 @@
                 <button type="button" class="btn-secondary" @click="closeGenerateModal">
                   Cancel
                 </button>
-                <button type="submit" class="btn-primary" :disabled="generating">
+                <button type="submit" class="btn-primary" :disabled="generating || !canGenerate">
                   <span v-if="generating" class="loading-spinner-small"></span>
-                  {{ generating ? 'Generating...' : 'Generate Diagram' }}
+                  {{ generating ? 'Generating...' : `Generate ${getDiagramTypeName()}` }}
                 </button>
               </div>
             </form>
@@ -292,6 +596,7 @@
           <div class="modal-header">
             <h3>{{ editingDiagram.name }}</h3>
             <div class="modal-actions-header">
+              <span class="diagram-type-label">{{ getDiagramTypeLabel(editingDiagram) }}</span>
               <button class="btn-close" @click="closeEditor">
                 <span class="material-symbols-outlined">close</span>
               </button>
@@ -301,12 +606,12 @@
           <div class="modal-body editor-body">
             <div class="editor-content">
               <div class="editor-main">
-                <UCDRenderer
-                  ref="ucdEditor"
+                <component
+                  :is="getEditorComponent()"
+                  ref="diagramEditor"
                   :diagram-data="editingDiagram"
                   :editable="true"
                   :show-labels="showElementLabels"
-                  :show-relationship-labels="showRelationshipLabels"
                   :zoom-level="zoomLevel"
                   @element-selected="handleElementSelect"
                   @position-updated="handlePositionUpdate"
@@ -323,15 +628,25 @@
 
 <script>
 import { getProjectDetail } from '@/api/project'
+import { usecaseApi } from '@/api/project'
 import {
   getUsecaseDiagrams,
   generateUsecaseDiagram,
   deleteUsecaseDiagram,
   updateMultiplePositions,
 } from '@/api/ucd'
+import {
+  getActivityDiagrams,
+  generateFromUsecase,
+  generateFromActor,
+  deleteActivityDiagram,
+} from '@/api/avd'
+import { getSequenceDiagrams, generateSequenceDiagram, deleteSequenceDiagram } from '@/api/sqd'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
 import UCDRenderer from '@/components/uml/usecase_diagram/UCDRenderer.vue'
+import ActivityDiagramRenderer from '@/components/uml/activity_diagram/ActivityDiagramRenderer.vue'
+import SequenceDiagramRenderer from '@/components/uml/sequence_diagram/SequenceDiagramRenderer.vue'
 import { useActiveMembers } from '@/utils/useActiveMembers'
 
 export default {
@@ -339,6 +654,8 @@ export default {
   components: {
     ProjectHeader,
     UCDRenderer,
+    ActivityDiagramRenderer,
+    SequenceDiagramRenderer,
   },
   setup() {
     const { activeUsers, initSocketConnection, cleanupSocketConnection } = useActiveMembers()
@@ -353,70 +670,209 @@ export default {
       project: {},
       versions: [],
       selectedVersionId: null,
-
-      diagrams: [],
+      // Combined diagrams data
+      usecaseDiagrams: [],
+      activityDiagrams: [],
+      sequenceDiagrams: [],
       loading: false,
-      viewMode: 'grid',
-
       showGenerateModal: false,
       editingDiagram: null,
       generating: false,
-
       generateForm: {
-        description: '',
+        type: 'usecase',
         lang: 'en-US',
+        description: '',
+        usecaseId: '',
+        sourceType: 'usecase',
+        requirementId: '',
+        actor: '',
       },
-
+      availableUsecases: [],
       // Editor state
       selectedElement: null,
       selectedElementType: null,
-
       // View settings
       showElementLabels: true,
-      showRelationshipLabels: true,
       zoomLevel: 1,
-
       // Preview management
       previewCache: new Map(),
       generatingPreviews: new Set(),
-      needsPreviewRegeneration: false,
-      currentEditingDiagramId: null,
-
-      // Export dropdown state
       activeExportDropdown: null,
-
+      // Filter và search
+      searchFilters: {
+        usecase: '',
+        activity: '',
+        sequence: '',
+      },
+      sortFilters: {
+        usecase: 'name',
+        activity: 'name',
+        sequence: 'name',
+      },
+      languageFilters: {
+        usecase: 'all',
+        activity: 'all',
+        sequence: 'all',
+      },
       toast: useToast(),
       saveTimeout: null,
     }
   },
-  watch: {
-    diagrams: {
-      handler(newDiagrams) {
-        if (newDiagrams && newDiagrams.length > 0) {
-          this.$nextTick(() => {
-            setTimeout(() => {
-              this.triggerPreviewGenerationForAllDiagrams()
-            }, 500)
-          })
+  computed: {
+    filteredUsecaseDiagrams() {
+      let filtered = this.usecaseDiagrams
+
+      // Search filter
+      if (this.searchFilters.usecase) {
+        const searchTerm = this.searchFilters.usecase.toLowerCase()
+        filtered = filtered.filter(
+          (diagram) =>
+            diagram.name?.toLowerCase().includes(searchTerm) ||
+            diagram.description?.toLowerCase().includes(searchTerm)
+        )
+      }
+
+      // Language filter
+      if (this.languageFilters.usecase !== 'all') {
+        filtered = filtered.filter((diagram) => diagram.lang === this.languageFilters.usecase)
+      }
+
+      // Sort
+      switch (this.sortFilters.usecase) {
+        case 'name':
+          filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+          break
+        case 'date':
+          filtered = filtered.sort(
+            (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
+          )
+          break
+        case 'actors':
+          filtered = filtered.sort((a, b) => (b.actors?.length || 0) - (a.actors?.length || 0))
+          break
+        case 'usecases':
+          filtered = filtered.sort((a, b) => (b.usecases?.length || 0) - (a.usecases?.length || 0))
+          break
+      }
+
+      return filtered
+    },
+    filteredActivityDiagrams() {
+      let filtered = this.activityDiagrams
+
+      // Search filter
+      if (this.searchFilters.activity) {
+        const searchTerm = this.searchFilters.activity.toLowerCase()
+        filtered = filtered.filter(
+          (diagram) =>
+            diagram.name?.toLowerCase().includes(searchTerm) ||
+            diagram.description?.toLowerCase().includes(searchTerm)
+        )
+      }
+
+      // Language filter
+      if (this.languageFilters.activity !== 'all') {
+        filtered = filtered.filter((diagram) => diagram.lang === this.languageFilters.activity)
+      }
+
+      // Sort
+      switch (this.sortFilters.activity) {
+        case 'name':
+          filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+          break
+        case 'date':
+          filtered = filtered.sort(
+            (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
+          )
+          break
+        case 'nodes':
+          filtered = filtered.sort((a, b) => (b.nodes?.length || 0) - (a.nodes?.length || 0))
+          break
+      }
+
+      return filtered
+    },
+    filteredSequenceDiagrams() {
+      let filtered = this.sequenceDiagrams
+
+      // Search filter
+      if (this.searchFilters.sequence) {
+        const searchTerm = this.searchFilters.sequence.toLowerCase()
+        filtered = filtered.filter(
+          (diagram) =>
+            diagram.name?.toLowerCase().includes(searchTerm) ||
+            diagram.description?.toLowerCase().includes(searchTerm)
+        )
+      }
+
+      // Language filter
+      if (this.languageFilters.sequence !== 'all') {
+        filtered = filtered.filter((diagram) => diagram.lang === this.languageFilters.sequence)
+      }
+
+      // Sort
+      switch (this.sortFilters.sequence) {
+        case 'name':
+          filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+          break
+        case 'date':
+          filtered = filtered.sort(
+            (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
+          )
+          break
+        case 'lifelines':
+          filtered = filtered.sort(
+            (a, b) => (b.lifelines?.length || 0) - (a.lifelines?.length || 0)
+          )
+          break
+      }
+
+      return filtered
+    },
+    canGenerate() {
+      // Kiểm tra điều kiện generate dựa trên loại diagram
+      if (this.generateForm.type === 'sequence') {
+        return !!this.generateForm.usecaseId
+      }
+      if (this.generateForm.type === 'activity') {
+        if (this.generateForm.sourceType === 'usecase') {
+          return !!this.generateForm.requirementId
+        } else {
+          return !!this.generateForm.actor?.trim()
         }
+      }
+      // Use case diagram luôn có thể generate
+      return true
+    },
+  },
+  watch: {
+    filteredUsecaseDiagrams: {
+      handler(newDiagrams) {
+        this.triggerPreviewGenerationForDiagrams(newDiagrams, 'usecase')
       },
       deep: true,
       immediate: false,
     },
-    editingDiagram: {
-      handler(newDiagram) {
-        if (newDiagram) {
-          this.currentEditingDiagramId = newDiagram.id || newDiagram._id
-        }
+    filteredActivityDiagrams: {
+      handler(newDiagrams) {
+        this.triggerPreviewGenerationForDiagrams(newDiagrams, 'activity')
       },
       deep: true,
-      immediate: true,
+      immediate: false,
+    },
+    filteredSequenceDiagrams: {
+      handler(newDiagrams) {
+        this.triggerPreviewGenerationForDiagrams(newDiagrams, 'sequence')
+      },
+      deep: true,
+      immediate: false,
     },
   },
   async created() {
     const projectId = this.$route.params.id
     if (projectId) {
       await this.fetchProjectData(projectId)
+      await this.loadAvailableUsecases()
       await this.loadDiagrams()
       this.initSocketConnection(projectId)
     }
@@ -436,14 +892,12 @@ export default {
         params: { id: this.project._id },
       })
     },
-
     navigateToOutput() {
       this.$router.push({
         name: 'OutputManagement',
         params: { id: this.project._id },
       })
     },
-
     // Data methods
     async fetchProjectData(projectId) {
       try {
@@ -452,7 +906,6 @@ export default {
         const result = data.data || data
         this.project = result.project || {}
         this.versions = result.versions || []
-
         if (this.versions.length > 0) {
           this.selectedVersionId = this.versions[0]._id
         }
@@ -461,28 +914,40 @@ export default {
         this.toast.error('Failed to load project data')
       }
     },
-
-    async loadDiagrams() {
+    async loadAvailableUsecases() {
       if (!this.selectedVersionId) {
-        this.diagrams = []
+        this.availableUsecases = []
         return
       }
-
+      try {
+        const response = await usecaseApi.getUsecases(this.selectedVersionId)
+        this.availableUsecases = response.data.data || []
+        console.log('📋 Loaded available usecases:', this.availableUsecases)
+      } catch (error) {
+        console.error('Error loading usecases:', error)
+        this.availableUsecases = []
+        this.toast.error('Failed to load use cases')
+      }
+    },
+    async loadDiagrams() {
+      if (!this.selectedVersionId) {
+        this.usecaseDiagrams = []
+        this.activityDiagrams = []
+        this.sequenceDiagrams = []
+        return
+      }
       this.loading = true
       try {
-        const { data } = await getUsecaseDiagrams(this.selectedVersionId)
-        const diagrams = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []
+        // Load all diagram types in parallel
+        const [usecaseResponse, activityResponse, sequenceResponse] = await Promise.all([
+          getUsecaseDiagrams(this.selectedVersionId).catch(() => ({ data: { data: [] } })),
+          getActivityDiagrams(this.selectedVersionId).catch(() => ({ data: { data: [] } })),
+          getSequenceDiagrams(this.selectedVersionId).catch(() => ({ data: { data: [] } })),
+        ])
 
-        this.diagrams = diagrams.map((diagram) => {
-          const diagramId = diagram.id || diagram._id
-          if (this.previewCache.has(diagramId)) {
-            return {
-              ...diagram,
-              previewImage: this.previewCache.get(diagramId),
-            }
-          }
-          return diagram
-        })
+        this.usecaseDiagrams = this.processDiagrams(usecaseResponse.data?.data || [], 'usecase')
+        this.activityDiagrams = this.processDiagrams(activityResponse.data?.data || [], 'activity')
+        this.sequenceDiagrams = this.processDiagrams(sequenceResponse.data?.data || [], 'sequence')
 
         this.$nextTick(() => {
           setTimeout(() => {
@@ -492,119 +957,189 @@ export default {
       } catch (err) {
         console.error('Error loading diagrams:', err)
         this.toast.error('Failed to load diagrams')
-        this.diagrams = []
+        this.usecaseDiagrams = []
+        this.activityDiagrams = []
+        this.sequenceDiagrams = []
       } finally {
         this.loading = false
       }
     },
-
-    // Preview Generation
-    triggerPreviewGenerationForAllDiagrams() {
-      console.log('🔄 Starting preview generation for all diagrams...')
-
-      this.diagrams.forEach((diagram, index) => {
+    processDiagrams(diagrams, type) {
+      return diagrams.map((diagram) => {
         const diagramId = diagram.id || diagram._id
-        const needsPreview = !diagram.previewImage && !this.previewCache.has(diagramId)
-
-        if (needsPreview) {
-          setTimeout(() => {
-            this.triggerPreviewGeneration(diagram)
-          }, index * 500)
-        } else {
-          console.log(`✅ Preview already exists for diagram: ${diagramId}`)
+        if (this.previewCache.has(diagramId)) {
+          return {
+            ...diagram,
+            previewImage: this.previewCache.get(diagramId),
+            _type: type,
+          }
+        }
+        return {
+          ...diagram,
+          _type: type,
         }
       })
     },
+    // Diagram Type Helpers
+    getDiagramTypeName(plural = false) {
+      const names = {
+        usecase: plural ? 'Use Case Diagrams' : 'Use Case Diagram',
+        activity: plural ? 'Activity Diagrams' : 'Activity Diagram',
+        sequence: plural ? 'Sequence Diagrams' : 'Sequence Diagram',
+      }
+      return names[this.generateForm.type] || 'Diagram'
+    },
+    getDiagramTypeLabel(diagram) {
+      const type = diagram._type || this.generateForm.type
+      const labels = {
+        usecase: 'Use Case',
+        activity: 'Activity',
+        sequence: 'Sequence',
+      }
+      return labels[type] || 'Diagram'
+    },
+    getDiagramTypeClass(diagram) {
+      const type = diagram._type || this.generateForm.type
+      return `type-${type}`
+    },
+    getDiagramIcon(diagram) {
+      const type = diagram ? diagram._type || this.generateForm.type : this.generateForm.type
+      const icons = {
+        usecase: 'account_tree',
+        activity: 'play_arrow',
+        sequence: 'timeline',
+      }
+      return icons[type] || 'schema'
+    },
+    getEditorComponent() {
+      const components = {
+        usecase: 'UCDRenderer',
+        activity: 'ActivityDiagramRenderer',
+        sequence: 'SequenceDiagramRenderer',
+      }
+      const type = this.editingDiagram?._type || this.generateForm.type
+      return components[type] || 'UCDRenderer'
+    },
+    getRelationshipCount(diagram) {
+      const type = diagram._type || this.generateForm.type
+      switch (type) {
+        case 'usecase':
+          return (diagram.associations?.length || 0) + (diagram.relationships?.length || 0)
+        case 'activity':
+          return diagram.edges?.length || 0
+        case 'sequence':
+          return diagram.messages?.length || 0
+        default:
+          return 0
+      }
+    },
+    // Diagram actions
+    generateNewDiagram() {
+      this.generateForm.type = 'usecase'
+      this.generateForm.lang = 'en-US'
+      this.generateForm.description = ''
+      this.generateForm.usecaseId = ''
+      this.generateForm.sourceType = 'usecase'
+      this.generateForm.requirementId = ''
+      this.generateForm.actor = ''
 
-    async triggerPreviewGeneration(diagram) {
-      const diagramId = diagram.id || diagram._id
+      this.showGenerateModal = true
+    },
+    generateSpecificDiagram(type) {
+      this.generateForm.type = type
+      this.generateForm.lang = 'en-US'
+      this.generateForm.description = ''
+      this.generateForm.usecaseId = ''
+      this.generateForm.sourceType = 'usecase'
+      this.generateForm.requirementId = ''
+      this.generateForm.actor = ''
 
-      if (this.generatingPreviews.has(diagramId)) {
-        console.log(`⏳ Preview already generating for: ${diagramId}`)
+      // Nếu không có usecase nào, hiển thị cảnh báo
+      if (
+        (type === 'sequence' ||
+          (type === 'activity' && this.generateForm.sourceType === 'usecase')) &&
+        this.availableUsecases.length === 0
+      ) {
+        this.toast.warning('Please create use cases first before generating diagrams')
         return
       }
 
-      this.generatingPreviews.add(diagramId)
-      console.log(`🚀 Starting preview generation for: ${diagramId}`)
-
-      try {
-        await this.$nextTick()
-        await new Promise((resolve) => setTimeout(resolve, 100))
-
-        const rendererRef = `previewGenerator_${diagramId}`
-        console.log(`🔍 Looking for renderer ref: ${rendererRef}`)
-
-        if (this.$refs[rendererRef] && this.$refs[rendererRef][0]) {
-          const renderer = this.$refs[rendererRef][0]
-          console.log(`✅ Found renderer for: ${diagramId}`)
-
-          if (typeof renderer.generatePreviewImage === 'function') {
-            console.log(`🎨 Calling generatePreviewImage for: ${diagramId}`)
-
-            const previewData = await renderer.generatePreviewImage()
-            if (previewData) {
-              console.log(`✅ Preview generated successfully for: ${diagramId}`)
-              this.handlePreviewGenerated(diagram, previewData)
-            } else {
-              console.warn(`❌ No preview data returned for: ${diagramId}`)
-            }
-          } else {
-            console.error(`❌ generatePreviewImage method not found in renderer for: ${diagramId}`)
-          }
-        } else {
-          console.error(`❌ Renderer ref not found for: ${diagramId}`, this.$refs[rendererRef])
-
-          setTimeout(() => {
-            if (!this.previewCache.has(diagramId)) {
-              console.log(`🔄 Retrying preview generation for: ${diagramId}`)
-              this.triggerPreviewGeneration(diagram)
-            }
-          }, 1000)
-          return
-        }
-      } catch (error) {
-        console.error(`💥 Error generating preview for ${diagramId}:`, error)
-
-        setTimeout(() => {
-          if (!this.previewCache.has(diagramId)) {
-            console.log(`🔄 Retrying after error for: ${diagramId}`)
-            this.triggerPreviewGeneration(diagram)
-          }
-        }, 2000)
-      } finally {
-        this.generatingPreviews.delete(diagramId)
-        console.log(`🏁 Finished preview generation attempt for: ${diagramId}`)
-      }
-    },
-
-    // Diagram actions
-    generateNewDiagram() {
       this.showGenerateModal = true
     },
-
     closeGenerateModal() {
       this.showGenerateModal = false
       this.resetGenerateForm()
     },
-
     async generateDiagram() {
       if (!this.selectedVersionId) {
         this.toast.error('Please select a version first')
         return
       }
 
+      // Validate form
+      if (!this.canGenerate) {
+        this.toast.error('Please fill all required fields')
+        return
+      }
+
       this.generating = true
       try {
-        const { data } = await generateUsecaseDiagram(
-          this.selectedVersionId,
-          this.generateForm.lang
-        )
+        let newDiagram
 
-        const newDiagram = data?.data || data
+        switch (this.generateForm.type) {
+          case 'activity':
+            if (this.generateForm.sourceType === 'usecase') {
+              const { data } = await generateFromUsecase(
+                this.selectedVersionId,
+                this.generateForm.requirementId,
+                this.generateForm.lang
+              )
+              newDiagram = data?.data || data
+            } else {
+              const { data } = await generateFromActor(
+                this.selectedVersionId,
+                this.generateForm.actor,
+                this.generateForm.lang
+              )
+              newDiagram = data?.data || data
+            }
+            break
+          case 'sequence':
+            const { data: sequenceData } = await generateSequenceDiagram(
+              this.selectedVersionId,
+              this.generateForm.usecaseId,
+              this.generateForm.lang
+            )
+            newDiagram = sequenceData?.data || sequenceData
+            break
+          case 'usecase':
+          default:
+            const { data: usecaseData } = await generateUsecaseDiagram(
+              this.selectedVersionId,
+              this.generateForm.lang
+            )
+            newDiagram = usecaseData?.data || usecaseData
+            break
+        }
+
         if (newDiagram) {
-          this.diagrams.unshift(newDiagram)
+          // Add to appropriate array
+          newDiagram._type = this.generateForm.type
+          switch (this.generateForm.type) {
+            case 'activity':
+              this.activityDiagrams.unshift(newDiagram)
+              break
+            case 'sequence':
+              this.sequenceDiagrams.unshift(newDiagram)
+              break
+            case 'usecase':
+            default:
+              this.usecaseDiagrams.unshift(newDiagram)
+              break
+          }
+
           this.closeGenerateModal()
-          this.toast.success('Diagram generated successfully!')
+          this.toast.success(`${this.getDiagramTypeName()} generated successfully!`)
 
           setTimeout(() => {
             this.triggerPreviewGeneration(newDiagram)
@@ -619,33 +1154,34 @@ export default {
       } catch (err) {
         console.error('Error generating diagram:', err)
         this.toast.error(
-          'Failed to generate diagram: ' + (err.response?.data?.message || err.message)
+          `Failed to generate ${this.getDiagramTypeName()}: ${
+            err.response?.data?.message || err.message
+          }`
         )
       } finally {
         this.generating = false
       }
     },
-
     openManualEditor() {
       this.toast.info('Manual editor will be implemented in next version')
     },
-
     editDiagram(diagram) {
       this.editingDiagram = { ...diagram }
       this.selectedElement = null
       this.zoomLevel = 1
     },
-
     closeEditor() {
       const editedDiagramId = this.editingDiagram
         ? this.editingDiagram.id || this.editingDiagram._id
         : null
+      const diagramType = this.editingDiagram?._type
 
       this.editingDiagram = null
       this.selectedElement = null
 
-      if (editedDiagramId) {
-        const diagram = this.diagrams.find((d) => (d.id || d._id) === editedDiagramId)
+      if (editedDiagramId && diagramType) {
+        const diagrams = this.getDiagramsByType(diagramType)
+        const diagram = diagrams.find((d) => (d.id || d._id) === editedDiagramId)
         if (diagram) {
           console.log('🔄 Regenerating preview for edited diagram:', editedDiagramId)
           this.regeneratePreview(diagram)
@@ -657,14 +1193,27 @@ export default {
         console.log('🔄 Diagrams reloaded after closing editor')
       })
     },
-
+    getDiagramsByType(type) {
+      switch (type) {
+        case 'activity':
+          return this.activityDiagrams
+        case 'sequence':
+          return this.sequenceDiagrams
+        case 'usecase':
+        default:
+          return this.usecaseDiagrams
+      }
+    },
     async deleteDiagram(diagramId, event) {
       if (event) {
         event.stopPropagation()
       }
 
-      const diagram = this.diagrams.find((d) => (d.id || d._id) === diagramId)
+      const diagram = this.findDiagramById(diagramId)
+      if (!diagram) return
+
       const diagramName = diagram?.name || 'Unnamed Diagram'
+      const diagramType = diagram._type || 'usecase'
 
       if (
         !confirm(`Are you sure you want to delete "${diagramName}"? This action cannot be undone.`)
@@ -680,8 +1229,25 @@ export default {
       }
 
       try {
-        await deleteUsecaseDiagram(diagramId)
-        this.diagrams = this.diagrams.filter((d) => (d.id || d._id) !== diagramId)
+        switch (diagramType) {
+          case 'activity':
+            await deleteActivityDiagram(diagramId)
+            this.activityDiagrams = this.activityDiagrams.filter(
+              (d) => (d.id || d._id) !== diagramId
+            )
+            break
+          case 'sequence':
+            await deleteSequenceDiagram(diagramId)
+            this.sequenceDiagrams = this.sequenceDiagrams.filter(
+              (d) => (d.id || d._id) !== diagramId
+            )
+            break
+          case 'usecase':
+          default:
+            await deleteUsecaseDiagram(diagramId)
+            this.usecaseDiagrams = this.usecaseDiagrams.filter((d) => (d.id || d._id) !== diagramId)
+            break
+        }
 
         this.previewCache.delete(diagramId)
         this.generatingPreviews.delete(diagramId)
@@ -706,647 +1272,180 @@ export default {
         }
       }
     },
+    findDiagramById(diagramId) {
+      return (
+        this.usecaseDiagrams.find((d) => (d.id || d._id) === diagramId) ||
+        this.activityDiagrams.find((d) => (d.id || d._id) === diagramId) ||
+        this.sequenceDiagrams.find((d) => (d.id || d._id) === diagramId)
+      )
+    },
+    // Preview Generation
+    triggerPreviewGenerationForAllDiagrams() {
+      console.log('🔄 Starting preview generation for all diagrams...')
+      this.triggerPreviewGenerationForDiagrams(this.usecaseDiagrams, 'usecase')
+      this.triggerPreviewGenerationForDiagrams(this.activityDiagrams, 'activity')
+      this.triggerPreviewGenerationForDiagrams(this.sequenceDiagrams, 'sequence')
+    },
+    triggerPreviewGenerationForDiagrams(diagrams, type) {
+      diagrams.forEach((diagram, index) => {
+        const diagramId = diagram.id || diagram._id
+        const needsPreview = !diagram.previewImage && !this.previewCache.has(diagramId)
+        if (needsPreview) {
+          setTimeout(() => {
+            this.triggerPreviewGeneration(diagram)
+          }, index * 500)
+        }
+      })
+    },
+    async triggerPreviewGeneration(diagram) {
+      const diagramId = diagram.id || diagram._id
+      if (this.generatingPreviews.has(diagramId)) return
 
+      this.generatingPreviews.add(diagramId)
+      try {
+        await this.$nextTick()
+        const rendererRef = `previewGenerator_${diagramId}`
+        if (this.$refs[rendererRef] && this.$refs[rendererRef][0]) {
+          const renderer = this.$refs[rendererRef][0]
+          if (typeof renderer.generatePreviewImage === 'function') {
+            const previewData = await renderer.generatePreviewImage()
+            if (previewData) {
+              this.handlePreviewGenerated(diagram, previewData)
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error generating preview for ${diagramId}:`, error)
+      } finally {
+        this.generatingPreviews.delete(diagramId)
+      }
+    },
     // Export Methods
     async exportDiagramAsPNG(diagram) {
       try {
         const diagramId = diagram.id || diagram._id
         const rendererRef = `previewGenerator_${diagramId}`
-
         if (this.$refs[rendererRef] && this.$refs[rendererRef][0]) {
           const renderer = this.$refs[rendererRef][0]
           if (renderer.exportAsPNG) {
             await renderer.exportAsPNG()
             this.toast.success('Diagram exported as PNG successfully!')
-          } else {
-            this.toast.error('Export functionality not available')
           }
-        } else {
-          await this.exportAsPNGFallback(diagram)
         }
         this.closeExportDropdown()
       } catch (err) {
         console.error('Error exporting PNG:', err)
-        this.toast.error('Failed to export PNG: ' + (err.message || 'Unknown error'))
+        this.toast.error('Failed to export PNG')
       }
     },
-
     async exportDiagramAsSVG(diagram) {
       try {
         const diagramId = diagram.id || diagram._id
         const rendererRef = `previewGenerator_${diagramId}`
-
         if (this.$refs[rendererRef] && this.$refs[rendererRef][0]) {
           const renderer = this.$refs[rendererRef][0]
           if (renderer.exportAsSVG) {
             renderer.exportAsSVG()
             this.toast.success('Diagram exported as SVG successfully!')
-          } else {
-            this.toast.error('SVG export functionality not available')
           }
-        } else {
-          await this.exportAsSVGFallback(diagram)
         }
         this.closeExportDropdown()
       } catch (err) {
         console.error('Error exporting SVG:', err)
-        this.toast.error('Failed to export SVG: ' + (err.message || 'Unknown error'))
+        this.toast.error('Failed to export SVG')
       }
     },
-
-    // Fallback export methods
-    async exportAsPNGFallback(diagram) {
-      try {
-        const allElements = [
-          ...this.getComputedActors(diagram),
-          ...this.getComputedUsecases(diagram),
-        ]
-        if (allElements.length === 0) {
-          this.toast.error('No content to export!')
-          return
+    // Helper methods
+    getSafeValue(value, defaultValue = '') {
+      return value !== null && value !== undefined ? value : defaultValue
+    },
+    getSafeArrayLength(array) {
+      return Array.isArray(array) ? array.length : 0
+    },
+    getLanguageCode(lang) {
+      const codes = {
+        'en-US': 'EN',
+        'vi-VN': 'VI',
+        en: 'EN',
+        vi: 'VI',
+      }
+      return codes[lang] || 'EN'
+    },
+    formatDate(dateString) {
+      if (!dateString) return 'N/A'
+      return new Date(dateString).toLocaleDateString()
+    },
+    resetGenerateForm() {
+      this.generateForm = {
+        type: 'usecase',
+        lang: 'en-US',
+        description: '',
+        usecaseId: '',
+        sourceType: 'usecase',
+        requirementId: '',
+        actor: '',
+      }
+    },
+    handleVersionSelect(versionId) {
+      this.selectedVersionId = versionId
+      this.loadAvailableUsecases()
+      this.loadDiagrams()
+    },
+    goBack() {
+      this.$router.push('/dashboard')
+    },
+    async refreshDiagrams() {
+      await this.loadAvailableUsecases()
+      await this.loadDiagrams()
+      this.toast.success('Diagrams refreshed')
+    },
+    // Preview Image Management
+    handlePreviewGenerated(diagram, previewData) {
+      if (previewData) {
+        const diagramId = diagram.id || diagram._id
+        this.previewCache.set(diagramId, previewData)
+        const diagrams = this.getDiagramsByType(diagram._type)
+        const diagramIndex = diagrams.findIndex((d) => (d.id || d._id) === diagramId)
+        if (diagramIndex !== -1) {
+          diagrams[diagramIndex].previewImage = previewData
         }
-
-        const bounds = allElements.reduce(
-          (acc, element) => ({
-            minX: Math.min(acc.minX, element.x - (element.width || 60)),
-            maxX: Math.max(acc.maxX, element.x + (element.width || 60)),
-            minY: Math.min(acc.minY, element.y - (element.height || 60)),
-            maxY: Math.max(acc.maxY, element.y + (element.height || 60)),
-          }),
-          { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
-        )
-
-        const padding = 100
-        const contentWidth = Math.max(bounds.maxX - bounds.minX + padding * 2, 800)
-        const contentHeight = Math.max(bounds.maxY - bounds.minY + padding * 2, 600)
-
-        const svgString = this.generateExportSVG(
-          diagram,
-          bounds,
-          padding,
-          contentWidth,
-          contentHeight
-        )
-        const svgData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`
-
-        const img = new Image()
-        const canvas = document.createElement('canvas')
-        const ctx = canvas.getContext('2d')
-
-        canvas.width = contentWidth
-        canvas.height = contentHeight
-        ctx.fillStyle = 'white'
-        ctx.fillRect(0, 0, contentWidth, contentHeight)
-
-        return new Promise((resolve, reject) => {
-          img.onload = () => {
-            try {
-              ctx.drawImage(img, 0, 0, contentWidth, contentHeight)
-
-              canvas.toBlob(
-                (blob) => {
-                  if (!blob) {
-                    reject(new Error('Could not create blob from canvas'))
-                    return
-                  }
-
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `use-case-diagram-${
-                    diagram.name || 'export'
-                  }-${new Date().getTime()}.png`
-                  document.body.appendChild(a)
-                  a.click()
-                  document.body.removeChild(a)
-                  URL.revokeObjectURL(url)
-                  resolve()
-                },
-                'image/png',
-                1.0
-              )
-            } catch (error) {
-              console.error('Error drawing image:', error)
-              reject(error)
-            }
-          }
-          img.onerror = (error) => {
-            console.error('Error loading SVG:', error)
-            reject(new Error('Could not load SVG for export.'))
-          }
-          img.src = svgData
-        })
-      } catch (err) {
-        console.error('Error in PNG fallback export:', err)
-        throw err
       }
     },
-
-    async exportAsSVGFallback(diagram) {
-      try {
-        const allElements = [
-          ...this.getComputedActors(diagram),
-          ...this.getComputedUsecases(diagram),
-        ]
-        if (allElements.length === 0) {
-          this.toast.error('No content to export!')
-          return
-        }
-
-        const bounds = allElements.reduce(
-          (acc, element) => ({
-            minX: Math.min(acc.minX, element.x - (element.width || 60)),
-            maxX: Math.max(acc.maxX, element.x + (element.width || 60)),
-            minY: Math.min(acc.minY, element.y - (element.height || 60)),
-            maxY: Math.max(acc.maxY, element.y + (element.height || 60)),
-          }),
-          { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
-        )
-
-        const padding = 100
-        const contentWidth = Math.max(bounds.maxX - bounds.minX + padding * 2, 800)
-        const contentHeight = Math.max(bounds.maxY - bounds.minY + padding * 2, 600)
-
-        const svgContent = this.generateExportSVG(
-          diagram,
-          bounds,
-          padding,
-          contentWidth,
-          contentHeight
-        )
-        const blob = new Blob([svgContent], { type: 'image/svg+xml' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `use-case-diagram-${diagram.name || 'export'}-${new Date().getTime()}.svg`
-        a.click()
-        URL.revokeObjectURL(url)
-      } catch (err) {
-        console.error('Error in SVG fallback export:', err)
-        throw err
+    onPreviewImageLoad(event) {
+      event.target.style.opacity = '1'
+    },
+    onPreviewImageError(diagram, event) {
+      const diagramId = diagram.id || diagram._id
+      event.target.style.display = 'none'
+      if (!this.generatingPreviews.has(diagramId)) {
+        this.triggerPreviewGeneration(diagram)
       }
     },
+    async regeneratePreview(diagram) {
+      const diagramId = diagram.id || diagram._id
+      if (this.generatingPreviews.has(diagramId)) return
 
+      this.previewCache.delete(diagramId)
+      const diagrams = this.getDiagramsByType(diagram._type)
+      const diagramIndex = diagrams.findIndex((d) => (d.id || d._id) === diagramId)
+      if (diagramIndex !== -1) {
+        delete diagrams[diagramIndex].previewImage
+      }
+      this.triggerPreviewGeneration(diagram)
+    },
     // Export dropdown methods
     toggleExportDropdown(diagram) {
       const diagramId = diagram.id || diagram._id
       this.activeExportDropdown = this.activeExportDropdown === diagramId ? null : diagramId
     },
-
     closeExportDropdown() {
       this.activeExportDropdown = null
     },
-
     handleClickOutside(event) {
       if (!event.target.closest('.export-dropdown')) {
         this.closeExportDropdown()
       }
     },
-
-    // Helper methods for export
-    getComputedActors(diagram) {
-      const actors = Array.isArray(diagram?.actors) ? diagram.actors : []
-      if (actors.length === 0) return []
-
-      const virtualSpace = {
-        minX: -1000,
-        maxX: 2200,
-        minY: -1000,
-        maxY: 1800,
-        centerX: 600,
-        centerY: 400,
-      }
-
-      return actors.map((actor, index) => {
-        const position = actor.position || { x: 0, y: 0 }
-
-        return {
-          id: this.normalizeId(actor._id) || this.normalizeId(actor.id) || `actor-${index}`,
-          name: actor.name || 'Unnamed Actor',
-          description: actor.description || '',
-          x: position.x || virtualSpace.centerX - 200 + (index % 2) * 200,
-          y: position.y || virtualSpace.centerY - 100 + Math.floor(index / 2) * 120,
-          width: 80,
-          height: 80,
-          _originalData: actor,
-        }
-      })
-    },
-
-    getComputedUsecases(diagram) {
-      const usecases = Array.isArray(diagram?.usecases) ? diagram.usecases : []
-      if (!usecases || usecases.length === 0) return []
-
-      const virtualSpace = {
-        minX: -1000,
-        maxX: 2200,
-        minY: -1000,
-        maxY: 1800,
-        centerX: 600,
-        centerY: 400,
-      }
-
-      return usecases.map((uc, index) => {
-        const position = uc.position || { x: 0, y: 0 }
-
-        return {
-          id: this.normalizeId(uc._id) || this.normalizeId(uc.id) || `uc-${index}`,
-          title: uc.title || 'Unnamed Use Case',
-          description: uc.description || '',
-          x: position.x || virtualSpace.centerX + (index % 4) * 150,
-          y: position.y || virtualSpace.centerY - 150 + Math.floor(index / 4) * 100,
-          width: 120,
-          height: 40,
-          _originalData: uc,
-        }
-      })
-    },
-
-    generateExportSVG(diagram, bounds, padding, contentWidth, contentHeight) {
-      const computedActors = this.getComputedActors(diagram)
-      const computedUsecases = this.getComputedUsecases(diagram)
-      const computedAssociations = this.getComputedAssociations(diagram)
-      const computedRelationships = this.getComputedRelationships(diagram)
-
-      const viewBox = `${bounds.minX - padding} ${
-        bounds.minY - padding
-      } ${contentWidth} ${contentHeight}`
-
-      return `
-<svg xmlns="http://www.w3.org/2000/svg" width="${contentWidth}" height="${contentHeight}" viewBox="${viewBox}">
-  <defs>
-    <marker id="association-arrow-export" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#374151" />
-    </marker>
-    <marker id="include-arrow-export" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
-    </marker>
-    <marker id="extend-arrow-export" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b5cf6" />
-    </marker>
-    <marker id="generalization-arrow-export" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10 L 2.5 5 z" fill="#10b981" stroke="#10b981" stroke-width="1" />
-    </marker>
-  </defs>
-
-  <!-- Background trắng -->
-  <rect x="${bounds.minX - padding}" y="${bounds.minY - padding}" 
-        width="${contentWidth}" height="${contentHeight}" fill="white" />
-
-  <!-- Render Associations -->
-  ${computedAssociations
-    .map((assoc) => {
-      const path = this.calculateAssociationPath(assoc)
-      return `<path d="${path}" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#association-arrow-export)" />`
-    })
-    .join('')}
-
-  <!-- Render Relationships -->
-  ${computedRelationships
-    .map((rel) => {
-      const path = this.calculateRelationshipPath(rel)
-      const marker = this.getRelationshipMarkerExport(rel.type)
-      const dashArray = rel.type === 'extend' ? 'stroke-dasharray="5,3"' : ''
-      const label = this.getRelationshipLabel(rel.type)
-      const labelPos = this.getRelationshipLabelPosition(rel)
-
-      const labelContent =
-        rel.type !== 'association'
-          ? `
-      <g>
-        <rect x="${labelPos.x - 20}" y="${
-              labelPos.y - 8
-            }" width="40" height="16" rx="3" fill="white" stroke="#e5e7eb" stroke-width="1" />
-        <text x="${labelPos.x}" y="${
-              labelPos.y
-            }" font-size="9" fill="#374151" text-anchor="middle" dominant-baseline="middle">${label}</text>
-      </g>
-    `
-          : ''
-
-      return `
-      <path d="${path}" stroke="${this.getRelationshipColor(
-        rel.type
-      )}" stroke-width="1.5" fill="none" ${dashArray} marker-end="${marker}" />
-      ${labelContent}
-    `
-    })
-    .join('')}
-
-  <!-- Render Use Cases -->
-  ${computedUsecases
-    .map(
-      (uc) => `
-    <g>
-      <ellipse cx="${uc.x}" cy="${uc.y}" rx="${uc.width / 2}" ry="${
-        uc.height / 2
-      }" fill="white" stroke="#3b82f6" stroke-width="2" />
-      <text x="${uc.x}" y="${
-        uc.y
-      }" font-size="10" fill="#1e40af" text-anchor="middle" dominant-baseline="middle">${
-        uc.title
-      }</text>
-    </g>
-  `
-    )
-    .join('')}
-
-  <!-- Render Actors -->
-  ${computedActors
-    .map(
-      (actor) => `
-    <g>
-      <circle cx="${actor.x}" cy="${
-        actor.y - 20
-      }" r="12" fill="white" stroke="#1f2937" stroke-width="2" />
-      <line x1="${actor.x}" y1="${actor.y - 8}" x2="${actor.x}" y2="${
-        actor.y + 15
-      }" stroke="#1f2937" stroke-width="2" />
-      <line x1="${actor.x - 12}" y1="${actor.y + 5}" x2="${actor.x + 12}" y2="${
-        actor.y + 5
-      }" stroke="#1f2937" stroke-width="2" />
-      <line x1="${actor.x}" y1="${actor.y + 15}" x2="${actor.x - 10}" y2="${
-        actor.y + 30
-      }" stroke="#1f2937" stroke-width="2" />
-      <line x1="${actor.x}" y1="${actor.y + 15}" x2="${actor.x + 10}" y2="${
-        actor.y + 30
-      }" stroke="#1f2937" stroke-width="2" />
-      <text x="${actor.x}" y="${
-        actor.y + 50
-      }" font-size="11" fill="#374151" text-anchor="middle" dominant-baseline="middle">${
-        actor.name
-      }</text>
-    </g>
-  `
-    )
-    .join('')}
-</svg>`
-    },
-
-    // Additional helper methods for export
-    getRelationshipMarkerExport(type) {
-      const markers = {
-        include: 'url(#include-arrow-export)',
-        extend: 'url(#extend-arrow-export)',
-        generalization: 'url(#generalization-arrow-export)',
-      }
-      return markers[type] || 'url(#association-arrow-export)'
-    },
-
-    getRelationshipLabel(type) {
-      const labels = {
-        include: '«include»',
-        extend: '«extend»',
-        generalization: '«inherits»',
-      }
-      return labels[type] || ''
-    },
-
-    getRelationshipColor(type) {
-      const colors = {
-        include: '#3b82f6',
-        extend: '#8b5cf6',
-        generalization: '#10b981',
-        association: '#374151',
-      }
-      return colors[type] || '#374151'
-    },
-
-    calculateAssociationPath(association) {
-      const { actor, usecase } = association
-      const dx = usecase.x - actor.x
-      const dy = usecase.y - actor.y
-      const length = Math.sqrt(dx * dx + dy * dy)
-      if (length === 0) return ''
-
-      const nx = dx / length
-      const ny = dy / length
-      const actorOffset = 25
-      const usecaseOffset = this.calculateUsecaseOffset(usecase, -nx, -ny)
-
-      const startX = actor.x + nx * actorOffset
-      const startY = actor.y + ny * actorOffset
-      const endX = usecase.x - nx * usecaseOffset
-      const endY = usecase.y - ny * usecaseOffset
-
-      return `M ${startX} ${startY} L ${endX} ${endY}`
-    },
-
-    calculateRelationshipPath(relationship) {
-      const { source, target } = relationship
-      if (source.id === target.id) {
-        return `M ${source.x} ${source.y} C ${source.x + 50} ${source.y - 50} ${source.x + 50} ${
-          source.y - 50
-        } ${source.x} ${source.y}`
-      }
-
-      const dx = target.x - source.x
-      const dy = target.y - source.y
-      const length = Math.sqrt(dx * dx + dy * dy)
-      if (length === 0) return ''
-
-      const nx = dx / length
-      const ny = dy / length
-      const sourceOffset = this.getElementOffset(source, nx, ny)
-      const targetOffset = this.getElementOffset(target, -nx, -ny)
-
-      const startX = source.x + nx * sourceOffset
-      const startY = source.y + ny * sourceOffset
-      const endX = target.x - nx * targetOffset
-      const endY = target.y - ny * targetOffset
-
-      return `M ${startX} ${startY} L ${endX} ${endY}`
-    },
-
-    calculateUsecaseOffset(usecase, nx, ny) {
-      const rx = usecase.width / 2
-      const ry = usecase.height / 2
-      if (nx === 0) return ry
-      if (ny === 0) return rx
-
-      const angle = Math.atan2(ny, nx)
-      const cosAngle = Math.cos(angle)
-      const sinAngle = Math.sin(angle)
-      return Math.sqrt((rx * cosAngle) ** 2 + (ry * sinAngle) ** 2)
-    },
-
-    getElementOffset(element, nx, ny) {
-      if (element.width && element.height) return this.calculateUsecaseOffset(element, nx, ny)
-      else return 25
-    },
-
-    getRelationshipLabelPosition(relationship) {
-      const { source, target } = relationship
-      const midX = (source.x + target.x) / 2
-      const midY = (source.y + target.y) / 2
-
-      const dx = target.x - source.x
-      const dy = target.y - source.y
-      const length = Math.sqrt(dx * dx + dy * dy)
-      const offset = Math.min(30, length * 0.2)
-
-      const perpendicularX = (-dy / length) * offset
-      const perpendicularY = (dx / length) * offset
-
-      return { x: midX + perpendicularX, y: midY + perpendicularY }
-    },
-
-    getComputedAssociations(diagram) {
-      const associations = Array.isArray(diagram?.associations) ? diagram.associations : []
-      const actors = this.getComputedActors(diagram)
-      const usecases = this.getComputedUsecases(diagram)
-
-      if (
-        !associations ||
-        associations.length === 0 ||
-        actors.length === 0 ||
-        usecases.length === 0
-      ) {
-        return []
-      }
-
-      return associations
-        .map((assoc) => {
-          try {
-            const actorId = this.normalizeId(assoc.actor_id)
-            const usecaseId = this.normalizeId(assoc.usecase_id)
-            if (!actorId || !usecaseId) return null
-
-            const actor = actors.find((a) => a.id === actorId)
-            const usecase = usecases.find((uc) => uc.id === usecaseId)
-            if (!actor || !usecase) return null
-
-            return {
-              id:
-                this.normalizeId(assoc._id) ||
-                this.normalizeId(assoc.id) ||
-                `assoc-${actorId}-${usecaseId}`,
-              actor,
-              usecase,
-            }
-          } catch (error) {
-            console.warn('Error processing association:', error)
-            return null
-          }
-        })
-        .filter(Boolean)
-    },
-
-    getComputedRelationships(diagram) {
-      const relationships = Array.isArray(diagram?.relationships) ? diagram.relationships : []
-      const actors = this.getComputedActors(diagram)
-      const usecases = this.getComputedUsecases(diagram)
-
-      if (!relationships || relationships.length === 0) return []
-
-      return relationships
-        .map((rel) => {
-          try {
-            const sourceId = this.normalizeId(rel.source)
-            const targetId = this.normalizeId(rel.target)
-            if (!sourceId || !targetId) return null
-
-            let source =
-              usecases.find((uc) => uc.id === sourceId) ||
-              actors.find((actor) => actor.id === sourceId)
-            let target =
-              usecases.find((uc) => uc.id === targetId) ||
-              actors.find((actor) => actor.id === targetId)
-            if (!source || !target) return null
-
-            return {
-              id:
-                this.normalizeId(rel._id) ||
-                this.normalizeId(rel.id) ||
-                `rel-${sourceId}-${targetId}`,
-              source,
-              target,
-              type: rel.type || 'association',
-            }
-          } catch (error) {
-            console.warn('Error processing relationship:', error)
-            return null
-          }
-        })
-        .filter(Boolean)
-    },
-
-    normalizeId(id) {
-      if (!id) return null
-      if (typeof id === 'object' && id.$oid) return id.$oid
-      if (typeof id === 'string') return id
-      if (typeof id === 'object') return String(id)
-      return String(id)
-    },
-
-    // Preview Image Management
-    handlePreviewGenerated(diagram, previewData) {
-      if (previewData) {
-        const diagramId = diagram.id || diagram._id
-
-        console.log('✅ Preview generated and saved for diagram:', diagramId)
-
-        this.previewCache.set(diagramId, previewData)
-
-        const diagramIndex = this.diagrams.findIndex((d) => (d.id || d._id) === diagramId)
-        if (diagramIndex !== -1) {
-          this.diagrams[diagramIndex].previewImage = previewData
-          console.log(`🖼️ Preview image set for diagram: ${diagramId}`)
-        }
-
-        this.generatingPreviews.delete(diagramId)
-      } else {
-        console.warn('❌ No preview data received for diagram:', diagram.id || diagram._id)
-      }
-    },
-
-    onPreviewImageLoad(event) {
-      console.log('🖼️ Preview image loaded successfully')
-      event.target.style.opacity = '1'
-    },
-
-    onPreviewImageError(diagram, event) {
-      const diagramId = diagram.id || diagram._id
-      console.warn('❌ Preview image failed to load for diagram:', diagramId)
-      event.target.style.display = 'none'
-
-      if (!this.generatingPreviews.has(diagramId)) {
-        console.log('🔄 Regenerating preview due to image load error')
-        this.triggerPreviewGeneration(diagram)
-      }
-    },
-
-    async regeneratePreview(diagram) {
-      const diagramId = diagram.id || diagram._id
-      if (this.generatingPreviews.has(diagramId)) {
-        console.log('⏳ Preview regeneration already in progress for:', diagramId)
-        return
-      }
-
-      console.log('🔄 Manually regenerating preview for:', diagramId)
-
-      this.previewCache.delete(diagramId)
-      const diagramIndex = this.diagrams.findIndex((d) => (d.id || d._id) === diagramId)
-      if (diagramIndex !== -1) {
-        delete this.diagrams[diagramIndex].previewImage
-      }
-
-      this.triggerPreviewGeneration(diagram)
-    },
-
-    forceRegenerateAllPreviews() {
-      console.log('🔄 Force regenerating all previews')
-
-      this.previewCache.clear()
-      this.generatingPreviews.clear()
-
-      this.diagrams.forEach((diagram) => {
-        delete diagram.previewImage
-      })
-
-      this.triggerPreviewGenerationForAllDiagrams()
-    },
-
     // Editor Methods
     handleElementSelect(event) {
       if (!event) {
@@ -1354,14 +1453,73 @@ export default {
         this.selectedElementType = null
         return
       }
-
       this.selectedElement = event.element
       this.selectedElementType = event.type
     },
-
     handlePositionUpdate({ element, type, position }) {
       if (!this.editingDiagram) return
 
+      const diagramType = this.editingDiagram._type
+
+      switch (diagramType) {
+        case 'usecase':
+          this.handleUsecasePositionUpdate({ element, type, position })
+          break
+        case 'activity':
+          this.handleActivityPositionUpdate({ element, type, position })
+          break
+        case 'sequence':
+          this.handleSequencePositionUpdate({ element, type, position })
+          break
+      }
+
+      // Gọi onSaveStart để hiển thị "Saving..."
+      if (this.$refs.diagramEditor && this.$refs.diagramEditor.onSaveStart) {
+        this.$refs.diagramEditor.onSaveStart()
+      }
+
+      this.debounceSave()
+    },
+
+    async saveDiagramPositions() {
+      if (!this.editingDiagram) return
+
+      const diagramType = this.editingDiagram._type
+      const diagramId = this.editingDiagram.id || this.editingDiagram._id
+
+      try {
+        switch (diagramType) {
+          case 'usecase':
+            await this.saveUsecasePositions(diagramId)
+            break
+          case 'activity':
+            await this.saveActivityPositions(diagramId)
+            break
+          case 'sequence':
+            await this.saveSequencePositions(diagramId)
+            break
+        }
+
+        // Gọi onSaveComplete để hiển thị "Saved just now"
+        if (this.$refs.diagramEditor && this.$refs.diagramEditor.onSaveComplete) {
+          this.$refs.diagramEditor.onSaveComplete(true)
+        }
+
+        console.log('💾 Positions saved successfully')
+      } catch (err) {
+        console.error('❌ Error saving positions:', err)
+
+        // Gọi onSaveComplete với false để hiển thị lỗi
+        if (this.$refs.diagramEditor && this.$refs.diagramEditor.onSaveComplete) {
+          this.$refs.diagramEditor.onSaveComplete(false)
+        }
+
+        this.toast.error('Failed to save positions')
+      }
+    },
+
+    // Thêm các phương thức xử lý cụ thể
+    handleUsecasePositionUpdate({ element, type, position }) {
       if (type === 'actor') {
         const actorIndex = this.editingDiagram.actors.findIndex(
           (a) => (a._id || a.id) === (element._id || element.id)
@@ -1385,18 +1543,46 @@ export default {
           this.editingDiagram.usecases[usecaseIndex].position.y = Math.round(position.y)
         }
       }
-
-      if (this.$refs.ucdEditor && this.$refs.ucdEditor.onSaveStart) {
-        this.$refs.ucdEditor.onSaveStart()
-      }
-
-      this.debounceSave()
     },
 
+    async saveUsecasePositions(diagramId) {
+      const updates = {
+        actors: this.editingDiagram.actors.map((actor) => ({
+          id: actor._id || actor.id,
+          position: actor.position || { x: 0, y: 0 },
+        })),
+        usecases: this.editingDiagram.usecases.map((usecase) => ({
+          id: usecase._id || usecase.id,
+          position: usecase.position || { x: 0, y: 0 },
+        })),
+      }
+
+      await updateMultiplePositions(diagramId, updates)
+    },
+
+    // Placeholder cho các loại diagram khác (cần implement sau)
+    handleActivityPositionUpdate({ element, type, position }) {
+      // TODO: Implement for activity diagrams
+      console.log('Activity diagram position update:', { element, type, position })
+    },
+
+    handleSequencePositionUpdate({ element, type, position }) {
+      // TODO: Implement for sequence diagrams
+      console.log('Sequence diagram position update:', { element, type, position })
+    },
+
+    async saveActivityPositions(diagramId) {
+      // TODO: Implement for activity diagrams
+      console.log('Saving activity diagram positions:', diagramId)
+    },
+
+    async saveSequencePositions(diagramId) {
+      // TODO: Implement for sequence diagrams
+      console.log('Saving sequence diagram positions:', diagramId)
+    },
     handleElementDrag({ element, type, newPosition }) {
       this.handlePositionUpdate({ element, type, position: newPosition })
     },
-
     debounceSave() {
       if (this.saveTimeout) {
         clearTimeout(this.saveTimeout)
@@ -1404,92 +1590,6 @@ export default {
       this.saveTimeout = setTimeout(() => {
         this.saveDiagramPositions()
       }, 1500)
-    },
-
-    async saveDiagramPositions() {
-      if (!this.editingDiagram) return
-
-      try {
-        const diagramId = this.editingDiagram.id || this.editingDiagram._id
-        if (!diagramId) return
-
-        const updates = {
-          actors: this.editingDiagram.actors.map((actor) => ({
-            id: actor._id || actor.id,
-            position: actor.position || { x: 0, y: 0 },
-          })),
-          usecases: this.editingDiagram.usecases.map((usecase) => ({
-            id: usecase._id || usecase.id,
-            position: usecase.position || { x: 0, y: 0 },
-          })),
-        }
-
-        await updateMultiplePositions(diagramId, updates)
-
-        if (this.$refs.ucdEditor && this.$refs.ucdEditor.onSaveComplete) {
-          this.$refs.ucdEditor.onSaveComplete(true)
-        }
-
-        console.log('💾 Positions saved successfully')
-        this.needsPreviewRegeneration = true
-      } catch (err) {
-        console.error('❌ Error saving positions:', err)
-
-        if (this.$refs.ucdEditor && this.$refs.ucdEditor.onSaveComplete) {
-          this.$refs.ucdEditor.onSaveComplete(false)
-        }
-
-        this.toast.error('Failed to save positions')
-      }
-    },
-
-    // Helper methods
-    getSafeValue(value, defaultValue = '') {
-      return value !== null && value !== undefined ? value : defaultValue
-    },
-
-    getSafeArrayLength(array) {
-      return Array.isArray(array) ? array.length : 0
-    },
-
-    getLanguageCode(lang) {
-      const codes = {
-        'en-US': 'EN',
-        'vi-VN': 'VI',
-        en: 'EN',
-        vi: 'VI',
-      }
-      return codes[lang] || 'EN'
-    },
-
-    formatDate(dateString) {
-      if (!dateString) return 'N/A'
-      return new Date(dateString).toLocaleDateString()
-    },
-
-    resetGenerateForm() {
-      this.generateForm = {
-        description: '',
-        lang: 'en-US',
-      }
-    },
-
-    handleVersionSelect(versionId) {
-      this.selectedVersionId = versionId
-      this.loadDiagrams()
-    },
-
-    goBack() {
-      this.$router.push('/dashboard')
-    },
-
-    async refreshDiagrams() {
-      await this.loadDiagrams()
-      this.toast.success('Diagrams refreshed')
-    },
-
-    async exportDiagram(diagram) {
-      await this.exportDiagramAsPNG(diagram)
     },
   },
 }
@@ -1553,6 +1653,11 @@ export default {
 
 .btn-primary:hover {
   background: #2d4a8a;
+}
+
+.btn-primary.small {
+  padding: 8px 16px;
+  font-size: 0.875rem;
 }
 
 .btn-secondary {
@@ -1639,33 +1744,14 @@ export default {
   border-bottom-color: #1a365d;
 }
 
-/* View Options */
-.view-options {
+/* Diagrams Display */
+.diagrams-display {
   display: flex;
-  gap: 4px;
-  background: #f3f4f6;
-  padding: 4px;
-  border-radius: 8px;
+  flex-direction: column;
+  gap: 32px;
 }
 
-.view-toggle {
-  padding: 8px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  color: #6b7280;
-  transition: all 0.3s ease;
-}
-
-.view-toggle.active {
-  background: white;
-  color: #1a365d;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-/* Diagrams Section */
-.diagrams-section {
+.diagram-section {
   background: white;
   border-radius: 12px;
   padding: 24px;
@@ -1676,23 +1762,88 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
-.section-header h3 {
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title h3 {
   font-size: 1.25rem;
   font-weight: 600;
   color: #1f2937;
   margin: 0;
 }
 
-/* Diagrams Grid - Responsive */
-.diagrams-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 24px;
+.diagram-count {
+  color: #6b7280;
+  font-size: 0.875rem;
 }
 
+.section-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  color: #9ca3af;
+  font-size: 20px;
+}
+
+.search-input {
+  padding: 8px 12px 8px 40px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  width: 250px;
+  transition: border-color 0.3s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #1a365d;
+}
+
+.filter-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.sort-select,
+.lang-select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  font-size: 0.875rem;
+  min-width: 120px;
+}
+
+/* Diagrams Scroll Container */
+.diagrams-scroll-container {
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.diagrams-scroll-content {
+  display: flex;
+  gap: 20px;
+  min-width: min-content;
+}
+
+/* Diagram Cards */
 .diagram-card {
   background: white;
   border-radius: 12px;
@@ -1701,6 +1852,9 @@ export default {
   transition: all 0.3s ease;
   cursor: pointer;
   border: 1px solid #e5e7eb;
+  min-width: 300px;
+  max-width: 300px;
+  flex-shrink: 0;
 }
 
 .diagram-card:hover {
@@ -1712,7 +1866,7 @@ export default {
 .diagram-preview {
   position: relative;
   width: 100%;
-  height: 200px;
+  height: 180px;
   background: #f8fafc;
   overflow: hidden;
   border-bottom: 1px solid #e5e7eb;
@@ -1781,16 +1935,23 @@ export default {
 
 .diagram-info h4 {
   margin: 0 0 8px 0;
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .diagram-description {
   margin: 0 0 12px 0;
   color: #6b7280;
   font-size: 0.875rem;
-  line-height: 1.5;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .diagram-meta {
@@ -1808,9 +1969,34 @@ export default {
   color: #9ca3af;
 }
 
+/* Type Badges */
+.diagram-type-badge,
+.type-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.type-usecase {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.type-activity {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.type-sequence {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .diagram-stats {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .stat-badge {
@@ -1824,100 +2010,22 @@ export default {
   color: #374151;
 }
 
-/* List View */
-.diagrams-list {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.list-header {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr auto;
-  gap: 16px;
-  padding: 16px 20px;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
-  font-weight: 600;
-  color: #374151;
-  font-size: 0.875rem;
-}
-
-.list-item {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr auto;
-  gap: 16px;
-  padding: 16px 20px;
-  border-bottom: 1px solid #f3f4f6;
-  align-items: center;
-}
-
-.list-item:hover {
-  background: #f9fafb;
-}
-
-.col-name {
+/* Empty Section */
+.empty-section {
+  text-align: center;
+  padding: 40px 20px;
+  min-width: 300px;
   display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.diagram-icon {
-  width: 40px;
-  height: 40px;
-  background: #e5e7eb;
-  border-radius: 8px;
-  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   color: #6b7280;
 }
 
-.item-info h4 {
-  margin: 0 0 4px 0;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.item-info p {
-  margin: 0;
-  font-size: 0.75rem;
-  color: #6b7280;
-}
-
-.lang-badge {
-  padding: 4px 8px;
-  background: #dbeafe;
-  color: #1e40af;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.stats-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 0.75rem;
-  color: #6b7280;
-}
-
-.col-actions {
-  display: flex;
-  gap: 4px;
-}
-
-/* Empty State */
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-}
-
 .empty-icon {
-  width: 80px;
-  height: 80px;
-  margin: 0 auto 20px;
+  width: 60px;
+  height: 60px;
+  margin-bottom: 16px;
   background: #f3f4f6;
   border-radius: 50%;
   display: flex;
@@ -1926,24 +2034,19 @@ export default {
 }
 
 .empty-icon .material-symbols-outlined {
-  font-size: 40px;
+  font-size: 30px;
   color: #9ca3af;
 }
 
-.empty-state h3 {
+.empty-section h4 {
   margin: 0 0 8px 0;
   color: #374151;
+  font-size: 1rem;
 }
 
-.empty-state p {
-  margin: 0 0 24px 0;
-  color: #6b7280;
-}
-
-.empty-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
+.empty-section p {
+  margin: 0 0 16px 0;
+  font-size: 0.875rem;
 }
 
 /* Modal Styles */
@@ -2037,6 +2140,12 @@ export default {
   font-weight: 500;
   color: #374151;
   font-size: 0.875rem;
+}
+
+.form-group label.required:after {
+  content: '*';
+  color: #ef4444;
+  margin-left: 4px;
 }
 
 .form-group input,
@@ -2161,6 +2270,23 @@ export default {
   font-size: 16px;
 }
 
+/* Field Help */
+.field-help {
+  color: #6b7280;
+  font-size: 0.75rem;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.diagram-type-label {
+  padding: 4px 8px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-right: 12px;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .uml-management-view {
@@ -2186,10 +2312,6 @@ export default {
     min-width: 120px;
   }
 
-  .diagrams-grid {
-    grid-template-columns: 1fr;
-  }
-
   .navigation-tabs {
     flex-direction: column;
     padding: 0;
@@ -2199,18 +2321,34 @@ export default {
     justify-content: center;
   }
 
-  .empty-actions {
+  .section-header {
     flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
   }
 
-  .list-header,
-  .list-item {
-    grid-template-columns: 1fr;
-    gap: 8px;
+  .section-controls {
+    width: 100%;
+    flex-direction: column;
+    gap: 12px;
   }
 
-  .col-actions {
-    justify-content: flex-end;
+  .search-input {
+    width: 100%;
+  }
+
+  .filter-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .sort-select,
+  .lang-select {
+    flex: 1;
+  }
+
+  .diagram-card {
+    min-width: 280px;
   }
 
   .modal-overlay.large {
@@ -2240,6 +2378,14 @@ export default {
 
   .diagram-stats {
     flex-wrap: wrap;
+  }
+
+  .diagrams-scroll-content {
+    gap: 12px;
+  }
+
+  .diagram-card {
+    min-width: 260px;
   }
 }
 </style>
