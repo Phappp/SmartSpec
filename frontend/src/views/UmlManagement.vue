@@ -1867,7 +1867,7 @@ export default {
   position: relative;
   width: 100%;
   height: 180px;
-  background: #f8fafc;
+  background: #fff;
   overflow: hidden;
   border-bottom: 1px solid #e5e7eb;
 }
