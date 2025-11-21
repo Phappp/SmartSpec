@@ -202,7 +202,8 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-
+import axiosClient from '@/utils/axiosClient'
+import { useToast } from 'vue-toastification'
 const props = defineProps({
   apiKey: {
     type: Object,
@@ -212,6 +213,7 @@ const props = defineProps({
 
 const emit = defineEmits(['save', 'close'])
 
+const toast = useToast()
 const loading = ref(false)
 
 const formData = reactive({
@@ -270,20 +272,37 @@ const validateForm = () => {
   return isValid
 }
 
+
 const handleSave = async () => {
   if (!validateForm()) return
-
   loading.value = true
-  try {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
 
-    emit('save', {
-      ...formData,
-      id: props.apiKey.id,
-    })
+  try {
+    const payload = {
+      display_name: formData.display_name,
+      is_active: formData.is_active,
+      daily_limit: formData.daily_limit || null,
+      rate_limit: formData.rate_limit || null,
+      priority: formData.priority,
+      expires_at: formData.expires_at || null,
+      description: formData.description || null,
+      permissions: formData.permissions,
+    }
+
+    // Gọi API PATCH /api/keys/:id
+    const res = await axiosClient.patch(`/api/keys/${props.apiKey.id}`, payload)
+
+    if (res.data && res.data.status === 'Success') {
+      toast.success('Cập nhật API Key thành công ')
+      emit('save', res.data.data)
+      emit('close')
+    } else {
+      toast.error('Không thể cập nhật API Key')
+      console.error('❌ Response:', res.data)
+    }
   } catch (error) {
-    console.error('Error updating API key:', error)
+    console.error('❌ Lỗi khi cập nhật API Key:', error)
+    toast.error('Đã xảy ra lỗi khi lưu thay đổi')
   } finally {
     loading.value = false
   }
@@ -292,17 +311,17 @@ const handleSave = async () => {
 const copyApiKey = async () => {
   try {
     await navigator.clipboard.writeText(props.apiKey.key_value)
-    // Show success message
-    console.log('API Key copied to clipboard')
+    toast.success('Đã sao chép API Key vào clipboard 📋')
   } catch (err) {
     console.error('Failed to copy API Key:', err)
+    toast.error('Không thể sao chép API Key')
   }
 }
 
 const maskApiKey = (key) => {
   if (!key) return ''
   const visibleChars = 8
-  return key.substring(0, visibleChars) + '*'.repeat(key.length - visibleChars)
+  return key.substring(0, visibleChars) + '*'.repeat(Math.max(0, key.length - visibleChars))
 }
 
 const getProviderDisplay = (provider) => {

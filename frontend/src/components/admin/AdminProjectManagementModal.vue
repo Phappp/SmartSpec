@@ -77,64 +77,35 @@
               <tr v-for="project in paginatedProjects" :key="project.id">
                 <td>
                   <div class="project-info">
-                    <div class="project-icon">
-                      <span class="material-symbols-outlined">folder</span>
-                    </div>
+                    <span class="material-symbols-outlined">folder</span>
                     <div class="project-details">
                       <div class="project-name">{{ project.name }}</div>
                       <div class="project-description">{{ project.description }}</div>
                     </div>
                   </div>
                 </td>
-                <td>
-                  <div class="owner-info">
-                    <div class="user-avatar small">
-                      <img :src="getOwner(project).avatar_url || defaultAvatar" alt="Owner" />
-                    </div>
-                    <span class="owner-name">{{ getOwner(project).name }}</span>
-                  </div>
-                </td>
-                <td>
-                  <div class="members-info">
-                    <div class="member-avatars">
-                      <div
-                        v-for="member in getTopMembers(project)"
-                        :key="member.user_id"
-                        class="member-avatar"
-                        :title="member.name"
-                      >
-                        <img :src="member.avatar_url || defaultAvatar" alt="Member" />
-                      </div>
-                      <div v-if="project.members.length > 3" class="more-members">
-                        +{{ project.members.length - 3 }}
-                      </div>
-                    </div>
-                    <span class="member-count">{{ project.members.length }} thành viên</span>
-                  </div>
-                </td>
-                <td>
-                  <span class="language-badge">{{ getLanguageDisplay(project.language) }}</span>
-                </td>
+
+                <td>{{ getOwner(project) }}</td>
+
+                <td>{{ project.memberCount }} thành viên</td>
+
+                <td><span class="language-badge">{{ getLanguageDisplay(project.language) }}</span></td>
+
                 <td>
                   <div class="version-info">
-                    <span class="version-number"
-                      >v{{ project.current_version?.version_number || '1.0' }}</span
-                    >
-                    <span class="version-date" v-if="project.current_version">
-                      {{ formatDate(project.current_version.created_at) }}
-                    </span>
+                    <span class="version-number">v1.0</span>
+                    <span class="version-date">{{ formatDate(project.createdAt) }}</span>
                   </div>
                 </td>
-                <td>
-                  <div class="last-accessed">
-                    {{ formatLastAccessed(project.last_accessed_at) }}
-                  </div>
-                </td>
+
+                <td>{{ formatLastAccessed(project.lastAccessedAt) }}</td>
+
                 <td>
                   <span class="status-badge" :class="getProjectStatus(project)">
                     {{ getStatusDisplay(project) }}
                   </span>
                 </td>
+
                 <td>
                   <div class="action-buttons">
                     <button class="btn-icon" @click="viewProject(project)" title="Xem chi tiết">
@@ -145,19 +116,12 @@
                     </button>
                     <button
                       class="btn-icon"
-                      @click="manageMembers(project)"
-                      title="Quản lý thành viên"
-                    >
-                      <span class="material-symbols-outlined">group</span>
-                    </button>
-                    <button
-                      class="btn-icon"
-                      :class="{ danger: !project.status?.is_trashed }"
+                      :class="{ danger: !project.isTrashed }"
                       @click="toggleProjectStatus(project)"
-                      :title="project.status?.is_trashed ? 'Khôi phục' : 'Lưu trữ'"
+                      :title="project.isTrashed ? 'Khôi phục' : 'Lưu trữ'"
                     >
                       <span class="material-symbols-outlined">
-                        {{ project.status?.is_trashed ? 'restore_from_trash' : 'archive' }}
+                        {{ project.isTrashed ? 'restore_from_trash' : 'archive' }}
                       </span>
                     </button>
                     <button
@@ -272,18 +236,17 @@
       @confirm="confirmDeleteProject"
       @cancel="showDeleteModal = false"
     />
-
-    confirmation-text="DELETE" @confirm="confirmDeleteProject" @cancel="showDeleteModal = false" />
   </div>
 </template>
 
 <script setup>
-// import { ref, reactive, computed, onMounted } from 'vue'
+ import { ref, reactive, computed, onMounted, watch } from 'vue'
+ import axiosClient from '@/utils/axiosClient.js'
 // import AdminCreateProjectModal from './AdminCreateProjectModal.vue'
-// import AdminEditProjectModal from './AdminEditProjectModal.vue'
-// import AdminProjectDetailsModal from './AdminProjectDetailsModal.vue'
-// import AdminManageMembersModal from './AdminManageMembersModal.vue'
-// import AdminConfirmModal from './AdminConfirmModal.vue'
+ import AdminEditProjectModal from './AdminEditProjectModal.vue'
+ import AdminProjectDetailsModal from './AdminProjectDetailsModal.vue'
+ import AdminManageMembersModal from './AdminManageMembersModal.vue'
+ import AdminConfirmModal from './AdminConfirmModal.vue'
 
 const emit = defineEmits(['close'])
 
@@ -315,77 +278,6 @@ const pagination = reactive({
   end: 0,
   pages: [],
 })
-
-const defaultAvatar =
-  'https://static.vecteezy.com/system/resources/previews/024/983/914/original/simple-user-default-icon-free-png.png'
-
-// Sample data
-const sampleProjects = [
-  {
-    id: '1',
-    name: 'E-commerce Platform',
-    description: 'Xây dựng hệ thống thương mại điện tử với AI integration',
-    language: 'vi-VN',
-    owner_id: '1',
-    members: [
-      { user_id: '1', name: 'Admin User', avatar_url: null, role: 'owner' },
-      { user_id: '2', name: 'Nguyễn Văn A', avatar_url: null, role: 'editor' },
-      { user_id: '3', name: 'Trần Thị B', avatar_url: null, role: 'viewer' },
-    ],
-    current_version: {
-      version_number: 2,
-      created_at: new Date('2024-01-15'),
-    },
-    last_accessed_at: new Date('2024-01-15T10:30:00'),
-    created_at: new Date('2024-01-01'),
-    status: {
-      is_trashed: false,
-      trashed_at: null,
-    },
-  },
-  {
-    id: '2',
-    name: 'Banking Mobile App',
-    description: 'Ứng dụng ngân hàng di động với tính năng AI chatbot',
-    language: 'en-US',
-    owner_id: '2',
-    members: [
-      { user_id: '2', name: 'Nguyễn Văn A', avatar_url: null, role: 'owner' },
-      { user_id: '1', name: 'Admin User', avatar_url: null, role: 'editor' },
-    ],
-    current_version: {
-      version_number: 1,
-      created_at: new Date('2024-01-10'),
-    },
-    last_accessed_at: new Date('2024-01-14T15:45:00'),
-    created_at: new Date('2024-01-05'),
-    status: {
-      is_trashed: false,
-      trashed_at: null,
-    },
-  },
-  {
-    id: '3',
-    name: 'Healthcare System',
-    description: 'Hệ thống quản lý chăm sóc sức khỏe thông minh',
-    language: 'vi-VN',
-    owner_id: '1',
-    members: [
-      { user_id: '1', name: 'Admin User', avatar_url: null, role: 'owner' },
-      { user_id: '3', name: 'Trần Thị B', avatar_url: null, role: 'editor' },
-    ],
-    current_version: {
-      version_number: 3,
-      created_at: new Date('2024-01-12'),
-    },
-    last_accessed_at: new Date('2024-01-13T09:20:00'),
-    created_at: new Date('2023-12-20'),
-    status: {
-      is_trashed: true,
-      trashed_at: new Date('2024-01-10'),
-    },
-  },
-]
 
 // Computed
 const filteredProjects = computed(() => {
@@ -430,11 +322,40 @@ const paginatedProjects = computed(() => {
 
 // Methods
 const loadProjects = async () => {
-  // Simulate API call
-  await new Promise((resolve) => setTimeout(resolve, 500))
-  projects.value = sampleProjects
-  updatePagination()
+  try {
+    const res = await axiosClient.get('/api/projects/admin/all')
+    console.log('🔥 Response dự án:', res.data)
+
+    if (res.data && res.data.status === 'Success') {
+      const items = res.data.data || []
+
+      projects.value = items.map((p) => ({
+        id: p.id,
+        name: p.name || 'Không có tên',
+        description: p.description || '',
+        language: p.language || 'vi-VN',
+        owner: p.owner || null,
+        memberCount: p.memberCount || 0,
+        acceptedMembers: p.acceptedMembers || 0,
+        pendingMembers: p.pendingMembers || 0,
+        isTrashed: p.isTrashed || false,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        lastAccessedAt: p.lastAccessedAt,
+      }))
+
+      updatePagination()
+      console.log('✅ Projects loaded:', projects.value)
+    } else {
+      console.warn('⚠️ API trả về lỗi:', res.data)
+      projects.value = []
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi tải danh sách dự án:', error)
+    projects.value = []
+  }
 }
+
 
 const updatePagination = () => {
   pagination.totalPages = Math.ceil(filteredProjects.value.length / pagination.pageSize)
@@ -451,11 +372,7 @@ const changePage = (page) => {
 }
 
 const getOwner = (project) => {
-  return project.members.find((member) => member.role === 'owner') || project.members[0]
-}
-
-const getTopMembers = (project) => {
-  return project.members.filter((member) => member.role !== 'owner').slice(0, 3)
+  return project.owner?.email || 'Không xác định'
 }
 
 const getLanguageDisplay = (language) => {
@@ -467,14 +384,13 @@ const getLanguageDisplay = (language) => {
 }
 
 const getProjectStatus = (project) => {
-  if (project.status?.is_trashed) return 'archived'
-  return 'active'
+  return project.isTrashed ? 'archived' : 'active'
 }
 
 const getStatusDisplay = (project) => {
-  if (project.status?.is_trashed) return 'Đã lưu trữ'
-  return 'Đang hoạt động'
+  return project.isTrashed ? 'Đã lưu trữ' : 'Đang hoạt động'
 }
+
 
 const formatDate = (date) => {
   if (!date) return 'N/A'
@@ -502,11 +418,6 @@ const viewProject = (project) => {
 const editProject = (project) => {
   editingProject.value = { ...project }
   showEditProjectModal.value = true
-}
-
-const manageMembers = (project) => {
-  selectedProject.value = project
-  showManageMembersModal.value = true
 }
 
 const toggleProjectStatus = (project) => {
@@ -610,8 +521,9 @@ onMounted(() => {
 }
 
 .modal-content.extra-large {
-  max-width: 1400px;
-  width: 95%;
+  max-width: 1200px;
+  width: 100%;
+  background: white;
   max-height: 90vh;
 }
 
@@ -986,6 +898,8 @@ onMounted(() => {
 .pagination-controls {
   display: flex;
   gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .btn-pagination {

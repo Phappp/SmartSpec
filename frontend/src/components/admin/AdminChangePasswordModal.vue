@@ -115,6 +115,7 @@
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
+import axiosClient from '@/utils/axiosClient'
 
 const emit = defineEmits(['change', 'close'])
 
@@ -135,10 +136,19 @@ const errors = reactive({
   confirmPassword: '',
 })
 
-// Password strength calculation
+// --- Password strength ---
+const calculatePasswordStrength = (password) => {
+  let strength = 0
+  if (password.length >= 8) strength++
+  if (/[A-Z]/.test(password)) strength++
+  if (/[a-z]/.test(password)) strength++
+  if (/[0-9]/.test(password)) strength++
+  if (/[!@#$%^&*]/.test(password)) strength++
+  return strength
+}
+
 const passwordStrength = computed(() => {
   if (!formData.newPassword) return 'empty'
-
   const strength = calculatePasswordStrength(formData.newPassword)
   if (strength < 2) return 'weak'
   if (strength < 4) return 'medium'
@@ -146,12 +156,7 @@ const passwordStrength = computed(() => {
 })
 
 const strengthText = computed(() => {
-  const texts = {
-    empty: '',
-    weak: 'Yếu',
-    medium: 'Trung bình',
-    strong: 'Mạnh',
-  }
+  const texts = { empty: '', weak: 'Yếu', medium: 'Trung bình', strong: 'Mạnh' }
   return texts[passwordStrength.value]
 })
 
@@ -171,16 +176,7 @@ const isFormValid = computed(() => {
   )
 })
 
-const calculatePasswordStrength = (password) => {
-  let strength = 0
-  if (password.length >= 8) strength++
-  if (/[A-Z]/.test(password)) strength++
-  if (/[a-z]/.test(password)) strength++
-  if (/[0-9]/.test(password)) strength++
-  if (/[!@#$%^&*]/.test(password)) strength++
-  return strength
-}
-
+// --- Validate form ---
 const validateForm = () => {
   let isValid = true
   errors.currentPassword = ''
@@ -214,33 +210,46 @@ const validateForm = () => {
   return isValid
 }
 
+// --- API: Đổi mật khẩu ---
 const handleChangePassword = async () => {
   if (!validateForm()) return
-
   loading.value = true
-  try {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
 
-    emit('change', {
-      currentPassword: formData.currentPassword,
+  try {
+    // 🚀 Gọi API qua axiosClient (tự động kèm token)
+    const response = await axiosClient.post('/users/change-password', {
+      oldPassword: formData.currentPassword,
       newPassword: formData.newPassword,
     })
 
-    // Reset form
-    Object.assign(formData, {
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-    })
+    if (response.status === 200) {
+      emit('change', {
+        currentPassword: formData.currentPassword,
+        newPassword: formData.newPassword,
+      })
+
+      Object.assign(formData, {
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      })
+
+      alert('Đổi mật khẩu thành công!')
+      emit('close')
+    }
   } catch (error) {
-    console.error('Error changing password:', error)
-    errors.currentPassword = 'Mật khẩu hiện tại không đúng'
+    if (error.response?.status === 400 || error.response?.status === 401) {
+      errors.currentPassword = 'Mật khẩu hiện tại không đúng'
+    } else {
+      alert('Có lỗi xảy ra. Vui lòng thử lại sau.')
+      console.error('Change password error:', error)
+    }
   } finally {
     loading.value = false
   }
 }
 </script>
+
 
 <style scoped>
 .modal-overlay {
@@ -262,7 +271,7 @@ const handleChangePassword = async () => {
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
   width: 90%;
-  max-width: 500px;
+  max-width: 600px;
   max-height: 90vh;
   overflow-y: auto;
 }
