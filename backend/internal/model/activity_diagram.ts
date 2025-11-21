@@ -1,24 +1,55 @@
 import { Schema, model, InferSchemaType } from "mongoose";
 
+/* ----------------- NODE SCHEMA ------------------ */
 const nodeSchema = new Schema({
-    id: String,
-    type: { type: String, enum: ["start", "action", "decision", "merge", "end"] },
-    label: String
+    id: { type: String, required: true },
+    type: { 
+        type: String, 
+        enum: [
+            "start", 
+            "end", 
+            "action", 
+            "decision", 
+            "merge", 
+            "fork", 
+            "join", 
+            "object", 
+            "swimlane"
+        ],
+        required: true
+    },
+    label: String,
+    lane_id: String  // để phân swimlane
 }, { _id: false });
 
+/* ----------------- EDGE SCHEMA ------------------ */
 const edgeSchema = new Schema({
-    from: String,
-    to: String,
-    condition: String
+    from: { type: String, required: true },
+    to:   { type: String, required: true },
+    condition: String,     // dùng cho decision nodes
+    guard: String,         // biểu thức điều kiện
+    trigger: String        // sự kiện kích hoạt
 }, { _id: false });
 
+/* ----------------- ACTIVITY DIAGRAM ------------------ */
 const activityDiagramSchema = new Schema({
     uml_id: { type: Schema.Types.ObjectId, ref: "umls", required: true },
+
     name: { type: String, required: true },
     description: String,
+
     nodes: [nodeSchema],
     edges: [edgeSchema],
+
+    lanes: [
+        {
+            id: String,
+            name: String
+        }
+    ],
+
     diagram_svg: String,
+
     created_by: { type: Schema.Types.ObjectId, ref: "users" }
 }, { timestamps: true });
 

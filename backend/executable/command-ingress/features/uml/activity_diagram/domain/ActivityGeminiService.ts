@@ -20,7 +20,7 @@ ${requirementModelJson}
 **QUY TẮC VÀ LOGIC THIẾT KẾ CHUẨN UML:**
 1. **NODE TYPES BẮT BUỘC:**
    - Phải có **đúng 1** node type **"start"** và **đúng 1** node type **"end"**
-   - Các loại node khác: **"action"**, **"decision"**, **"merge"**
+   - Hỗ trợ đầy đủ node types: "start", "end", "action", "decision", "merge", "fork", "join", "object", "swimlane".
 2. **CẤU TRÚC VÀ TÍNH DUY NHẤT:**
    - **ID** của node phải là **string duy nhất** trong toàn bộ sơ đồ.
    - **Edges** phải đảm bảo luồng hoạt động **liên tục** từ 'start' đến 'end'.
@@ -53,58 +53,67 @@ KHÔNG bao gồm bất kỳ lời giải thích, bình luận, hay định dạn
 Đầu ra phải sẵn sàng để được một chương trình phân tích ngay lập tức.
 Đối tượng JSON BẮT BUỘC phải tuân thủ nghiêm ngặt cấu trúc chi tiết sau.
 Bao gồm TẤT CẢ các trường cho mỗi node và edge.
+Dưới dây là 1 ví dụ:
 {
-  "name": "Ten-So-Do-Hoat-Dong",
-  "description": "Mô tả ngắn gọn nhưng rõ ràng về luồng hoạt động được mô hình hóa.",
+  "name": "Password Change Flow",
+  "description": "Activity diagram mô tả quy trình đổi mật khẩu người dùng.",
+  "lanes": [
+    { "id": "lane_user", "name": "User" },
+    { "id": "lane_system", "name": "System" }
+  ],
   "nodes": [
-    { 
-      "id": "start", 
-      "type": "start", 
-      "label": "Bắt đầu luồng", 
-      "requirement_ids": [] 
-    },
-    { 
-      "id": "UC1_ActionA", 
-      "type": "action", 
-      "label": "Thực hiện hành động A", 
-      "requirement_ids": ["UC1"] 
-    },
-    { 
-      "id": "UC2_DecisionB", 
-      "type": "decision", "
-      label": "Kiểm tra điều kiện B", 
-      "requirement_ids": ["UC2"] 
-    },
-    { 
-      "id": "end", 
-      "type": "end", 
-      "label": "Kết thúc luồng", 
-      "requirement_ids": [] 
-    }
+    { "id": "n_start", "type": "start", "label": "Start", "lane_id": "lane_user" },
+
+    { "id": "n_select_change", "type": "action", "label": "Select Change Password", "lane_id": "lane_user" },
+
+    { "id": "n_show_form", "type": "action", "label": "Show Change Password Form", "lane_id": "lane_system" },
+
+    { "id": "n_input", "type": "action", "label": "Input Old/New Password", "lane_id": "lane_user" },
+
+    { "id": "n_confirm_cancel", "type": "decision", "label": "Confirm or Cancel?", "lane_id": "lane_user" },
+
+    { "id": "n_check_valid", "type": "action", "label": "Validate New Password", "lane_id": "lane_system" },
+
+    { "id": "n_decision_valid", "type": "decision", "label": "Password Valid?", "lane_id": "lane_system" },
+
+    { "id": "n_show_error", "type": "action", "label": "Show Error Message", "lane_id": "lane_system" },
+
+    { "id": "n_merge", "type": "merge", "label": "Return to End", "lane_id": "lane_system" },
+
+    { "id": "n_update", "type": "action", "label": "Update Password", "lane_id": "lane_system" },
+
+    { "id": "n_success", "type": "action", "label": "Show Success Message", "lane_id": "lane_system" },
+
+    { "id": "n_end", "type": "end", "label": "End", "lane_id": "lane_system" }
   ],
   "edges": [
-    { 
-      "from": "start", 
-      "to": "UC1_ActionA", 
-      "condition": null 
-    },
-    { 
-      "from": "UC1_ActionA", 
-      "to": "UC2_DecisionB", 
-      "condition": null 
-    },
-    { 
-      "from": "UC2_DecisionB", 
-      "to": "end", 
-      "condition": "Nếu đúng (True)" 
-    },
-    { 
-      "from": "UC2_DecisionB", 
-      "to": "UC1_ActionA", 
-      "condition": "Nếu sai (False)" 
-    }
+    { "from": "n_start", "to": "n_select_change" },
+
+    { "from": "n_select_change", "to": "n_show_form" },
+
+    { "from": "n_show_form", "to": "n_input" },
+
+    { "from": "n_input", "to": "n_confirm_cancel" },
+
+    { "from": "n_confirm_cancel", "to": "n_check_valid", "condition": "Confirm" },
+
+    { "from": "n_confirm_cancel", "to": "n_merge", "condition": "Cancel" },
+
+    { "from": "n_check_valid", "to": "n_decision_valid" },
+
+    { "from": "n_decision_valid", "to": "n_show_error", "condition": "Invalid" },
+
+    { "from": "n_show_error", "to": "n_show_form" },
+
+    { "from": "n_decision_valid", "to": "n_update", "condition": "Valid" },
+
+    { "from": "n_update", "to": "n_success" },
+
+    { "from": "n_success", "to": "n_merge" },
+
+    { "from": "n_merge", "to": "n_end" }
   ],
-  "diagram_svg": null
+  "diagram_svg": "",
 }
 `
   },
@@ -124,7 +133,7 @@ ${requirementModelJson}
 **UML DESIGN RULES AND LOGIC:**
 1. **REQUIRED NODE TYPES:**
 - Must have **exactly 1** node type **"start"** and **exactly 1** node type **"end"**
-- Other node types: **"action"**, **"decision"**, **"merge"**
+- Supported node types: "start", "end", "action", "decision", "merge", "fork", "join", "object", "swimlane".
 2. **STRUCTURE AND UNIQUENESS:**
 - The **ID** of a node must be a **unique string** in the entire diagram.
 - **Edges** must ensure a **continuous** flow of operations from 'start' to 'end'.
@@ -159,57 +168,65 @@ The JSON object MUST strictly adhere to the following detailed structure.
 Include ALL fields for each node and edge.
 Return ONLY a single, valid JSON object with:
 {
-  "name": "Activity-Diagram-Name",
-  "description": "A brief but clear description of the modeled activity flow.",
+  "name": "Password Change Flow",
+  "description": "Activity diagram mô tả quy trình đổi mật khẩu người dùng.",
+  "lanes": [
+    { "id": "lane_user", "name": "User" },
+    { "id": "lane_system", "name": "System" }
+  ],
   "nodes": [
-    { 
-      "id": "start", 
-      "type": "start", 
-      "label": "Start Flow", 
-      "requirement_ids": [] 
-    },
-    { 
-      "id": "UC1_ActionA", 
-      "type": "action", "label": 
-      "Perform Action A", 
-      "requirement_ids": ["UC1"] 
-    },
-    { 
-      "id": "UC2_DecisionB", 
-      "type": "decision", 
-      "label": "Check Condition B", 
-      "requirement_ids": ["UC2"] 
-    },
-    { 
-      "id": "end", 
-      "type": "end", 
-      "label": "End Flow", 
-      "requirement_ids": [] 
-    }
+    { "id": "n_start", "type": "start", "label": "Start", "lane_id": "lane_user" },
+
+    { "id": "n_select_change", "type": "action", "label": "Select Change Password", "lane_id": "lane_user" },
+
+    { "id": "n_show_form", "type": "action", "label": "Show Change Password Form", "lane_id": "lane_system" },
+
+    { "id": "n_input", "type": "action", "label": "Input Old/New Password", "lane_id": "lane_user" },
+
+    { "id": "n_confirm_cancel", "type": "decision", "label": "Confirm or Cancel?", "lane_id": "lane_user" },
+
+    { "id": "n_check_valid", "type": "action", "label": "Validate New Password", "lane_id": "lane_system" },
+
+    { "id": "n_decision_valid", "type": "decision", "label": "Password Valid?", "lane_id": "lane_system" },
+
+    { "id": "n_show_error", "type": "action", "label": "Show Error Message", "lane_id": "lane_system" },
+
+    { "id": "n_merge", "type": "merge", "label": "Return to End", "lane_id": "lane_system" },
+
+    { "id": "n_update", "type": "action", "label": "Update Password", "lane_id": "lane_system" },
+
+    { "id": "n_success", "type": "action", "label": "Show Success Message", "lane_id": "lane_system" },
+
+    { "id": "n_end", "type": "end", "label": "End", "lane_id": "lane_system" }
   ],
   "edges": [
-    { 
-      "from": "start", 
-      "to": "UC1_ActionA", 
-      "condition": null 
-    },
-    { 
-      "from": "UC1_ActionA", 
-      "to": "UC2_DecisionB", 
-      "condition": null 
-    },
-    { 
-      "from": "UC2_DecisionB", 
-      "to": "end", 
-      "condition": "True" 
-    },
-    { 
-      "from": "UC2_DecisionB", 
-      "to": "UC1_ActionA", 
-      "condition": "False" 
-    }
+    { "from": "n_start", "to": "n_select_change" },
+
+    { "from": "n_select_change", "to": "n_show_form" },
+
+    { "from": "n_show_form", "to": "n_input" },
+
+    { "from": "n_input", "to": "n_confirm_cancel" },
+
+    { "from": "n_confirm_cancel", "to": "n_check_valid", "condition": "Confirm" },
+
+    { "from": "n_confirm_cancel", "to": "n_merge", "condition": "Cancel" },
+
+    { "from": "n_check_valid", "to": "n_decision_valid" },
+
+    { "from": "n_decision_valid", "to": "n_show_error", "condition": "Invalid" },
+
+    { "from": "n_show_error", "to": "n_show_form" },
+
+    { "from": "n_decision_valid", "to": "n_update", "condition": "Valid" },
+
+    { "from": "n_update", "to": "n_success" },
+
+    { "from": "n_success", "to": "n_merge" },
+
+    { "from": "n_merge", "to": "n_end" }
   ],
-  "diagram_svg": null
+  "diagram_svg": ""
 }
 `
   }
