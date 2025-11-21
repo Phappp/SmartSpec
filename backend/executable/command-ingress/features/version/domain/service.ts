@@ -16,6 +16,8 @@ import { ServiceResponse, ResponseStatus } from "../../../services/serviceRespon
 import { versionSocketService } from "./version.socket.service";
 import {PreviewChangeDto} from "../adapter/preview.dto";
 import { randomUUID } from "crypto";
+import version from '../../../../../internal/model/version';
+import project from '../../../../../internal/model/project';
 
 
 export class VersionService {
@@ -739,6 +741,8 @@ export class VersionService {
           }
         }
       }
+      preview.changes.pull({ change_id: changeId });
+      await preview.save({ session });
       // Tương tự cho các entity khác: database, testcase, uml, diagram, output, requirement
       // Bạn có thể copy nguyên logic từ for-loop vào đây
 
@@ -819,6 +823,38 @@ export class VersionService {
       );
     } catch (error: any) {
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
+    }
+  }
+
+  public async rollbackVersion(versionId: string, userId: string) {
+    try {
+      // 1. Lấy version
+      const version = await Version.findById(versionId);
+      if (!version) return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+      const currentVersionID = version.parent_version_id;
+      const currentVersion = await Version.findById(currentVersionID);
+      if (!currentVersion) return new ServiceResponse(ResponseStatus.Failed, "Currun Version not found", null, 404);
+      const project = await Project.findById(version.project_id);
+      if (!project) {
+        return new ServiceResponse(ResponseStatus.Failed, "Project not found", null, 404);
+      }
+
+      // 🕓 Lưu version cũ (nếu có)
+      const oldVersionId = project.current_version?.toString();
+
+      // ⚙️ Cập nhật version hiện tại
+      project.current_version = new mongoose.Types.ObjectId(versionId);
+      await project.save();
+
+      // 🔔 Gửi thông báo realtime tới các user khác trong project
+      versionSocketService.emitVersionSwitched(
+        project._id.toString(),
+        userId,
+        versionId,
+        oldVersionId || ""
+      );
+    } catch (err) {
+      throw err;
     }
   }
 }
