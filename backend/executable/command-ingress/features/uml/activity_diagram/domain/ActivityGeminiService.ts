@@ -1,4 +1,4 @@
-import { ActivityEdge, ActivityNode, ActivityDiagramDTO } from './interfaces';
+import { ActivityEdge, ActivityNode,ActivityLane, ActivityDiagramDTO } from './interfaces';
 import { ApiKeyService } from '../../../orchestrator/domain/ApiKeyService';
 import { Types } from 'mongoose';
 
@@ -6,7 +6,6 @@ const prompts = {
   'vi-VN': {
     activityDiagram: (requirementModelJson: string) => `
 BẠN LÀ MỘT CHUYÊN GIA UML VÀ KIẾN TRÚC SƯ HỆ THỐNG ĐẲNG CẤP THẾ GIỚI, chuyên tạo ra các SƠ ĐỒ HOẠT ĐỘNG (Activity Diagram) tối ưu và logic từ các mô hình yêu cầu nghiệp vụ.
-
 Nhiệm vụ của bạn là phân tích mô hình yêu cầu sau đây và thiết kế một cấu trúc Sơ đồ Hoạt động (Activity Diagram) hoàn chỉnh và logic.
 
 MÔ HÌNH YÊU CẦU:
@@ -44,6 +43,7 @@ ${requirementModelJson}
 1. Luôn trả về một **object JSON** với đầy đủ các trường:
    - name (string) 
    - description (string)
+   - lanes (array)
    - nodes (array)
    - edges (array)
    - diagram_svg (null)
@@ -157,6 +157,7 @@ If the source is unknown, leave **[]**.
 1. Always return a **JSON object** with full fields:
 - name (string)
 - description (string)
+- lanes (array)
 - nodes (array)
 - edges (array)
 - diagram_svg (null)
@@ -335,20 +336,20 @@ export class ActivityGeminiService {
     let parsed: any = {};
     try {
       parsed = cleanedJson ? JSON.parse(cleanedJson) : {};
-    } catch (err) {
+    } catch (err) { 
       console.error('Error parsing cleaned AI response:', err);
       parsed = {};
     }
-
+    const lanes: ActivityLane[] = Array.isArray(parsed.lanes) ? parsed.lanes : [];
     const nodes: ActivityNode[] = Array.isArray(parsed.nodes) ? parsed.nodes : [];
     const edges: ActivityEdge[] = Array.isArray(parsed.edges) ? parsed.edges : [];
 
     const result: ActivityDiagramDTO = {
       name: parsed?.name || 'Generated Activity',
       description: typeof parsed?.description === 'string' ? parsed.description : '',
+      lanes,
       nodes,
-      edges,
-      diagram_svg: typeof parsed?.diagram_svg === 'string' ? parsed.diagram_svg : ''
+      edges
     };
 
     console.log('Final ActivityDiagramDTO:', JSON.stringify(result, null, 2));

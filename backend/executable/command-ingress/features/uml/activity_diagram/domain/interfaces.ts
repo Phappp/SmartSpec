@@ -19,7 +19,7 @@ export interface ActivityNode {
   id: string;
   type: ActivityNodeType;
   label?: string;
-  lane_id?: string;  // NEW
+  lane_id?: string;
 }
 
 // ======================
@@ -29,8 +29,8 @@ export interface ActivityEdge {
   from: string;
   to: string;
   condition?: string;
-  guard?: string;     // NEW
-  trigger?: string;   // NEW
+  guard?: string;       
+  trigger?: string;    
 }
 
 // ======================
@@ -45,15 +45,14 @@ export interface ActivityLane {
 // MAIN DTO
 // ======================
 export interface ActivityDiagramDTO {
-  uml_id?: string;  // optional if used in frontend
+  uml_id?: string;
+
   name: string;
   description?: string;
-
+  lanes?: ActivityLane[]; 
   nodes: ActivityNode[];
   edges: ActivityEdge[];
-  lanes?: ActivityLane[];  // NEW
 
   diagram_svg?: string;
-
-  created_by?: string; // match database
+  created_by?: string;
 }

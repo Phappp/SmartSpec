@@ -37,16 +37,14 @@ const activityDiagramSchema = new Schema({
 
     name: { type: String, required: true },
     description: String,
-
+    lanes: [
+            {
+                id: String,
+                name: String
+            }
+        ],
     nodes: [nodeSchema],
     edges: [edgeSchema],
-
-    lanes: [
-        {
-            id: String,
-            name: String
-        }
-    ],
 
     diagram_svg: String,
 
