@@ -106,6 +106,27 @@ export class ActivityDiagramController {
       next(err);
     }
   }
+  
+  public deleteActivityDiagram = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { activityDiagramId } = req.params;
+      if (!activityDiagramId) {
+        res.status(400).json({ message: 'activityDiagramId là bắt buộc.' });
+        return;
+      }
+
+      const result = await this.service.deleteActivityDiagram(activityDiagramId);
+
+      if (result.deletedCount === 0) {
+        res.status(404).json({ message: 'Không tìm thấy activity diagram để xóa.' });
+        return;
+      }
+
+      res.status(200).json({ message: 'Xóa activity diagram thành công!', deletedCount: result.deletedCount });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 

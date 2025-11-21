@@ -207,12 +207,6 @@ export class OrchestratorService {
             "completed",
             false
         );
-
-        const bumpResult = await this.versionService.bumpVersion(
-            versionId,
-            userId,
-            "minor"
-        );
         return result;
     }
 

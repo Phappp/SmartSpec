@@ -34,9 +34,8 @@ export default function initActivityDiagramRoute(): Router {
 
     // Utilities
   router.post('/:activityDiagramId/validate', requireAuthorizedUser, controller.validateStructure);
-  router.get('/:activityDiagramId/export', 
-    // requireAuthorizedUser, 
-    controller.export);
+  router.get('/:activityDiagramId/export', requireAuthorizedUser, controller.export);
+  router.delete('/', requireAuthorizedUser, controller.deleteActivityDiagram);
   return router;
 }
 
