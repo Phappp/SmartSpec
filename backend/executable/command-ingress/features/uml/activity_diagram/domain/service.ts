@@ -34,6 +34,7 @@ export class ActivityDiagramService {
     }
     const generated = await this.ai.generateFromUseCase([requirement], language);
     const name = generated?.name || `${requirement.name || 'Usecase'} - Activity`;
+    const lanes = generated.lanes;
     const nodes = generated?.nodes || [ { id: 'n_start', type: 'start', label: 'Start' }, { id: 'n_end', type: 'end', label: 'End' } ];
     const edges = generated?.edges || [ { from: 'n_start', to: 'n_end' } ];
     const diagram_svg = this.core.renderSvg({ name, nodes: nodes as any, edges: edges as any });
@@ -42,6 +43,7 @@ export class ActivityDiagramService {
       uml_id: uml._id.toString(),
       name,
       description: generated?.description || 'Generated from requirement',
+      lanes,
       nodes,
       edges,
       diagram_svg,
@@ -70,6 +72,7 @@ export class ActivityDiagramService {
     }
     const generated = await this.ai.generateFromUseCase(requirements, language);
     const name = generated?.name || `${actor} - Activity`;
+    const lane = generated.lanes;
     const nodes = generated?.nodes || [ { id: 'n_start', type: 'start', label: 'Start' }, { id: 'n_end', type: 'end', label: 'End' } ];
     const edges = generated?.edges || [ { from: 'n_start', to: 'n_end' } ];
     const diagram_svg = this.core.renderSvg({ name, nodes: nodes as any, edges: edges as any });
@@ -78,6 +81,7 @@ export class ActivityDiagramService {
       uml_id: uml._id.toString(),
       name,
       description: generated?.description || 'Generated from actor requirements',
+      lane,
       nodes,
       edges,
       diagram_svg,
