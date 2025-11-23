@@ -30,7 +30,16 @@ export class OrchestratorService {
         // 🟢 Bắt đầu: clear lỗi cũ
         console.log(`[SERVICE] Clearing previous errors for version ${versionId} before running...`);
         // Độ trễ ngẫu nhiên từ 2000ms (2 giây) đến 3000ms (3 giây)
+        let version = await Version.findById(versionId).lean();
+        if (!version) throw new Error("Version not found");
 
+        // ✅ Nếu version không phải temporary → bump trước
+        if (version.version_temporary === false) {
+            const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
+            if (!bumpRes.data) throw new Error("Auto bump failed");
+            version = bumpRes.data.newVersion;
+            versionId = version._id.toString();
+        }
         await Version.findByIdAndUpdate(versionId, {
             $set: {
                 status: "processing",
@@ -50,9 +59,6 @@ export class OrchestratorService {
             "initializing",
             true
         );
-
-        const version = await Version.findById(versionId).lean();
-        if (!version) throw new Error("Version not found");
 
         // 🧠 AUTO SWITCH MODE
         if (opts.mode === "full") {

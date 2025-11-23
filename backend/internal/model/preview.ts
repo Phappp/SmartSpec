@@ -29,7 +29,7 @@ const approverSchema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: "users", required: true },
   role: { type: String, enum: ["owner", "member"], required: true },
   approved_at: { type: Date, default: null },
-  status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
+  status: { type: String, enum: ["pending", "approved", "rejected","rollback"], default: "pending" },
   comment: { type: String, default: "" }
 }, { _id: false });
 
