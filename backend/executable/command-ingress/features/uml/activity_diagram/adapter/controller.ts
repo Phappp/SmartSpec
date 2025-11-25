@@ -107,15 +107,20 @@ export class ActivityDiagramController {
     }
   }
   
-  public deleteActivityDiagram = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public deleteActivityDiagram = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const userId = req.getSubject();
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+        return;
+      }
       const { activityDiagramId } = req.params;
       if (!activityDiagramId) {
         res.status(400).json({ message: 'activityDiagramId là bắt buộc.' });
         return;
       }
 
-      const result = await this.service.deleteActivityDiagram(activityDiagramId);
+      const result = await this.service.deleteActivityDiagram(activityDiagramId,userId);
 
       if (result.deletedCount === 0) {
         res.status(404).json({ message: 'Không tìm thấy activity diagram để xóa.' });

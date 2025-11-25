@@ -3,6 +3,7 @@ import UmlModel from '../../../../../../internal/model/uml';
 import { ActivityCoreService } from './ActivityCoreService';
 import { ActivityGeminiService } from './ActivityGeminiService';
 import VersionModel from '../../../../../../internal/model/version';
+import ProjectModel from '../../../../../../internal/model/project';
 import { Types } from "mongoose";
 import sharp from 'sharp';
 
@@ -11,12 +12,25 @@ export class ActivityDiagramService {
   private ai = new ActivityGeminiService();
 
   public async generateFromUsecase(requirementId: string, language: string, versionId?: string, userId?: string) {
-    if (!versionId) throw new Error('versionId là bắt buộc để lấy requirement model');
+    if (!userId) throw new Error("Missing userId to authenticate");
+    if (!versionId) throw new Error("versionId is required to get requirement model");
     const version = await VersionModel.findById(versionId).lean();
-    if (!version) throw new Error('Không tìm thấy version');
+    if (!version) throw new Error("Version not found");
+    const project = await ProjectModel.findById(version.project_id).lean();
+    if (!project) throw new Error("Project not found");
+    // Tìm member
+    const member = (project.members || []).find(
+      (m) => m.user_id.toString() === userId && m.status === 'accepted'
+    );
+
+    if (!member) throw new Error("You are not a member of the project");
+
+    if (!['editor', 'owner'].includes(member.role)) {
+      throw new Error("You do not have permission to perform this action.");
+    }
     const requirements = (version.requirement_model || []) as any[];
     const requirement = requirements.find(r => r.id === requirementId);
-    if (!requirement) throw new Error('Không tìm thấy requirement theo id');
+    if (!requirement) throw new Error("Requirement not found by id");
 
     let uml = await UmlModel.findOne({ version_id: new Types.ObjectId(versionId) }).lean();
 
@@ -52,8 +66,22 @@ export class ActivityDiagramService {
   }
 
   public async generateFromActor( versionId: string,actor: string, language: string,userId?: string) {
+    if (!userId) throw new Error("Missing userId to authenticate");
+    if (!versionId) throw new Error("versionId is required to get requirement model");
     const version = await VersionModel.findById(versionId).lean();
-    if (!version) throw new Error('Không tìm thấy version');
+    if (!version) throw new Error("Version not found");
+    const project = await ProjectModel.findById(version.project_id).lean();
+    if (!project) throw new Error("Project not found");
+    // Tìm member
+    const member = (project.members || []).find(
+      (m) => m.user_id.toString() === userId && m.status === 'accepted'
+    );
+
+    if (!member) throw new Error("You are not a member of the project");
+
+    if (!['editor', 'owner'].includes(member.role)) {
+      throw new Error("You do not have permission to perform this action.");
+    }
     const requirements = ((version.requirement_model || []) as any[]).filter(r => (r.role || '').toLowerCase() === actor.toLowerCase());
     if (!requirements.length) throw new Error('Không có requirement nào cho actor này');
     let uml = await UmlModel.findOne({ version_id: new Types.ObjectId(versionId) }).lean();
@@ -135,17 +163,52 @@ export class ActivityDiagramService {
       return null;
     }
   }
-  public async deleteActivityDiagram(id: string | string[]): Promise<{ deletedCount: number }> {
-    if (!id) throw new Error("Chưa cung cấp id để xóa activity diagram");
-
+  
+  public async deleteActivityDiagram(id: string | string[],userId: string): Promise<{ deletedCount: number }> {
+    if (!id) throw new Error("No activity diagram ID provided");
+    if (!userId) throw new Error("Missing userId for authorization");
     const ids = Array.isArray(id) ? id : [id];
+    // 1. Fetch diagrams before deleting
+    const diagrams = await ActivityDiagramModel.find({
+      _id: { $in: ids.map(i => new Types.ObjectId(i)) }
+    }).lean();
+    if (!diagrams || diagrams.length === 0) {
+      throw new Error("Activity diagram not found");
+    }
+    // 2. Get UML records linked to diagrams
+    const umlIds = diagrams.map(d => d.uml_id);
+    const umlRecords = await UmlModel.find({
+      _id: { $in: umlIds }
+    }).lean();
+    if (!umlRecords.length) {
+      throw new Error("Associated UML not found");
+    }
+    // 3. All UMLs belong to the same project
+    const projectId = umlRecords[0].project_id.toString();
 
-    // Xóa khỏi database
-    const result = await ActivityDiagramModel.deleteMany({ _id: { $in: ids.map(i => new Types.ObjectId(i)) } });
-    
+    const project = await ProjectModel.findById(projectId).lean();
+    if (!project) throw new Error("Project not found");
+
+    // 4. Permission check (must be owner or editor)
+    const member = (project.members || []).find(
+      (m) => m.user_id.toString() === userId && m.status === 'accepted'
+    );
+
+    if (!member && project.owner_id.toString() !== userId) {
+      throw new Error("You are not a member of the project");
+    }
+
+    if (!["owner", "editor"].includes(member.role!)) {
+      throw new Error("You do not have permission to delete activity diagrams.");
+    }
+
+    // 5. Delete diagrams
+    const result = await ActivityDiagramModel.deleteMany({
+      _id: { $in: ids.map(i => new Types.ObjectId(i)) }
+    });
+
     return { deletedCount: result.deletedCount || 0 };
   }
-
 }
 
 
