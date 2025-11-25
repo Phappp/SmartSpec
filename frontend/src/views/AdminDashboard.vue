@@ -16,17 +16,13 @@
       </div>
       <div class="header-right">
         <div class="header-actions">
-          <button class="btn-notification" @click="toggleNotifications">
-            <span class="material-symbols-outlined">notifications</span>
-            <span v-if="unreadNotifications > 0" class="notification-badge">{{
-              unreadNotifications
-            }}</span>
-          </button>
+          
           <div class="user-menu" @click="toggleUserMenu">
             <div class="user-avatar">
               <img
-                src="https://static.vecteezy.com/system/resources/previews/024/983/914/original/simple-user-default-icon-free-png.png"
-                alt="Admin"
+                :src="currentUser.avatar_url"
+                :alt="currentUser.name"
+                @error="(e) => (e.target.src = 'https://static.vecteezy.com/system/resources/previews/024/983/914/original/simple-user-default-icon-free-png.png')"
               />
             </div>
             <span class="user-name">{{ currentUser.name }}</span>
@@ -138,19 +134,7 @@
               </div>
             </div>
             <div class="chart-container">
-              <div class="pie-chart">
-                <div
-                  v-for="(item, index) in userDistribution"
-                  :key="item.label"
-                  class="pie-segment"
-                  :style="getSegmentStyle(item, index)"
-                  @mouseenter="hoveredSegment = index"
-                  @mouseleave="hoveredSegment = null"
-                >
-                  <div class="segment-tooltip" v-if="hoveredSegment === index">
-                    {{ item.label }}: {{ item.percentage }}%
-                  </div>
-                </div>
+              <div class="pie-chart" :style="{ background: pieBackground }">
                 <div class="pie-center">
                   <div class="center-content">
                     <span class="center-value">
@@ -162,12 +146,15 @@
                     </span>
                     <span class="center-label">
                       {{
-                        hoveredSegment !== null ? userDistribution[hoveredSegment].label : 'Tổng'
+                        hoveredSegment !== null
+                          ? userDistribution[hoveredSegment].label
+                          : 'Tổng'
                       }}
                     </span>
                   </div>
                 </div>
               </div>
+
               <div class="chart-legend">
                 <div
                   v-for="(item, index) in userDistribution"
@@ -393,40 +380,82 @@
       <!-- Two Column Layout -->
       <section class="two-column-section">
         <div class="column-grid">
-          <!-- Recent Activity -->
+          <!-- Log System (moved here, replaces Recent Activity) -->
           <div class="column-card">
             <div class="card-header">
-              <h3><span class="material-symbols-outlined">schedule</span> Hoạt động gần đây</h3>
+              <h3>
+                <span class="material-symbols-outlined">list_alt</span> Log hệ thống
+              </h3>
               <div class="card-actions">
-                <button class="btn-icon" @click="refreshActivities">
+                <div class="log-filters">
+                  <select v-model="logFilter.level" class="filter-select">
+                    <option value="all">Tất cả level</option>
+                    <option value="info">Info</option>
+                    <option value="warning">Warning</option>
+                    <option value="error">Error</option>
+                  </select>
+                  <select v-model="logFilter.type" class="form-input">
+                    <option value="all">Tất cả</option>
+                    <option value="system">Hệ thống</option>
+                    <option value="user">Người dùng</option>
+                    <option value="project">Dự án</option>
+                    <option value="member">Thành viên</option>
+                  </select>
+                </div>
+                <button class="btn-icon" @click="refreshLogs">
                   <span class="material-symbols-outlined">refresh</span>
                 </button>
+                <div class="relative dropdown">
+                  <button 
+                    class="btn-action secondary flex items-center gap-1"
+                    @click.stop="showExportMenu = !showExportMenu" 
+                  >
+                    <span class="material-symbols-outlined">download</span>
+                    Xuất log
+                    <span class="material-symbols-outlined text-sm">expand_more</span>
+                  </button>
+                  
+                  <div 
+                    v-if="showExportMenu" 
+                    class="dropdown-menu absolute right-0 mt-2 w-36 bg-white border rounded-lg shadow-lg z-50"
+                  >
+                    <button @click="exportLogs('pdf'); showExportMenu = false" class="dropdown-item">Xuất PDF</button>
+                    <button @click="exportLogs('csv'); showExportMenu = false" class="dropdown-item">Xuất CSV</button>
+                    <button @click="exportLogs('json'); showExportMenu = false" class="dropdown-item">Xuất JSON</button>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="activity-list">
-              <div
-                v-for="activity in recentActivities"
-                :key="activity.id"
-                class="activity-item"
-                :class="activity.type"
-              >
-                <div class="activity-icon">
-                  <span class="material-symbols-outlined">{{
-                    getActivityIcon(activity.type)
-                  }}</span>
+            <div class="log-list">
+              <div v-for="log in filteredLogs" :key="log.id" class="log-item" :class="log.level">
+                <div class="log-level" :class="log.level">{{ log.level }}</div>
+                <div class="log-content">
+                  <div class="log-message">{{ log.message }}</div>
+                  <div class="log-meta">
+                    <span class="log-type">{{ log.type }}</span>
+                    <span class="log-time">{{ formatTime(log.timestamp) }}</span>
+                    <span class="log-user" v-if="log.user">{{ log.user }}</span>
+                  </div>
                 </div>
-                <div class="activity-content">
-                  <p class="activity-description">{{ activity.description }}</p>
-                  <span class="activity-time">{{ formatTime(activity.timestamp) }}</span>
-                </div>
-                <div class="activity-badge" :class="activity.status">
-                  {{ activity.statusText }}
+                <div class="log-actions">
+                  <button class="btn-icon small" @click="viewLogDetails(log)">
+                    <span class="material-symbols-outlined">visibility</span>
+                  </button>
                 </div>
               </div>
+            </div>
+            <div class="log-footer">
+              <div class="log-summary">
+                Hiển thị {{ filteredLogs.length }} log
+                <span v-if="logFilter.level !== 'all'">(lọc theo {{ logFilter.level }})</span>
+              </div>
+              <button class="btn-view-all" @click="showLogManagementModal = true">
+                Xem tất cả log
+              </button>
             </div>
           </div>
 
-          <!-- System Status -->
+          <!-- System Status (right column, unchanged) -->
           <div class="column-card">
             <div class="card-header">
               <h3>
@@ -474,66 +503,6 @@
                 <span class="metric-value">{{ systemMetrics.disk }}%</span>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Log Management -->
-      <section class="log-section">
-        <div class="log-card">
-          <div class="card-header">
-            <h3><span class="material-symbols-outlined">list_alt</span> Log hệ thống</h3>
-            <div class="card-actions">
-              <div class="log-filters">
-                <select v-model="logFilter.level" class="filter-select">
-                  <option value="all">Tất cả level</option>
-                  <option value="info">Info</option>
-                  <option value="warning">Warning</option>
-                  <option value="error">Error</option>
-                </select>
-                <select v-model="logFilter.type" class="filter-select">
-                  <option value="all">Tất cả loại</option>
-                  <option value="user">Người dùng</option>
-                  <option value="system">Hệ thống</option>
-                  <option value="api">API</option>
-                  <option value="project">Dự án</option>
-                </select>
-              </div>
-              <button class="btn-icon" @click="refreshLogs">
-                <span class="material-symbols-outlined">refresh</span>
-              </button>
-              <button class="btn-action secondary" @click="exportLogs">
-                <span class="material-symbols-outlined">download</span>
-                Xuất log
-              </button>
-            </div>
-          </div>
-          <div class="log-list">
-            <div v-for="log in filteredLogs" :key="log.id" class="log-item" :class="log.level">
-              <div class="log-level" :class="log.level">{{ log.level }}</div>
-              <div class="log-content">
-                <div class="log-message">{{ log.message }}</div>
-                <div class="log-meta">
-                  <span class="log-type">{{ log.type }}</span>
-                  <span class="log-time">{{ formatTime(log.timestamp) }}</span>
-                  <span class="log-user" v-if="log.user">{{ log.user }}</span>
-                </div>
-              </div>
-              <div class="log-actions">
-                <button class="btn-icon small" @click="viewLogDetails(log)">
-                  <span class="material-symbols-outlined">visibility</span>
-                </button>
-              </div>
-            </div>
-          </div>
-          <div class="log-footer">
-            <div class="log-summary">
-              Hiển thị {{ filteredLogs.length }} log
-              <span v-if="logFilter.level !== 'all'">(lọc theo {{ logFilter.level }})</span>
-            </div>
-            <button class="btn-view-all" @click="showLogManagementModal = true">
-              Xem tất cả log
-            </button>
           </div>
         </div>
       </section>
@@ -616,7 +585,10 @@
 
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
-
+import { useRouter } from 'vue-router'
+import axiosClient from '@/utils/axiosClient'
+import { socket, initSocketConnection } from '@/utils/socket'
+import { useToast } from 'vue-toastification'
 // Component imports
 import AdminProfileModal from '@/components/admin/AdminProfileModal.vue'
 import AdminChangePasswordModal from '@/components/admin/AdminChangePasswordModal.vue'
@@ -631,13 +603,13 @@ import AdminProjectManagementModal from '@/components/admin/AdminProjectManageme
 // import AdminProjectAnalyticsModal from '@/components/admin/AdminProjectAnalyticsModal.vue'
 // import AdminProjectTemplatesModal from '@/components/admin/AdminProjectTemplatesModal.vue'
 // import AdminBackupModal from '@/components/admin/AdminBackupModal.vue'
-
+const router = useRouter()
 // State
 const showUserMenu = ref(false)
 const hoveredSegment = ref(null)
-const unreadNotifications = ref(3)
-
+const { toast } = useToast()
 // Modal states
+const showExportMenu = ref(false)
 const showProfileModal = ref(false)
 const showChangePasswordModal = ref(false)
 const showSystemSettingsModal = ref(false)
@@ -654,14 +626,9 @@ const showBackupModal = ref(false)
 
 // Data
 const currentUser = ref({
-  id: '1',
-  name: 'Admin User',
-  email: 'admin@smartspec.com',
-  role: 'ADMIN',
-  avatar:
-    'https://static.vecteezy.com/system/resources/previews/024/983/914/original/simple-user-default-icon-free-png.png',
-  lastLogin: new Date('2024-01-15T08:30:00'),
-  createdAt: new Date('2023-01-01'),
+  name: 'Đang tải...',
+  email: '',
+  avatar_url: '',
 })
 
 const stats = ref({
@@ -672,7 +639,6 @@ const stats = ref({
   totalProjects: 567,
   activeProjects: 432,
   newProjectsToday: 8,
-  deletedProjects: 23,
   activeApiKeys: 23,
   dailyActive: 234,
   totalLogs: 12456,
@@ -688,10 +654,8 @@ const systemStats = ref({
 })
 
 const userDistribution = ref([
-  { label: 'Admin', value: 39, percentage: 33, color: '#1a365d' },
-  { label: 'Participant', value: 100, percentage: 67, color: '#2d3748' },
 ])
-
+const userList = ref([])
 const apiUsage = ref([
   { name: 'Gemini', usage: '1,234', percentage: 45, color: '#1a365d', trend: 'up', change: '+12%' },
   { name: 'OpenAI', usage: '987', percentage: 35, color: '#2d3748', trend: 'up', change: '+8%' },
@@ -707,48 +671,6 @@ const apiStats = ref({
   errorRate: 1.8,
 })
 
-const recentActivities = ref([
-  {
-    id: 1,
-    type: 'user',
-    description: 'Người dùng mới "john_doe" đã đăng ký',
-    timestamp: new Date('2024-01-15T14:25:00'),
-    status: 'success',
-    statusText: 'Thành công',
-  },
-  {
-    id: 2,
-    type: 'project',
-    description: 'Dự án "E-commerce Platform" được tạo',
-    timestamp: new Date('2024-01-15T14:10:00'),
-    status: 'success',
-    statusText: 'Thành công',
-  },
-  {
-    id: 3,
-    type: 'api',
-    description: 'API Key mới được tạo cho OpenAI',
-    timestamp: new Date('2024-01-15T13:45:00'),
-    status: 'success',
-    statusText: 'Thành công',
-  },
-  {
-    id: 4,
-    type: 'system',
-    description: 'Hệ thống backup hoàn tất',
-    timestamp: new Date('2024-01-15T13:30:00'),
-    status: 'success',
-    statusText: 'Hoàn tất',
-  },
-  {
-    id: 5,
-    type: 'error',
-    description: 'Lỗi kết nối database đã được khắc phục',
-    timestamp: new Date('2024-01-15T12:15:00'),
-    status: 'warning',
-    statusText: 'Cảnh báo',
-  },
-])
 
 const systemServices = ref([
   {
@@ -795,49 +717,8 @@ const systemMetrics = ref({
   network: 12,
 })
 
-const systemLogs = ref([
-  {
-    id: 1,
-    level: 'info',
-    type: 'system',
-    message: 'Hệ thống khởi động thành công',
-    timestamp: new Date('2024-01-15T14:30:00'),
-    user: 'system',
-  },
-  {
-    id: 2,
-    level: 'warning',
-    type: 'api',
-    message: 'API rate limit gần đạt ngưỡng',
-    timestamp: new Date('2024-01-15T14:25:00'),
-    user: 'api_gateway',
-  },
-  {
-    id: 3,
-    level: 'error',
-    type: 'database',
-    message: 'Lỗi kết nối database - đã tự động khắc phục',
-    timestamp: new Date('2024-01-15T14:20:00'),
-    user: 'db_service',
-  },
-  {
-    id: 4,
-    level: 'info',
-    type: 'user',
-    message: 'Người dùng admin đăng nhập thành công',
-    timestamp: new Date('2024-01-15T14:15:00'),
-    user: 'auth_service',
-  },
-  {
-    id: 5,
-    level: 'info',
-    type: 'project',
-    message: 'Dự án mới được tạo: E-commerce Platform',
-    timestamp: new Date('2024-01-15T14:10:00'),
-    user: 'project_service',
-  },
-])
-
+const systemLogs = ref([])
+const logLoading = ref(false)
 const logFilter = ref({
   level: 'all',
   type: 'all',
@@ -895,14 +776,35 @@ const filteredLogs = computed(() => {
     return levelMatch && typeMatch
   })
 })
+const fetchCurrentUser = async () => {
+  try {
+    const res = await axiosClient.get('/api/auth/me')
+    if (res.data?.status === 'Success' && res.data.data) {
+      const user = res.data.data
+      const BASE_URL = 'http://localhost:8000'
 
+      currentUser.value = {
+        id: user.id,
+        name: user.name || 'Không rõ',
+        email: user.email || 'Chưa có email',
+        avatar_url: user.avatar_url
+          ? user.avatar_url.startsWith('http')
+            ? user.avatar_url
+            : `${BASE_URL}${user.avatar_url}`
+          : 'https://static.vecteezy.com/system/resources/previews/024/983/914/original/simple-user-default-icon-free-png.png',
+      }
+
+      console.log('✅ Current user loaded:', currentUser.value)
+    } else {
+      console.warn('⚠️ Không lấy được user từ /api/auth/me', res.data)
+    }
+  } catch (err) {
+    console.error('❌ Lỗi khi lấy thông tin user:', err)
+  }
+}
 // Methods
 const toggleUserMenu = () => {
   showUserMenu.value = !showUserMenu.value
-}
-
-const toggleNotifications = () => {
-  unreadNotifications.value = 0
 }
 
 const formatNumber = (num) => {
@@ -922,37 +824,200 @@ const formatTime = (date) => {
   return `${days} ngày trước`
 }
 
-const getSegmentStyle = (item, index) => {
-  let startAngle = 0
-  for (let i = 0; i < index; i++) {
-    startAngle += userDistribution.value[i].percentage * 3.6
-  }
-  const endAngle = startAngle + item.percentage * 3.6
 
-  return {
-    background: `conic-gradient(from ${startAngle}deg, ${item.color} 0deg, ${item.color} ${
-      endAngle - startAngle
-    }deg, transparent ${endAngle - startAngle}deg)`,
-  }
-}
+const pieBackground = computed(() => {
+  let start = 0
+  const gradients = userDistribution.value.map((item) => {
+    const end = start + item.percentage * 3.6
+    const part = `${item.color} ${start}deg ${end}deg`
+    start = end
+    return part
+  })
+  return `conic-gradient(${gradients.join(', ')})`
+})
+const refreshProjectStats = async () => {
+  try {
+    const res = await axiosClient.get('http://localhost:8000/api/projects/admin/all')
 
-const getActivityIcon = (type) => {
-  const icons = {
-    user: 'person_add',
-    project: 'create_new_folder',
-    api: 'key',
-    system: 'settings',
-    error: 'warning',
+    if (res.data?.status === 'Success' && Array.isArray(res.data.data)) {
+      const projects = res.data.data
+
+      // Tổng số dự án
+      stats.value.totalProjects = projects.length
+
+      // Dự án đang hoạt động (chưa bị xóa)
+      const activeProjects = projects.filter((p) => !p.isTrashed).length
+      stats.value.activeProjects = activeProjects
+
+      // Dự án đã xóa (isTrashed = true)
+      const trashedProjects = projects.filter((p) => p.isTrashed).length
+      stats.value.deletedProjects = trashedProjects
+
+      // Dự án tạo trong hôm nay
+      const today = new Date().toISOString().split('T')[0]
+      const newProjectsToday = projects.filter((p) => {
+        const createdDate = new Date(p.createdAt).toISOString().split('T')[0]
+        return createdDate === today
+      }).length
+      stats.value.newProjectsToday = newProjectsToday
+
+      console.log('✅ Project stats loaded:', {
+        total: projects.length,
+        active: activeProjects,
+        deleted: trashedProjects,
+        today: newProjectsToday,
+      })
+    } else {
+      console.warn('⚠️ Không nhận được dữ liệu hợp lệ từ API /projects/admin/all')
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi tải dữ liệu dự án:', error)
   }
-  return icons[type] || 'info'
 }
 
 const refreshUserStats = async () => {
-  console.log('Refreshing user stats...')
+  try {
+    const res = await axiosClient.get('/api/users')
+
+    if (res.data && res.data.status === 'Success') {
+      const rawUsers = res.data.data
+      const BASE_URL = 'http://localhost:8000'
+      // ✅ Chuẩn hóa dữ liệu người dùng
+      const users = rawUsers.map(u => ({
+        id: u.id,
+        name: u.name || 'Không rõ',
+        email: u.email || 'Chưa có email',
+        avatar_url: u.avatar_url
+          ? u.avatar_url.startsWith('http')
+            ? u.avatar_url
+            : `${BASE_URL}${u.avatar_url}`
+          : 'https://static.vecteezy.com/system/resources/previews/024/983/914/original/simple-user-default-icon-free-png.png',
+        role:
+          u.system_role === 'ADMIN'
+            ? 'Quản Trị Viên'
+            : u.system_role === 'PARTICIPANT'
+            ? 'Thành Viên'
+            : 'Khác',
+        system_role: u.system_role,
+        status: u.status === 'ACTIVE' ? 'Đang hoạt động' : 'Không hoạt động',
+        rawStatus: u.status,
+        createdAt: u.dob
+          ? new Date(u.dob).toLocaleDateString('vi-VN')
+          : 'Không rõ',
+        gender:
+          u.gender === 'male' ? 'Nam' : u.gender === 'female' ? 'Nữ' : 'Khác',
+        twoFactor: u.isTwoFactorEnabled ? 'Bật' : 'Tắt',
+      }))
+
+      // ✅ Lưu danh sách người dùng để dùng ở modal
+      userList.value = users
+
+      // ✅ Tổng số người dùng
+      stats.value.totalUsers = users.length
+
+      // ✅ Đếm hoạt động / không hoạt động
+      stats.value.activeUsers = users.filter(u => u.rawStatus === 'ACTIVE').length
+      stats.value.inactiveUsers = users.filter(u => u.rawStatus !== 'ACTIVE').length
+
+      // ✅ Đếm theo role
+      const roleCounts = users.reduce((acc, user) => {
+        acc[user.system_role] = (acc[user.system_role] || 0) + 1
+        return acc
+      }, {})
+
+      // ✅ Biểu đồ phân bố người dùng
+      const total = users.length || 1
+      const distribution = Object.entries(roleCounts).map(([role, count]) => ({
+        label:
+          role === 'ADMIN'
+            ? 'Admin'
+            : role === 'PARTICIPANT'
+            ? 'Participant'
+            : role,
+        value: count,
+        percentage: Math.round((count / total) * 100),
+        color:
+          role === 'ADMIN'
+            ? '#13235d'
+            : role === 'PARTICIPANT'
+            ? '#52abea'
+            : '#8884d8',
+      }))
+
+      userDistribution.value = distribution
+
+      console.log('✅ User stats loaded:', {
+        total: users.length,
+        active: stats.value.activeUsers,
+        inactive: stats.value.inactiveUsers,
+        distribution,
+      })
+    } else {
+      console.warn('❌ Dữ liệu không hợp lệ khi gọi /api/users:', res.data)
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi tải thống kê người dùng:', error)
+  }
 }
 
 const refreshApiStats = async () => {
-  console.log('Refreshing API stats...')
+  try {
+    const res = await axiosClient.get('http://localhost:8000/api/keys')
+
+    if (res.data?.status === 'Success' && Array.isArray(res.data.data)) {
+      const keys = res.data.data
+
+      // Đếm số lượng key đang hoạt động
+      const activeKeys = keys.filter((k) => k.is_active).length
+      stats.value.activeApiKeys = activeKeys
+
+      // Đếm theo nhà cung cấp
+      const providerStats = keys.reduce((acc, key) => {
+        const provider = key.provider?.toLowerCase() || 'other'
+        acc[provider] = (acc[provider] || 0) + 1
+        return acc
+      }, {})
+
+      // Gán vào biến thống kê chính
+      apiStats.value.gemini = providerStats['gemini'] || 0
+      apiStats.value.openai = providerStats['openai'] || 0
+      apiStats.value.claude = providerStats['claude'] || 0
+      apiStats.value.totalRequests = keys.length
+      apiStats.value.successRate = 100 // nếu API chưa trả dữ liệu này, để tạm
+      apiStats.value.errorRate = 0
+
+      // Cập nhật biểu đồ hiển thị
+      const total = keys.length
+      apiUsage.value = Object.entries(providerStats).map(([provider, count]) => ({
+        name:
+          provider === 'gemini'
+            ? 'Gemini'
+            : provider === 'openai'
+            ? 'OpenAI'
+            : provider === 'claude'
+            ? 'Claude'
+            : 'Khác',
+        usage: count.toString(),
+        percentage: total ? Math.round((count / total) * 100) : 0,
+        color:
+          provider === 'gemini'
+            ? '#1a365d'
+            : provider === 'openai'
+            ? '#2d3748'
+            : provider === 'claude'
+            ? '#4a5568'
+            : '#718096',
+        trend: 'up',
+        change: '+0%',
+      }))
+
+      console.log('✅ API key stats loaded:', apiUsage.value)
+    } else {
+      console.warn('⚠️ Không nhận được dữ liệu hợp lệ từ API /api/keys')
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi tải API key stats:', error)
+  }
 }
 
 const refreshActivities = async () => {
@@ -964,8 +1029,54 @@ const refreshSystemStatus = async () => {
 }
 
 const refreshLogs = async () => {
-  console.log('Refreshing logs...')
+  logLoading.value = true
+  try {
+    // ✅ Đồng bộ với backend — kiểm tra đúng tên query param
+    const params = {}
+    if (logFilter.value.level !== 'all') params.level = logFilter.value.level
+    if (logFilter.value.type !== 'all') params.target_type = logFilter.value.type  // <-- đổi từ type sang target_type
+
+    console.log('📡 Fetching logs with params:', params)
+    const res = await axiosClient.get('/api/logs', { params })
+
+    const logItems = res.data?.data?.items || res.data?.data || []
+
+    if (res.data?.status === 'Success' && Array.isArray(logItems)) {
+      systemLogs.value = logItems.map((log) => ({
+        id: log._id || log.id,
+        userId: log.user_id,
+        user: log.user_name || log.user_email || 'Hệ thống',
+        action: log.action || '-',
+        type: log.target_type?.toLowerCase() || 'system',  // ✅ chuẩn hóa type
+        level: log.level?.toLowerCase() || 'info',
+        message:
+          log.details?.message ||
+          log.action ||
+          'Không có mô tả hành động',
+        timestamp: new Date(log.created_at || log.timestamp),
+        ip: log.ip || '-',
+        userAgent: log.user_agent || '-',
+      }))
+
+      console.log(`✅ Loaded ${systemLogs.value.length} logs`)
+    } else {
+      console.warn('⚠️ Không nhận được log hợp lệ:', res.data)
+      systemLogs.value = []
+    }
+  } catch (err) {
+    console.error('❌ Lỗi khi tải log:', err)
+    toast({
+      title: 'Lỗi tải log',
+      description:
+        err.response?.data?.message || 'Không thể tải log hệ thống.',
+      variant: 'destructive',
+    })
+  } finally {
+    logLoading.value = false
+  }
 }
+
+
 
 const exportUserStats = () => {
   console.log('Exporting user stats...')
@@ -975,9 +1086,73 @@ const exportApiStats = () => {
   console.log('Exporting API stats...')
 }
 
-const exportLogs = () => {
-  console.log('Exporting logs...')
-}
+const exportLogs = async (format) => {
+  try {
+    const baseURL = 'http://localhost:8000';
+    
+    // ✅ Lấy giá trị của bộ lọc
+    const levelFilter = logFilter.value.level !== 'all' ? logFilter.value.level : '';
+    const typeFilter = logFilter.value.type !== 'all' ? logFilter.value.type : '';
+    
+    // ✅ Xây dựng các query params
+    const params = new URLSearchParams();
+    params.append('format', format);
+
+    // Thêm level và target_type vào params nếu chúng không phải 'all'
+    if (levelFilter) {
+        params.append('level', levelFilter);
+    }
+    if (typeFilter) {
+        params.append('target_type', typeFilter); // Backend đang dùng target_type
+    }
+
+    const url = `${baseURL}/api/logs/export?${params.toString()}`;
+
+    console.log('📤 Exporting logs with URL:', url); // Log URL để kiểm tra
+
+    const response = await fetch(url, {
+      method: 'GET',
+      mode: 'cors',
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+      },
+    });
+
+    if (!response.ok) {
+      // Cố gắng đọc thông báo lỗi từ server (nếu có)
+      const errorText = await response.text();
+      console.error('Server error response:', errorText);
+      throw new Error(`Server trả lỗi ${response.status}: ${errorText.substring(0, 100)}...`);
+    }
+
+    // 👇 Lấy tên file từ header (nếu được expose)
+    const disposition = response.headers.get('Content-Disposition');
+    const filename =
+      disposition?.split('filename=')[1]?.replace(/"/g, '') ||
+      `logs_${levelFilter}_${typeFilter}_${Date.now()}.${format}`; // Tạo tên file chi tiết hơn
+
+    // 👇 Đọc binary stream
+    const blob = await response.blob();
+
+    // 👇 Tạo và click link tải
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+
+    // 👇 Dọn dẹp
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+
+    console.log(`✅ Tải thành công ${filename}`);
+  } catch (err) {
+    console.error('❌ Lỗi export log:', err);
+    alert('Xuất thất bại: ' + err.message);
+  }
+};
+
 
 const viewLogDetails = (log) => {
   console.log('Viewing log details:', log)
@@ -1013,6 +1188,15 @@ const saveSystemSettings = (settings) => {
 const logout = () => {
   console.log('Logging out...')
   showUserMenu.value = false
+
+  // Xóa token & thông tin user
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('refreshToken')
+  localStorage.removeItem('user')
+  localStorage.removeItem('role')
+
+  // Chuyển hướng về trang đăng nhập
+  router.push('/login')
 }
 
 // Close user menu when clicking outside
@@ -1026,20 +1210,46 @@ const handleClickOutside = (event) => {
 // Watchers
 watch(logFilter, () => {
   refreshLogs()
-})
+}, { deep: true })
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  initSocketConnection()
+  // 🔥 Lắng nghe log realtime từ server (cả project + system)
+  socket.on("log_event", (event) => {
+  console.log("🧩 Realtime log event:", event);
+
+  // Nếu log hệ thống (không có projectId)
+  if (!event.projectId) {
+    const log = event.log || event;
+    systemLogs.value.unshift({
+      id: log._id || log.id,
+      user: log.user_name || log.user_email || 'Hệ thống',
+      action: log.action || '-',
+      type: log.target_type?.toLowerCase() || 'system',
+      level: log.level?.toLowerCase() || 'info',
+      message: log.details?.message || log.action || 'Không có mô tả hành động',
+      timestamp: new Date(log.created_at || log.timestamp || event.timestamp),
+      ip: log.ip || '-',
+      userAgent: log.user_agent || '-',
+    });
+
+    // Giới hạn tối đa 100 log
+    if (systemLogs.value.length > 100) systemLogs.value.pop();
+  }
+})
 
   // Fetch initial data
   refreshUserStats()
+  refreshProjectStats()
   refreshApiStats()
   refreshActivities()
   refreshSystemStatus()
   refreshLogs()
-
+  fetchCurrentUser()
   console.log('Admin dashboard mounted')
 })
+
 </script>
 
 <style scoped>
@@ -1075,7 +1285,40 @@ onMounted(() => {
   font-size: 32px;
   color: #63b3ed;
 }
+.pie-chart {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
 
+.pie-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border-radius: 50%;
+  width: 100px;
+  height: 100px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.center-content .center-value {
+  display: block;
+  font-weight: bold;
+  font-size: 20px;
+  color: #1a365d;
+}
+
+.center-content .center-label {
+  font-size: 14px;
+  color: #555;
+}
 .logo h1 {
   font-size: 20px;
   font-weight: 700;
@@ -1164,7 +1407,67 @@ onMounted(() => {
   z-index: 1000;
   margin-top: 8px;
 }
+.relative.dropdown {
+    position: relative;
+    display: inline-block; /* Quan trọng để chỉ chiếm không gian cần thiết */
+}
 
+/* 2. Nút kích hoạt Dropdown */
+.btn-action.secondary {
+    /* Đảm bảo nút có kiểu dáng dễ nhìn */
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    background-color: #f7f7f7;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.btn-action.secondary:hover {
+    background-color: #e0e0e0;
+}
+
+/* 3. Menu thả xuống */
+.dropdown-menu {
+    /* Định vị và hình dáng chung */
+    position: absolute;
+    right: 0; /* Menu xuất hiện bên phải nút bấm */
+    top: 100%; /* Đặt dưới nút bấm */
+    margin-top: 8px; /* Khoảng cách với nút */
+    width: 140px; /* Chiều rộng của menu */
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0; /* Viền nhẹ */
+    border-radius: 8px; /* Bo góc */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    z-index: 50;
+    overflow: hidden; /* Đảm bảo các item không tràn ra ngoài bo góc */
+}
+
+/* 4. Các mục trong Menu (Xuất PDF, CSV, JSON) */
+.dropdown-item {
+    /* Đảm bảo là nút bấm full width */
+    width: 100%;
+    text-align: left;
+    padding: 10px 15px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+/* Hiệu ứng di chuột (Hover) */
+.dropdown-item:hover {
+    background-color: #f1f5f9; /* Màu nền khi di chuột */
+    color: #007bff; /* Thay đổi màu chữ (tùy chọn) */
+}
+
+/* Loại bỏ viền cho item cuối cùng (nếu muốn) */
+.dropdown-menu .dropdown-item:not(:last-child) {
+    border-bottom: 1px solid #f0f0f0; 
+}
 .dropdown-item {
   display: flex;
   align-items: center;
@@ -1359,7 +1662,7 @@ onMounted(() => {
   top: -40px;
   left: 50%;
   transform: translateX(-50%);
-  background: #1a365d;
+  background: #3979ad;
   color: white;
   padding: 6px 12px;
   border-radius: 6px;
@@ -1584,7 +1887,7 @@ onMounted(() => {
 .card-header {
   background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
   color: white;
-  padding: 20px 24px;
+  padding: 16px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1672,6 +1975,7 @@ onMounted(() => {
 .btn-action.secondary {
   background: #f7fafc;
   color: #4a5568;
+  padding: 8px 10px;
   border: 1px solid #e2e8f0;
 }
 
@@ -1988,7 +2292,7 @@ onMounted(() => {
 
 .log-list {
   padding: 0;
-  max-height: 400px;
+  max-height: 506px;
   overflow-y: auto;
 }
 

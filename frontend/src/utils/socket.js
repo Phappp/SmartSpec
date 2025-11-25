@@ -1,20 +1,39 @@
-// 📄 utils/socket.js - SỬA ĐỔI
 import { io } from "socket.io-client";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
 
 export const socket = io(BACKEND_URL, {
-    transports: ["websocket"],
-    reconnection: true,
-    auth: {
-        userId: localStorage.getItem("userId") // ✅ THÊM: Gửi userId khi kết nối
-    }
+  transports: ["websocket"],
+  reconnection: true,
 });
 
 export function initSocketConnection() {
-    const userId = localStorage.getItem("userId");
+  const userId = localStorage.getItem("userId");
+
+  socket.on("connect", () => {
+    console.log("🔌 Connected to backend socket:", socket.id);
+
+    // ✅ Tham gia room cá nhân (nếu có userId)
     if (userId) {
-        socket.emit("notification", userId);
-        console.log("✅ Joined socket room:", `user_${userId}`);
+      socket.emit("notification", userId);
+      console.log("✅ Joined socket room:", `user_${userId}`);
     }
+
+    // ✅ Tham gia room hệ thống (để nhận log toàn hệ thống)
+    socket.emit("join_system_logs");
+    console.log("🌍 Joined global system log room");
+  });
+
+  // ✅ Lắng nghe tất cả log realtime (từ BE)
+  socket.on("log_event", (event) => {
+    if (event.projectId) {
+      console.log("📘 [Project Log Event]:", event);
+    } else {
+      console.log("🌍 [System Log Event]:", event);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.warn("❌ Socket disconnected from server");
+  });
 }

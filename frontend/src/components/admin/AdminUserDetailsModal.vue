@@ -13,7 +13,7 @@
           <div class="profile-header">
             <div class="avatar-section">
               <div class="user-avatar large">
-                <img :src="user.avatar_url || defaultAvatar" alt="Avatar" />
+                <img :src="userAvatar || defaultAvatar" alt="Avatar" />
               </div>
               <div class="user-basic-info">
                 <h2>{{ user.name }}</h2>
@@ -29,10 +29,6 @@
               </div>
             </div>
             <div class="profile-actions">
-              <button class="btn btn-primary" @click="editUser">
-                <span class="material-symbols-outlined">edit</span>
-                Chỉnh sửa
-              </button>
               <button class="btn btn-secondary" @click="sendMessage">
                 <span class="material-symbols-outlined">mail</span>
                 Gửi tin nhắn
@@ -109,66 +105,36 @@
 
             <!-- Activity Tab -->
             <div v-if="activeTab === 'activity'" class="tab-panel">
-              <div class="activity-stats">
-                <div class="stat-cards">
-                  <div class="stat-card">
-                    <div class="stat-icon">
-                      <span class="material-symbols-outlined">folder</span>
-                    </div>
-                    <div class="stat-content">
-                      <h3>{{ user.project_count || 0 }}</h3>
-                      <p>Dự án</p>
-                    </div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-icon">
-                      <span class="material-symbols-outlined">description</span>
-                    </div>
-                    <div class="stat-content">
-                      <h3>{{ user.documents_count || 0 }}</h3>
-                      <p>Tài liệu</p>
-                    </div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-icon">
-                      <span class="material-symbols-outlined">api</span>
-                    </div>
-                    <div class="stat-content">
-                      <h3>{{ user.api_requests || 0 }}</h3>
-                      <p>API Requests</p>
-                    </div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-icon">
-                      <span class="material-symbols-outlined">login</span>
-                    </div>
-                    <div class="stat-content">
-                      <h3>{{ user.login_count || 0 }}</h3>
-                      <p>Lần đăng nhập</p>
-                    </div>
-                  </div>
-                </div>
+              <div v-if="loadingActivities" class="loading-state">
+                <span class="material-symbols-outlined spin">sync</span>
+                Đang tải hoạt động...
+              </div>
 
-                <div class="recent-activity">
-                  <h4>Hoạt động gần đây</h4>
-                  <div class="activity-list">
-                    <div
-                      v-for="activity in recentActivities"
-                      :key="activity.id"
-                      class="activity-item"
-                    >
-                      <div class="activity-icon">
-                        <span class="material-symbols-outlined">{{ activity.icon }}</span>
-                      </div>
-                      <div class="activity-content">
-                        <p class="activity-description">{{ activity.description }}</p>
-                        <span class="activity-time">{{ activity.time }}</span>
-                      </div>
+              <div v-else-if="recentActivities.length > 0" class="recent-activity">
+                <h4>Hoạt động gần đây</h4>
+                <div class="activity-list">
+                  <div
+                    v-for="activity in recentActivities"
+                    :key="activity.id"
+                    class="activity-item"
+                  >
+                    <div class="activity-icon">
+                      <span class="material-symbols-outlined">{{ activity.icon }}</span>
+                    </div>
+                    <div class="activity-content">
+                      <p class="activity-description">{{ activity.description }}</p>
+                      <span class="activity-time">{{ activity.time }}</span>
                     </div>
                   </div>
                 </div>
               </div>
+
+              <div v-else class="empty-state">
+                <span class="material-symbols-outlined">hourglass_empty</span>
+                <p>Chưa có hoạt động nào được ghi nhận</p>
+              </div>
             </div>
+
 
             <!-- Projects Tab -->
             <div v-if="activeTab === 'projects'" class="tab-panel">
@@ -262,7 +228,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import axiosClient from '@/utils/axiosClient'
 
 const props = defineProps({
   user: {
@@ -271,12 +238,18 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['close', 'edit'])
 
 const activeTab = ref('overview')
 const defaultAvatar =
   'https://static.vecteezy.com/system/resources/previews/024/983/914/original/simple-user-default-icon-free-png.png'
-
+const userAvatar = computed(() => {
+  const avatar = user.value?.avatar_url
+  if (!avatar) return defaultAvatar
+  // Nếu avatar đã là link đầy đủ
+  if (avatar.startsWith('http')) return avatar
+  // Nếu avatar là path tương đối => gắn BASE_URL
+  return `${'http://localhost:8000'}${avatar}`
+})
 const tabs = [
   { id: 'overview', label: 'Tổng quan', icon: 'dashboard' },
   { id: 'activity', label: 'Hoạt động', icon: 'activity_zone' },
@@ -285,32 +258,8 @@ const tabs = [
 ]
 
 // Sample data
-const recentActivities = [
-  {
-    id: 1,
-    icon: 'login',
-    description: 'Đăng nhập vào hệ thống',
-    time: '2 giờ trước',
-  },
-  {
-    id: 2,
-    icon: 'create_new_folder',
-    description: 'Tạo dự án mới: E-commerce Platform',
-    time: '1 ngày trước',
-  },
-  {
-    id: 3,
-    icon: 'description',
-    description: 'Tải lên tài liệu requirements.pdf',
-    time: '2 ngày trước',
-  },
-  {
-    id: 4,
-    icon: 'api',
-    description: 'Sử dụng API để tạo use case diagram',
-    time: '3 ngày trước',
-  },
-]
+const recentActivities = ref([])
+const loadingActivities = ref(false)
 
 const userProjects = [
   {
@@ -330,7 +279,46 @@ const userProjects = [
     updated_at: new Date('2024-01-12'),
   },
 ]
+const fetchUserActivities = async () => {
+  if (!user.value?.id) return
+  loadingActivities.value = true
+  try {
+    const res = await axiosClient.get(`/api/logs?user_id=${user.value.id}`)
+    const logs = res.data?.data?.items || []
 
+    recentActivities.value = logs.map((log) => ({
+      id: log._id,
+      icon: getActivityIcon(log.action),
+      description: log.details?.message || log.action || 'Hoạt động không xác định',
+      time: formatDateTime(log.created_at),
+    }))
+  } catch (err) {
+    console.error('Lỗi khi tải hoạt động người dùng:', err)
+    recentActivities.value = []
+  } finally {
+    loadingActivities.value = false
+  }
+}
+
+const getActivityIcon = (action) => {
+  const icons = {
+    login: 'login',
+    logout: 'logout',
+    create_user: 'person_add',
+    create_project: 'add_circle',
+    update_project: 'edit',
+    create_version: 'layers',
+    delete_project: 'delete',
+    default: 'info',
+  }
+  return icons[action?.toLowerCase()] || icons.default
+}
+
+watch(activeTab, (newVal) => {
+  if (newVal === 'activity') {
+    fetchUserActivities()
+  }
+})
 // Computed
 const user = computed(() => props.user)
 
@@ -401,10 +389,6 @@ const getUserTheme = (theme) => {
   return themes[theme] || 'Sáng'
 }
 
-const editUser = () => {
-  emit('edit', user.value)
-  emit('close')
-}
 
 const sendMessage = () => {
   // Implement send message functionality
@@ -425,6 +409,11 @@ const activateUser = () => {
   // Implement activate user functionality
   console.log('Activate user:', user.value.id)
 }
+onMounted(() => {
+  if (activeTab.value === 'activity') {
+    fetchUserActivities()
+  }
+})
 </script>
 
 <style scoped>
@@ -446,6 +435,7 @@ const activateUser = () => {
   max-width: 900px;
   width: 95%;
   max-height: 90vh;
+  background:white;
 }
 
 .modal-header {

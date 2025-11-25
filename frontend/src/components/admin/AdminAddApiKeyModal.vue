@@ -208,9 +208,11 @@
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
-
+import axiosClient from '@/utils/axiosClient'
+import { useToast } from 'vue-toastification'
 const emit = defineEmits(['add', 'close'])
 
+const toast = useToast()
 const loading = ref(false)
 const showKey = ref(false)
 
@@ -275,42 +277,34 @@ const handleAddApiKey = async () => {
 
   loading.value = true
   try {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    const apiKeyData = {
-      ...formData,
-      created_by: 'current_user_id', // This would be set by backend
-      created_at: new Date(),
-      last_used: null,
-      usage_count: 0,
+    // Chuẩn bị body gửi lên server
+    const payload = {
+      key_value: formData.key_value,
+      provider: formData.provider,
+      display_name: formData.display_name || null,
+      is_active: formData.is_active,
+      daily_limit: formData.daily_limit || null,
+      rate_limit: formData.rate_limit || null,
+      priority: formData.priority,
+      expires_at: formData.expires_at || null,
+      description: formData.description || null,
+      permissions: formData.permissions,
     }
 
-    emit('add', apiKeyData)
+    // Gọi API thật
+    const res = await axiosClient.post('/api/keys', payload)
 
-    // Reset form
-    Object.assign(formData, {
-      key_value: '',
-      provider: '',
-      display_name: '',
-      is_active: true,
-      daily_limit: 1000,
-      rate_limit: 60,
-      priority: 'medium',
-      expires_at: '',
-      description: '',
-      permissions: {
-        text_generation: true,
-        code_generation: true,
-        analysis: true,
-        chat_models: true,
-        vision_models: false,
-        embedding_models: false,
-      },
-    })
-    showKey.value = false
+    if (res.data && res.data.status === 'Success') {
+      toast.success('Thêm API Key thành công 🎉')
+      emit('add', res.data.data) // Trả về key mới để cập nhật danh sách
+      emit('close')
+    } else {
+      toast.error('Không thể thêm API Key')
+      console.error('❌ Response:', res.data)
+    }
   } catch (error) {
-    console.error('Error adding API key:', error)
+    console.error('❌ Lỗi khi thêm API Key:', error)
+    toast.error('Lỗi khi thêm API Key')
   } finally {
     loading.value = false
   }
