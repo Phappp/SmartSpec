@@ -91,7 +91,7 @@ export class ActivityDiagramService {
 
   
   public async getListActivityDiagram(versionId: string) {
-    if (versionId) {
+    if (versionId){
       const umls = await UmlModel.find({ version_id: versionId }).select('_id');
       const ids = umls.map(u => u._id);
       return ActivityDiagramModel.find({ uml_id: { $in: ids } }).lean();
@@ -135,6 +135,17 @@ export class ActivityDiagramService {
       return null;
     }
   }
+  public async deleteActivityDiagram(id: string | string[]): Promise<{ deletedCount: number }> {
+    if (!id) throw new Error("Chưa cung cấp id để xóa activity diagram");
+
+    const ids = Array.isArray(id) ? id : [id];
+
+    // Xóa khỏi database
+    const result = await ActivityDiagramModel.deleteMany({ _id: { $in: ids.map(i => new Types.ObjectId(i)) } });
+    
+    return { deletedCount: result.deletedCount || 0 };
+  }
+
 }
 
 
