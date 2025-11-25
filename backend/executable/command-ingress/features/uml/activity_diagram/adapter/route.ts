@@ -9,8 +9,8 @@ export default function initActivityDiagramRoute(): Router {
   router.post('/version/:versionId/requirements/:requirementId/generate',
     requireAuthorizedUser,
     controller.generateFromUsecase);
-    // Requirement-based generation and helpers
-  router.post('/version/:versionId/actors/:actor/generate', 
+  // Requirement-based generation and helpers
+  router.post('/version/:versionId/actors/:actor/generate',
     // requireAuthorizedUser, 
     controller.generateFromActor);
 
@@ -32,11 +32,10 @@ export default function initActivityDiagramRoute(): Router {
   // router.delete('/:id/edges/:index', requireAuthorizedUser, controller.removeEdge);
   // router.patch('/:id/svg', requireAuthorizedUser, controller.updateSvg);
 
-    // Utilities
+  // Utilities
   router.post('/:activityDiagramId/validate', requireAuthorizedUser, controller.validateStructure);
-  router.get('/:activityDiagramId/export', 
-    // requireAuthorizedUser, 
-    controller.export);
+  router.get('/:activityDiagramId/export', requireAuthorizedUser, controller.export);
+  router.delete('/:activityDiagramId', requireAuthorizedUser, controller.deleteActivityDiagram); // Xóa một qua param
   return router;
 }
 

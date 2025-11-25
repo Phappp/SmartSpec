@@ -183,12 +183,6 @@ export class SequenceDiagramController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        const ucId = req.params.ucId;
-        if (!ucId) {
-          res.status(400).json({ message: "UcId is required." });
-          return;
-        }
-
         const sequenceId = req.params.sequenceId;
         if (!sequenceId) {
           res.status(400).json({ message: "SequenceId is required." });
@@ -202,7 +196,7 @@ export class SequenceDiagramController extends BaseController {
         }
 
         const responseData =
-          await this.sequenceDiagramService.deleteSequenceDiagramById(ucId, sequenceId, subId);
+          await this.sequenceDiagramService.deleteSequenceDiagramById(sequenceId, subId);
 
         res.status(StatusCodes.OK).json({
           status: "Success",

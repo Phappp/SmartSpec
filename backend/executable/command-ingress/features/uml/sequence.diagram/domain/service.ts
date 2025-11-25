@@ -105,12 +105,12 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
 
     return savedDocument.toObject({ getters: true }) as SequenceDiagramResponse;
   }
- public async getSequenceDiagrams(versionId: string): Promise<SequenceDiagramResponse[]> {
+  public async getSequenceDiagrams(versionId: string): Promise<SequenceDiagramResponse[]> {
     try {
       const diagrams = await SequenceDiagramSchema.find({ version_id: versionId })
         .populate('created_by', 'name email')
         .lean();
-      
+
       // Convert Mongoose documents to SequenceDiagramResponse
       return diagrams.map(diagram => this.mapToSequenceDiagramResponse(diagram));
     } catch (error) {
@@ -125,11 +125,11 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
         .populate('created_by', 'name email')
         .populate('linked_testcases')
         .lean();
-      
+
       if (!diagram) {
         throw new Error('Sequence diagram not found');
       }
-      
+
       return this.mapToSequenceDiagramResponse(diagram);
     } catch (error) {
       console.error('Error getting sequence diagram by id:', error);
@@ -142,7 +142,7 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
       const diagrams = await SequenceDiagramSchema.find({ usecase_ref_id: usecaseId })
         .populate('created_by', 'name email')
         .lean();
-      
+
       return diagrams.map(diagram => this.mapToSequenceDiagramResponse(diagram));
     } catch (error) {
       console.error('Error getting sequence diagrams by usecase:', error);
@@ -174,21 +174,19 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
     } as SequenceDiagramResponse;
   }
   public async deleteSequenceDiagramById(
-    ucId: string,
     sequenceId: string,
     subId: string
   ): Promise<SequenceDiagramResponse> {
-    const sequenceDiagram = await SequenceDiagram.findOne({
-      _id: sequenceId,
-      usecase_ref_id: ucId,
-    });
+    const sequenceDiagram = await SequenceDiagram.findById(sequenceId);
     if (!sequenceDiagram) {
       throw new Error("Sequence Diagram not found.");
     }
+
     const project = await Project.findById(sequenceDiagram?.project_id);
     if (!project) {
       throw new Error("Associated project not found.");
     }
+
     const user = project.members.find(
       (member) => member.user_id.toString() === subId
     );
@@ -200,11 +198,11 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
 
     if (!["owner", "editor"].includes(user.role)) {
       throw new Error(
-        "Unauthorized: Only owner or editor can delete sequence diagrams."
+        "Only owner or editor can delete sequence diagrams."
       );
     }
 
-    await SequenceDiagram.deleteOne({ _id: sequenceId, usecase_ref_id: ucId });
+    await SequenceDiagram.findByIdAndDelete(sequenceId);
     return sequenceDiagram.toObject({
       getters: true,
     }) as SequenceDiagramResponse;

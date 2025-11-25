@@ -78,8 +78,9 @@ export const bulkDeleteDiagrams = (diagramIds) =>
         diagramIds
     });
 
-export const deleteSequenceDiagram = (sqdId) =>
-    axiosClient.delete(`/api/sequence-diagram/${sqdId}`);
+// SỬA API CLIENT - Dùng route chỉ cần sequenceId
+export const deleteSequenceDiagram = (sequenceId) =>
+    axiosClient.delete(`/api/sequence-diagram/${sequenceId}`);
 
 // ==================== VALIDATION API ====================
 export const validateStructure = (sqdId) =>

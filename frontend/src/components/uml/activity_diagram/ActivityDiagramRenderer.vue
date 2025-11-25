@@ -152,6 +152,41 @@
           />
         </g>
 
+        <!-- Swimlanes -->
+        <g class="swimlanes-layer" v-if="showSwimlanes && computedLanes.length > 0">
+          <g v-for="(lane, index) in computedLanes" :key="`lane-${lane.id}`">
+            <!-- Lane background -->
+            <rect
+              :x="getLaneX(index)"
+              :y="virtualSpace.minY"
+              :width="getLaneWidth()"
+              :height="virtualSpace.height"
+              :class="['swimlane-bg', index % 2 === 0 ? 'swimlane-even' : 'swimlane-odd']"
+            />
+
+            <!-- Lane label -->
+            <text
+              :x="getLaneX(index) + getLaneWidth() / 2"
+              :y="virtualSpace.minY + 30"
+              class="swimlane-label"
+              text-anchor="middle"
+              dominant-baseline="middle"
+            >
+              {{ lane.name || `Lane ${index + 1}` }}
+            </text>
+
+            <!-- Lane separator -->
+            <line
+              v-if="index > 0"
+              :x1="getLaneX(index)"
+              :y1="virtualSpace.minY"
+              :x2="getLaneX(index)"
+              :y2="virtualSpace.maxY"
+              class="swimlane-separator"
+            />
+          </g>
+        </g>
+
         <!-- Render Edges -->
         <g class="edges-layer">
           <g v-for="edge in computedEdges" :key="`edge-${edge.id}`" class="edge-group">
@@ -161,14 +196,14 @@
               marker-end="url(#activity-arrow)"
             />
             <text
-              v-if="edge.condition"
+              v-if="getEdgeLabel(edge)"
               :x="getEdgeLabelPosition(edge).x"
               :y="getEdgeLabelPosition(edge).y"
-              class="edge-condition"
+              class="edge-label"
               text-anchor="middle"
               dominant-baseline="middle"
             >
-              [{{ edge.condition }}]
+              {{ getEdgeLabel(edge) }}
             </text>
           </g>
         </g>
@@ -176,7 +211,7 @@
         <!-- Render Nodes -->
         <g class="nodes-layer">
           <g
-            v-for="node in computedNodes"
+            v-for="node in positionedNodes"
             :key="`node-${node.id}`"
             :class="{
               'node-group': true,
@@ -215,15 +250,44 @@
               filter="url(#activity-drop-shadow)"
             />
 
-            <!-- Node Label -->
-            <foreignObject
+            <!-- Fork/Join Nodes -->
+            <rect
+              v-else-if="node.type === 'fork' || node.type === 'join'"
               :x="node.x - node.width / 2"
               :y="node.y - node.height / 2"
               :width="node.width"
               :height="node.height"
+              :class="`activity-node node-${node.type}`"
+              filter="url(#activity-drop-shadow)"
+            />
+
+            <!-- Object Nodes -->
+            <rect
+              v-else-if="node.type === 'object'"
+              :x="node.x - node.width / 2"
+              :y="node.y - node.height / 2"
+              :width="node.width"
+              :height="node.height"
+              rx="8"
+              :class="`activity-node node-${node.type}`"
+              filter="url(#activity-drop-shadow)"
+            />
+
+            <!-- Node Label -->
+            <foreignObject
+              :x="getNodeLabelPosition(node).x"
+              :y="getNodeLabelPosition(node).y"
+              :width="getNodeLabelSize(node).width"
+              :height="getNodeLabelSize(node).height"
               class="node-content"
             >
-              <div class="node-label">
+              <div
+                class="node-label"
+                :class="{
+                  'object-node': node.type === 'object',
+                  'swimlane-node': node.type === 'swimlane',
+                }"
+              >
                 {{ node.label }}
               </div>
             </foreignObject>
@@ -238,7 +302,7 @@
           :width="selectedElement.width + 16"
           :height="selectedElement.height + 16"
           class="selection-highlight"
-          :rx="selectedElement.type === 'action' ? 12 : 8"
+          :rx="getSelectionHighlightRadius(selectedElement)"
         />
 
         <!-- Drag preview -->
@@ -254,7 +318,10 @@
             :class="`activity-node node-${draggingElement.type} drag-preview-element`"
           />
           <rect
-            v-else-if="draggingType === 'node' && draggingElement.type === 'action'"
+            v-else-if="
+              draggingType === 'node' &&
+              (draggingElement.type === 'action' || draggingElement.type === 'object')
+            "
             :x="dragPosition.x - draggingElement.width / 2"
             :y="dragPosition.y - draggingElement.height / 2"
             :width="draggingElement.width"
@@ -272,6 +339,17 @@
             "
             :class="`activity-node node-${draggingElement.type} drag-preview-element`"
           />
+          <rect
+            v-else-if="
+              draggingType === 'node' &&
+              (draggingElement.type === 'fork' || draggingElement.type === 'join')
+            "
+            :x="dragPosition.x - draggingElement.width / 2"
+            :y="dragPosition.y - draggingElement.height / 2"
+            :width="draggingElement.width"
+            :height="draggingElement.height"
+            :class="`activity-node node-${draggingElement.type} drag-preview-element`"
+          />
         </g>
       </svg>
     </div>
@@ -280,7 +358,7 @@
     <div v-if="!previewMode && !optimizeForPreview" class="status-bar">
       <div class="status-item">
         <span class="material-symbols-outlined">circle</span>
-        {{ computedNodes.length }} Nodes
+        {{ positionedNodes.length }} Nodes
       </div>
       <div class="status-item">
         <span class="material-symbols-outlined">arrow_right_alt</span>
@@ -312,6 +390,7 @@ export default {
       default: () => ({
         nodes: [],
         edges: [],
+        lanes: [],
       }),
     },
     onPositionChange: {
@@ -346,6 +425,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    showSwimlanes: {
+      type: Boolean,
+      default: true,
+    },
   },
   data() {
     return {
@@ -366,10 +449,10 @@ export default {
       lastSaved: null,
 
       virtualSpace: {
-        minX: -500,
-        maxX: 1500,
-        minY: -500,
-        maxY: 1500,
+        minX: 0,
+        maxX: 1200,
+        minY: 0,
+        maxY: 800,
         get width() {
           return this.maxX - this.minX
         },
@@ -386,6 +469,11 @@ export default {
 
       // Preview generation
       previewGenerated: false,
+
+      // Layout configuration
+      nodeSpacing: 120,
+      laneHeaderHeight: 60,
+      horizontalSpacing: 200,
     }
   },
   computed: {
@@ -403,7 +491,12 @@ export default {
       return {
         nodes: Array.isArray(this.diagramData?.nodes) ? this.diagramData.nodes : [],
         edges: Array.isArray(this.diagramData?.edges) ? this.diagramData.edges : [],
+        lanes: Array.isArray(this.diagramData?.lanes) ? this.diagramData.lanes : [],
       }
+    },
+
+    computedLanes() {
+      return this.safeDiagramData.lanes
     },
 
     computedNodes() {
@@ -411,19 +504,31 @@ export default {
       if (!nodes || nodes.length === 0) return []
 
       return nodes.map((node, index) => {
-        const position = node.position || { x: 0, y: 0 }
+        // Set dimensions based on node type
+        const { width, height } = this.getNodeSize(node.type)
 
         return {
           id: node.id || `node-${index}`,
           type: node.type || 'action',
           label: node.label || 'Unnamed',
-          x: position.x || this.virtualSpace.centerX - 200 + (index % 4) * 150,
-          y: position.y || this.virtualSpace.centerY - 150 + Math.floor(index / 4) * 120,
-          width: 120,
-          height: 60,
+          lane_id: node.lane_id || null,
+          width: width,
+          height: height,
           _originalData: node,
         }
       })
+    },
+
+    positionedNodes() {
+      if (this.computedNodes.length === 0) return []
+
+      // Tạo bản sao để không làm thay đổi dữ liệu gốc
+      const nodes = JSON.parse(JSON.stringify(this.computedNodes))
+      
+      // Tính toán layout
+      this.calculateNodeLayout(nodes)
+
+      return nodes
     },
 
     computedEdges() {
@@ -432,13 +537,15 @@ export default {
 
       return edges
         .map((edge, index) => {
-          const sourceNode = this.computedNodes.find((n) => n.id === edge.from)
-          const targetNode = this.computedNodes.find((n) => n.id === edge.to)
+          const sourceNode = this.positionedNodes.find((n) => n.id === edge.from)
+          const targetNode = this.positionedNodes.find((n) => n.id === edge.to)
           return {
             id: `edge-${index}`,
             from: edge.from,
             to: edge.to,
             condition: edge.condition,
+            guard: edge.guard,
+            trigger: edge.trigger,
             source: sourceNode,
             target: targetNode,
           }
@@ -481,7 +588,6 @@ export default {
     this.setupFullscreenListener()
     this.centerViewport()
 
-    // Auto generate preview nếu được yêu cầu
     if (this.autoGeneratePreview) {
       this.$nextTick(() => {
         setTimeout(() => {
@@ -500,10 +606,233 @@ export default {
     this.cleanupFullscreenListener()
   },
   methods: {
+    // Thuật toán layout mới cho activity diagram
+    calculateNodeLayout(nodes) {
+      // Xây dựng đồ thị từ edges
+      const graph = this.buildGraph(nodes)
+      
+      // Tìm node start
+      const startNode = nodes.find(node => node.type === 'start')
+      if (!startNode) return
+
+      // Tính toán vị trí theo BFS với xử lý đặc biệt cho decision nodes
+      this.calculatePositionsBFS(nodes, graph, startNode)
+      
+      // Căn chỉnh vị trí theo lanes
+      this.adjustPositionsByLanes(nodes)
+    },
+
+    buildGraph(nodes) {
+      const graph = {}
+      const edges = this.safeDiagramData.edges
+
+      // Khởi tạo graph
+      nodes.forEach(node => {
+        graph[node.id] = { node, children: [], parents: [] }
+      })
+
+      // Thêm edges vào graph
+      edges.forEach(edge => {
+        if (graph[edge.from] && graph[edge.to]) {
+          graph[edge.from].children.push(graph[edge.to])
+          graph[edge.to].parents.push(graph[edge.from])
+        }
+      })
+
+      return graph
+    },
+
+    calculatePositionsBFS(nodes, graph, startNode) {
+      const visited = new Set()
+      const queue = [{ node: graph[startNode.id], depth: 0, horizontalOrder: 0 }]
+      const depthMap = new Map()
+      const horizontalOrders = new Map()
+      let maxDepth = 0
+
+      // BFS để tính depth và horizontal order
+      while (queue.length > 0) {
+        const current = queue.shift()
+        const currentNode = current.node.node
+        
+        if (visited.has(currentNode.id)) continue
+        visited.add(currentNode.id)
+
+        // Lưu depth và horizontal order
+        depthMap.set(currentNode.id, current.depth)
+        horizontalOrders.set(currentNode.id, current.horizontalOrder)
+        maxDepth = Math.max(maxDepth, current.depth)
+
+        // Xử lý đặc biệt cho decision nodes
+        if (currentNode.type === 'decision') {
+          this.layoutDecisionNode(currentNode, current.node.children, current.depth + 1, horizontalOrders)
+        }
+
+        // Thêm children vào queue
+        current.node.children.forEach((child, index) => {
+          if (!visited.has(child.node.id)) {
+            let horizontalOrder = current.horizontalOrder
+            
+            // Điều chỉnh horizontal order cho các nhánh từ decision
+            if (currentNode.type === 'decision') {
+              const condition = this.getEdgeCondition(currentNode.id, child.node.id)
+              if (condition === 'Yes') {
+                horizontalOrder = current.horizontalOrder - 1 // Nhánh Yes sang trái
+              } else if (condition === 'No') {
+                horizontalOrder = current.horizontalOrder + 1 // Nhánh No sang phải
+              }
+            } else {
+              // Các node khác giữ nguyên horizontal order
+              horizontalOrder = current.horizontalOrder + (index - (current.node.children.length - 1) / 2)
+            }
+            
+            queue.push({ 
+              node: child, 
+              depth: current.depth + 1,
+              horizontalOrder: horizontalOrder
+            })
+          }
+        })
+      }
+
+      // Tính toán vị trí thực tế dựa trên depth và horizontal order
+      this.calculateActualPositions(nodes, depthMap, horizontalOrders, maxDepth)
+    },
+
+    layoutDecisionNode(decisionNode, children, depth, horizontalOrders) {
+      if (children.length === 0) return
+
+      // Phân bố các children của decision node
+      children.forEach((child, index) => {
+        const condition = this.getEdgeCondition(decisionNode.id, child.node.id)
+        let horizontalOrder = horizontalOrders.get(decisionNode.id) || 0
+        
+        if (condition === 'Yes') {
+          horizontalOrder = (horizontalOrders.get(decisionNode.id) || 0) - 1
+        } else if (condition === 'No') {
+          horizontalOrder = (horizontalOrders.get(decisionNode.id) || 0) + 1
+        }
+        
+        horizontalOrders.set(child.node.id, horizontalOrder)
+      })
+    },
+
+    getEdgeCondition(fromId, toId) {
+      const edge = this.safeDiagramData.edges.find(edge => 
+        edge.from === fromId && edge.to === toId
+      )
+      return edge ? edge.condition : null
+    },
+
+    calculateActualPositions(nodes, depthMap, horizontalOrders, maxDepth) {
+      // Tìm phạm vi horizontal order để căn chỉnh
+      let minOrder = Infinity
+      let maxOrder = -Infinity
+      
+      horizontalOrders.forEach(order => {
+        minOrder = Math.min(minOrder, order)
+        maxOrder = Math.max(maxOrder, order)
+      })
+
+      // Tính toán vị trí thực tế
+      nodes.forEach(node => {
+        const depth = depthMap.get(node.id) || 0
+        const horizontalOrder = horizontalOrders.get(node.id) || 0
+        
+        // Tính Y theo depth (start trên cùng, end dưới cùng)
+        if (node.type === 'start') {
+          node.y = this.laneHeaderHeight + 50
+        } else if (node.type === 'end') {
+          node.y = this.laneHeaderHeight + 50 + ((maxDepth + 1) * this.nodeSpacing)
+        } else {
+          node.y = this.laneHeaderHeight + 50 + (depth * this.nodeSpacing)
+        }
+
+        // Tính X theo horizontal order
+        const orderRange = maxOrder - minOrder
+        const availableWidth = this.virtualSpace.width - 200 // Padding 100 mỗi bên
+        
+        if (orderRange === 0) {
+          // Chỉ có một cột, căn giữa
+          node.x = this.virtualSpace.width / 2
+        } else {
+          // Phân bố đều theo horizontal order
+          const normalizedOrder = (horizontalOrder - minOrder) / orderRange
+          node.x = 100 + (normalizedOrder * availableWidth)
+        }
+      })
+
+      // Đảm bảo start và end node ở giữa
+      const startNode = nodes.find(node => node.type === 'start')
+      const endNode = nodes.find(node => node.type === 'end')
+      if (startNode) startNode.x = this.virtualSpace.width / 2
+      if (endNode) endNode.x = this.virtualSpace.width / 2
+    },
+
+    adjustPositionsByLanes(nodes) {
+      if (this.computedLanes.length === 0) return
+
+      const laneWidth = this.virtualSpace.width / this.computedLanes.length
+      
+      nodes.forEach(node => {
+        const laneIndex = this.computedLanes.findIndex(lane => lane.id === node.lane_id)
+        if (laneIndex !== -1) {
+          // Giới hạn node trong lane của nó, nhưng vẫn giữ vị trí tương đối
+          const laneCenter = (laneIndex * laneWidth) + (laneWidth / 2)
+          const laneMinX = laneIndex * laneWidth + 50
+          const laneMaxX = (laneIndex + 1) * laneWidth - 50
+          
+          node.x = Math.max(laneMinX, Math.min(laneMaxX, node.x))
+          
+          // Nếu node bị giới hạn, điều chỉnh để gần với center hơn
+          if (node.x === laneMinX || node.x === laneMaxX) {
+            node.x = laneCenter
+          }
+        }
+      })
+    },
+
+    // Node sizing
+    getNodeSize(type) {
+      switch (type) {
+        case 'start':
+        case 'end':
+          return { width: 40, height: 40 }
+        case 'action':
+        case 'object':
+          return { width: 120, height: 60 }
+        case 'decision':
+        case 'merge':
+          return { width: 80, height: 80 }
+        case 'fork':
+        case 'join':
+          return { width: 100, height: 20 }
+        case 'swimlane':
+          return { width: 300, height: 400 }
+        default:
+          return { width: 120, height: 60 }
+      }
+    },
+
+    // Lane positioning
+    getLaneX(index) {
+      const laneCount = Math.max(this.computedLanes.length, 1)
+      return this.virtualSpace.minX + index * (this.virtualSpace.width / laneCount)
+    },
+
+    getLaneWidth() {
+      return this.virtualSpace.width / Math.max(this.computedLanes.length, 1)
+    },
+
     // Virtual Space Management
     updateVirtualSpace() {
-      const allElements = [...this.computedNodes]
-      if (allElements.length === 0) return
+      const allElements = [...this.positionedNodes]
+      if (allElements.length === 0) {
+        this.virtualSpace.minX = 0
+        this.virtualSpace.maxX = this.containerWidth
+        this.virtualSpace.minY = 0
+        this.virtualSpace.maxY = this.containerHeight
+        return
+      }
 
       const bounds = allElements.reduce(
         (acc, element) => ({
@@ -515,7 +844,7 @@ export default {
         { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
       )
 
-      const padding = 200
+      const padding = 100
       this.virtualSpace.minX = Math.min(this.virtualSpace.minX, bounds.minX - padding)
       this.virtualSpace.maxX = Math.max(this.virtualSpace.maxX, bounds.maxX + padding)
       this.virtualSpace.minY = Math.min(this.virtualSpace.minY, bounds.minY - padding)
@@ -532,6 +861,12 @@ export default {
     // Node and Edge Methods
     calculateEdgePath(edge) {
       const { source, target } = edge
+      
+      // Xử lý đặc biệt cho edges từ decision node
+      if (source.type === 'decision') {
+        return this.calculateDecisionEdgePath(edge)
+      }
+      
       const dx = target.x - source.x
       const dy = target.y - source.y
       const length = Math.sqrt(dx * dx + dy * dy)
@@ -548,10 +883,44 @@ export default {
       return `M ${startX} ${startY} L ${endX} ${endY}`
     },
 
+    calculateDecisionEdgePath(edge) {
+      const { source, target, condition } = edge
+      const startOffset = this.getNodeOffset(source, 0, 1) // Xuống từ đáy
+      
+      let startX = source.x
+      let startY = source.y + startOffset
+      
+      let endX = target.x
+      let endY = target.y - this.getNodeOffset(target, 0, -1) // Vào từ trên
+
+      // Điều chỉnh cho Yes/No branches
+      if (condition === 'Yes') {
+        // Yes branch - cong sang trái
+        const controlX1 = source.x - this.horizontalSpacing / 3
+        const controlY1 = startY + (endY - startY) * 0.3
+        const controlX2 = target.x - this.horizontalSpacing / 3
+        const controlY2 = endY - (endY - startY) * 0.3
+        return `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
+      } else if (condition === 'No') {
+        // No branch - cong sang phải
+        const controlX1 = source.x + this.horizontalSpacing / 3
+        const controlY1 = startY + (endY - startY) * 0.3
+        const controlX2 = target.x + this.horizontalSpacing / 3
+        const controlY2 = endY - (endY - startY) * 0.3
+        return `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
+      }
+
+      // Mặc định đường thẳng
+      return `M ${startX} ${startY} L ${endX} ${endY}`
+    },
+
     getNodeOffset(node, nx, ny) {
       if (node.type === 'start' || node.type === 'end') {
         return 20
-      } else if (node.type === 'action') {
+      } else if (node.type === 'decision' || node.type === 'merge') {
+        const size = 40
+        return Math.abs(nx * size) + Math.abs(ny * size)
+      } else if (['action', 'object', 'fork', 'join'].includes(node.type)) {
         const rx = node.width / 2
         const ry = node.height / 2
         if (nx === 0) return ry
@@ -561,28 +930,83 @@ export default {
         const cosAngle = Math.cos(angle)
         const sinAngle = Math.sin(angle)
         return Math.sqrt((rx * cosAngle) ** 2 + (ry * sinAngle) ** 2)
-      } else if (node.type === 'decision' || node.type === 'merge') {
-        const size = 25
-        return Math.abs(nx * size) + Math.abs(ny * size)
       }
       return 30
     },
 
+    getEdgeLabel(edge) {
+      if (edge.guard) return `[${edge.guard}]`
+      if (edge.trigger) return `/${edge.trigger}`
+      if (edge.condition) return `[${edge.condition}]`
+      return ''
+    },
+
     getEdgeLabelPosition(edge) {
       const { source, target } = edge
+      
+      if (source.type === 'decision') {
+        // Đặt label ở vị trí cong cho decision edges
+        const midY = (source.y + target.y) / 2
+        let midX
+        if (edge.condition === 'Yes') {
+          midX = source.x - this.horizontalSpacing / 3
+        } else if (edge.condition === 'No') {
+          midX = source.x + this.horizontalSpacing / 3
+        } else {
+          midX = (source.x + target.x) / 2
+        }
+        return { x: midX, y: midY }
+      }
+      
       const midX = (source.x + target.x) / 2
       const midY = (source.y + target.y) / 2
       return { x: midX, y: midY - 10 }
     },
 
     getDecisionPoints(node) {
-      const size = 25
+      const size = 40
       return `
         ${node.x},${node.y - size}
         ${node.x + size},${node.y}
         ${node.x},${node.y + size}
         ${node.x - size},${node.y}
       `
+    },
+
+    getNodeLabelPosition(node) {
+      if (node.type === 'fork' || node.type === 'join') {
+        return {
+          x: node.x - node.width / 2,
+          y: node.y + node.height / 2 + 5,
+        }
+      }
+      return {
+        x: node.x - node.width / 2,
+        y: node.y - node.height / 2,
+      }
+    },
+
+    getNodeLabelSize(node) {
+      if (node.type === 'fork' || node.type === 'join') {
+        return {
+          width: node.width,
+          height: 20,
+        }
+      }
+      return {
+        width: node.width,
+        height: node.height,
+      }
+    },
+
+    getSelectionHighlightRadius(node) {
+      switch (node.type) {
+        case 'action':
+        case 'object':
+          return 12
+        default:
+          return 8
+      }
     },
 
     // Drag and Drop
@@ -795,7 +1219,7 @@ export default {
     },
 
     fitToViewport() {
-      const allElements = [...this.computedNodes]
+      const allElements = [...this.positionedNodes]
       if (allElements.length === 0) return
 
       const bounds = allElements.reduce(
@@ -861,7 +1285,7 @@ export default {
       return new Promise((resolve) => {
         setTimeout(async () => {
           try {
-            const allElements = [...this.computedNodes]
+            const allElements = [...this.positionedNodes]
             if (allElements.length === 0) {
               resolve(null)
               return
@@ -929,55 +1353,118 @@ export default {
   <rect x="${bounds.minX - padding}" y="${bounds.minY - padding}" 
         width="${contentWidth}" height="${contentHeight}" fill="white" />
 
+  <!-- Render Swimlanes -->
+  ${this.computedLanes
+    .map((lane, index) => {
+      const laneX = this.getLaneX(index) - bounds.minX + padding
+      const laneWidth = this.getLaneWidth()
+      const laneName = lane.name || `Lane ${index + 1}`
+
+      return `
+      <rect x="${laneX}" y="${padding}" 
+            width="${laneWidth}" height="${contentHeight - padding * 2}"
+            fill="${index % 2 === 0 ? '#f8fafc' : '#ffffff'}" 
+            stroke="#e5e7eb" stroke-width="1" />
+      <text x="${laneX + laneWidth / 2}" y="${padding + 30}" 
+            font-size="14" font-weight="600" fill="#6b7280" 
+            text-anchor="middle" dominant-baseline="middle">
+        ${laneName}
+      </text>
+      ${
+        index > 0
+          ? `<line x1="${laneX}" y1="${padding}" x2="${laneX}" y2="${
+              contentHeight - padding
+            }" stroke="#e5e7eb" stroke-width="1" />`
+          : ''
+      }
+    `
+    })
+    .join('')}
+
   <!-- Render Edges -->
   ${this.computedEdges
     .map((edge) => {
       const path = this.calculateEdgePath(edge)
-      const labelContent = edge.condition
-        ? `<text x="${this.getEdgeLabelPosition(edge).x}" y="${
-            this.getEdgeLabelPosition(edge).y
-          }" font-size="10" fill="#6b7280" text-anchor="middle" dominant-baseline="middle">[${
-            edge.condition
-          }]</text>`
+      const labelContent = this.getEdgeLabel(edge)
+        ? `<text x="${this.getEdgeLabelPosition(edge).x - bounds.minX + padding}" y="${
+            this.getEdgeLabelPosition(edge).y - bounds.minY + padding
+          }" font-size="10" fill="#6b7280" text-anchor="middle" dominant-baseline="middle">${this.getEdgeLabel(
+            edge
+          )}</text>`
         : ''
 
       return `
-        <path d="${path}" stroke="#374151" stroke-width="2" fill="none" marker-end="url(#activity-arrow-preview)" />
+        <path d="${this.adjustPathForExport(path, bounds, padding)}" 
+              stroke="#374151" stroke-width="2" fill="none" 
+              marker-end="url(#activity-arrow-preview)" />
         ${labelContent}
       `
     })
     .join('')}
 
   <!-- Render Nodes -->
-  ${this.computedNodes
+  ${this.positionedNodes
     .map((node) => {
+      const x = node.x - bounds.minX + padding
+      const y = node.y - bounds.minY + padding
+
       if (node.type === 'start' || node.type === 'end') {
         return `
-          <circle cx="${node.x}" cy="${node.y}" r="20" 
+          <circle cx="${x}" cy="${y}" r="20" 
                   fill="${node.type === 'start' ? '#10b981' : '#ef4444'}" 
                   stroke="${node.type === 'start' ? '#047857' : '#dc2626'}" 
                   stroke-width="2" />
+          <text x="${x}" y="${y}" font-size="12" fill="white" 
+                text-anchor="middle" dominant-baseline="middle" font-weight="bold">
+            ${node.type === 'start' ? 'Start' : 'End'}
+          </text>
         `
       } else if (node.type === 'action') {
         return `
-          <rect x="${node.x - node.width / 2}" y="${node.y - node.height / 2}" 
+          <rect x="${x - node.width / 2}" y="${y - node.height / 2}" 
                 width="${node.width}" height="${node.height}" rx="8"
                 fill="white" stroke="#3b82f6" stroke-width="2" />
-          <text x="${node.x}" y="${node.y}" font-size="12" fill="#1e40af" 
+          <text x="${x}" y="${y}" font-size="12" fill="#1e40af" 
                 text-anchor="middle" dominant-baseline="middle">${node.label}</text>
         `
       } else if (node.type === 'decision' || node.type === 'merge') {
-        const points = this.getDecisionPoints(node)
+        const points = this.getDecisionPoints({ ...node, x, y })
         return `
           <polygon points="${points}" fill="white" stroke="#8b5cf6" stroke-width="2" />
-          <text x="${node.x}" y="${node.y}" font-size="12" fill="#6b21a8" 
+          <text x="${x}" y="${y}" font-size="12" fill="#6b21a8" 
                 text-anchor="middle" dominant-baseline="middle">${node.label}</text>
+        `
+      } else if (node.type === 'fork' || node.type === 'join') {
+        return `
+          <rect x="${x - node.width / 2}" y="${y - node.height / 2}" 
+                width="${node.width}" height="${node.height}"
+                fill="#6b7280" stroke="#374151" stroke-width="2" />
+          <text x="${x}" y="${y + node.height / 2 + 15}" font-size="10" fill="#374151" 
+                text-anchor="middle" dominant-baseline="middle">${node.label}</text>
+        `
+      } else if (node.type === 'object') {
+        return `
+          <rect x="${x - node.width / 2}" y="${y - node.height / 2}" 
+                width="${node.width}" height="${node.height}" rx="8"
+                fill="white" stroke="#f59e0b" stroke-width="2" />
+          <text x="${x}" y="${y}" font-size="12" fill="#92400e" 
+                text-anchor="middle" dominant-baseline="middle" text-decoration="underline">${
+                  node.label
+                }</text>
         `
       }
       return ''
     })
     .join('')}
 </svg>`
+    },
+
+    adjustPathForExport(path, bounds, padding) {
+      return path.replace(/(M|L) (\d+) (\d+)/g, (match, command, x, y) => {
+        const adjustedX = parseInt(x) - bounds.minX + padding
+        const adjustedY = parseInt(y) - bounds.minY + padding
+        return `${command} ${adjustedX} ${adjustedY}`
+      })
     },
 
     regeneratePreview() {
@@ -997,7 +1484,7 @@ export default {
       try {
         this.isExporting = true
 
-        const allElements = [...this.computedNodes]
+        const allElements = [...this.positionedNodes]
         if (allElements.length === 0) {
           alert('No content to export!')
           return
@@ -1073,7 +1560,7 @@ export default {
     },
 
     exportAsSVG() {
-      const allElements = [...this.computedNodes]
+      const allElements = [...this.positionedNodes]
       if (allElements.length === 0) {
         alert('No content to export!')
         return
@@ -1380,6 +1867,19 @@ export default {
   stroke-width: 2;
 }
 
+.node-fork,
+.node-join {
+  fill: #6b7280;
+  stroke: #374151;
+  stroke-width: 2;
+}
+
+.node-object {
+  fill: white;
+  stroke: #f59e0b;
+  stroke-width: 2;
+}
+
 .node-label {
   font-size: 12px;
   font-weight: 500;
@@ -1389,6 +1889,17 @@ export default {
   justify-content: center;
   height: 100%;
   pointer-events: none;
+  word-break: break-word;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.object-node {
+  text-decoration: underline;
+}
+
+.swimlane-node {
+  font-weight: bold;
 }
 
 /* Edge Styles */
@@ -1398,9 +1909,39 @@ export default {
   fill: none;
 }
 
-.edge-condition {
+.edge-label {
   font-size: 10px;
   fill: #6b7280;
+}
+
+/* Swimlane Styles */
+.swimlanes-layer {
+  pointer-events: none;
+}
+
+.swimlane-bg {
+  fill: transparent;
+}
+
+.swimlane-even {
+  fill: rgba(243, 244, 246, 0.5);
+}
+
+.swimlane-odd {
+  fill: rgba(249, 250, 251, 0.5);
+}
+
+.swimlane-label {
+  font-size: 14px;
+  font-weight: 600;
+  fill: #6b7280;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.swimlane-separator {
+  stroke: #d1d5db;
+  stroke-width: 2;
 }
 
 /* Canvas Boundary */

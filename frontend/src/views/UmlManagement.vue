@@ -1263,7 +1263,7 @@ export default {
       } catch (err) {
         console.error('Error deleting diagram:', err)
         this.toast.error(
-          'Failed to delete diagram: ' + (err.response?.data?.message || err.message)
+          (err.response?.data?.message || err.message)
         )
       } finally {
         if (deleteButton) {

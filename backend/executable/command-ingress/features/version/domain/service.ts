@@ -16,6 +16,9 @@ import { ServiceResponse, ResponseStatus } from "../../../services/serviceRespon
 import { versionSocketService } from "./version.socket.service";
 import {PreviewChangeDto} from "../adapter/preview.dto";
 import { randomUUID } from "crypto";
+import version from '../../../../../internal/model/version';
+import project from '../../../../../internal/model/project';
+import preview from '../../../../../internal/model/preview';
 
 
 export class VersionService {
@@ -104,32 +107,17 @@ export class VersionService {
    * - If minor → finalize temporary version
    * - If major → finalize temporary version and bump major (+1.0)
    */
-  public async approve(
-    baseVersionId: string,
-    userId: string,
-    changeType: "major" | "minor",
-    comment?: string
-  ) {
+  public async approve(baseVersionId: string,userId: string,changeType: "major" | "minor",comment?: string) {
     try {
       // ✅ Lấy baseVersion (bây giờ chính là version tạm)
       const baseVersion = await Version.findById(baseVersionId);
       if (!baseVersion) {
-        return new ServiceResponse(
-          ResponseStatus.Failed,
-          "Base version not found",
-          null,
-          404
-        );
+        return new ServiceResponse(ResponseStatus.Failed,"Base version not found",null,404);
       }
 
       const preview = await Preview.findOne({ base_version_id: baseVersionId });
       if (!preview) {
-        return new ServiceResponse(
-          ResponseStatus.Failed,
-          "Preview not found",
-          null,
-          404
-        );
+        return new ServiceResponse(ResponseStatus.Failed,"Preview not found",null,404);
       }
 
       // ✅ Check owner
@@ -143,12 +131,7 @@ export class VersionService {
       );
 
       if (!isOwner) {
-        return new ServiceResponse(
-          ResponseStatus.Failed,
-          "Only project owner can approve this preview",
-          null,
-          403
-        );
+        return new ServiceResponse(ResponseStatus.Failed,"Only project owner can approve this preview",null,403);
       }
 
       // ✅ update approver log
@@ -170,7 +153,12 @@ export class VersionService {
 
       // ✅ Chuyển version tạm thành version chính thức
       baseVersion.version_temporary = false;
-
+      versionSocketService.emitVersionCreated(
+        baseVersion.project_id.toString(),
+        userId,
+        baseVersionId,
+        baseVersion
+      );
       await baseVersion.save();
 
       // ✅ update preview
@@ -349,24 +337,7 @@ export class VersionService {
 
       await session.commitTransaction();
 
-      return new ServiceResponse(
-        ResponseStatus.Success,
-        "New version created with cloned entities",
-        {
-          newVersion,
-          idMaps: {
-            inputMap,
-            dbMap,
-            tcMap,
-            umlMap,
-            usecaseUMLmap,
-            activityUMLmap,
-            sequenceUMLmap
-          }
-        },
-        201
-      );
-
+      return new ServiceResponse(ResponseStatus.Success,"New version created with cloned entities",{newVersion,idMaps: {inputMap,dbMap,tcMap,umlMap,usecaseUMLmap,activityUMLmap,sequenceUMLmap}},201);
     } catch (e: any) {
       await session.abortTransaction();
       return new ServiceResponse(ResponseStatus.Failed, e.message, null, 500);
@@ -559,7 +530,52 @@ export class VersionService {
             }], { session });
           }
         }
-      } else if (entityType === 'testcase') {
+      }else if (entityType === "table") {
+        const db = await Database.findOne({
+          _id: entityId,
+          version_id: baseVersion._id,
+        }).session(session);
+        // 1️⃣ TABLE ADDED → Rollback = xóa table đã thêm
+        if (changeType === "added") {
+          console.log(`[Table][Added] Removing newly added table: ${after?.name}`);
+
+          if (after?.name) {
+            await Database.updateOne(
+              { _id: db._id, version_id: baseVersion._id },
+              { $pull: { tables: { name: after.name } } }
+            ).session(session);
+          }
+        }
+
+        // 2️⃣ TABLE UPDATED → Rollback = khôi phục bảng trước khi update
+        else if (changeType === "updated") {
+          console.log(`[Table][Updated] Restoring table state: ${before?.name}`);
+
+          if (before?.name) {
+            await Database.updateOne(
+              {
+                _id: db._id,
+                version_id: baseVersion._id,
+                "tables.name": before.name,
+              },
+              { $set: { "tables.$": before } }
+            ).session(session);
+          }
+        }
+
+        // 3️⃣ TABLE DELETED → Rollback = chèn lại bảng đã bị xóa
+        else if (changeType === "deleted") {
+          console.log(`[Table][Deleted] Re-inserting deleted table: ${before?.name}`);
+
+          if (before) {
+            await Database.updateOne(
+              { _id: db._id, version_id: baseVersion._id },
+              { $push: { tables: before } }
+            ).session(session);
+          }
+        }
+      }
+       else if (entityType === 'testcase') {
         if (changeType === 'added') {
           console.log(`[Testcase][Added] Deleting Testcase + related Outputs`);
           if (entityId) {
@@ -691,28 +707,19 @@ export class VersionService {
       } else if (entityType === 'requirement') {
         if (changeType === 'added') {
           const reqs = baseVersion.requirement_model?.toObject?.() || baseVersion.requirement_model || [];
-          // Bước 1: Xác định vị trí cần chèn (theo index cũ nếu có)
-          const oldId = before.id; // e.g. "UC3"
+          const oldId = before.id;
           const oldIndex = parseInt(oldId.replace(/^UC/, "")) - 1;
-
-          // Bước 2: Chèn requirement vào vị trí cũ
           reqs.splice(oldIndex, 0, before);
-
-          // Bước 3: Normalize ID lại (UC1, UC2, ...) theo thứ tự mới
           const normalized = reqs.map((uc: any, index: number) => ({
             ...uc,
             id: `UC${index + 1}`
           }));
-
-          // Bước 4: Tạo map oldId → newId
           const idMap = new Map<string, string>();
           for (let i = 0; i < reqs.length; i++) {
             const oldId = reqs[i].id;
             const newId = normalized[i].id;
             if (oldId && newId) idMap.set(oldId, newId);
           }
-
-          // Bước 5: Cập nhật related_usecases
           const synced = normalized.map((uc: any) => {
             if (Array.isArray(uc.related_usecases) && uc.related_usecases.length > 0) {
               uc.related_usecases = uc.related_usecases
@@ -721,8 +728,6 @@ export class VersionService {
             }
             return uc;
           });
-
-          // Bước 6: Cập nhật version
           baseVersion.set("requirement_model", synced);
           baseVersion.updated_at = new Date();
           baseVersion.affects_requirement = true;
@@ -739,9 +744,8 @@ export class VersionService {
           }
         }
       }
-      // Tương tự cho các entity khác: database, testcase, uml, diagram, output, requirement
-      // Bạn có thể copy nguyên logic từ for-loop vào đây
-
+      preview.changes.pull({ change_id: changeId });
+      await preview.save({ session });
       await baseVersion.save({ session });
       await session.commitTransaction();
 
@@ -819,6 +823,69 @@ export class VersionService {
       );
     } catch (error: any) {
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
+    }
+  }
+
+  public async rollbackVersion(versionId: string, userId: string) {
+    try {
+      const version = await Version.findById(versionId);
+      if (!version) {
+        return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+      }
+      const parentVersionId = version.parent_version_id;
+      const parentVersion = await Version.findById(parentVersionId);
+      if (!parentVersion) {
+        return new ServiceResponse(ResponseStatus.Failed,"Parent version not found", null,404);
+      }
+      // 🔍 2. Tìm preview gắn với version này
+      const preview = await Preview.findOne({ target_version_id: versionId });
+      if (!preview) {
+        return new ServiceResponse(ResponseStatus.Failed,"Preview not found",null,404);
+      }
+      // 🔍 3. Tìm approver của user này
+      const approver = preview.approvers.find(a => a.user_id.toString() === userId);
+      if (!approver) {
+        return new ServiceResponse(ResponseStatus.Failed,"You are not an approver of this preview",null,403);
+      }
+      // 4️⃣ Đánh dấu user này rollback
+      approver.status = "rollback";
+      approver.approved_at = new Date();
+      await preview.save();
+      // 5️⃣ Kiểm tra TẤT CẢ đã rollback chưa?
+      const allRollback = preview.approvers.every(a => a.status === "rollback");
+      if (!allRollback) {
+        // Một số người rollback → chờ người khác
+        return new ServiceResponse(ResponseStatus.Success,"Rollback submitted, waiting for other approvers",{ preview_status: "partial_rollback" },200);
+      }
+      // ================================
+      // 🎯 6️⃣ TẤT CẢ APPROVERS ĐÃ ROLLBACK → THỰC HIỆN ROLLBACK VERSION
+      // ================================
+      const project = await Project.findById(version.project_id);
+      if (!project) {
+        return new ServiceResponse(ResponseStatus.Failed, "Project not found", null, 404);
+      }
+      const oldVersionId = project.current_version?.toString() || "";
+      // Set current version về parent
+      project.current_version = new mongoose.Types.ObjectId(parentVersionId);
+      await project.save();
+      await Input.deleteMany({ version_id: versionId });
+      await Output.deleteMany({ version_id: versionId });
+      await Preview.deleteOne({ base_version_id: versionId });
+      await Version.deleteOne({ _id: versionId });
+      // Xoá version con
+      await Version.deleteOne({ _id: versionId });
+      // Xoá preview
+      await preview.deleteOne();
+      // Emit
+      versionSocketService.emitVersionSwitched(
+        project._id.toString(),
+        userId,
+        parentVersionId.toString(),
+        oldVersionId
+      );
+      return new ServiceResponse(ResponseStatus.Success,"Rollback completed by all approvers",null,200);
+    } catch (err) {
+      throw err;
     }
   }
 }

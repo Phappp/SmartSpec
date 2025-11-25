@@ -12,14 +12,23 @@ MÔ HÌNH YÊU CẦU:
 ${requirementModelJson}
 
 **QUAN TRỌNG:**
+- Activity diagram đúng chuẩn là : sơ đồ mô tả luồng hoạt động (workflow) hoặc luồng nghiệp vụ (business flow) bằng cách biểu diễn các hành động, 
+quyết định, rẽ nhánh, song song và kết thúc của một quy trình. Nó cho thấy thứ tự các bước, ai thực hiện, điều kiện xảy ra, và cách các dòng chảy 
+hợp nhất trở lại.
 - Giữ response CÀNG NGẮN GỌN CÀNG TỐT, chỉ bao gồm các nodes và edges thực sự cần thiết.
 - KHÔNG thêm ví dụ, giải thích, hoặc nội dung thừa.
 - Ưu tiên thiết kế đơn giản, hiệu quả, tuân thủ chuẩn UML.
 - *KHÔNG được trả về mảng trực tiếp*.
 **QUY TẮC VÀ LOGIC THIẾT KẾ CHUẨN UML:**
 1. **NODE TYPES BẮT BUỘC:**
-   - Phải có **đúng 1** node type **"start"** và **đúng 1** node type **"end"**
-   - Hỗ trợ đầy đủ node types: "start", "end", "action", "decision", "merge", "fork", "join", "object", "swimlane".
+   - Phải có 1 start và 1 end.
+   - Mọi action phải nằm trong một lane.
+   - Decision luôn phải có điều kiện trên các nhánh đi ra.
+   - Merge phải được dùng để đóng các nhánh phát sinh từ decision.
+   - Edges phải tạo luồng liên tục từ start → end.
+   - Không được tạo các node “cô lập” không liên kết.
+   - Chỉ decision mới được phép có “condition”.
+   - Action không được có quá nhiều nhánh đi ra (1 hoặc 2 nếu có exception).
 2. **CẤU TRÚC VÀ TÍNH DUY NHẤT:**
    - **ID** của node phải là **string duy nhất** trong toàn bộ sơ đồ.
    - **Edges** phải đảm bảo luồng hoạt động **liên tục** từ 'start' đến 'end'.
@@ -126,14 +135,23 @@ REQUIREMENT MODEL:
 ${requirementModelJson}
 
 **IMPORTANT:**
-- Keep the response AS SHORT AS POSSIBLE, only include the nodes and edges that are really needed.
-- DO NOT add examples, explanations, or extra content.
+- A standard activity diagram is: a diagram that describes the workflow or business flow by representing the actions,
+decisions, branches, parallelism, and termination of a process. It shows the order of steps, who performs them, what conditions occur, and how the flows
+reconcile back.
+- Keep the response AS SHORT AS POSSIBLE, including only the nodes and edges that are truly necessary.
+- DO NOT add examples, explanations, or redundant content.
 - Prioritize simple, efficient, UML-compliant designs.
 - *DO NOT return arrays directly*.
-**UML DESIGN RULES AND LOGIC:**
+**UML STANDARD DESIGN RULES AND LOGIC:**
 1. **REQUIRED NODE TYPES:**
-- Must have **exactly 1** node type **"start"** and **exactly 1** node type **"end"**
-- Supported node types: "start", "end", "action", "decision", "merge", "fork", "join", "object", "swimlane".
+- Must have 1 start and 1 end.
+- Every action must be in a lane.
+- Decision must always have conditions on outgoing branches.
+- Merge must be used to close branches arising from decision.
+- Edges must create a continuous flow from start → end.
+- Do not create “isolated” nodes that are not connected.
+- Only decisions are allowed to have “conditions”.
+- Actions must not have too many outgoing branches (1 or 2 if there is an exception).
 2. **STRUCTURE AND UNIQUENESS:**
 - The **ID** of a node must be a **unique string** in the entire diagram.
 - **Edges** must ensure a **continuous** flow of operations from 'start' to 'end'.

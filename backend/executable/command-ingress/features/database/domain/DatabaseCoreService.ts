@@ -23,7 +23,8 @@ export class DatabaseCoreService {
     }
 
     public async generateSchemaFromRequirements(userId:string, payload: GenerateDatabasePayload) {
-        const { versionId, projectId, requirements } = payload;
+        const {projectId, requirements } = payload;
+        let  versionId = payload.versionId;
 
         if (!requirements || requirements.length === 0) {
             throw new Error("Không có requirements để sinh database.");
@@ -48,6 +49,7 @@ export class DatabaseCoreService {
 
             version = bumpRes.data.newVersion;
             payload.versionId = version._id.toString(); // update versionId
+            versionId = version._id.toString();
         }
         const databaseSchema = await this.geminiService.generateDatabaseSchema(requirements, 'vi-VN');
 

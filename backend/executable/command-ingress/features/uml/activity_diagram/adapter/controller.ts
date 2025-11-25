@@ -19,13 +19,13 @@ export class ActivityDiagramController {
         return;
       }
       const { versionId, requirementId } = req.params as { [k: string]: string };
-      const { language} = req.query as { [k: string]: string };
+      const { language } = req.query as { [k: string]: string };
       if (!versionId || !requirementId) {
         res.status(400).json({ message: 'versionId và requirementId là bắt buộc.' });
         return;
       }
       const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
-      const result = await this.service.generateFromUsecase(requirementId, lang, versionId,userId);
+      const result = await this.service.generateFromUsecase(requirementId, lang, versionId, userId);
       res.status(201).json({ message: 'Tạo activity diagram từ usecase thành công!', data: result });
     } catch (err) {
       next(err);
@@ -39,24 +39,24 @@ export class ActivityDiagramController {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
         return;
       }
-      const { versionId,actor } = req.params as { [k: string]: string };
+      const { versionId, actor } = req.params as { [k: string]: string };
       const { language } = req.query as { [k: string]: string };
       if (!versionId || !actor) {
         res.status(400).json({ message: 'versionId và actor là bắt buộc.' });
         return;
       }
       const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
-      const result = await this.service.generateFromActor(versionId, actor, lang,userId);
+      const result = await this.service.generateFromActor(versionId, actor, lang, userId);
       res.status(201).json({ message: 'Tạo activity diagram từ actor thành công!', data: result });
     } catch (err) {
       next(err);
     }
   }
 
-  
+
   public getListActivityDiagram = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const {versionId} = req.params;
+      const { versionId } = req.params;
       const result = await this.service.getListActivityDiagram(versionId);
       res.status(200).json({ data: result });
     } catch (err) {
@@ -92,18 +92,64 @@ export class ActivityDiagramController {
     try {
       const { activityDiagramId } = req.params;
       const pngBuffer = await this.service.export(activityDiagramId);
-      
+
       if (!pngBuffer) {
         res.status(404).json({ message: 'Không thể tạo PNG cho activity diagram.' });
         return;
       }
-      
+
       res.status(200)
         .type('image/png')
         .setHeader('Content-Disposition', `attachment; filename="activity-diagram-${activityDiagramId}.png"`)
         .send(pngBuffer);
     } catch (err) {
       next(err);
+    }
+  }
+
+  public deleteActivityDiagram = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.getSubject();
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+        return;
+      }
+
+      const { activityDiagramId } = req.params;
+      const { ids } = req.body;
+
+      if (!activityDiagramId && !ids) {
+        res.status(400).json({ message: 'No Activity Diagram found to delete' });
+        return;
+      }
+
+      const idToDelete = activityDiagramId || ids;
+
+      const result = await this.service.deleteActivityDiagram(idToDelete, userId);
+
+      if (result.deletedCount === 0) {
+        res.status(404).json({ message: 'No Activity Diagram found to delete' });
+        return;
+      }
+
+      res.status(200).json({
+        message: 'Activity diagram deleted Successfully',
+        deletedCount: result.deletedCount
+      });
+    } catch (err: any) {
+      // Xử lý lỗi cụ thể mà không in ra console
+      if (err.message.includes('owner') || err.message.includes('editor')) {
+        res.status(403).json({
+          message: 'Only owner or editor can delete usecase diagrams'
+        });
+      } else if (err.message.includes('Unauthorized')) {
+        res.status(403).json({
+          message: 'Unauthorized - User is not a member of this project'
+        });
+      } else {
+        // Chuyển lỗi khác đến error handler chung
+        next(err);
+      }
     }
   }
 }
