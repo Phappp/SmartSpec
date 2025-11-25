@@ -1,6 +1,7 @@
 // src/features/database/domain/service.ts
 
 import UsecaseDiagramSchema from "../../../../../../internal/model/usecase_diagram";
+import Project from "../../../../../../internal/model/project";
 import { UsecaseDiagramGeminiService } from "../domain/GeminiService";
 import {
   GenerateUsecaseDiagrambasePayload,
@@ -440,16 +441,32 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     return this.getUsecaseDiagramsById(ucId);
   }
   public async deleteUsecaseDiagram(ucId: string, userId: string): Promise<void> {
-    // Kiểm tra user có tồn tại không (tuỳ chọn)
-    const user = await new UserServiceImpl().getUserById(userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
-
     // Kiểm tra usecase diagram có tồn tại không
     const ucd = await UsecaseDiagramSchema.findOne({ _id: ucId });
     if (!ucd) {
       throw new Error("Usecase Diagram not found");
+    }
+
+    // Lấy project từ usecase diagram
+    const project = await Project.findById(ucd.project_id);
+    if (!project) {
+      throw new Error("Associated project not found");
+    }
+
+    // Kiểm tra quyền user trong project
+    const userMember = project.members.find(
+      (member: any) => member.user_id.toString() === userId
+    );
+
+    console.log("User attempting deletion:", userMember);
+
+    if (!userMember || userMember.status !== "accepted") {
+      throw new Error("Unauthorized - User is not a member of this project");
+    }
+
+    // Chỉ cho phép owner hoặc editor xóa
+    if (!["owner", "editor"].includes(userMember.role)) {
+      throw new Error("Only owner or editor can delete usecase diagrams");
     }
 
     // Thực hiện xóa
