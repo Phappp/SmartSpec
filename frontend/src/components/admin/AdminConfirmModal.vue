@@ -135,259 +135,316 @@ const handleConfirm = () => {
 </script>
 
 <style scoped>
+/* ======================
+   Overlay
+   ====================== */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background: rgba(2, 6, 23, 0.55); /* tối nhẹ cho contrast tốt */
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   z-index: 1000;
   padding: 20px;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: modal-fade 180ms ease;
 }
 
+/* ======================
+   Modal shell
+   ====================== */
 .modal-content.confirm-modal {
-  max-width: 500px;
-  width: 90%;
-}
-
-.modal-header {
-  padding: 24px;
+  width: 100%;
+  max-width: 520px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 14px 40px rgba(12, 18, 30, 0.18);
+  overflow: hidden;
   display: flex;
+  flex-direction: column;
+  animation: modal-pop 200ms cubic-bezier(.2,.9,.3,1);
+  color: #0f1724;
+  min-height: 120px;
+}
+
+/* ======================
+   Header
+   ====================== */
+.modal-header {
+  display: flex;
+  gap: 14px;
   align-items: flex-start;
-  gap: 16px;
-  border-radius: 12px 12px 0 0;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(15, 23, 36, 0.06);
+  position: relative;
 }
 
-.modal-header.info {
-  background: #ebf8ff;
-  color: #2b6cb0;
-}
-
-.modal-header.warning {
-  background: #fffaf0;
-  color: #d69e2e;
-}
-
-.modal-header.danger {
-  background: #fed7d7;
-  color: #c53030;
-}
-
-.modal-header.success {
-  background: #f0fff4;
-  color: #276749;
-}
-
+/* Icon bubble - small and subtle */
 .header-icon {
-  flex-shrink: 0;
-}
-
-.header-icon .material-symbols-outlined {
-  font-size: 32px;
-}
-
-.header-content {
-  flex: 1;
-}
-
-.header-content h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.header-content p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: currentColor;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: all 0.2s;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.7;
 }
 
+/* default neutral look, overridden by type class */
+.modal-header.info .header-icon {
+  background: linear-gradient(180deg, rgba(238, 249, 255, 0.9), rgba(232, 245, 255, 0.9));
+  color: #1e6fb7;
+}
+.modal-header.warning .header-icon {
+  background: linear-gradient(180deg, rgba(255, 250, 240, 0.9), rgba(255, 245, 230, 0.9));
+  color: #b36a00;
+}
+.modal-header.danger .header-icon {
+  background: linear-gradient(180deg, rgba(255, 242, 242, 0.95), rgba(255, 235, 235, 0.95));
+  color: #c53030;
+}
+.modal-header.success .header-icon {
+  background: linear-gradient(180deg, rgba(245, 255, 250, 0.95), rgba(235, 255, 240, 0.95));
+  color: #25603a;
+}
+
+/* Icon size */
+.header-icon .material-symbols-outlined {
+  font-size: 20px;
+}
+
+/* Title + message */
+.header-content {
+  flex: 1;
+  min-width: 0;
+}
+.header-content h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #0f1724;
+}
+.header-content p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+
+/* Close button (top-right) */
+.close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  padding: 6px;
+  border-radius: 8px;
+  color: #64748b;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.close-btn .material-symbols-outlined { font-size: 20px; }
 .close-btn:hover {
-  opacity: 1;
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(15, 23, 36, 0.04);
+  color: #0f1724;
+  transform: rotate(20deg);
 }
 
+/* ======================
+   Body
+   ====================== */
 .modal-body {
-  padding: 24px;
-}
-
-.confirmation-content {
-  text-align: center;
-}
-
-.warning-text {
-  color: #e53e3e;
-  font-weight: 500;
-  margin-bottom: 16px;
-  padding: 12px;
-  background: #fed7d7;
-  border-radius: 6px;
-  border: 1px solid #feb2b2;
-}
-
-.input-group {
-  text-align: left;
-}
-
-.input-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #374151;
-}
-
-.form-input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 20px;
+  background: #fff;
+  color: #0f1724;
   font-size: 14px;
-  transition: all 0.2s;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: #1a365d;
-  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
-}
-
-.modal-footer {
-  padding: 24px;
-  border-top: 1px solid #e2e8f0;
+  line-height: 1.6;
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
   gap: 12px;
 }
 
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  min-width: 80px;
+/* Warning banner inside body (if present) */
+.warning-text {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  color: #7f1d1d;
+  background: linear-gradient(180deg, rgba(254, 226, 226, 0.8), rgba(255, 245, 245, 0.8));
+  border: 1px solid rgba(235, 87, 87, 0.12);
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.4);
+}
+
+/* Confirmation input group */
+.input-group {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.input-group label {
+  font-size: 13px;
+  color: #334155;
+  font-weight: 600;
+}
+.form-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #d5e3f9;
+  background: #fff;
+  color: #0f1724;
+  font-size: 14px;
+  transition: box-shadow 120ms ease, border-color 120ms ease, transform 120ms ease;
+  box-shadow: none;
+}
+.form-input::placeholder { color: #94a3b8; }
+.form-input:focus {
+  outline: none;
+  border-color: #2b6fb7;
+  box-shadow: 0 6px 20px rgba(43,111,183,0.08);
+  transform: translateY(-1px);
+}
+
+/* If you want center alignment of main body text for simple confirmations */
+.confirmation-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+/* ======================
+   Footer (actions)
+   ====================== */
+.modal-footer {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px;
+  background: linear-gradient(180deg,#ffffff,#fbfdff);
+  border-top: 1px solid rgba(15, 23, 36, 0.04);
+  justify-content: flex-end;
+}
+
+/* Button base */
+.btn {
+  min-width: 90px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  border: 1px solid transparent;
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
 }
 
+/* Disabled */
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Variants */
+.btn-secondary {
+  background: #f1f5f9;
+  color: #0f1724;
+  border-color: #e6eef8;
+}
+.btn-secondary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(12,18,30,0.06);
 }
 
 .btn-primary {
-  background: #1a365d;
-  color: white;
+  background: linear-gradient(180deg,#0f2747,#123055);
+  color: #fff;
+  border-color: rgba(0,0,0,0.06);
 }
-
 .btn-primary:hover:not(:disabled) {
-  background: #2d3748;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(18,48,85,0.12);
 }
 
-.btn-secondary {
-  background: #f7fafc;
-  color: #374151;
-  border: 1px solid #e2e8f0;
-}
-
-.btn-secondary:hover {
-  background: #edf2f7;
-}
-
+/* Type-based confirm button classes mapping in component: btn-danger, btn-warning, btn-success, btn-info */
 .btn-danger {
-  background: #e53e3e;
-  color: white;
+  background: linear-gradient(180deg,#c52828,#9b2525);
+  color: #fff;
 }
-
-.btn-danger:hover:not(:disabled) {
-  background: #c53030;
-}
-
 .btn-warning {
-  background: #ed8936;
-  color: white;
+  background: linear-gradient(180deg,#c67a00,#a05c00);
+  color: #fff;
 }
-
-.btn-warning:hover:not(:disabled) {
-  background: #dd6b20;
-}
-
 .btn-success {
-  background: #38a169;
-  color: white;
+  background: linear-gradient(180deg,#2f8a55,#196f3f);
+  color: #fff;
 }
-
-.btn-success:hover:not(:disabled) {
-  background: #2f855a;
-}
-
 .btn-info {
-  background: #3182ce;
-  color: white;
+  background: linear-gradient(180deg,#2b7fc8,#1f63a8);
+  color: #fff;
 }
 
+/* Hover effects for type buttons */
+.btn-danger:hover:not(:disabled),
+.btn-warning:hover:not(:disabled),
+.btn-success:hover:not(:disabled),
 .btn-info:hover:not(:disabled) {
-  background: #2b6cb0;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(12,18,30,0.08);
 }
 
+/* Loading spinner inside button */
 .loading-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid transparent;
-  border-top: 2px solid currentColor;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: rgba(255,255,255,0.9);
+  animation: spinner 800ms linear infinite;
+  display: inline-block;
 }
 
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
+/* ======================
+   Small screens
+   ====================== */
+@media (max-width: 520px) {
+  .modal-content.confirm-modal { max-width: 96%; border-radius: 10px; }
+  .modal-header { padding: 14px 14px; gap: 12px; }
+  .modal-body { padding: 16px; }
+  .modal-footer { padding: 12px 14px; flex-direction: column-reverse; gap: 8px; align-items: stretch; }
+  .btn { width: 100%; }
+  .close-btn { top: 10px; right: 10px; }
+  .header-content h3 { font-size: 15px; }
+  .header-content p { font-size: 13px; }
 }
 
-@media (max-width: 768px) {
-  .modal-content.confirm-modal {
-    width: 95%;
-    margin: 20px;
-  }
-
-  .modal-header {
-    flex-direction: column;
-    text-align: center;
-    gap: 12px;
-  }
-
-  .modal-footer {
-    flex-direction: column;
-  }
-
-  .btn {
-    width: 100%;
-  }
+/* ======================
+   Animations & Keyframes
+   ====================== */
+@keyframes modal-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes modal-pop {
+  from { opacity: 0; transform: scale(.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes spinner {
+  to { transform: rotate(360deg); }
 }
 </style>
+

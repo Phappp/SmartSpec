@@ -225,9 +225,11 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import AdminAddApiKeyModal from './AdminAddApiKeyModal.vue'
 // import AdminEditApiKeyModal from './AdminEditApiKeyModal.vue'
 import AdminConfirmModal from './AdminConfirmModal.vue'
+import AdminEditApiKeyModal from './AdminEditApiKeyModal.vue'
+import axiosClient from '@/utils/axiosClient'
+import { useToast } from 'vue-toastification'
 
-const emit = defineEmits(['close'])
-
+const toast = useToast()
 // Modal states
 const showAddApiKeyModal = ref(false)
 const showEditApiKeyModal = ref(false)
@@ -245,57 +247,6 @@ const filters = reactive({
   sortBy: 'created_at',
 })
 
-// Sample data
-const sampleApiKeys = [
-  {
-    id: '1',
-    key_value: 'sk-proj-abc123def456ghi789jkl012mno345pqr678stu901',
-    provider: 'gemini',
-    display_name: 'Gemini Production Key',
-    is_active: true,
-    usage_count: 1234,
-    daily_limit: 1000,
-    rate_limit: 60,
-    priority: 'high',
-    expires_at: '2024-12-31',
-    description: 'API Key cho môi trường production',
-    created_by_name: 'Admin User',
-    created_at: new Date('2024-01-01'),
-    last_used: new Date('2024-01-15T10:30:00'),
-  },
-  {
-    id: '2',
-    key_value: 'sk-openai-xyz789uvw456abc123def456ghi789jkl012',
-    provider: 'openai',
-    display_name: 'OpenAI Development',
-    is_active: true,
-    usage_count: 567,
-    daily_limit: 500,
-    rate_limit: 30,
-    priority: 'medium',
-    expires_at: null,
-    description: 'Dùng cho mục đích phát triển và testing',
-    created_by_name: 'Developer',
-    created_at: new Date('2024-01-10'),
-    last_used: new Date('2024-01-14T15:45:00'),
-  },
-  {
-    id: '3',
-    key_value: 'sk-ant-claude-123abc456def789ghi012jkl345mno678',
-    provider: 'claude',
-    display_name: 'Claude Backup Key',
-    is_active: false,
-    usage_count: 89,
-    daily_limit: 200,
-    rate_limit: 20,
-    priority: 'low',
-    expires_at: '2024-06-30',
-    description: 'Key dự phòng cho Claude API',
-    created_by_name: 'Admin User',
-    created_at: new Date('2024-01-05'),
-    last_used: new Date('2024-01-08T09:15:00'),
-  },
-]
 
 // Computed
 const filteredApiKeys = computed(() => {
@@ -330,14 +281,66 @@ const filteredApiKeys = computed(() => {
 
 // Methods
 const loadApiKeys = async () => {
-  // Simulate API call
-  await new Promise((resolve) => setTimeout(resolve, 500))
-  apiKeys.value = sampleApiKeys
+  try {
+    const res = await axiosClient.get('/api/keys')
+    if (res.data && res.data.status === 'Success') {
+      apiKeys.value = res.data.data.map((item) => ({
+        id: item.id,
+        key_value: item.key_value,
+        provider: item.provider,
+        is_active: item.is_active,
+        created_by: item.created_by,
+        created_at: new Date(item.createAt),
+        updated_at: new Date(item.updatedAt),
+        // các field không có từ backend thì để mặc định
+        display_name: item.display_name || '(Không có tên)',
+        usage_count: item.usage_count || 0,
+        daily_limit: item.daily_limit || null,
+        rate_limit: item.rate_limit || null,
+        priority: item.priority || 'medium',
+        description: item.description || '',
+        expires_at: item.expires_at || null,
+        created_by_name: item.created_by_name || 'System',
+        last_used: item.last_used || null,
+      }))
+      console.log('✅ API Keys loaded:', apiKeys.value)
+    } else {
+      console.error('❌ Failed to load API keys:', res.data)
+      toast.error('Không thể tải danh sách API Key')
+    }
+  } catch (error) {
+    console.error('❌ Error loading API keys:', error)
+    toast.error('Lỗi khi tải danh sách API Key')
+  }
 }
 
-const toggleApiKeyStatus = (apiKey) => {
+const toggleApiKeyStatus = async (apiKey) => {
+  const oldStatus = apiKey.is_active
   apiKey.is_active = !apiKey.is_active
-  // In real app, call API to update status
+
+  try {
+    const res = await axiosClient.patch(`/api/keys/${apiKey.id}`, {
+      is_active: apiKey.is_active,
+    })
+
+    if (res.data && res.data.status === 'Success') {
+      toast.success(
+        apiKey.is_active
+          ? 'API Key đã được kích hoạt '
+          : 'API Key đã bị vô hiệu hóa '
+      )
+    } else {
+      // Nếu API trả lỗi thì khôi phục trạng thái cũ
+      apiKey.is_active = oldStatus
+      toast.error('Không thể cập nhật trạng thái API Key')
+      console.error('❌ Response:', res.data)
+    }
+  } catch (error) {
+    // Nếu lỗi mạng/API → khôi phục trạng thái cũ
+    apiKey.is_active = oldStatus
+    console.error('❌ Lỗi khi cập nhật trạng thái API Key:', error)
+    toast.error('Đã xảy ra lỗi khi thay đổi trạng thái')
+  }
 }
 
 const editApiKey = (apiKey) => {
@@ -351,9 +354,20 @@ const deleteApiKey = (apiKey) => {
 }
 
 const confirmDeleteApiKey = async () => {
-  if (deletingApiKey.value) {
-    // In real app, call API to delete API key
-    apiKeys.value = apiKeys.value.filter((key) => key.id !== deletingApiKey.value.id)
+  if (!deletingApiKey.value) return
+  try {
+    const id = deletingApiKey.value.id
+    const res = await axiosClient.delete(`/api/keys/${id}`)
+    if (res.data && res.data.status === 'Success') {
+      apiKeys.value = apiKeys.value.filter((key) => key.id !== id)
+      toast.success('Đã xóa API Key thành công')
+    } else {
+      toast.error('Không thể xóa API Key')
+    }
+  } catch (error) {
+    console.error('❌ Error deleting API key:', error)
+    toast.error('Lỗi khi xóa API Key')
+  } finally {
     showDeleteModal.value = false
     deletingApiKey.value = null
   }
@@ -490,6 +504,7 @@ onMounted(() => {
   max-width: 1200px;
   width: 95%;
   max-height: 90vh;
+  background: white;
 }
 
 .modal-header {
@@ -572,7 +587,7 @@ onMounted(() => {
   padding: 0;
   display: flex;
   flex-direction: column;
-  height: calc(90vh - 80px);
+  height: calc(90vh - 90px);
 }
 
 .filters-section {

@@ -137,28 +137,25 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import axiosClient from '@/utils/axiosClient'
+import { useToast } from 'vue-toastification'
 
-const props = defineProps({
-  user: {
-    type: Object,
-    required: true,
-  },
-})
-
-const emit = defineEmits(['save', 'close'])
+const toast = useToast()
+const emit = defineEmits(['close', 'updated'])
 
 const avatarInput = ref(null)
 const loading = ref(false)
+const uploading = ref(false)
 
+// 🧩 Dữ liệu form
 const formData = reactive({
   name: '',
   email: '',
-  phone: '',
-  gender: '',
+  gender: 'female',
   dob: '',
-  bio: '',
-  role: '',
   avatar: '',
+  status: 'ACTIVE',
+  role: '',
   createdAt: '',
   lastLogin: '',
   preferences: {
@@ -168,87 +165,142 @@ const formData = reactive({
   },
 })
 
-const errors = reactive({
-  name: '',
-  email: '',
-})
+const errors = reactive({ name: '', email: '' })
 
-// Initialize form data
-onMounted(() => {
-  Object.assign(formData, {
-    ...props.user,
-    preferences: {
-      language: props.user.setting?.language || 'vi',
-      theme: props.user.setting?.theme || 'light',
-      timezone: 'Asia/Ho_Chi_Minh',
-    },
-  })
-})
+// 🧩 Lấy thông tin user
+const fetchUser = async () => {
+  try {
+    const res = await axiosClient.get('/api/auth/me')
+    const user = res.data?.data
+    if (!user) return
 
-const triggerAvatarUpload = () => {
-  avatarInput.value?.click()
-}
+    formData.name = user.name
+    formData.email = user.email
+    formData.gender = user.gender || 'female'
+    formData.status = user.status || 'ACTIVE'
+    formData.role = user.system_role
+    formData.createdAt = user.created_at
+    formData.avatar = getFullAvatarUrl(user.avatar_url)
+    formData.preferences.language = user.setting?.language || 'vi'
+    formData.preferences.theme = user.setting?.theme || 'light'
 
-const handleAvatarUpload = (event) => {
-  const file = event.target.files[0]
-  if (file) {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      formData.avatar = e.target.result
+    if (user.dob) {
+      const d = new Date(user.dob)
+      formData.dob = d.toISOString().split('T')[0]
     }
-    reader.readAsDataURL(file)
+  } catch (err) {
+    console.error('❌ Error fetching user:', err)
+    toast.error('Không thể tải thông tin người dùng.')
   }
 }
 
+onMounted(fetchUser)
+
+// 🖼️ Upload avatar
+const triggerAvatarUpload = () => avatarInput.value?.click()
+
+const handleAvatarUpload = async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  if (!allowedTypes.includes(file.type)) {
+    toast.warning('Chỉ chấp nhận định dạng JPEG, PNG, GIF, WebP.')
+    return
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    toast.warning('Kích thước tệp phải nhỏ hơn 5MB.')
+    return
+  }
+
+  uploading.value = true
+  try {
+    const formDataUpload = new FormData()
+    formDataUpload.append('avatar', file)
+    const res = await axiosClient.post('/api/users/upload-avatar', formDataUpload, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    const newAvatar = getFullAvatarUrl(res.data.data.avatar_url)
+    formData.avatar = newAvatar
+    toast.success('Cập nhật ảnh đại diện thành công!')
+  } catch (err) {
+    console.error('Error uploading avatar:', err)
+    toast.error(err.response?.data?.message || 'Tải ảnh thất bại!')
+  } finally {
+    uploading.value = false
+    avatarInput.value.value = ''
+  }
+}
+
+// 🧾 Validate form
 const validateForm = () => {
-  let isValid = true
+  let valid = true
   errors.name = ''
   errors.email = ''
 
   if (!formData.name.trim()) {
-    errors.name = 'Họ tên là bắt buộc'
-    isValid = false
+    errors.name = 'Họ tên là bắt buộc.'
+    valid = false
   }
 
   if (!formData.email.trim()) {
-    errors.email = 'Email là bắt buộc'
-    isValid = false
+    errors.email = 'Email là bắt buộc.'
+    valid = false
   } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-    errors.email = 'Email không hợp lệ'
-    isValid = false
+    errors.email = 'Email không hợp lệ.'
+    valid = false
   }
 
-  return isValid
+  return valid
 }
 
+// 💾 Lưu thay đổi hồ sơ
 const handleSave = async () => {
+  if (loading.value) return // ✅ chống double-click
   if (!validateForm()) return
 
   loading.value = true
-  try {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
 
-    emit('save', {
-      ...formData,
-      setting: {
-        language: formData.preferences.language,
-        theme: formData.preferences.theme,
-      },
-    })
-  } catch (error) {
-    console.error('Error updating profile:', error)
+  try {
+    const [year, month, day] = formData.dob
+      ? formData.dob.split('-').map((x) => Number(x))
+      : [null, null, null]
+
+    const payload = {
+      email: formData.email,
+      name: formData.name,
+      dob: year ? { day, month, year } : null,
+      gender: formData.gender,
+      avatar_url: formData.avatar.replace('http://localhost:8000', ''),
+      status: formData.status,
+    }
+
+    const res = await axiosClient.patch('/api/users/update-profile', payload)
+
+    toast.success(res.data?.message || 'Cập nhật hồ sơ thành công!')
+    emit('updated', payload)
+    setTimeout(() => emit('close'), 1200)
+  } catch (err) {
+    console.error('❌ Error updating profile:', err)
+    toast.error(err.response?.data?.message || 'Cập nhật thất bại!')
   } finally {
     loading.value = false
   }
 }
 
+// 🌍 Helper
+const getFullAvatarUrl = (avatarUrl) => {
+  if (!avatarUrl) return ''
+  if (avatarUrl.startsWith('http') || avatarUrl.startsWith('blob:')) return avatarUrl
+  const baseUrl = 'http://localhost:8000'
+  const cleanUrl = avatarUrl.startsWith('/') ? avatarUrl : `/${avatarUrl}`
+  return `${baseUrl}${cleanUrl}`
+}
+
 const getRoleDisplay = (role) => {
-  const roles = {
-    ADMIN: 'Quản trị viên',
-    PARTICIPANT: 'Thành viên',
-  }
-  return roles[role] || role
+  const map = { ADMIN: 'Quản trị viên', PARTICIPANT: 'Thành viên' }
+  return map[role] || role
 }
 
 const formatDate = (date) => {
@@ -257,11 +309,11 @@ const formatDate = (date) => {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
   })
 }
 </script>
+
+
 
 <style scoped>
 .modal-overlay {
