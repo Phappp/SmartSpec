@@ -81,7 +81,11 @@ export const authGuard = (to, from, next) => {
     next('/login')
     return
   }
-  
+  if (isAdmin()) {
+    console.log('⚠ Admin trying to access user route → redirect to admin dashboard')
+    next('/admin')
+    return
+  }
   console.log('✅ Authentication granted')
   next()
 }
