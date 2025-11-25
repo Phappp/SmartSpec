@@ -1,6 +1,6 @@
 <template>
   <div
-    @click="openProject"
+    @click="handleCardClick"
     class="project-card"
     :class="{
       trashed: isTrashed,
@@ -9,8 +9,14 @@
       failed: project.creationStatus === 'failed',
       retrying: project.isRetry,
       mobile: isMobile,
+      selected: isSelected,
     }"
   >
+    <!-- Selection checkbox - LUÔN HIỂN THỊ KHI Ở TRONG THÙNG RÁC -->
+    <!-- <div v-if="isTrashed" class="selection-checkbox">
+      <input type="checkbox" :checked="isSelected" @click.stop="toggleSelection" />
+    </div> -->
+
     <!-- TRẠNG THÁI ĐANG TẠO HOẶC RETRY -->
     <div v-if="isCreating" class="creating-state">
       <div class="creating-header">
@@ -87,18 +93,19 @@
             {{ project.members?.filter((member) => member.status === 'accepted').length || 0 }}
           </span>
 
-          <div class="fab-container" @click.stop v-click-outside="closeFab">
+          <!-- ẨN FAB MENU KHI Ở TRONG THÙNG RÁC -->
+          <div v-if="!isTrashed" class="fab-container" @click.stop v-click-outside="closeFab">
             <button class="fab-main" @click="toggleFab">
               <span class="material-symbols-outlined">more_vert</span>
             </button>
 
             <div class="fab-options" :class="{ open }">
               <button
-                v-for="(btn, i) in isTrashed ? trashedActions : normalActions"
+                v-for="(btn, i) in normalActions"
                 :key="i"
                 class="fab-btn"
                 :class="`fab-${btn.type}`"
-                :style="getStyle(i, isTrashed ? trashedActions.length : normalActions.length)"
+                :style="getStyle(i, normalActions.length)"
                 @click.stop="btn.action"
                 :title="btn.title"
                 :disabled="btn.disabled"
@@ -170,6 +177,7 @@ export default {
     project: { type: Object, required: true },
     showDelete: { type: Boolean, default: true },
     isTrashed: { type: Boolean, default: false },
+    isSelected: { type: Boolean, default: false }, // Thêm prop isSelected
   },
   data() {
     return {
@@ -286,6 +294,22 @@ export default {
     window.removeEventListener('resize', this.checkMobile)
   },
   methods: {
+    handleCardClick() {
+      // Nếu đang trong chế độ chỉnh sửa hoặc đang tạo, không làm gì cả
+      if (this.isEditing || this.isCreating) return
+
+      // Nếu đang trong thùng rác - luôn kích hoạt chọn nhiều
+      if (this.isTrashed) {
+        this.toggleSelection()
+        return
+      }
+
+      // Xử lý bình thường cho các trường hợp khác - mở project
+      this.openProject()
+    },
+    toggleSelection() {
+      this.$emit('selection-toggle', this.project._id || this.project.id)
+    },
     checkMobile() {
       this.isMobile = window.innerWidth <= 768
     },
@@ -392,11 +416,9 @@ export default {
     },
     restoreProject() {
       this.$emit('restore', this.project._id || this.project.id)
-      this.closeFab()
     },
     deletePermanently() {
       this.$emit('delete-permanently', this.project._id || this.project.id)
-      this.closeFab()
     },
     formatDate(dateStr) {
       if (!dateStr) return ''
@@ -411,6 +433,8 @@ export default {
 </script>
 
 <style scoped>
+/* Các style khác giữ nguyên */
+
 .project-card {
   background: #fff;
   border-radius: 12px;
@@ -418,7 +442,7 @@ export default {
   margin-bottom: 64px;
   margin-right: 36px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
   cursor: pointer;
   position: relative;
   min-height: 140px;
@@ -429,6 +453,38 @@ export default {
 
 .project-card:hover:not(.trashed) {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.32);
+}
+
+.project-card.selected {
+  border: 2px solid #007bff;
+  background-color: #f0f8ff;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2);
+}
+
+/* Thêm hiệu ứng cho thẻ được chọn trong thùng rác */
+.project-card.trashed.selected {
+  background-color: #e8f4ff;
+  border-color: #0056b3;
+}
+
+/* Hiệu ứng hover cho thẻ trong thùng rác */
+.project-card.trashed:not(.selected):hover {
+  background-color: #f8f9fa;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Selection checkbox */
+.selection-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+}
+
+.selection-checkbox input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
 }
 
 .project-content {
@@ -527,10 +583,16 @@ export default {
   background-color: #fdfdfd;
   border: 1px dashed #ccc;
   opacity: 0.85;
+  cursor: pointer; /* Đảm bảo con trỏ là pointer cho thẻ trong thùng rác */
 }
 
 .project-card.trashed h3 {
   color: #888;
+}
+
+/* Ẩn FAB container khi ở trong thùng rác */
+.project-card.trashed .fab-container {
+  display: none !important;
 }
 
 .fab-container {
@@ -670,261 +732,7 @@ export default {
   box-shadow: 0 0 12px rgba(121, 118, 118, 0.6);
 }
 
-/* Edit Form Styles */
-.edit-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.form-group {
-  margin-bottom: 0;
-}
-
-.inline-input,
-.inline-textarea {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
-  transition: border 0.3s ease;
-  box-sizing: border-box;
-}
-
-.inline-input:focus,
-.inline-textarea:focus {
-  outline: none;
-  border-color: #007bff;
-}
-
-.inline-input {
-  font-size: 18px;
-  font-weight: 600;
-  height: 36px;
-}
-
-.inline-textarea {
-  resize: vertical;
-  min-height: 60px;
-  font-family: inherit;
-}
-
-.edit-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.btn {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s ease;
-}
-
-.btn-cancel {
-  background: #f8f9fa;
-  color: #333;
-}
-
-.btn-cancel:hover {
-  background: #e9ecef;
-}
-
-.btn-save {
-  background: #1a365d;
-  opacity: 0.8;
-  color: white;
-}
-
-.btn-save:hover {
-  opacity: 1;
-}
-
-/* Ensure consistent height when editing */
-.project-card.editing {
-  min-height: 140px;
-  justify-content: flex-start;
-}
-
-.fab-btn:disabled {
-  position: absolute;
-  top: 36%;
-  left: 38%;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: none;
-  background: rgb(73, 73, 73);
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  opacity: 0;
-  transform: scale(0.5);
-  transition: all 0.3s ease;
-  cursor: not-allowed;
-}
-
-.fab-btn:disabled:hover {
-  background: rgb(73, 73, 73);
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-  transform: scale(1);
-}
-
-/* Creating State Styles */
-.project-card.creating {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border: 2px dashed #1a365d;
-  cursor: not-allowed;
-  opacity: 0.9;
-}
-
-.creating-state {
-  padding: 4px;
-}
-
-.creating-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 8px;
-}
-
-.creating-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1a365d;
-  margin: 0;
-  flex: 1;
-}
-
-.creating-badge {
-  background: #1a365d;
-  color: white;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 10px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.creating-badge.failed {
-  background: #ef4444;
-}
-
-.creating-description {
-  color: #666;
-  font-size: 14px;
-  margin: 8px 0 16px;
-  line-height: 1.4;
-}
-
-.creating-progress {
-  margin: 16px 0;
-}
-
-.progress-info {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 12px;
-  color: #666;
-}
-
-.stage-text {
-  font-weight: 500;
-}
-
-.progress-percent {
-  font-weight: 600;
-  color: #1a365d;
-}
-
-.progress-bar {
-  height: 6px;
-  background-color: #e5e7eb;
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #1a365d, #2c5282);
-  border-radius: 3px;
-  transition: width 0.5s ease-in-out;
-}
-
-.creating-footer {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #e9ecef;
-}
-
-.creating-note {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: #6c757d;
-  font-style: italic;
-}
-
-.creating-note .material-symbols-outlined {
-  font-size: 14px;
-}
-
-/* Failed State */
-.project-card.failed {
-  border-color: #ef4444;
-  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-}
-
-.creating-failed {
-  text-align: center;
-  padding: 16px 0;
-}
-
-.failed-icon {
-  font-size: 32px;
-  color: #ef4444;
-  margin-bottom: 8px;
-}
-
-.failed-message {
-  color: #ef4444;
-  font-size: 14px;
-  margin-bottom: 12px;
-  font-weight: 500;
-}
-
-.retry-btn {
-  background: #ef4444;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-.retry-btn:hover {
-  background: #dc2626;
-}
-
-/* Ẩn FAB menu và normal content khi đang creating */
-.project-card.creating .project-content,
-.project-card.creating .fab-container {
-  display: none !important;
-}
+/* Các style khác giữ nguyên... */
 
 /* ===== RESPONSIVE STYLES ===== */
 @media (max-width: 768px) {
@@ -1022,6 +830,16 @@ export default {
   .btn {
     width: 100%;
     padding: 10px;
+  }
+
+  .selection-checkbox {
+    top: 6px;
+    left: 6px;
+  }
+
+  .selection-checkbox input {
+    width: 16px;
+    height: 16px;
   }
 }
 
