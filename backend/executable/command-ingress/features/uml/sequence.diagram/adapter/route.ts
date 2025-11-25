@@ -16,6 +16,12 @@ const initSequenceDiagramRoute: (
       controller.generateSchemaFromRequirements.bind(controller)
     );
   router
+    .route("/usecase/:ucId/sequence/:sequenceId")
+    .delete(
+      requireAuthorizedUser,
+      controller.deleteSequenceDiagramById.bind(controller)
+    );
+  router
     .route("/versions/:versionId/")
     .get(
       requireAuthorizedUser,
@@ -27,6 +33,7 @@ const initSequenceDiagramRoute: (
       requireAuthorizedUser,
       controller.getSequenceDiagramById.bind(controller)
     );
+
   return router;
 };
 

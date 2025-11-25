@@ -10,8 +10,7 @@ import {
 import { UserServiceImpl } from "../../../user/domain/service"; // Import service của bạn
 import Project from "../../../../../../internal/model/project";
 import Version from "../../../../../../internal/model/version";
-import mongoose from "mongoose";
-import { th } from "@faker-js/faker/.";
+import SequenceDiagram from "../../../../../../internal/model/sequence_diagram";
 export class SequenceDiagramServiceImpl implements SequenceDiagramService {
   private geminiService: SequenceDiagramGeminiService;
 
@@ -120,5 +119,41 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
     usecaseId: string
   ): Promise<SequenceDiagramResponse[]> {
     throw new Error("Method not implemented.");
+  }
+  public async deleteSequenceDiagramById(
+    ucId: string,
+    sequenceId: string,
+    subId: string
+  ): Promise<SequenceDiagramResponse> {
+    const sequenceDiagram = await SequenceDiagram.findOne({
+      _id: sequenceId,
+      usecase_ref_id: ucId,
+    });
+    if (!sequenceDiagram) {
+      throw new Error("Sequence Diagram not found.");
+    }
+    const project = await Project.findById(sequenceDiagram?.project_id);
+    if (!project) {
+      throw new Error("Associated project not found.");
+    }
+    const user = project.members.find(
+      (member) => member.user_id.toString() === subId
+    );
+    console.log("User attempting deletion:", user);
+
+    if (!user || user.status !== "accepted") {
+      throw new Error("Unauthorized");
+    }
+
+    if (!["owner", "editor"].includes(user.role)) {
+      throw new Error(
+        "Unauthorized: Only owner or editor can delete sequence diagrams."
+      );
+    }
+
+    await SequenceDiagram.deleteOne({ _id: sequenceId, usecase_ref_id: ucId });
+    return sequenceDiagram.toObject({
+      getters: true,
+    }) as SequenceDiagramResponse;
   }
 }
