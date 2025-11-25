@@ -138,7 +138,7 @@ export class SequenceDiagramController extends BaseController {
 
         res.status(StatusCodes.OK).json({
           status: "Success",
-          message: "Get all Usecase diagram Successfully",
+          message: "Get all Sequence diagram Successfully",
           data: responseData,
         });
       }
@@ -166,7 +166,41 @@ export class SequenceDiagramController extends BaseController {
 
         res.status(StatusCodes.OK).json({
           status: "Success",
-          message: "Get Usecase diagram by Id Successfully",
+          message: "Get Sequence diagram by Id Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
+
+  async deleteSequenceDiagramById(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const sequenceId = req.params.sequenceId;
+        if (!sequenceId) {
+          res.status(400).json({ message: "SequenceId is required." });
+          return;
+        }
+
+        const subId = req.getSubject();
+        if (!subId) {
+          res.status(401).json({ message: "Unauthorized" });
+          return;
+        }
+
+        const responseData =
+          await this.sequenceDiagramService.deleteSequenceDiagramById(sequenceId, subId);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Delete sequence diagram by Id Successfully",
           data: responseData,
         });
       }

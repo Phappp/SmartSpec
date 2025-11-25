@@ -10,8 +10,7 @@ import {
 import { UserServiceImpl } from "../../../user/domain/service"; // Import service của bạn
 import Project from "../../../../../../internal/model/project";
 import Version from "../../../../../../internal/model/version";
-import mongoose from "mongoose";
-import { th } from "@faker-js/faker/.";
+import SequenceDiagram from "../../../../../../internal/model/sequence_diagram";
 export class SequenceDiagramServiceImpl implements SequenceDiagramService {
   private geminiService: SequenceDiagramGeminiService;
 
@@ -106,12 +105,12 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
 
     return savedDocument.toObject({ getters: true }) as SequenceDiagramResponse;
   }
- public async getSequenceDiagrams(versionId: string): Promise<SequenceDiagramResponse[]> {
+  public async getSequenceDiagrams(versionId: string): Promise<SequenceDiagramResponse[]> {
     try {
       const diagrams = await SequenceDiagramSchema.find({ version_id: versionId })
         .populate('created_by', 'name email')
         .lean();
-      
+
       // Convert Mongoose documents to SequenceDiagramResponse
       return diagrams.map(diagram => this.mapToSequenceDiagramResponse(diagram));
     } catch (error) {
@@ -126,11 +125,11 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
         .populate('created_by', 'name email')
         .populate('linked_testcases')
         .lean();
-      
+
       if (!diagram) {
         throw new Error('Sequence diagram not found');
       }
-      
+
       return this.mapToSequenceDiagramResponse(diagram);
     } catch (error) {
       console.error('Error getting sequence diagram by id:', error);
@@ -143,7 +142,7 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
       const diagrams = await SequenceDiagramSchema.find({ usecase_ref_id: usecaseId })
         .populate('created_by', 'name email')
         .lean();
-      
+
       return diagrams.map(diagram => this.mapToSequenceDiagramResponse(diagram));
     } catch (error) {
       console.error('Error getting sequence diagrams by usecase:', error);
@@ -173,5 +172,39 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
       created_at: doc.created_at || doc.createdAt,
       updated_at: doc.updated_at || doc.updatedAt
     } as SequenceDiagramResponse;
+  }
+  public async deleteSequenceDiagramById(
+    sequenceId: string,
+    subId: string
+  ): Promise<SequenceDiagramResponse> {
+    const sequenceDiagram = await SequenceDiagram.findById(sequenceId);
+    if (!sequenceDiagram) {
+      throw new Error("Sequence Diagram not found.");
+    }
+
+    const project = await Project.findById(sequenceDiagram?.project_id);
+    if (!project) {
+      throw new Error("Associated project not found.");
+    }
+
+    const user = project.members.find(
+      (member) => member.user_id.toString() === subId
+    );
+    console.log("User attempting deletion:", user);
+
+    if (!user || user.status !== "accepted") {
+      throw new Error("Unauthorized");
+    }
+
+    if (!["owner", "editor"].includes(user.role)) {
+      throw new Error(
+        "Only owner or editor can delete sequence diagrams."
+      );
+    }
+
+    await SequenceDiagram.findByIdAndDelete(sequenceId);
+    return sequenceDiagram.toObject({
+      getters: true,
+    }) as SequenceDiagramResponse;
   }
 }
