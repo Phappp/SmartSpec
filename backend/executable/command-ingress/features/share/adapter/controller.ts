@@ -192,4 +192,22 @@ export class ShareProjectController extends BaseController {
       handleServiceResponse(result, res);
     });
   };
+
+  public updateMemberRole = async (req: HttpRequest, res: Response, next: NextFunction) => {
+    await this.execWithTryCatchBlock(req, res, next, async () => {
+      const userId = req.getSubject();
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, 'Unauthorized', null, 401), res);
+        return;
+      }
+
+      const { projectId, memberId } = req.params;
+      const { role } = req.body;
+
+      const result = await this.service.updateMemberRole(projectId, memberId, role,userId);
+
+      // result = ServiceResponse<{ oldRole: string; newRole: string }>
+      handleServiceResponse(result, res);
+    });
+  };
 }
