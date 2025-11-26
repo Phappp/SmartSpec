@@ -1643,7 +1643,7 @@ export default {
       this.saveToHistory('Initial state')
     }
   },
-  beforeDestroy() {
+  beforeUnmount() {
     document.removeEventListener('keydown', this.handleKeydown)
     document.removeEventListener('mousemove', this.handleDrag)
     document.removeEventListener('mouseup', this.stopDrag)

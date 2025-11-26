@@ -15,6 +15,7 @@ import ForgotPassword from '../pages/ForgotPassword.vue'
 import ResetPassword from '../pages/ResetPassword.vue'
 import adminRoutes from './admin'
 import { authGuard, adminGuard } from '../utils/authGuard'
+import Chatbot from '../views/Chatbot.vue'
 
 //import ProjectSharing from '@./components/ProjectSharingManagement.vue'
 const routes = [
@@ -28,6 +29,7 @@ const routes = [
   { path: '/reset-password', component: ResetPassword },
 
   { path: '/reset-password', component: ResetPassword },
+  { path: '/chatbot', name: 'Chatbot', component: Chatbot },
   {
     path: '/project/:id/output',
     name: 'OutputManagement',
@@ -63,9 +65,9 @@ const routes = [
     props: true,
     meta: { requiresAuth: true }
   },
-  { 
-    path: '/dashboard', 
-    name: 'Home', 
+  {
+    path: '/dashboard',
+    name: 'Home',
     component: Homepage,
     beforeEnter: authGuard
   },

@@ -102,6 +102,9 @@ import { SequenceDiagramController } from "./features/uml/sequence.diagram/adapt
 import { SequenceDiagramServiceImpl } from "./features/uml/sequence.diagram/domain/service";
 import initSequenceDiagramRoute from "./features/uml/sequence.diagram/adapter/route";
 
+import initChatbotRoute from "./features/chatbot/adapter/router";
+import { ChatbotController } from "./features/chatbot/adapter/controller";
+import { ChatbotService } from "./features/chatbot/domain/service";
 
 const app = express();
 
@@ -190,6 +193,9 @@ const createHttpServer = (redisClient: any) => {
 
   const testcaseService = new TestcaseService();
   const testcaseController = new TestcaseController();
+
+  const chatbotService = new ChatbotService();
+  const chatbotController = new ChatbotController(chatbotService);
   // Setup route
 
   app.use('/api/auth', initAuthRoute(new AuthController(authService)));
@@ -200,6 +206,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/databases', initDatabaseRoute())
   app.use('/api/testcases', initTestcaseRoute());
   app.use('/api/activity-diagrams', initActivityDiagramRoute());
+  app.use('/api/chatbot', initChatbotRoute(chatbotController));
   app.use(
     "/api/keys",
     initApiKeyRoute(new ApiKeyController(new ApiKeyServiceImpl()))
@@ -264,7 +271,7 @@ const createHttpServer = (redisClient: any) => {
     )
   );
   app.use("/api/logs", initLogRoute(new LogController(new LogService())));
-  app.use("/api/versions",initVersionRoute(new VersionController(new VersionService())))
+  app.use("/api/versions", initVersionRoute(new VersionController(new VersionService())))
   app.use(recoverMiddleware);
 
   return server;
