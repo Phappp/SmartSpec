@@ -119,18 +119,6 @@
                 <option value="createdAt">Date Created</option>
                 <option value="name">Name</option>
               </select>
-
-              <!-- Toggle Multi-select Mode -->
-              <!-- <button
-                @click="toggleMultiSelectMode"
-                class="btn-multi-select"
-                :class="{ active: isMultiSelectMode }"
-              >
-                <span class="material-symbols-outlined">
-                  {{ isMultiSelectMode ? 'check_box' : 'check_box_outline_blank' }}
-                </span>
-                {{ isMultiSelectMode ? 'Cancel Selection' : 'Select Multiple' }}
-              </button> -->
             </div>
             <div class="filter-stats">
               <span class="stat-text">{{ filteredProjects.length }} projects found</span>
@@ -144,7 +132,6 @@
           <div v-if="currentView === 'recent-projects'" class="projects-view">
             <div class="section-header">
               <h2>Recent Projects</h2>
-              <!-- <p>Your recently accessed projects</p> -->
             </div>
             <div v-if="filteredProjects.length > 0" class="projects-grid">
               <ProjectCard
@@ -153,6 +140,7 @@
                 :project="p"
                 :show-multi-select="isMultiSelectMode"
                 :is-selected="selectedProjects.includes(p._id)"
+                :current-user-id="user?._id"
                 @open="openProject"
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
@@ -161,6 +149,7 @@
                 @restore="restoreProject"
                 @delete-permanently="confirmDeletePermanently"
                 @selection-toggle="handleSelectionToggle"
+                @open-preview="openPreviewModal"
               />
             </div>
             <div v-else class="empty-state">
@@ -180,7 +169,6 @@
           <div v-if="currentView === 'my-projects'" class="projects-view">
             <div class="section-header">
               <h2>My Projects</h2>
-              <!-- <p>Projects you own</p> -->
             </div>
             <div v-if="filteredProjects.length > 0" class="projects-grid">
               <ProjectCard
@@ -189,6 +177,7 @@
                 :project="p"
                 :show-multi-select="isMultiSelectMode"
                 :is-selected="selectedProjects.includes(p._id)"
+                :current-user-id="user?._id"
                 @open="openProject"
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
@@ -197,6 +186,7 @@
                 @restore="restoreProject"
                 @delete-permanently="confirmDeletePermanently"
                 @selection-toggle="handleSelectionToggle"
+                @open-preview="openPreviewModal"
               />
             </div>
             <div v-else class="empty-state">
@@ -225,6 +215,7 @@
                 :project="p"
                 :show-multi-select="isMultiSelectMode"
                 :is-selected="selectedProjects.includes(p._id)"
+                :current-user-id="user?._id"
                 @open="openProject"
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
@@ -233,6 +224,7 @@
                 @restore="restoreProject"
                 @delete-permanently="confirmDeletePermanently"
                 @selection-toggle="handleSelectionToggle"
+                @open-preview="openPreviewModal"
               />
             </div>
             <div v-else class="empty-state">
@@ -249,20 +241,6 @@
             <div class="section-header">
               <h2>Trashed Projects</h2>
               <p>Projects moved to trash</p>
-
-              <!-- Multi-select toggle for trash -->
-              <!-- <div class="trash-actions" v-if="trashedProjects.length > 0">
-                <button
-                  @click="toggleMultiSelectMode"
-                  class="btn-multi-select"
-                  :class="{ active: isMultiSelectMode }"
-                >
-                  <span class="material-symbols-outlined">
-                    {{ isMultiSelectMode ? 'check_box' : 'check_box_outline_blank' }}
-                  </span>
-                  {{ isMultiSelectMode ? 'Cancel Selection' : 'Select Multiple' }}
-                </button>
-              </div> -->
             </div>
             <div v-if="trashedProjects.length > 0" class="projects-grid">
               <ProjectCard
@@ -272,6 +250,7 @@
                 :is-trashed="true"
                 :show-multi-select="isMultiSelectMode"
                 :is-selected="selectedProjects.includes(p._id)"
+                :current-user-id="user?._id"
                 @open="openProject"
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
@@ -280,6 +259,7 @@
                 @restore="restoreProject"
                 @delete-permanently="confirmDeletePermanently"
                 @selection-toggle="handleSelectionToggle"
+                @open-preview="openPreviewModal"
               />
             </div>
             <div v-else class="empty-state">
@@ -294,6 +274,7 @@
       </div>
     </div>
 
+    <!-- Modals -->
     <NewProjectModal
       :show="isNewProjectModalVisible"
       @close="closeNewProjectModal"
@@ -311,6 +292,17 @@
       @close="closeShareModal"
     />
 
+    <!-- Preview Modal -->
+    <PreviewModal
+      v-if="isPreviewModalVisible"
+      :project="selectedProject"
+      :preview-data="previewData"
+      @close="closePreviewModal"
+      @approve="handleApprovePreview"
+      @revert="handleRevertChange"
+      @bump-version="handleBumpVersion"
+    />
+
     <AppModal
       v-model="isAppModalVisible"
       :title="modalContent.title"
@@ -319,7 +311,6 @@
       @confirm="modalContent.onConfirm"
     />
 
-    <!-- Modal xem invitations -->
     <InvitationsModal
       v-if="isInvitationsModalVisible"
       :sent-invitations="sentInvitations"
@@ -341,6 +332,7 @@ import NewProjectModal from '@/components/NewProjectForm.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
 import AppModal from '@/components/AppModal.vue'
 import InvitationsModal from '@/components/InvitationsModal.vue'
+import PreviewModal from '@/components/PreviewModal.vue'
 import {
   getMyProjects,
   getSharedProjects,
@@ -361,6 +353,7 @@ import {
 } from '@/api/share'
 import { getUserInfo, logout as authLogout } from '@/utils/authGuard'
 import { socket } from '@/utils/socket'
+import { getPreview, approvePreview, revertChange, bumpVersion } from '@/api/version'
 
 export default {
   name: 'Homepage',
@@ -372,14 +365,17 @@ export default {
     PersonalInfor,
     ProjectSharingModal,
     InvitationsModal,
+    PreviewModal,
   },
   data() {
     return {
       isNewProjectModalVisible: false,
       showPersonalInfo: false,
       isShareModalVisible: false,
+      isPreviewModalVisible: false,
       isInvitationsModalVisible: false,
       selectedProject: null,
+      previewData: null,
       creationSuccess: false,
       currentView: 'recent-projects',
       user: null,
@@ -492,7 +488,375 @@ export default {
     }
   },
   methods: {
-    // Multi-select methods
+    closePreviewModal() {
+      this.isPreviewModalVisible = false
+      this.selectedProject = null
+      this.previewData = null
+    },
+
+    // Trong methods của HomePage.vue
+    // Trong methods của HomePage.vue
+    async handleApprovePreview({ changeType, comment }) {
+      try {
+        // DEBUG: Log to see what we're working with
+        console.log('🔍 Debug version data:', {
+          previewData: this.previewData,
+          previewDataBaseVersionId: this.previewData?.base_version_id,
+          previewDataBaseVersionIdType: typeof this.previewData?.base_version_id,
+          previewDataBaseVersionIdValue: this.previewData?.base_version_id?._id,
+          selectedProject: this.selectedProject,
+          projectCurrentVersion: this.selectedProject?.current_version,
+          projectCurrentVersionType: typeof this.selectedProject?.current_version,
+        })
+
+        // FIX: Extract versionId correctly from Proxy object
+        let versionId = null
+
+        // Priority 1: From previewData.base_version_id (handle Proxy object)
+        if (this.previewData?.base_version_id) {
+          const baseVersion = this.previewData.base_version_id
+          // Handle both Proxy object and plain object
+          if (baseVersion._id) {
+            versionId = baseVersion._id
+            console.log('📌 Using _id from previewData.base_version_id object:', versionId)
+          } else if (typeof baseVersion === 'string') {
+            versionId = baseVersion
+            console.log('📌 Using string from previewData.base_version_id:', versionId)
+          } else {
+            // If it's a Proxy, try to access the underlying data
+            try {
+              versionId = baseVersion._id || JSON.parse(JSON.stringify(baseVersion))._id
+              console.log('📌 Extracted _id from Proxy object:', versionId)
+            } catch (e) {
+              console.error('❌ Cannot extract _id from base_version_id:', baseVersion)
+            }
+          }
+        }
+        // Priority 2: From project current_version
+        else if (this.selectedProject?.current_version) {
+          const currentVersion = this.selectedProject.current_version
+          if (typeof currentVersion === 'string') {
+            versionId = currentVersion
+            console.log('📌 Using versionId from project (string):', versionId)
+          } else if (currentVersion && typeof currentVersion === 'object') {
+            versionId = currentVersion._id || currentVersion.id
+            console.log('📌 Using versionId from project (object):', versionId)
+          }
+        }
+
+        // Validate versionId
+        if (!versionId) {
+          console.error('❌ No versionId found after extraction')
+          this.toast.error('Cannot find version to approve')
+          return
+        }
+
+        // Ensure versionId is a string and validate it
+        const stringVersionId = String(versionId).trim()
+
+        // Check if it's a valid MongoDB ObjectId format (24 hex characters)
+        const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(stringVersionId)
+        if (
+          !stringVersionId ||
+          stringVersionId === 'null' ||
+          stringVersionId === 'undefined' ||
+          !isValidObjectId
+        ) {
+          console.error('❌ Invalid versionId format:', {
+            stringVersionId,
+            isValidObjectId,
+            length: stringVersionId?.length,
+          })
+          this.toast.error('Invalid version ID format')
+          return
+        }
+
+        console.log('✅ Final versionId for API:', {
+          original: versionId,
+          stringVersionId: stringVersionId,
+          type: typeof stringVersionId,
+          isValidObjectId: isValidObjectId,
+        })
+
+        // Use the correct approvePreview API
+        const response = await approvePreview(stringVersionId, changeType, comment)
+
+        console.log('🎉 Approval response:', {
+          status: response.status,
+          data: response.data,
+          success: response.data?.success,
+          message: response.data?.message,
+        })
+
+        // FIX: Correct response handling logic
+        if (response.status === 200 || response.status === 201) {
+          // Success case - API call was successful
+          this.toast.success(`Version ${changeType} released successfully!`)
+
+          // Emit socket event and refresh data
+          this.closePreviewModal()
+          this.fetchInitialData() // Refresh project list
+
+          // Emit socket event for real-time update
+          if (socket) {
+            socket.emit('version_approved', {
+              projectId: this.selectedProject._id,
+              versionId: stringVersionId,
+              changeType,
+              userId: this.user._id,
+            })
+          }
+        } else {
+          // API call succeeded but returned non-success status
+          console.warn('⚠️ API returned non-success status:', response.status)
+          const errorMessage = response.data?.message || 'Failed to approve changes'
+          this.toast.error(errorMessage)
+        }
+      } catch (error) {
+        console.error('❌ Error approving preview:', {
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message,
+          url: error.config?.url,
+        })
+
+        // FIX: Better error message handling
+        let errorMessage = 'Failed to approve changes. Please try again.'
+
+        if (error.response?.data?.message) {
+          errorMessage = error.response.data.message
+        } else if (error.response?.status === 403) {
+          errorMessage = 'Only project owner can approve changes'
+        } else if (error.response?.status === 404) {
+          errorMessage = 'Preview not found or already processed'
+        } else if (error.response?.status === 500) {
+          errorMessage = 'Server error occurred while approving changes'
+        }
+
+        this.toast.error(errorMessage)
+      }
+    },
+
+    async openPreviewModal(project) {
+      try {
+        this.selectedProject = project
+
+        console.log('🔍 Opening preview for project:', {
+          projectId: project._id,
+          projectName: project.name,
+          currentVersion: project.current_version,
+          currentVersionType: typeof project.current_version,
+        })
+
+        // FIX: Extract versionId correctly for getPreview
+        let versionId = null
+
+        if (project.current_version) {
+          const currentVersion = project.current_version
+          if (typeof currentVersion === 'string') {
+            versionId = currentVersion
+            console.log('📋 Using string versionId:', versionId)
+          } else if (currentVersion && typeof currentVersion === 'object') {
+            versionId = currentVersion._id || currentVersion.id
+            console.log('📋 Using object versionId:', versionId)
+          }
+        }
+
+        // Validate versionId
+        if (!versionId) {
+          console.error('❌ No versionId found for preview')
+          this.toast.error('Project has no version to preview')
+          return
+        }
+
+        const stringVersionId = String(versionId).trim()
+        const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(stringVersionId)
+
+        if (
+          !stringVersionId ||
+          stringVersionId === 'null' ||
+          stringVersionId === 'undefined' ||
+          !isValidObjectId
+        ) {
+          console.error('❌ Invalid versionId for preview:', {
+            stringVersionId,
+            isValidObjectId,
+          })
+          this.toast.error('Invalid version ID format')
+          return
+        }
+
+        console.log('📋 Fetching preview with versionId:', stringVersionId)
+
+        // Fetch preview data using the correct API
+        const response = await getPreview(stringVersionId)
+
+        console.log('📊 Preview response:', {
+          versionId: stringVersionId,
+          responseStatus: response.status,
+          responseData: response.data,
+        })
+
+        if (response.data && response.data.data) {
+          this.previewData = response.data.data
+          this.isPreviewModalVisible = true
+
+          console.log('✅ Preview data loaded:', {
+            base_version_id: this.previewData.base_version_id,
+            base_version_id_type: typeof this.previewData.base_version_id,
+            base_version_id_value: this.previewData.base_version_id?._id,
+            changesCount: this.previewData.changes?.length,
+          })
+        } else {
+          this.toast.info('No pending changes for this project')
+        }
+      } catch (error) {
+        console.error('Error fetching preview:', {
+          error: error.message,
+          url: error.config?.url,
+          status: error.response?.status,
+        })
+        this.toast.error('Failed to load preview data')
+      }
+    },
+
+    // Cập nhật các methods khác tương tự
+    async handleRevertChange(changeId) {
+      try {
+        // FIX: Extract versionId correctly from Proxy object
+        let versionId = null
+
+        if (this.previewData?.base_version_id) {
+          const baseVersion = this.previewData.base_version_id
+          versionId = baseVersion._id || (typeof baseVersion === 'string' ? baseVersion : null)
+        } else if (this.selectedProject?.current_version) {
+          const currentVersion = this.selectedProject.current_version
+          versionId = typeof currentVersion === 'string' ? currentVersion : currentVersion?._id
+        }
+
+        if (!versionId) {
+          this.toast.error('Cannot find version to revert change')
+          return
+        }
+
+        const stringVersionId = String(versionId).trim()
+        const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(stringVersionId)
+
+        if (!isValidObjectId) {
+          console.error('❌ Invalid versionId for revert:', stringVersionId)
+          this.toast.error('Invalid version ID')
+          return
+        }
+
+        console.log('🔄 Reverting change:', { changeId, versionId: stringVersionId })
+
+        const response = await revertChange(stringVersionId, changeId)
+
+        console.log('✅ Revert successful:', response.data)
+        this.toast.success('Change reverted successfully')
+
+        // Refresh preview data
+        this.openPreviewModal(this.selectedProject)
+      } catch (error) {
+        console.error('❌ Error reverting change:', error)
+        this.toast.error('Failed to revert change')
+      }
+    },
+
+    async handleBumpVersion(changeType) {
+      try {
+        // FIX: Extract versionId correctly from Proxy object
+        let versionId = null
+
+        if (this.previewData?.base_version_id) {
+          const baseVersion = this.previewData.base_version_id
+          versionId = baseVersion._id || (typeof baseVersion === 'string' ? baseVersion : null)
+        } else if (this.selectedProject?.current_version) {
+          const currentVersion = this.selectedProject.current_version
+          versionId = typeof currentVersion === 'string' ? currentVersion : currentVersion?._id
+        }
+
+        if (!versionId) {
+          this.toast.error('Cannot find version to bump')
+          return
+        }
+
+        const stringVersionId = String(versionId).trim()
+        const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(stringVersionId)
+
+        if (!isValidObjectId) {
+          console.error('❌ Invalid versionId for bump:', stringVersionId)
+          this.toast.error('Invalid version ID')
+          return
+        }
+
+        console.log('🚀 Bumping version:', { changeType, versionId: stringVersionId })
+
+        const response = await bumpVersion(stringVersionId, changeType)
+
+        console.log('✅ Version bump successful:', response.data)
+        this.toast.success(`Version bumped to ${changeType} successfully`)
+
+        this.closePreviewModal()
+        this.fetchInitialData() // Refresh project list
+      } catch (error) {
+        console.error('❌ Error bumping version:', error)
+        this.toast.error('Failed to bump version')
+      }
+    },
+
+    // async openPreviewModal(project) {
+    //   try {
+    //     this.selectedProject = project
+
+    //     console.log('🔍 Opening preview for project:', {
+    //       projectId: project._id,
+    //       currentVersion: project.current_version,
+    //       currentVersionType: typeof project.current_version,
+    //       currentVersionId: project.current_version?._id,
+    //       currentVersionIdType: typeof project.current_version?._id,
+    //     })
+
+    //     // FIX: Extract versionId correctly for getPreview
+    //     let versionId = project.current_version?._id || project.current_version
+
+    //     if (versionId && typeof versionId === 'object') {
+    //       versionId = versionId._id || versionId.toString()
+    //     }
+
+    //     if (!versionId || typeof versionId !== 'string') {
+    //       console.error('❌ Invalid versionId for preview:', versionId)
+    //       this.toast.error('Invalid version ID')
+    //       return
+    //     }
+
+    //     // Fetch preview data using the correct API
+    //     const response = await getPreview(versionId)
+
+    //     console.log('📊 Preview response:', {
+    //       versionId,
+    //       responseData: response.data,
+    //     })
+
+    //     if (response.data && response.data.data) {
+    //       this.previewData = response.data.data
+    //       this.isPreviewModalVisible = true
+
+    //       console.log('✅ Preview data loaded:', {
+    //         base_version_id: this.previewData.base_version_id,
+    //         base_version_id_type: typeof this.previewData.base_version_id,
+    //         changesCount: this.previewData.changes?.length,
+    //       })
+    //     } else {
+    //       this.toast.info('No pending changes for this project')
+    //     }
+    //   } catch (error) {
+    //     console.error('Error fetching preview:', error)
+    //     this.toast.error('Failed to load preview data')
+    //   }
+    // },
+
+    // Existing methods remain exactly the same...
     toggleMultiSelectMode() {
       this.isMultiSelectMode = !this.isMultiSelectMode
       if (!this.isMultiSelectMode) {
@@ -791,7 +1155,7 @@ export default {
     },
     navigateTo(view) {
       this.currentView = view
-      this.clearSelection() // Clear selection when changing views
+      this.clearSelection()
     },
     async handleEditProject({ projectId, data }) {
       try {
@@ -816,7 +1180,6 @@ export default {
       updateProjectInArray(this.sharedProjects)
     },
     openProject(project) {
-      // Don't open project if in multi-select mode
       if (this.isMultiSelectMode) return
 
       const id = project._id || project.id
@@ -893,7 +1256,6 @@ export default {
         console.error('❌ Failed to refresh user data:', error)
       }
     },
-    // INVITATION MODAL METHODS
     openInvitationsModal() {
       this.isInvitationsModalVisible = true
       this.loadSentInvitations()
@@ -968,6 +1330,7 @@ export default {
 </script>
 
 <style scoped>
+/* Styles remain the same as original */
 .homepage {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: #f9fafb;
@@ -1231,7 +1594,6 @@ export default {
   display: flex;
   gap: 12px;
   align-items: center;
-  /* flex-wrap: wrap; */
 }
 
 .search-input-container {
@@ -1275,33 +1637,6 @@ export default {
 
 .filter-select:focus {
   outline: none;
-  border-color: #1a365d;
-}
-
-/* Multi-select Button */
-.btn-multi-select {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: white;
-  color: #374151;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 150px;
-}
-
-.btn-multi-select:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-}
-
-.btn-multi-select.active {
-  background: #1a365d;
-  color: white;
   border-color: #1a365d;
 }
 
@@ -1360,11 +1695,6 @@ export default {
   font-size: 0.875rem;
   color: #6b7280;
   margin: 0;
-}
-
-.trash-actions {
-  display: flex;
-  gap: 12px;
 }
 
 /* Projects Grid */
@@ -1511,11 +1841,6 @@ export default {
     width: 100%;
   }
 
-  .btn-multi-select {
-    width: 100%;
-    justify-content: center;
-  }
-
   .filter-stats {
     justify-content: space-between;
     width: 100%;
@@ -1525,10 +1850,6 @@ export default {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
-  }
-
-  .trash-actions {
-    width: 100%;
   }
 
   .projects-grid {
