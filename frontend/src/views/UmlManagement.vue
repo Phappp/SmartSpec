@@ -41,10 +41,10 @@
             <span class="material-symbols-outlined">auto_awesome</span>
             Generate Diagram
           </button>
-          <button class="btn-secondary" @click="openManualEditor">
+          <!-- <button class="btn-secondary" @click="openManualEditor">
             <span class="material-symbols-outlined">draw</span>
             Create Manually
-          </button>
+          </button> -->
         </div>
       </div>
 
