@@ -3,28 +3,81 @@
     <!-- Overview Card -->
     <div class="card overview-card">
       <div class="card-header">
-        <h3 class="card-title">{{ data.title }}</h3>
-        <div class="card-actions">
-          <span :class="['status-badge', statusClass]">
-            <i class="material-symbols-outlined">{{ statusIcon }}</i>
-            {{ statusText }}
-          </span>
-          <span :class="['priority-badge', priorityClass]">
-            <i class="material-symbols-outlined">flag</i>
-            {{ priorityText }}
-          </span>
-          <span :class="['severity-badge', severityClass]" v-if="data.severity">
-            <i class="material-symbols-outlined">warning</i>
-            {{ severityText }}
-          </span>
-          <span class="type-badge">
-            <i class="material-symbols-outlined">science</i>
-            {{ data.test_type }}
-          </span>
+        <div class="title-wrapper">
+          <h3 v-if="!isEditing" class="card-title">{{ data.title || 'Untitled Test Case' }}</h3>
+          <input
+            v-else
+            class="input title-input"
+            v-model="formData.title"
+            placeholder="Tên test case"
+          />
+          <div class="card-actions">
+            <template v-if="!isEditing">
+              <span :class="['status-badge', statusClass]">
+                <i class="material-symbols-outlined">{{ statusIcon }}</i>
+                {{ statusText }}
+              </span>
+              <span :class="['priority-badge', priorityClass]">
+                <i class="material-symbols-outlined">flag</i>
+                {{ priorityText }}
+              </span>
+              <span :class="['severity-badge', severityClass]" v-if="data.severity">
+                <i class="material-symbols-outlined">warning</i>
+                {{ severityText }}
+              </span>
+              <span class="type-badge">
+                <i class="material-symbols-outlined">science</i>
+                {{ data.test_type }}
+              </span>
+            </template>
+            <template v-else>
+              <select class="pill-input" v-model="formData.status">
+                <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+              <select class="pill-input" v-model="formData.priority">
+                <option v-for="option in priorityOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+              <select class="pill-input" v-model="formData.severity">
+                <option v-for="option in severityOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+              <select class="pill-input" v-model="formData.test_type">
+                <option v-for="type in typeOptions" :key="type" :value="type">
+                  {{ type }}
+                </option>
+              </select>
+            </template>
+          </div>
+        </div>
+        <div v-if="canEditControls" class="edit-toolbar">
+          <button v-if="!isEditing" class="icon-button" @click="startEditing" title="Chỉnh sửa">
+            <i class="material-symbols-outlined">edit</i>
+          </button>
+          <div v-else class="edit-actions">
+            <button class="btn primary mini" @click="saveChanges">
+              <i class="material-symbols-outlined">save</i>
+              Lưu
+            </button>
+            <button class="btn ghost mini" @click="cancelEditing">
+              <i class="material-symbols-outlined">close</i>
+              Hủy
+            </button>
+          </div>
         </div>
       </div>
 
-      <p class="card-description">{{ data.description || 'No description' }}</p>
+      <p v-if="!isEditing" class="card-description">{{ data.description || 'No description' }}</p>
+      <textarea
+        v-else
+        class="textarea description-input"
+        v-model="formData.description"
+        placeholder="Mô tả test case"
+      ></textarea>
 
       <!-- Project & Version Info -->
       <div class="meta-info-grid">
@@ -169,7 +222,61 @@
         <i class="material-symbols-outlined">playlist_add_check</i>
         Test Steps
       </h4>
-      <div class="steps-container">
+      <div v-if="isEditing" class="steps-editor">
+        <div
+          v-for="(step, index) in formData.steps"
+          :key="`edit-step-${index}`"
+          class="step-edit-row"
+        >
+          <div class="step-number">{{ index + 1 }}</div>
+          <div class="step-edit-content">
+            <label>Hành động</label>
+            <textarea
+              class="textarea"
+              v-model="step.action"
+              placeholder="Mô tả hành động kiểm thử"
+            ></textarea>
+            <label>Kết quả mong đợi</label>
+            <textarea
+              class="textarea"
+              v-model="step.expected_immediate_result"
+              placeholder="Kết quả mong đợi"
+            ></textarea>
+            <label>Verification</label>
+            <input
+              class="input"
+              v-model="step.verification_input"
+              placeholder="Verification points (phân tách bởi dấu phẩy)"
+            />
+            <label>Actual Result</label>
+            <textarea
+              class="textarea"
+              v-model="step.actualResult"
+              placeholder="Kết quả thực tế"
+            ></textarea>
+            <label>Trạng thái</label>
+            <select class="pill-input" v-model="step.status">
+              <option
+                v-for="option in statusOptions"
+                :key="`step-status-${option.value}`"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+            <div class="step-inline-actions">
+              <button class="icon-button" @click="removeStep(index)" title="Xóa bước">
+                <i class="material-symbols-outlined">close</i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <button class="btn ghost mini" @click="addStep">
+          <i class="material-symbols-outlined">add</i>
+          Thêm bước
+        </button>
+      </div>
+      <div v-else class="steps-container">
         <div
           v-for="(step, index) in data.steps || []"
           :key="index"
@@ -406,7 +513,7 @@
 </template>
 
 <script>
-import { computed } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 export default {
   name: 'TestcaseDetail',
@@ -415,8 +522,179 @@ export default {
       type: Object,
       required: true,
     },
+    canEdit: {
+      type: Boolean,
+      default: false,
+    },
+    mode: {
+      type: String,
+      default: 'view',
+    },
+    isCreating: {
+      type: Boolean,
+      default: false,
+    },
   },
-  setup(props) {
+  emits: ['submit', 'cancel'],
+  setup(props, { emit }) {
+    const isEditing = ref(props.isCreating)
+    const formData = reactive({
+      title: '',
+      description: '',
+      status: 'not_executed',
+      priority: 'medium',
+      severity: 'medium',
+      test_type: 'integration',
+      steps: [],
+    })
+
+    const statusOptions = [
+      { value: 'not_executed', label: 'Not Executed' },
+      { value: 'in_progress', label: 'In Progress' },
+      { value: 'passed', label: 'Passed' },
+      { value: 'failed', label: 'Failed' },
+      { value: 'blocked', label: 'Blocked' },
+    ]
+
+    const priorityOptions = [
+      { value: 'critical', label: 'Critical' },
+      { value: 'high', label: 'High' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'low', label: 'Low' },
+    ]
+
+    const severityOptions = [
+      { value: 'minor', label: 'Minor' },
+      { value: 'major', label: 'Major' },
+      { value: 'critical', label: 'Critical' },
+    ]
+    const typeOptions = ['unit', 'integration', 'api', 'ui', 'performance', 'security']
+
+    const hydrateForm = () => {
+      const source = props.data || {}
+      formData.title = source.title || ''
+      formData.description = source.description || ''
+      formData.status = source.status || 'not_executed'
+      formData.priority = source.priority || 'medium'
+      formData.severity = source.severity || 'medium'
+      formData.test_type = source.test_type || 'integration'
+      formData.steps = Array.isArray(source.steps)
+        ? source.steps.map((step, index) => ({
+            step_number: step.step_number || index + 1,
+            action: step.action || '',
+            expected_immediate_result: step.expected_immediate_result || '',
+            verification_points: Array.isArray(step.verification_points)
+              ? [...step.verification_points]
+              : [],
+            verification_input: Array.isArray(step.verification_points)
+              ? step.verification_points.join(', ')
+              : '',
+            actualResult: step.actualResult || '',
+            status: step.status || 'not_executed',
+          }))
+        : []
+    }
+
+    watch(
+      () => props.data,
+      () => {
+        if (!isEditing.value || props.mode !== 'create') {
+          hydrateForm()
+        }
+      },
+      { immediate: true }
+    )
+
+    watch(
+      () => props.mode,
+      (mode) => {
+        if (mode === 'create') {
+          isEditing.value = true
+          hydrateForm()
+        } else if (!props.canEdit) {
+          isEditing.value = false
+        }
+      }
+    )
+
+    const canEditControls = computed(() => props.canEdit || props.mode === 'create')
+
+    const startEditing = () => {
+      if (!props.canEdit) return
+      isEditing.value = true
+      hydrateForm()
+    }
+
+    const cancelEditing = () => {
+      if (props.mode === 'create') {
+        emit('cancel')
+        return
+      }
+      isEditing.value = false
+      hydrateForm()
+    }
+
+    const cleanSteps = () =>
+      formData.steps
+        .map((step, index) => {
+          const verificationPoints = step.verification_input
+            ? step.verification_input
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean)
+            : Array.isArray(step.verification_points)
+            ? step.verification_points.filter(Boolean)
+            : []
+          return {
+            step_number: Number(step.step_number) || index + 1,
+            action: step.action || '',
+            expected_immediate_result: step.expected_immediate_result || '',
+            verification_points: verificationPoints,
+            actualResult: step.actualResult || '',
+            status: step.status || 'not_executed',
+          }
+        })
+        .filter((step) => step.action || step.expected_immediate_result)
+
+    const saveChanges = () => {
+      // Transform severity trước khi gửi
+      const transformedSeverity = formData.severity === 'medium' ? 'minor' : formData.severity
+
+      const payload = {
+        ...props.data,
+        title: formData.title,
+        description: formData.description,
+        status: formData.status,
+        priority: formData.priority,
+        severity: transformedSeverity, // Sử dụng giá trị đã transform
+        test_type: formData.test_type,
+        steps: cleanSteps(),
+      }
+
+      emit('submit', payload)
+      if (props.mode !== 'create') {
+        isEditing.value = false
+      }
+    }
+
+    const addStep = () => {
+      formData.steps.push({
+        step_number: formData.steps.length + 1,
+        action: '',
+        expected_immediate_result: '',
+        verification_points: [],
+        verification_input: '',
+        actualResult: '',
+        status: 'not_executed',
+      })
+    }
+
+    const removeStep = (index) => {
+      formData.steps.splice(index, 1)
+    }
+
+    const currentStatus = computed(() => (isEditing.value ? formData.status : props.data.status))
+
     const statusClass = computed(() => {
       const statusMap = {
         passed: 'status-passed',
@@ -425,7 +703,7 @@ export default {
         not_executed: 'status-not-executed',
         in_progress: 'status-progress',
       }
-      return statusMap[props.data.status] || 'status-default'
+      return statusMap[currentStatus.value] || 'status-default'
     })
 
     const statusIcon = computed(() => {
@@ -436,7 +714,7 @@ export default {
         not_executed: 'pending',
         in_progress: 'schedule',
       }
-      return iconMap[props.data.status] || 'help'
+      return iconMap[currentStatus.value] || 'help'
     })
 
     const statusText = computed(() => {
@@ -447,8 +725,12 @@ export default {
         not_executed: 'Not Executed',
         in_progress: 'In Progress',
       }
-      return statusMap[props.data.status] || props.data.status
+      return statusMap[currentStatus.value] || currentStatus.value || 'N/A'
     })
+
+    const currentPriority = computed(() =>
+      isEditing.value ? formData.priority : props.data.priority
+    )
 
     const priorityClass = computed(() => {
       const priorityMap = {
@@ -457,7 +739,7 @@ export default {
         medium: 'priority-medium',
         low: 'priority-low',
       }
-      return priorityMap[props.data.priority] || 'priority-default'
+      return priorityMap[currentPriority.value] || 'priority-default'
     })
 
     const priorityText = computed(() => {
@@ -467,8 +749,12 @@ export default {
         medium: 'Medium',
         low: 'Low',
       }
-      return priorityMap[props.data.priority] || props.data.priority
+      return priorityMap[currentPriority.value] || currentPriority.value || 'N/A'
     })
+
+    const currentSeverity = computed(() =>
+      isEditing.value ? formData.severity : props.data.severity
+    )
 
     const severityClass = computed(() => {
       const severityMap = {
@@ -476,7 +762,7 @@ export default {
         major: 'severity-major',
         minor: 'severity-minor',
       }
-      return severityMap[props.data.severity] || 'severity-default'
+      return severityMap[currentSeverity.value] || 'severity-default'
     })
 
     const severityText = computed(() => {
@@ -485,22 +771,33 @@ export default {
         major: 'Major',
         minor: 'Minor',
       }
-      return severityMap[props.data.severity] || props.data.severity
+      return severityMap[currentSeverity.value] || currentSeverity.value || 'N/A'
     })
 
     const passedSteps = computed(() => {
-      const steps = props.data.steps || []
-      return steps.filter((step) => step.actualResult && step.actualResult.includes('PASS')).length
+      const steps = isEditing.value ? formData.steps : props.data.steps || []
+      return steps.filter((step) => step.status === 'passed').length
     })
 
     const getStepStatusClass = (step) => {
-      if (!step.actualResult) return 'step-not-executed'
-      return step.actualResult.includes('PASS') ? 'step-passed' : 'step-failed'
+      if (!step.status) return 'step-default'
+      const statusMap = {
+        passed: 'step-passed',
+        failed: 'step-failed',
+        blocked: 'step-blocked',
+        not_executed: 'step-not-executed',
+      }
+      return statusMap[step.status] || 'step-default'
     }
 
     const getStepStatusIcon = (step) => {
-      if (!step.actualResult) return 'radio_button_unchecked'
-      return step.actualResult.includes('PASS') ? 'check_circle' : 'cancel'
+      const iconMap = {
+        passed: 'check_circle',
+        failed: 'cancel',
+        blocked: 'block',
+        not_executed: 'pause_circle',
+      }
+      return iconMap[step.status] || 'radio_button_unchecked'
     }
 
     const formatDate = (dateString) => {
@@ -520,6 +817,18 @@ export default {
       getStepStatusClass,
       getStepStatusIcon,
       formatDate,
+      isEditing,
+      formData,
+      canEditControls,
+      startEditing,
+      cancelEditing,
+      saveChanges,
+      addStep,
+      removeStep,
+      statusOptions,
+      priorityOptions,
+      severityOptions,
+      typeOptions,
     }
   },
 }
@@ -558,6 +867,109 @@ export default {
   font-weight: 700;
   color: #7ee787;
   margin: 0;
+}
+.title-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.input {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #f0f6fc;
+  font-size: 14px;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 64px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #f0f6fc;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.title-input {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.description-input {
+  margin-top: 8px;
+}
+
+.pill-input {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.edit-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn.mini {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.btn.primary {
+  background: #238636;
+  border-color: #2ea043;
+  color: #fff;
+}
+
+.btn.ghost {
+  background: transparent;
+  border-color: #30363d;
+  color: #c9d1d9;
+}
+
+.icon-button {
+  border: 1px solid #30363d;
+  background: transparent;
+  color: #8b949e;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button:hover {
+  border-color: #58a6ff;
+  color: #58a6ff;
+
   flex: 1;
 }
 
@@ -721,6 +1133,36 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.steps-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.step-edit-row {
+  display: flex;
+  gap: 12px;
+}
+
+.step-edit-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.step-edit-content label {
+  font-size: 12px;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.step-inline-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .step-item {
