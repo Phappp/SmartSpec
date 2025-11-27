@@ -179,7 +179,9 @@ export default {
       return total
     })
 
-    const activeProjects = computed(() => props.projects.filter((p) => p.status === 'active').length || 0)
+    const activeProjects = computed(
+      () => props.projects.filter((p) => p.status === 'active').length || 0
+    )
 
     const toggleSection = (sectionType) => {
       sectionStates.value[sectionType] = !sectionStates.value[sectionType]

@@ -25,11 +25,73 @@
         Diagram Preview
       </h4>
       <div class="diagram-preview">
-        <div class="preview-placeholder">
+        <!-- Preview Image (nếu đã generate) -->
+        <img
+          v-if="previewImage"
+          :src="previewImage"
+          :alt="data.name || 'UML Diagram'"
+          class="preview-image"
+          @load="onPreviewImageLoad"
+          @error="onPreviewImageError"
+        />
+        
+        <!-- Use Case Diagram Renderer -->
+        <div v-else-if="diagramType === 'usecase' || data.type === 'uml-usecase'" class="preview-generator">
+          <UCDRenderer
+            :ref="`previewGenerator_${data.id || data._id}`"
+            :diagram-data="normalizedDiagramData"
+            :preview-mode="true"
+            :auto-generate-preview="true"
+            :optimize-for-preview="true"
+            @preview-generated="handlePreviewGenerated"
+            class="hidden-renderer"
+          />
+          <div class="generating-preview">
+            <div class="loading-spinner-small"></div>
+            <span>Generating preview...</span>
+          </div>
+        </div>
+        
+        <!-- Activity Diagram Renderer -->
+        <div v-else-if="diagramType === 'activity' || data.type === 'uml-activity'" class="preview-generator">
+          <ActivityDiagramRenderer
+            :ref="`previewGenerator_${data.id || data._id}`"
+            :diagram-data="normalizedDiagramData"
+            :preview-mode="true"
+            :auto-generate-preview="true"
+            :optimize-for-preview="true"
+            @preview-generated="handlePreviewGenerated"
+            class="hidden-renderer"
+          />
+          <div class="generating-preview">
+            <div class="loading-spinner-small"></div>
+            <span>Generating preview...</span>
+          </div>
+        </div>
+        
+        <!-- Sequence Diagram Renderer -->
+        <div v-else-if="diagramType === 'sequence' || data.type === 'uml-sequence'" class="preview-generator">
+          <SequenceDiagramRenderer
+            :ref="`previewGenerator_${data.id || data._id}`"
+            :diagram-data="normalizedDiagramData"
+            :preview-mode="true"
+            :auto-generate-preview="true"
+            :optimize-for-preview="true"
+            @preview-generated="handlePreviewGenerated"
+            class="hidden-renderer"
+          />
+          <div class="generating-preview">
+            <div class="loading-spinner-small"></div>
+            <span>Generating preview...</span>
+          </div>
+        </div>
+        
+        <!-- Fallback Placeholder -->
+        <div v-else class="preview-placeholder">
           <i class="material-symbols-outlined preview-icon">account_tree</i>
-          <h4 class="preview-title">{{ data.type }}</h4>
+          <h4 class="preview-title">{{ data.type || 'UML Diagram' }}</h4>
           <p class="preview-description">Visualization of {{ data.name }}</p>
-          <div class="preview-hint">Diagram would be rendered here in production</div>
+          <div class="preview-hint">Diagram type not recognized</div>
         </div>
       </div>
     </div>
@@ -79,10 +141,18 @@
 </template>
 
 <script>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import UCDRenderer from '@/components/uml/usecase_diagram/UCDRenderer.vue'
+import ActivityDiagramRenderer from '@/components/uml/activity_diagram/ActivityDiagramRenderer.vue'
+import SequenceDiagramRenderer from '@/components/uml/sequence_diagram/SequenceDiagramRenderer.vue'
 
 export default {
   name: 'UmlDetail',
+  components: {
+    UCDRenderer,
+    ActivityDiagramRenderer,
+    SequenceDiagramRenderer,
+  },
   props: {
     data: {
       type: Object,
@@ -90,6 +160,8 @@ export default {
     }
   },
   setup(props) {
+    // Khởi tạo previewImage từ data nếu có sẵn
+    const previewImage = ref(props.data.previewImage || null)
     const statusClass = computed(() => {
       const statusMap = {
         completed: 'status-completed',
@@ -117,10 +189,102 @@ export default {
       return statusMap[props.data.status] || props.data.status
     })
 
+    // Xác định loại diagram từ data
+    const diagramType = computed(() => {
+      if (props.data.type) {
+        if (props.data.type.includes('usecase')) return 'usecase'
+        if (props.data.type.includes('activity')) return 'activity'
+        if (props.data.type.includes('sequence')) return 'sequence'
+      }
+      // Fallback: thử đoán từ cấu trúc data
+      if (props.data.actors && props.data.usecases) return 'usecase'
+      if (props.data.nodes && props.data.edges) return 'activity'
+      if (props.data.lifelines && props.data.messages) return 'sequence'
+      return null
+    })
+
+    // Chuẩn hoá data để renderer có thể sử dụng
+    // Renderer cần data đúng format, nên truyền toàn bộ data nếu có
+    const normalizedDiagramData = computed(() => {
+      // Nếu data đã có đầy đủ structure, dùng luôn
+      if (props.data.nodes || props.data.actors || props.data.lifelines) {
+        return {
+          ...props.data,
+          id: props.data.id || props.data._id,
+          _id: props.data._id || props.data.id,
+        }
+      }
+
+      // Nếu không, tạo structure cơ bản
+      const base = {
+        id: props.data.id || props.data._id,
+        _id: props.data._id || props.data.id,
+        name: props.data.name,
+        description: props.data.description,
+        lang: props.data.lang || 'en-US',
+      }
+
+      if (diagramType.value === 'usecase') {
+        return {
+          ...base,
+          actors: props.data.actors || [],
+          usecases: props.data.usecases || [],
+          associations: props.data.associations || [],
+          relationships: props.data.relationships || [],
+        }
+      } else if (diagramType.value === 'activity') {
+        return {
+          ...base,
+          nodes: props.data.nodes || [],
+          edges: props.data.edges || [],
+          lanes: props.data.lanes || [],
+        }
+      } else if (diagramType.value === 'sequence') {
+        return {
+          ...base,
+          lifelines: props.data.lifelines || [],
+          messages: props.data.messages || [],
+          fragments: props.data.fragments || [],
+        }
+      }
+
+      return base
+    })
+
+    // Reset previewImage khi data thay đổi
+    watch(
+      () => props.data.id || props.data._id,
+      () => {
+        previewImage.value = props.data.previewImage || null
+      }
+    )
+
+    // Xử lý preview generated từ renderer
+    const handlePreviewGenerated = (previewData) => {
+      if (previewData) {
+        previewImage.value = previewData
+      }
+    }
+
+    const onPreviewImageLoad = (event) => {
+      event.target.style.opacity = '1'
+    }
+
+    const onPreviewImageError = (event) => {
+      event.target.style.display = 'none'
+      previewImage.value = null
+    }
+
     return {
       statusClass,
       statusIcon,
-      statusText
+      statusText,
+      diagramType,
+      normalizedDiagramData,
+      previewImage,
+      handlePreviewGenerated,
+      onPreviewImageLoad,
+      onPreviewImageError,
     }
   }
 }
@@ -199,6 +363,66 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: auto;
+  position: relative;
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  object-fit: contain;
+  transition: opacity 0.3s ease;
+  opacity: 0;
+}
+
+.preview-generator {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  position: relative;
+}
+
+.hidden-renderer {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+}
+
+.generating-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #8b949e;
+  font-size: 14px;
+  background: #0d1117;
+}
+
+.loading-spinner-small {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #30363d;
+  border-top: 2px solid #ffa657;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .preview-placeholder {

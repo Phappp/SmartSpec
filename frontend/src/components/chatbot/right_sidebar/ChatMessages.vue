@@ -58,6 +58,23 @@
           <div class="message-time">{{ message.time }}</div>
         </div>
       </div>
+      
+      <!-- Loading indicator khi chatbot đang thinking -->
+      <div v-if="isThinking" class="message message-bot thinking-message">
+        <div class="message-avatar">
+          <span class="material-symbols-outlined avatar-bot">smart_toy</span>
+        </div>
+        <div class="message-content">
+          <div class="message-text thinking-text">
+            <div class="thinking-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <span class="thinking-label">Đang xử lý...</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div v-if="isDragOver" class="drag-overlay">
@@ -80,6 +97,10 @@ export default {
       default: () => [],
     },
     isDragOver: {
+      type: Boolean,
+      default: false,
+    },
+    isThinking: {
       type: Boolean,
       default: false,
     },
@@ -307,6 +328,59 @@ export default {
   user-select: none;
   -webkit-user-select: none; /* Safari */
   -ms-user-select: none; /* IE/Edge */
+}
+
+.thinking-message {
+  opacity: 0.8;
+}
+
+.thinking-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: #21262d;
+  border-radius: 16px;
+  border-bottom-left-radius: 4px;
+}
+
+.thinking-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.thinking-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #8b949e;
+  animation: thinking-bounce 1.4s infinite ease-in-out;
+}
+
+.thinking-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.thinking-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+.thinking-label {
+  color: #8b949e;
+  font-size: 13px;
+  font-style: italic;
+}
+
+@keyframes thinking-bounce {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .drag-overlay {

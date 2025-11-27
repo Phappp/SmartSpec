@@ -1,5 +1,8 @@
 <template>
   <div class="chatbot-agent">
+    <div v-if="errorMessage" class="error-banner">
+      {{ errorMessage }}
+    </div>
     <div class="chatbot-container">
       <LeftSidebar
         :selectedProject="selectedProject"
@@ -88,6 +91,7 @@ export default {
     const dragHintVisible = ref(false)
     const isDragOver = ref(false)
     const isStreaming = ref(false)
+    const isWaitingResponse = ref(false)
     const showProjectModal = ref(false)
     const streamingInterval = ref(null)
     const errorMessage = ref('')
@@ -128,6 +132,11 @@ export default {
     // Computed properties
     const currentEntityData = computed(() => {
       if (!selectedEntity.value) return null
+
+      // Nếu selectedEntity đã có kèm data (từ hành động read của LLM) thì ưu tiên dùng luôn
+      if (selectedEntity.value.data) {
+        return selectedEntity.value.data
+      }
 
       if (selectedEntity.value.type === 'uml') {
         const umlType = selectedEntity.value.umlType
@@ -357,14 +366,37 @@ export default {
 
     const addContextToChat = async (contextData) => {
       if (!contextData || !currentChatId.value) return
-      const normalizedType = contextData.type?.startsWith('uml') ? 'uml' : contextData.type
+      
+      // Xử lý database-table: chuyển thành database type với data là table
+      let normalizedType = contextData.type?.startsWith('uml') ? 'uml' : contextData.type
+      let contextPayload = {
+        type: normalizedType,
+        entityId: contextData.id,
+        name: contextData.name,
+        data: contextData.data,
+      }
+      
+      // Nếu là database-table, chuyển thành database type và đảm bảo data có đầy đủ thông tin
+      if (contextData.type === 'database-table') {
+        normalizedType = 'database'
+        contextPayload = {
+          type: 'database',
+          entityId: contextData.data?.databaseId || contextData.id,
+          name: contextData.data?.databaseName || contextData.name,
+          data: {
+            // Giữ nguyên database info nếu có
+            ...(contextData.data?.databaseId ? {
+              id: contextData.data.databaseId,
+              name: contextData.data.databaseName,
+            } : {}),
+            // Thêm table vào data
+            table: contextData.data,
+          },
+        }
+      }
+      
       try {
-        const response = await chatbotApi.addContext(currentChatId.value, {
-          type: normalizedType,
-          entityId: contextData.id,
-          name: contextData.name,
-          data: contextData.data,
-        })
+        const response = await chatbotApi.addContext(currentChatId.value, contextPayload)
         const payload = unwrap(response)
         updateConversationContexts(currentChatId.value, payload?.contexts || [])
       } catch (error) {
@@ -451,28 +483,100 @@ export default {
       const trimmed = messageText?.trim()
       if (!trimmed || !currentChatId.value || isStreaming.value) return
 
+      // Clear previous error before sending a new message
+      errorMessage.value = ''
+
       try {
+        console.debug('[Chatbot] sending message', {
+          conversationId: currentChatId.value,
+          text: trimmed,
+        })
+        isWaitingResponse.value = true
+
         const response = await chatbotApi.sendMessage(currentChatId.value, trimmed)
         const payload = unwrap(response)
+
+        console.debug('[Chatbot] sendMessage payload', {
+          hasUserMessage: !!payload?.userMessage,
+          botMessagesCount: Array.isArray(payload?.botMessages) ? payload.botMessages.length : 0,
+          actionsCount: Array.isArray(payload?.actions) ? payload.actions.length : 0,
+          operationsCount: Array.isArray(payload?.operations) ? payload.operations.length : 0,
+        })
+
         const currentChat = findChatById(currentChatId.value)
-      if (!currentChat) return
+        if (!currentChat) return
 
         if (payload?.userMessage) {
           currentChat.messages.push(payload.userMessage)
         }
 
-        if (payload?.botMessage) {
-      currentChat.messages.push({
+        // Nhiều bot messages: hiển thị ngay các message đầu, stream message cuối
+        if (payload?.botMessages?.length) {
+          const msgs = payload.botMessages
+          const last = msgs[msgs.length - 1]
+
+          msgs.slice(0, -1).forEach((m) => {
+            currentChat.messages.push(m)
+          })
+
+          if (last) {
+            currentChat.messages.push({
+              id: last.id,
+              sender: 'bot',
+              text: '',
+              displayText: '',
+              isStreaming: true,
+              time: last.time,
+              type: last.type || 'text',
+            })
+            isStreaming.value = true
+            simulateStreaming(last.text || '', last.id)
+          }
+        } else if (payload?.botMessage) {
+          currentChat.messages.push({
             id: payload.botMessage.id,
-        sender: 'bot',
-        text: '',
-        displayText: '',
-        isStreaming: true,
+            sender: 'bot',
+            text: '',
+            displayText: '',
+            isStreaming: true,
             time: payload.botMessage.time,
             type: payload.botMessage.type || 'text',
-      })
-      isStreaming.value = true
+          })
+          isStreaming.value = true
           simulateStreaming(payload.botMessage.text || '', payload.botMessage.id)
+        }
+
+        // Nếu có actions từ BE (đặc biệt là READ), tự động select entity tương ứng cho main content
+        if (Array.isArray(payload?.actions) && payload.actions.length) {
+          const firstRead = payload.actions.find(
+            (a) => a?.success && a.action === 'read' && a.data
+          )
+          if (firstRead) {
+            const data = firstRead.data
+            const rawType = firstRead.entityType || firstRead.entity_type || 'usecase'
+            let mappedType = rawType
+            const extra = {}
+
+            if (rawType.startsWith('uml-')) {
+              const umlType = rawType.replace('uml-', '')
+              mappedType = 'uml'
+              extra.umlType = umlType
+            }
+
+            console.debug('[Chatbot] auto-select entity from action', {
+              rawType,
+              mappedType,
+              id: data?.id || firstRead.entityId,
+            })
+
+            selectedEntity.value = {
+              type: mappedType,
+              id: data?.id || firstRead.entityId,
+              name: data?.name || data?.title || firstRead.entityId,
+              data,
+              ...extra,
+            }
+          }
         }
 
         if (payload?.operations?.length) {
@@ -482,6 +586,16 @@ export default {
         }
       } catch (error) {
         console.error('Không thể gửi tin nhắn', error)
+        errorMessage.value =
+          error?.response?.data?.message || 'Không thể gửi tin nhắn, vui lòng thử lại sau'
+        // Ensure streaming state is cleaned up on error
+        if (streamingInterval.value) {
+          clearInterval(streamingInterval.value)
+          streamingInterval.value = null
+        }
+        isStreaming.value = false
+      } finally {
+        isWaitingResponse.value = false
       }
     }
 
@@ -533,6 +647,7 @@ export default {
       dragHintVisible,
       isDragOver,
       isStreaming,
+      isWaitingResponse,
       showProjectModal,
       errorMessage,
       loadingStates,
@@ -566,6 +681,14 @@ export default {
   color: #c9d1d9;
   height: 100vh;
   overflow: hidden;
+}
+
+.error-banner {
+  background-color: #da3633;
+  color: #f0f6fc;
+  padding: 8px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid #ff7b72;
 }
 
 .chatbot-container {

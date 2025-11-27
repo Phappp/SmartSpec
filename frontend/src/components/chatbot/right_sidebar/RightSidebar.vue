@@ -18,13 +18,17 @@
     <ChatMessages
       :messages="currentChatMessages"
       :isDragOver="isDragOver"
+      :isThinking="isStreaming || isWaitingResponse"
       @drag-over="$emit('drag-over')"
       @drag-leave="$emit('drag-leave')"
       @drop="$emit('drop', $event)"
       @example-message="$emit('example-message', $event)"
     />
 
-    <ChatInput @send-message="$emit('send-message', $event)" :isLoading="isStreaming" />
+    <ChatInput
+      @send-message="$emit('send-message', $event)"
+      :isLoading="isStreaming || isWaitingResponse"
+    />
   </div>
 </template>
 
@@ -57,6 +61,10 @@ export default {
       default: () => [],
     },
     isStreaming: {
+      type: Boolean,
+      default: false,
+    },
+    isWaitingResponse: {
       type: Boolean,
       default: false,
     },

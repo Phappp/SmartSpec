@@ -15,9 +15,19 @@
     </div>
 
     <!-- Tables -->
-    <div v-for="table in data.tables" :key="table.name" class="table-card">
+    <div 
+      v-for="table in data.tables" 
+      :key="table.name" 
+      class="table-card"
+      draggable="true"
+      @dragstart="onTableDragStart($event, table)"
+      @dragend="onTableDragEnd"
+    >
       <div class="table-header">
-        <h4 class="table-name">{{ table.name }}</h4>
+        <h4 class="table-name">
+          <i class="material-symbols-outlined drag-icon">drag_indicator</i>
+          {{ table.name }}
+        </h4>
         <span class="table-columns">
           <i class="material-symbols-outlined">view_column</i>
           {{ table.columns.length }} columns
@@ -111,6 +121,27 @@ export default {
       required: true,
     },
   },
+  emits: ['add-to-chat'],
+  methods: {
+    onTableDragStart(event, table) {
+      const dragData = {
+        type: 'database-table',
+        id: table.name,
+        name: table.name,
+        data: {
+          ...table,
+          databaseName: this.data.name,
+          databaseId: this.data.id || this.data._id,
+        },
+      }
+      event.dataTransfer.setData('application/json', JSON.stringify(dragData))
+      event.dataTransfer.effectAllowed = 'copy'
+      event.currentTarget.classList.add('dragging')
+    },
+    onTableDragEnd(event) {
+      event.currentTarget.classList.remove('dragging')
+    },
+  },
 }
 </script>
 
@@ -181,6 +212,20 @@ export default {
   border: 1px solid #30363d;
   border-radius: 8px;
   overflow: hidden;
+  cursor: grab;
+  transition: all 0.2s;
+}
+
+.table-card:hover {
+  border-color: #58a6ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2);
+}
+
+.table-card.dragging {
+  opacity: 0.6;
+  cursor: grabbing;
+  border: 2px dashed #58a6ff;
 }
 
 .table-header {
@@ -197,6 +242,19 @@ export default {
   font-weight: 600;
   color: #d2a8ff;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drag-icon {
+  font-size: 18px;
+  color: #8b949e;
+  cursor: grab;
+}
+
+.table-card:hover .drag-icon {
+  color: #58a6ff;
 }
 
 .table-columns {

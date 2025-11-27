@@ -183,31 +183,93 @@ export class ChatbotService {
         const action = (rawAction as any).action;
 
         if (action === "read") {
-            const entity = await gateway.read(entityType, (rawAction as any).entityId);
+            const entityId = (rawAction as any).entityId;
+            let entity = await gateway.read(entityType, entityId);
+
+            // Fallback: nếu DB không có, thử lấy từ context_items (snapshot khi user kéo‑thả)
+            if (!entity && Array.isArray(conversation.context_items)) {
+                const loweredId = String(entityId || "").toLowerCase();
+                const ctx = conversation.context_items.find((context: any) => {
+                    // Ưu tiên match theo loại entity, nhưng nếu LLM không set đúng thì vẫn cho phép match rộng hơn
+                    if (context.entity_type && context.entity_type !== entityType) return false;
+
+                    const sameId = String(context.entity_id || "").toLowerCase() === loweredId;
+                    const sameName = String(context.name || "").toLowerCase() === loweredId;
+
+                    const snapshot: any = context.data_snapshot || {};
+                    const snapId = snapshot._id || snapshot.id;
+                    const sameSnapshotId = snapId && String(snapId).toLowerCase() === loweredId;
+
+                    const includesName =
+                        String(context.name || "").toLowerCase().includes(loweredId) ||
+                        loweredId.includes(String(context.name || "").toLowerCase());
+
+                    return sameId || sameName || sameSnapshotId || includesName;
+                });
+                if (ctx?.data_snapshot) {
+                    entity = ctx.data_snapshot;
+                }
+            }
+
             return {
                 success: true,
                 needsApproval: false,
                 entityType,
                 action: action,
-                entityId: (rawAction as any).entityId,
+                entityId,
                 data: entity,
             };
         }
 
         if (action === "write") {
             const payload = (rawAction as any).payload || {};
-            const result = await gateway.write(entityType, (rawAction as any).entityId || null, payload);
-            const entityId =
-                (rawAction as any).entityId ||
-                result.entity?.id ||
+            let entityId = (rawAction as any).entityId || null;
+
+            // Nếu LLM không truyền entityId nhưng người dùng đang chỉnh sửa entity đã tạo trước đó (chưa keep),
+            // hãy tìm entityId từ pending operations trong conversation này
+            if (!entityId && Array.isArray(conversation.context_items)) {
+                // Tìm trong context_items: entity cùng type và có data_snapshot với _id
+                const matchingContext = conversation.context_items.find((ctx: any) => {
+                    if (ctx.entity_type !== entityType) return false;
+                    const snapshot = ctx.data_snapshot || {};
+                    return snapshot._id || snapshot.id;
+                });
+                if (matchingContext?.data_snapshot) {
+                    entityId = matchingContext.data_snapshot._id?.toString() || matchingContext.data_snapshot.id;
+                }
+            }
+
+            // Nếu vẫn không có entityId, thử tìm từ pending operations
+            if (!entityId) {
+                const pendingOps = await ChatOperation.find({
+                    conversation_id: conversation._id,
+                    entity_type: entityType,
+                    status: "pending",
+                    action: "create",
+                })
+                    .sort({ created_at: -1 })
+                    .limit(1)
+                    .lean();
+                if (pendingOps.length > 0) {
+                    entityId = pendingOps[0].entity_id;
+                }
+            }
+
+            const result = await gateway.write(entityType, entityId, payload);
+
+            // Ưu tiên sử dụng _id MongoDB (hoặc subdocument _id) làm entityId chuẩn cho toàn hệ thống,
+            // tránh giữ lại các giá trị tạm như "new" hay mã business.
+            const finalEntityId =
                 result.entity?._id?.toString() ||
+                result.afterSnapshot?._id?.toString() ||
+                result.entity?.id ||
                 result.afterSnapshot?.id ||
-                result.afterSnapshot?._id?.toString();
+                entityId;
 
             const operation = await this.logOperation({
                 conversation,
                 entityType,
-                entityId,
+                entityId: finalEntityId,
                 action: result.action,
                 before: result.beforeSnapshot,
                 after: result.afterSnapshot,
@@ -215,7 +277,7 @@ export class ChatbotService {
                 description:
                     result.action === "create"
                         ? `Tạo ${entityType} mới`
-                        : `Cập nhật ${entityType} ${entityId}`,
+                        : `Cập nhật ${entityType} ${finalEntityId}`,
             });
 
             return {
@@ -223,7 +285,7 @@ export class ChatbotService {
                 needsApproval: result.action !== "read",
                 entityType,
                 action: action,
-                entityId,
+                entityId: finalEntityId,
                 data: result.entity,
                 operation,
             };
@@ -417,7 +479,8 @@ Current version: ${version?._id || "N/A"}`;
             ]);
 
         const usecases = (version?.requirement_model || []).map((item: any) => ({
-            id: item.id,
+            // Dùng _id của subdocument để LLM và client luôn làm việc với Mongo ObjectId
+            id: item._id?.toString() || item.id,
             type: "usecase",
             name: item.name,
             description: item.goal ?? item.description ?? "",
@@ -878,11 +941,16 @@ Current version: ${version?._id || "N/A"}`;
                         user_id: this.toObjectId(userId),
                     },
                     context_snapshot: {
-                        active_entities: (conversation.context_items || []).map((context: any) => ({
-                            entity_type: context.entity_type,
-                            entity_id: context.entity_id,
-                            entity_name: context.name,
-                        })),
+                        active_entities: (conversation.context_items || []).map((context: any) => {
+                            const snapshot: any = context.data_snapshot || {};
+                            const rawId = snapshot._id || snapshot.id || context.entity_id;
+                            return {
+                                entity_type: context.entity_type,
+                                entity_id: rawId ? String(rawId) : undefined,
+                                entity_name: context.name,
+                                entity_data: snapshot || undefined,
+                            };
+                        }),
                     },
                 },
             ]);
@@ -896,7 +964,21 @@ Current version: ${version?._id || "N/A"}`;
                 userMessage: messageText.trim(),
             };
 
+            console.log("[ChatbotService.sendMessage] plannerInput", {
+                conversationId: conversation._id.toString(),
+                userId,
+                message: plannerInput.userMessage,
+                contextsCount: plannerInput.contexts.length,
+                historyCount: plannerInput.history.length,
+            });
+
             const plan = await this.planner.generatePlan(plannerInput);
+
+            console.log("[ChatbotService.sendMessage] planner output", {
+                replyPreview: (plan.reply || "").slice(0, 200),
+                actionsCount: Array.isArray(plan.actions) ? plan.actions.length : 0,
+                hasMemoryNote: !!plan.memoryNote,
+            });
             const gateway = new ChatEntityGateway(
                 conversation.project_id as Types.ObjectId,
                 conversation.version_id as Types.ObjectId
@@ -908,6 +990,14 @@ Current version: ${version?._id || "N/A"}`;
                     const result = await this.executeAction(action as ChatAction, gateway, conversation, userId);
                     actionResults.push(result);
                 } catch (error: any) {
+                    console.error("[ChatbotService.sendMessage] executeAction error", {
+                        action: action.action,
+                        entityType: (action as any).entityType,
+                        entityId: (action as any).entityId,
+                        payload: (action as any).payload,
+                        message: error?.message,
+                        stack: error?.stack,
+                    });
                     actionResults.push({
                         success: false,
                         action: action.action,
@@ -918,50 +1008,68 @@ Current version: ${version?._id || "N/A"}`;
                 }
             }
 
-            const replyText = plan.reply || "Tôi đã tiếp nhận yêu cầu của bạn.";
+            console.log("[ChatbotService.sendMessage] actions executed", {
+                total: actionResults.length,
+                successes: actionResults.filter((a: any) => a.success).length,
+                reads: actionResults.filter((a: any) => a.action === "read").length,
+                writes: actionResults.filter((a: any) => a.action === "write").length,
+                deletes: actionResults.filter((a: any) => a.action === "delete").length,
+                operationsCreated: actionResults.filter((a: any) => !!a.operation).length,
+            });
 
-            // Nếu có hành động READ thành công, bổ sung tóm tắt ngắn gọn vào câu trả lời
-            const readSummaries: string[] = [];
-            for (const ar of actionResults) {
-                if (ar.success && ar.action === "read" && ar.data) {
-                    if (ar.entityType === "usecase") {
-                        const uc = ar.data as any;
-                        readSummaries.push(
-                            `• Use case: ${uc.name || uc.goal || ar.entityId}\n  - Goal: ${uc.goal || "N/A"}\n  - Preconditions: ${(uc.preconditions || []).join("; ") || "N/A"}`
-                        );
-                    } else if (ar.entityType === "testcase") {
-                        const tc = ar.data as any;
-                        readSummaries.push(
-                            `• Test case: ${tc.title || ar.entityId}\n  - Status: ${tc.status || "N/A"}\n  - Priority: ${tc.priority || "N/A"}`
-                        );
-                    } else if (ar.entityType === "database") {
-                        const db = ar.data as any;
-                        readSummaries.push(
-                            `• Database: ${db.name || ar.entityId}\n  - Tables: ${(db.tables || []).length}`
-                        );
-                    }
+            // Nếu có actions được thực hiện và reply ban đầu chỉ là câu xác nhận ngắn,
+            // gửi lại cho LLM với kết quả actions để LLM tự tạo reply chi tiết
+            let replyText = plan.reply || "Tôi đã tiếp nhận yêu cầu của bạn.";
+            const hasReadActions = plan.actions?.some(a => a.action === "read") || false;
+            const isShortConfirmation = replyText.toLowerCase().includes("kiểm tra") || 
+                                       replyText.toLowerCase().includes("đang") ||
+                                       replyText.toLowerCase().includes("đợi") ||
+                                       replyText.toLowerCase().includes("vui lòng");
+
+            if (actionResults.length > 0 && (hasReadActions || isShortConfirmation)) {
+                // Gửi lại cho LLM với kết quả actions để tạo reply chi tiết
+                const followUpPlan = await this.planner.generatePlan({
+                    language: (project.language as string) || "vi-VN",
+                    projectSummary: this.buildProjectSummary(project, version),
+                    contexts: this.mapContexts(conversation.context_items || []),
+                    memoryNotes: (conversation.memory_notes || []).map((note: any) => note.note),
+                    history: (await this.getRecentMessages(conversation._id)) as Array<{ role: "user" | "assistant"; text: string }>,
+                    userMessage: messageText.trim(),
+                    actionResults: actionResults.map((ar: any) => ({
+                        success: ar.success,
+                        action: ar.action,
+                        entityType: ar.entityType,
+                        entityId: ar.entityId,
+                        data: ar.data,
+                        error: ar.error,
+                    })),
+                });
+
+                if (followUpPlan.reply) {
+                    replyText = followUpPlan.reply;
                 }
             }
 
-            let finalReplyText = replyText;
-            if (readSummaries.length) {
-                finalReplyText += `\n\nTôi vừa đọc các entity sau:\n${readSummaries.join("\n")}`;
-            }
-            const [botMessage] = await ConversationMessage.create([
-                {
-                    conversation_id: conversation._id,
-                    content: {
-                        text: finalReplyText,
-                        type: "text",
-                    },
-                    sender: {
-                        type: "assistant",
-                    },
+            const assistantPayloads: any[] = [];
+
+            // Tin nhắn: câu trả lời của LLM (dựa trên kết quả actions nếu có)
+            assistantPayloads.push({
+                conversation_id: conversation._id,
+                content: {
+                    text: replyText,
+                    type: "text",
                 },
-            ]);
+                sender: {
+                    type: "assistant",
+                },
+            });
+
+            const botDocs = await ConversationMessage.create(assistantPayloads);
+            const botMessages = botDocs.map((doc) => this.mapMessage(doc));
+            const botMessage = botMessages[botMessages.length - 1];
 
             const updatePayload: Record<string, any> = {
-                $inc: { message_count: 2 },
+                $inc: { message_count: 1 + botMessages.length },
                 $set: { last_activity: new Date() },
             };
             if (plan.memoryNote) {
@@ -977,7 +1085,8 @@ Current version: ${version?._id || "N/A"}`;
             return this.success(
                 {
                     userMessage: this.mapMessage(userMessage),
-                    botMessage: this.mapMessage(botMessage),
+                    botMessage,
+                    botMessages,
                     actions: actionResults,
                     operations: actionResults
                         .filter((item: any) => !!item.operation)
