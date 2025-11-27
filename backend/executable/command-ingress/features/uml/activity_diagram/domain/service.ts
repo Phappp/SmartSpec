@@ -11,7 +11,7 @@ export class ActivityDiagramService {
   private core = new ActivityCoreService();
   private ai = new ActivityGeminiService();
 
-  public async generateFromUsecase(requirementId: string, language: string, versionId?: string, userId?: string) {
+  public async generateFromUsecase(requirementId: string, language: string, versionId: string, userId?: string) {
     if (!userId) throw new Error("Missing userId to authenticate");
     if (!versionId) throw new Error("versionId is required to get requirement model");
     const version = await VersionModel.findById(versionId).lean();
@@ -32,21 +32,8 @@ export class ActivityDiagramService {
     const requirement = requirements.find(r => r.id === requirementId);
     if (!requirement) throw new Error("Requirement not found by id");
 
-    let uml = await UmlModel.findOne({ version_id: new Types.ObjectId(versionId) }).lean();
-
-    if (!uml) {
-      const newUml = await UmlModel.create({
-        project_id: version.project_id,
-        version_id: versionId,
-        name: "Default UML Diagram",
-        description: "Auto-generated UML for version " + versionId,
-        created_by: userId ? new Types.ObjectId(userId) : undefined,
-        updated_by: userId ? new Types.ObjectId(userId) : undefined,
-      });
-      // Trả về plain object (giống .lean())
-      uml = newUml.toObject();
-    }
-    const generated = await this.ai.generateFromUseCase([requirement], language);
+    const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+    const generated = await this.ai.generateFromUseCase([requirement], lang);
     const name = generated?.name || `${requirement.name || 'Usecase'} - Activity`;
     const lanes = generated.lanes;
     const nodes = generated?.nodes || [ { id: 'n_start', type: 'start', label: 'Start' }, { id: 'n_end', type: 'end', label: 'End' } ];
@@ -54,7 +41,9 @@ export class ActivityDiagramService {
     const diagram_svg = this.core.renderSvg({ name, nodes: nodes as any, edges: edges as any });
 
     return await ActivityDiagramModel.create({
-      uml_id: uml._id.toString(),
+      project_id: project._id,
+      version_id: versionId,
+      lang,
       name,
       description: generated?.description || 'Generated from requirement',
       lanes,
@@ -82,23 +71,10 @@ export class ActivityDiagramService {
     if (!['editor', 'owner'].includes(member.role)) {
       throw new Error("You do not have permission to perform this action.");
     }
+    const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
     const requirements = ((version.requirement_model || []) as any[]).filter(r => (r.role || '').toLowerCase() === actor.toLowerCase());
     if (!requirements.length) throw new Error('Không có requirement nào cho actor này');
-    let uml = await UmlModel.findOne({ version_id: new Types.ObjectId(versionId) }).lean();
-
-    if (!uml) {
-      const newUml = await UmlModel.create({
-        project_id: version.project_id,
-        version_id: versionId,
-        name: "Default UML Diagram",
-        description: "Auto-generated UML for version " + versionId,
-        created_by: userId ? new Types.ObjectId(userId) : undefined,
-        updated_by: userId ? new Types.ObjectId(userId) : undefined,
-      });
-      // Trả về plain object (giống .lean())
-      uml = newUml.toObject();
-    }
-    const generated = await this.ai.generateFromUseCase(requirements, language);
+    const generated = await this.ai.generateFromUseCase(requirements, lang);
     const name = generated?.name || `${actor} - Activity`;
     const lane = generated.lanes;
     const nodes = generated?.nodes || [ { id: 'n_start', type: 'start', label: 'Start' }, { id: 'n_end', type: 'end', label: 'End' } ];
@@ -106,7 +82,9 @@ export class ActivityDiagramService {
     const diagram_svg = this.core.renderSvg({ name, nodes: nodes as any, edges: edges as any });
 
     return await ActivityDiagramModel.create({
-      uml_id: uml._id.toString(),
+      project_id: project._id,
+      version_id: versionId,
+      lang,
       name,
       description: generated?.description || 'Generated from actor requirements',
       lane,
@@ -175,18 +153,8 @@ export class ActivityDiagramService {
     if (!diagrams || diagrams.length === 0) {
       throw new Error("Activity diagram not found");
     }
-    // 2. Get UML records linked to diagrams
-    const umlIds = diagrams.map(d => d.uml_id);
-    const umlRecords = await UmlModel.find({
-      _id: { $in: umlIds }
-    }).lean();
-    if (!umlRecords.length) {
-      throw new Error("Associated UML not found");
-    }
-    // 3. All UMLs belong to the same project
-    const projectId = umlRecords[0].project_id.toString();
-
-    const project = await ProjectModel.findById(projectId).lean();
+    
+    const project = await ProjectModel.findById(diagrams[0].project_id).lean();
     if (!project) throw new Error("Project not found");
 
     // 4. Permission check (must be owner or editor)
