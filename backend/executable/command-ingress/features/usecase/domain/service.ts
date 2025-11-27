@@ -144,14 +144,13 @@ export class UsecaseService {
 
     try {
       // Kiểm tra version tồn tại
-      let version = await Version.findById(versionId).session(session);
+      let version = await Version.findById(versionId);
       if (!version) throw new Error("Version not found");
 
       // ✅ Nếu version không phải temporary → bump trước
       if (version.version_temporary === false) {
-          const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
-          if (!bumpRes.data) throw new Error("Auto bump failed");
-          version = await Version.findById(bumpRes.data.newVersion._id).session(session);
+          version = (await this.versionService.bumpVersion(versionId,userId,"minor")).data.newVersion;
+          console.log("version sau khi bump",version._id);
           if (!version) throw new Error("Version not found after bump");
           versionId = version._id.toString();
       }
@@ -413,17 +412,12 @@ export class UsecaseService {
 
     try {
       // Kiểm tra version tồn tại
-      let version = await Version.findById(versionId).session(session);
-      if (!version) {
-        throw new Error("Version not found");
-      }
+      let version = await Version.findById(versionId);
+      if (!version) throw new Error("Version not found");
 
       // ✅ Nếu version không phải temporary → bump trước
       if (version.version_temporary === false) {
-          const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
-          if (!bumpRes.data) throw new Error("Auto bump failed");
-          console.log("Version sau khi bump",bumpRes.data.newVersion._id);
-          version = await Version.findById(bumpRes.data.newVersion._id).session(session);
+          version = (await this.versionService.bumpVersion(versionId,userId,"minor")).data.newVersion;
           console.log("version sau khi bump",version._id);
           if (!version) throw new Error("Version not found after bump");
           versionId = version._id.toString();
