@@ -3,39 +3,83 @@
     <!-- Overview Card -->
     <div class="card overview-card">
       <div class="card-header">
-        <h3 class="card-title">{{ data.name }}</h3>
-        <div class="card-actions">
-          <span class="table-count">
-            <i class="material-symbols-outlined">table_chart</i>
-            {{ data.tables.length }} tables
-          </span>
+        <div class="title-wrapper">
+          <h3 v-if="!isEditing" class="card-title">{{ data.name }}</h3>
+          <input
+            v-else
+            class="input title-input"
+            v-model="formData.name"
+            placeholder="Tên database"
+          />
+          <div class="card-actions">
+            <span class="table-count">
+              <i class="material-symbols-outlined">table_chart</i>
+              {{ tableCount }} tables
+            </span>
+          </div>
+        </div>
+        <div v-if="canEditControls" class="edit-toolbar">
+          <button v-if="!isEditing" class="icon-button" @click="startEditing" title="Chỉnh sửa">
+            <i class="material-symbols-outlined">edit</i>
+          </button>
+          <div v-else class="edit-actions">
+            <button class="btn primary mini" @click="saveChanges">
+              <i class="material-symbols-outlined">save</i>
+              Lưu
+            </button>
+            <button class="btn ghost mini" @click="cancelEditing">
+              <i class="material-symbols-outlined">close</i>
+              Hủy
+            </button>
+          </div>
         </div>
       </div>
-      <p class="card-description">{{ data.description }}</p>
+      <p v-if="!isEditing" class="card-description">{{ data.description }}</p>
+      <textarea
+        v-else
+        class="textarea description-input"
+        v-model="formData.description"
+        placeholder="Mô tả database"
+      ></textarea>
     </div>
 
     <!-- Tables -->
-    <div 
-      v-for="table in data.tables" 
-      :key="table.name" 
+    <div
+      v-for="(table, tableIndex) in isEditing ? formData.tables : data.tables"
+      :key="isEditing ? `table-${tableIndex}` : table.name"
       class="table-card"
-      draggable="true"
-      @dragstart="onTableDragStart($event, table)"
-      @dragend="onTableDragEnd"
+      :draggable="!isEditing"
+      @dragstart="!isEditing && onTableDragStart($event, table)"
+      @dragend="!isEditing && onTableDragEnd($event)"
     >
       <div class="table-header">
         <h4 class="table-name">
           <i class="material-symbols-outlined drag-icon">drag_indicator</i>
-          {{ table.name }}
+          <span v-if="!isEditing">{{ table.name }}</span>
+          <input
+            v-else
+            class="input"
+            v-model="formData.tables[tableIndex].name"
+            placeholder="Tên bảng"
+          />
         </h4>
         <span class="table-columns">
           <i class="material-symbols-outlined">view_column</i>
-          {{ table.columns.length }} columns
+          {{
+            (isEditing ? formData.tables[tableIndex].columns.length : table.columns.length)
+          }}
+          columns
         </span>
       </div>
-      <p v-if="table.description" class="table-description">{{ table.description }}</p>
+      <p v-if="!isEditing && table.description" class="table-description">{{ table.description }}</p>
+      <textarea
+        v-else-if="isEditing"
+        class="textarea description-input"
+        v-model="formData.tables[tableIndex].description"
+        placeholder="Mô tả bảng"
+      ></textarea>
 
-      <div class="table-container">
+      <div v-if="!isEditing" class="table-container">
         <table class="data-table">
           <thead>
             <tr>
@@ -85,7 +129,54 @@
           </tbody>
         </table>
       </div>
+      <div v-else class="columns-editor">
+        <div
+          v-for="(column, columnIndex) in formData.tables[tableIndex].columns"
+          :key="`column-${columnIndex}`"
+          class="column-edit-card"
+        >
+          <div class="column-edit-grid">
+            <input class="input" v-model="column.name" placeholder="Column name" />
+            <input class="input" v-model="column.type" placeholder="Type" />
+            <input class="input" v-model="column.length" placeholder="Length" />
+          </div>
+          <div class="column-flags">
+            <label><input type="checkbox" v-model="column.isPrimaryKey" />Primary</label>
+            <label><input type="checkbox" v-model="column.isForeignKey" />Foreign</label>
+            <label><input type="checkbox" v-model="column.unique" />Unique</label>
+            <label><input type="checkbox" v-model="column.nullable" />Nullable</label>
+          </div>
+          <input
+            class="input"
+            v-model="column.references"
+            placeholder="References (table.column)"
+          />
+          <textarea
+            class="textarea"
+            v-model="column.description"
+            placeholder="Mô tả cột"
+          ></textarea>
+          <div class="column-actions">
+            <button class="icon-button" @click="removeColumn(tableIndex, columnIndex)" title="Xóa cột">
+              <i class="material-symbols-outlined">delete</i>
+            </button>
+          </div>
+        </div>
+        <button class="btn ghost mini" @click="addColumn(tableIndex)">
+          <i class="material-symbols-outlined">add</i>
+          Thêm cột
+        </button>
+        <button class="btn ghost mini danger" @click="removeTable(tableIndex)">
+          <i class="material-symbols-outlined">delete</i>
+          Xóa bảng
+        </button>
+      </div>
     </div>
+
+    <button v-if="isEditing" class="btn ghost mini" @click="addTable">
+      <i class="material-symbols-outlined">add</i>
+      Thêm bảng
+    </button>
 
     <!-- Relationships -->
     <div v-if="data.relationships && data.relationships.length" class="card">
@@ -113,6 +204,8 @@
 </template>
 
 <script>
+import { reactive, ref, watch, computed } from 'vue'
+
 export default {
   name: 'DatabaseDetail',
   props: {
@@ -120,27 +213,193 @@ export default {
       type: Object,
       required: true,
     },
+    canEdit: {
+      type: Boolean,
+      default: false,
+    },
+    mode: {
+      type: String,
+      default: 'view',
+    },
+    isCreating: {
+      type: Boolean,
+      default: false,
+    },
   },
-  emits: ['add-to-chat'],
-  methods: {
-    onTableDragStart(event, table) {
+  emits: ['submit', 'cancel'],
+  setup(props, { emit }) {
+    const isEditing = ref(props.isCreating)
+    const formData = reactive({
+      name: '',
+      description: '',
+      tables: [],
+    })
+
+    const cloneTables = (tables = []) =>
+      tables.map((table) => ({
+        name: table.name || '',
+        description: table.description || '',
+        columns: Array.isArray(table.columns)
+          ? table.columns.map((column) => ({
+              name: column.name || '',
+              type: column.type || '',
+              length: column.length || '',
+              isPrimaryKey: !!column.isPrimaryKey,
+              isForeignKey: !!column.isForeignKey,
+              nullable: column.nullable !== false,
+              unique: !!column.unique,
+              references: column.references || '',
+              description: column.description || '',
+            }))
+          : [],
+      }))
+
+    const hydrateForm = () => {
+      const source = props.data || {}
+      formData.name = source.name || ''
+      formData.description = source.description || ''
+      formData.tables = cloneTables(source.tables || [])
+    }
+
+    watch(
+      () => props.data,
+      () => {
+        if (!isEditing.value || props.mode !== 'create') {
+          hydrateForm()
+        }
+      },
+      { immediate: true }
+    )
+
+    watch(
+      () => props.mode,
+      (mode) => {
+        if (mode === 'create') {
+          isEditing.value = true
+          hydrateForm()
+        } else if (!props.canEdit) {
+          isEditing.value = false
+        }
+      }
+    )
+
+    const canEditControls = computed(() => props.canEdit || props.mode === 'create')
+
+    const startEditing = () => {
+      if (!props.canEdit) return
+      isEditing.value = true
+      hydrateForm()
+    }
+
+    const cancelEditing = () => {
+      if (props.mode === 'create') {
+        emit('cancel')
+        return
+      }
+      isEditing.value = false
+      hydrateForm()
+    }
+
+    const saveChanges = () => {
+      const payload = {
+        ...props.data,
+        name: formData.name,
+        description: formData.description,
+        tables: formData.tables.map((table) => ({
+          ...table,
+          columns: table.columns.map((column) => ({
+            name: column.name,
+            type: column.type,
+            length: column.length,
+            isPrimaryKey: column.isPrimaryKey,
+            isForeignKey: column.isForeignKey,
+            nullable: column.nullable,
+            unique: column.unique,
+            references: column.references,
+            description: column.description,
+          })),
+        })),
+      }
+      emit('submit', payload)
+      if (props.mode !== 'create') {
+        isEditing.value = false
+      }
+    }
+
+    const addTable = () => {
+      formData.tables.push({
+        name: `table_${formData.tables.length + 1}`,
+        description: '',
+        columns: [],
+      })
+    }
+
+    const removeTable = (index) => {
+      formData.tables.splice(index, 1)
+    }
+
+    const addColumn = (tableIndex) => {
+      formData.tables[tableIndex].columns.push({
+        name: `column_${formData.tables[tableIndex].columns.length + 1}`,
+        type: 'varchar',
+        length: '',
+        isPrimaryKey: false,
+        isForeignKey: false,
+        nullable: true,
+        unique: false,
+        references: '',
+        description: '',
+      })
+    }
+
+    const removeColumn = (tableIndex, columnIndex) => {
+      formData.tables[tableIndex].columns.splice(columnIndex, 1)
+    }
+
+    const onTableDragStart = (event, table) => {
+      if (isEditing.value) return
       const dragData = {
         type: 'database-table',
         id: table.name,
         name: table.name,
         data: {
           ...table,
-          databaseName: this.data.name,
-          databaseId: this.data.id || this.data._id,
+          databaseName: props.data.name,
+          databaseId: props.data.id || props.data._id,
         },
       }
       event.dataTransfer.setData('application/json', JSON.stringify(dragData))
       event.dataTransfer.effectAllowed = 'copy'
       event.currentTarget.classList.add('dragging')
-    },
-    onTableDragEnd(event) {
+    }
+
+    const onTableDragEnd = (event) => {
       event.currentTarget.classList.remove('dragging')
-    },
+    }
+
+    const tableCount = computed(() =>
+      isEditing.value
+        ? formData.tables.length
+        : Array.isArray(props.data.tables)
+        ? props.data.tables.length
+        : 0
+    )
+
+    return {
+      isEditing,
+      formData,
+      canEditControls,
+      startEditing,
+      cancelEditing,
+      saveChanges,
+      addTable,
+      removeTable,
+      addColumn,
+      removeColumn,
+      onTableDragStart,
+      onTableDragEnd,
+      tableCount,
+    }
   },
 }
 </script>
@@ -182,6 +441,110 @@ export default {
 .card-actions {
   display: flex;
   gap: 8px;
+}
+
+.title-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.input {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #f0f6fc;
+  font-size: 14px;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 60px;
+  background: #0d1117;
+.pill-input {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #f0f6fc;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.title-input {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.edit-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn.mini {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.btn.primary {
+  background: #238636;
+  border-color: #2ea043;
+  color: #fff;
+}
+
+.btn.ghost {
+  background: transparent;
+  border-color: #30363d;
+  color: #c9d1d9;
+}
+
+.btn.danger {
+  border-color: #f85149;
+  color: #ff7b72;
+}
+
+.icon-button {
+  border: 1px solid #30363d;
+  background: transparent;
+  color: #8b949e;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button:hover {
+  border-color: #58a6ff;
+  color: #58a6ff;
 }
 
 .table-count {
@@ -226,6 +589,48 @@ export default {
   opacity: 0.6;
   cursor: grabbing;
   border: 2px dashed #58a6ff;
+}
+
+.columns-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.column-edit-card {
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(13, 17, 23, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.column-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.column-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: #8b949e;
+}
+
+.column-flags label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.column-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .table-header {

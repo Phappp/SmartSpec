@@ -64,18 +64,19 @@ export default {
   emits: ['select', 'drag-start', 'add-to-chat'],
   setup(props, { emit }) {
     // Entity data với xử lý tên dài
-    const name = computed(() => props.entity.name || props.entity.title)
+    const entityId = computed(() => props.entity.id ?? props.entity._id ?? props.entity.uuid ?? null)
+    const name = computed(() => props.entity.name || props.entity.title || props.entity.tableName || 'Unnamed')
     const displayName = computed(() => {
       const maxLength = props.isCompact ? 25 : 35
-      return name.value.length > maxLength ? name.value.substring(0, maxLength) + '...' : name.value
+      const raw = name.value || 'Unnamed'
+      return raw.length > maxLength ? raw.substring(0, maxLength) + '...' : raw
     })
 
-    const description = computed(() => props.entity.description || 'Không có mô tả')
+    const description = computed(() => props.entity.description || props.entity.summary || 'Không có mô tả')
     const displayDescription = computed(() => {
       const maxLength = props.isCompact ? 40 : 60
-      return description.value.length > maxLength
-        ? description.value.substring(0, maxLength) + '...'
-        : description.value
+      const raw = description.value || ''
+      return raw.length > maxLength ? raw.substring(0, maxLength) + '...' : raw
     })
 
     const status = computed(() => props.entity.status)
@@ -150,7 +151,7 @@ export default {
     const onClick = () => {
       emit('select', {
         type: props.type,
-        id: props.entity.id,
+        id: entityId.value ?? props.entity.id,
         name: name.value,
         data: props.entity,
       })
@@ -159,7 +160,7 @@ export default {
     const onDragStart = (event) => {
       const dragData = {
         type: props.type,
-        id: props.entity.id,
+        id: entityId.value ?? props.entity.id,
         name: name.value,
         data: props.entity,
       }
@@ -179,7 +180,7 @@ export default {
     const addToChat = () => {
       const contextData = {
         type: props.type,
-        id: props.entity.id,
+        id: entityId.value ?? props.entity.id,
         name: name.value,
         data: props.entity,
       }
@@ -187,6 +188,7 @@ export default {
     }
 
     return {
+      entityId,
       name,
       displayName,
       description,

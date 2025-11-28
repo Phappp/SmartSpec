@@ -8,6 +8,15 @@
             <i class="material-symbols-outlined">chat</i>
             Thêm vào chat
           </button>
+          <button
+            v-if="selectedEntity && canDeleteEntity"
+            class="action-btn danger"
+            @click="$emit('delete-entity')"
+            title="Xóa"
+          >
+            <i class="material-symbols-outlined">delete</i>
+            Xóa
+          </button>
         </div>
       </div>
       <div v-if="selectedEntity" class="breadcrumb">
@@ -82,13 +91,37 @@
       </div>
 
       <!-- Usecase Detail -->
-      <UsecaseDetail v-else-if="selectedEntity.type === 'usecase'" :data="entityData" />
+      <UsecaseDetail
+        v-else-if="selectedEntity.type === 'usecase'"
+        :data="entityData"
+        :canEdit="canEditEntity"
+        :mode="entityMode"
+        :isCreating="isCreating"
+        @submit="onDetailSubmit('usecase', $event)"
+        @cancel="onDetailCancel"
+      />
 
       <!-- Testcase Detail -->
-      <TestcaseDetail v-else-if="selectedEntity.type === 'testcase'" :data="entityData" />
+      <TestcaseDetail
+        v-else-if="selectedEntity.type === 'testcase'"
+        :data="entityData"
+        :canEdit="canEditEntity"
+        :mode="entityMode"
+        :isCreating="isCreating"
+        @submit="onDetailSubmit('testcase', $event)"
+        @cancel="onDetailCancel"
+      />
 
       <!-- Database Detail -->
-      <DatabaseDetail v-else-if="selectedEntity.type === 'database'" :data="entityData" />
+      <DatabaseDetail
+        v-else-if="selectedEntity.type === 'database'"
+        :data="entityData"
+        :canEdit="canEditEntity"
+        :mode="entityMode"
+        :isCreating="isCreating"
+        @submit="onDetailSubmit('database', $event)"
+        @cancel="onDetailCancel"
+      />
 
       <!-- UML Detail -->
       <UmlDetail v-else-if="selectedEntity.type === 'uml'" :data="entityData" />
@@ -124,8 +157,31 @@ export default {
       type: Array,
       default: () => [],
     },
+    canEditEntity: {
+      type: Boolean,
+      default: false,
+    },
+    canDeleteEntity: {
+      type: Boolean,
+      default: false,
+    },
+    entityMode: {
+      type: String,
+      default: 'view',
+    },
+    isCreating: {
+      type: Boolean,
+      default: false,
+    },
   },
-  emits: ['add-to-chat', 'undo-operation', 'keep-operation'],
+  emits: [
+    'add-to-chat',
+    'undo-operation',
+    'keep-operation',
+    'save-entity',
+    'cancel-create',
+    'delete-entity',
+  ],
   setup(props, { emit }) {
     const contentTitle = computed(() => {
       if (!props.selectedEntity) return 'Tổng quan'
@@ -183,6 +239,14 @@ export default {
       return `${operation.entityType || 'entity'} · ${operation.entityId || ''}`.trim()
     }
 
+    const onDetailSubmit = (type, payload) => {
+      emit('save-entity', { type, payload })
+    }
+
+    const onDetailCancel = () => {
+      emit('cancel-create')
+    }
+
     return {
       contentTitle,
       entityTypeLabel,
@@ -191,6 +255,8 @@ export default {
       exportEntity,
       formatJson,
       formatOperationTitle,
+      onDetailSubmit,
+      onDetailCancel,
     }
   },
 }
@@ -244,6 +310,16 @@ export default {
   font-size: 12px;
   font-weight: 500;
   transition: all 0.2s;
+}
+
+.action-btn.danger {
+  border-color: #f85149;
+  color: #ff7b72;
+}
+
+.action-btn.danger:hover {
+  background-color: rgba(248, 81, 73, 0.15);
+  color: #ff7b72;
 }
 
 .action-btn:hover {

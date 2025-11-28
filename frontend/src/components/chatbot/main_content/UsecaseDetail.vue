@@ -3,21 +3,68 @@
     <!-- Overview Card -->
     <div class="card overview-card">
       <div class="card-header">
-        <h3 class="card-title">{{ data.name }}</h3>
-        <div class="card-actions">
-          <span :class="['status-badge', statusClass]">
-            <i class="material-symbols-outlined">{{ statusIcon }}</i>
-            {{ statusText }}
-          </span>
-          <span :class="['priority-badge', priorityClass]">
-            <i class="material-symbols-outlined">flag</i>
-            {{ priorityText }}
-          </span>
+        <div class="title-wrapper">
+          <h3 v-if="!isEditing" class="card-title">{{ data?.name || 'Unnamed Use Case' }}</h3>
+          <input
+            v-else
+            class="input title-input"
+            v-model="formData.name"
+            placeholder="Tên use case"
+          />
+          <div class="card-actions">
+            <template v-if="!isEditing">
+              <span :class="['status-badge', statusClass]">
+                <i class="material-symbols-outlined">{{ statusIcon }}</i>
+                {{ statusText }}
+              </span>
+              <span :class="['priority-badge', priorityClass]">
+                <i class="material-symbols-outlined">flag</i>
+                {{ priorityText }}
+              </span>
+            </template>
+            <template v-else>
+              <select class="pill-input" v-model="formData.status">
+                <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+              <select class="pill-input" v-model="formData.priority">
+                <option v-for="option in priorityOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </template>
+          </div>
+        </div>
+        <div v-if="canEditControls" class="edit-toolbar">
+          <button v-if="!isEditing" class="icon-button" @click="startEditing" title="Chỉnh sửa">
+            <i class="material-symbols-outlined">edit</i>
+          </button>
+          <div v-else class="edit-actions">
+            <button class="btn primary mini" @click="saveChanges">
+              <i class="material-symbols-outlined">save</i>
+              Lưu
+            </button>
+            <button class="btn ghost mini" @click="cancelEditing">
+              <i class="material-symbols-outlined">close</i>
+              Hủy
+            </button>
+          </div>
         </div>
       </div>
-      <p class="card-description">{{ data.goal || data.description || 'No description' }}</p>
-      <div v-if="data.reason" class="card-reason"><strong>Lý do:</strong> {{ data.reason }}</div>
-      <div v-if="data.feedback" class="card-feedback">
+      <div v-if="!isEditing" class="card-description">
+        {{ data.goal || data.description || 'No description' }}
+      </div>
+      <textarea
+        v-else
+        class="textarea description-input"
+        v-model="formData.goal"
+        placeholder="Mục tiêu hoặc mô tả"
+      ></textarea>
+      <div v-if="data.reason && !isEditing" class="card-reason">
+        <strong>Lý do:</strong> {{ data.reason }}
+      </div>
+      <div v-if="data.feedback && !isEditing" class="card-feedback">
         <strong>Feedback:</strong> {{ formatFeedback(data.feedback) }}
       </div>
     </div>
@@ -30,22 +77,42 @@
           <i class="material-symbols-outlined">people</i>
           Actors / Role
         </h4>
-        <div v-if="data.role" class="role-info">
-          <div class="role-name">{{ data.role.name || 'N/A' }}</div>
-          <div v-if="data.role.description" class="role-description">
-            {{ data.role.description }}
+        <template v-if="isEditing">
+          <div class="editable-list">
+            <div
+              v-for="(actor, index) in formData.actors"
+              :key="`actor-${index}`"
+              class="editable-list-item"
+            >
+              <input class="input" v-model="formData.actors[index]" placeholder="Tên actor" />
+              <button class="icon-button" @click="removeListItem('actors', index)" title="Xóa">
+                <i class="material-symbols-outlined">close</i>
+              </button>
+            </div>
+            <button class="btn ghost mini" @click="addListItem('actors')">
+              <i class="material-symbols-outlined">add</i>
+              Thêm actor
+            </button>
           </div>
-        </div>
-        <ul v-else-if="data.actors && data.actors.length" class="entity-list">
-          <li v-for="actor in data.actors" :key="actor" class="entity-item">
-            <i class="material-symbols-outlined entity-icon">person</i>
-            <span class="entity-text">{{ actor }}</span>
-          </li>
-        </ul>
-        <div v-else class="empty-state">
-          <i class="material-symbols-outlined">inbox</i>
-          <span class="empty-text">No actors</span>
-        </div>
+        </template>
+        <template v-else>
+          <div v-if="data.role" class="role-info">
+            <div class="role-name">{{ data.role.name || 'N/A' }}</div>
+            <div v-if="data.role.description" class="role-description">
+              {{ data.role.description }}
+            </div>
+          </div>
+          <ul v-else-if="data.actors && data.actors.length" class="entity-list">
+            <li v-for="actor in data.actors" :key="actor" class="entity-item">
+              <i class="material-symbols-outlined entity-icon">person</i>
+              <span class="entity-text">{{ actor }}</span>
+            </li>
+          </ul>
+          <div v-else class="empty-state">
+            <i class="material-symbols-outlined">inbox</i>
+            <span class="empty-text">No actors</span>
+          </div>
+        </template>
       </div>
 
       <!-- Preconditions Card -->
@@ -54,16 +121,40 @@
           <i class="material-symbols-outlined">assignment</i>
           Preconditions
         </h4>
-        <ul class="entity-list" v-if="data.preconditions && data.preconditions.length">
-          <li v-for="precondition in data.preconditions" :key="precondition" class="entity-item">
-            <i class="material-symbols-outlined entity-icon">checklist</i>
-            <span class="entity-text">{{ precondition }}</span>
-          </li>
-        </ul>
-        <div v-else class="empty-state">
-          <i class="material-symbols-outlined">inbox</i>
-          <span class="empty-text">No preconditions</span>
-        </div>
+        <template v-if="isEditing">
+          <div class="editable-list">
+            <div
+              v-for="(item, index) in formData.preconditions"
+              :key="`precondition-${index}`"
+              class="editable-list-item"
+            >
+              <input
+                class="input"
+                v-model="formData.preconditions[index]"
+                placeholder="Điều kiện"
+              />
+              <button class="icon-button" @click="removeListItem('preconditions', index)">
+                <i class="material-symbols-outlined">close</i>
+              </button>
+            </div>
+            <button class="btn ghost mini" @click="addListItem('preconditions')">
+              <i class="material-symbols-outlined">add</i>
+              Thêm điều kiện
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <ul class="entity-list" v-if="data.preconditions && data.preconditions.length">
+            <li v-for="precondition in data.preconditions" :key="precondition" class="entity-item">
+              <i class="material-symbols-outlined entity-icon">checklist</i>
+              <span class="entity-text">{{ precondition }}</span>
+            </li>
+          </ul>
+          <div v-else class="empty-state">
+            <i class="material-symbols-outlined">inbox</i>
+            <span class="empty-text">No preconditions</span>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -73,7 +164,28 @@
         <i class="material-symbols-outlined">play_arrow</i>
         Main Flow / Tasks
       </h4>
-      <ol class="steps-list">
+      <div v-if="isEditing" class="steps-editor">
+        <div
+          v-for="(step, index) in formData.mainFlow"
+          :key="`step-${index}`"
+          class="step-edit-row"
+        >
+          <div class="step-number">{{ index + 1 }}</div>
+          <textarea
+            class="textarea step-textarea"
+            v-model="formData.mainFlow[index]"
+            placeholder="Mô tả bước"
+          ></textarea>
+          <button class="icon-button" @click="removeListItem('mainFlow', index)">
+            <i class="material-symbols-outlined">close</i>
+          </button>
+        </div>
+        <button class="btn ghost mini" @click="addListItem('mainFlow')">
+          <i class="material-symbols-outlined">add</i>
+          Thêm bước
+        </button>
+      </div>
+      <ol v-else class="steps-list">
         <li
           v-for="(step, index) in data.tasks || data.mainFlow || []"
           :key="index"
@@ -264,7 +376,7 @@
 </template>
 
 <script>
-import { computed } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 export default {
   name: 'UsecaseDetail',
@@ -273,8 +385,137 @@ export default {
       type: Object,
       required: true,
     },
+    canEdit: {
+      type: Boolean,
+      default: false,
+    },
+    mode: {
+      type: String,
+      default: 'view',
+    },
+    isCreating: {
+      type: Boolean,
+      default: false,
+    },
   },
-  setup(props) {
+  emits: ['submit', 'cancel'],
+  setup(props, { emit }) {
+    const isEditing = ref(props.isCreating)
+    const formData = reactive({
+      name: '',
+      goal: '',
+      description: '',
+      status: 'draft',
+      priority: 'medium',
+      actors: [],
+      preconditions: [],
+      mainFlow: [],
+    })
+
+    const statusOptions = [
+      { value: 'draft', label: 'Draft' },
+      { value: 'in_progress', label: 'In progress' },
+      { value: 'approved', label: 'Approved' },
+      { value: 'completed', label: 'Completed' },
+      { value: 'failed', label: 'Failed' },
+    ]
+
+    const priorityOptions = [
+      { value: 'high', label: 'High' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'low', label: 'Low' },
+    ]
+
+    const hydrateForm = () => {
+      const source = props.data || {}
+      formData.name = source.name || ''
+      formData.goal = source.goal || source.description || ''
+      formData.description = source.description || ''
+      formData.status = source.status || 'draft'
+      formData.priority = source.priority || 'medium'
+      formData.actors = Array.isArray(source.actors) ? [...source.actors] : []
+      formData.preconditions = Array.isArray(source.preconditions)
+        ? [...source.preconditions]
+        : []
+      const mainFlow = source.tasks || source.mainFlow || []
+      formData.mainFlow = Array.isArray(mainFlow) ? [...mainFlow] : []
+    }
+
+    watch(
+      () => props.data,
+      () => {
+        if (!isEditing.value || props.mode !== 'create') {
+          hydrateForm()
+        }
+      },
+      { immediate: true }
+    )
+
+    watch(
+      () => props.mode,
+      (newMode) => {
+        if (newMode === 'create') {
+          isEditing.value = true
+          hydrateForm()
+        } else if (!props.canEdit) {
+          isEditing.value = false
+        }
+      }
+    )
+
+    const canEditControls = computed(() => props.canEdit || props.mode === 'create')
+
+    const startEditing = () => {
+      if (!props.canEdit) return
+      isEditing.value = true
+      hydrateForm()
+    }
+
+    const cancelEditing = () => {
+      if (props.mode === 'create') {
+        emit('cancel')
+        return
+      }
+      isEditing.value = false
+      hydrateForm()
+    }
+
+    const cleanArray = (arr) => (Array.isArray(arr) ? arr.filter((item) => item && item.trim()) : [])
+
+    const saveChanges = () => {
+      const payload = {
+        ...props.data,
+        name: formData.name,
+        goal: formData.goal,
+        description: formData.goal || formData.description,
+        status: formData.status,
+        priority: formData.priority,
+        actors: cleanArray(formData.actors),
+        preconditions: cleanArray(formData.preconditions),
+        tasks: cleanArray(formData.mainFlow),
+        mainFlow: cleanArray(formData.mainFlow),
+      }
+      emit('submit', payload)
+      if (props.mode !== 'create') {
+        isEditing.value = false
+      }
+    }
+
+    const addListItem = (field) => {
+      if (!Array.isArray(formData[field])) {
+        formData[field] = []
+      }
+      formData[field].push('')
+    }
+
+    const removeListItem = (field, index) => {
+      if (Array.isArray(formData[field])) {
+        formData[field].splice(index, 1)
+      }
+    }
+
+    const currentStatus = computed(() => (isEditing.value ? formData.status : props.data.status))
+
     const statusClass = computed(() => {
       const statusMap = {
         approved: 'status-approved',
@@ -285,7 +526,7 @@ export default {
         failed: 'status-failed',
         has_conflicts: 'status-conflict',
       }
-      return statusMap[props.data.status] || 'status-default'
+      return statusMap[currentStatus.value] || 'status-default'
     })
 
     const statusIcon = computed(() => {
@@ -298,7 +539,7 @@ export default {
         failed: 'error',
         has_conflicts: 'warning',
       }
-      return iconMap[props.data.status] || 'help'
+      return iconMap[currentStatus.value] || 'help'
     })
 
     const statusText = computed(() => {
@@ -311,8 +552,12 @@ export default {
         failed: 'Failed',
         has_conflicts: 'Has Conflicts',
       }
-      return statusMap[props.data.status] || props.data.status
+      return statusMap[currentStatus.value] || currentStatus.value || 'N/A'
     })
+
+    const currentPriority = computed(() =>
+      isEditing.value ? formData.priority : props.data.priority
+    )
 
     const priorityClass = computed(() => {
       const priorityMap = {
@@ -320,7 +565,7 @@ export default {
         medium: 'priority-medium',
         low: 'priority-low',
       }
-      return priorityMap[props.data.priority] || 'priority-default'
+      return priorityMap[currentPriority.value] || 'priority-default'
     })
 
     const priorityText = computed(() => {
@@ -329,11 +574,16 @@ export default {
         medium: 'Medium',
         low: 'Low',
       }
-      return priorityMap[props.data.priority] || props.data.priority
+      return priorityMap[currentPriority.value] || currentPriority.value || 'N/A'
     })
 
     const hasMetadata = computed(() => {
-      return props.data.id || props.data.version || props.data.created_at || props.data.updated_at
+      return (
+        props.data.id ||
+        props.data.version ||
+        props.data.created_at ||
+        props.data.updated_at
+      )
     })
 
     const formatFeedback = (feedback) => {
@@ -356,6 +606,16 @@ export default {
       hasMetadata,
       formatFeedback,
       formatDate,
+      isEditing,
+      formData,
+      canEditControls,
+      startEditing,
+      cancelEditing,
+      saveChanges,
+      addListItem,
+      removeListItem,
+      statusOptions,
+      priorityOptions,
     }
   },
 }
@@ -533,6 +793,138 @@ export default {
 .status-badge .material-symbols-outlined,
 .priority-badge .material-symbols-outlined {
   font-size: 14px;
+}
+
+.title-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.edit-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.input {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #f0f6fc;
+  font-size: 14px;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 64px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #f0f6fc;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.title-input {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.description-input {
+  margin-top: 8px;
+}
+
+.pill-input {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.editable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editable-list-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-button {
+  border: 1px solid #30363d;
+  background: transparent;
+  color: #8b949e;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button:hover {
+  border-color: #58a6ff;
+  color: #58a6ff;
+}
+
+.btn {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn.mini {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.btn.primary {
+  background: #238636;
+  border-color: #2ea043;
+  color: #fff;
+}
+
+.btn.ghost {
+  background: transparent;
+  border-color: #30363d;
+  color: #c9d1d9;
+}
+
+.steps-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.step-edit-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.step-textarea {
+  flex: 1;
+  min-height: 60px;
 }
 
 .status-approved {
