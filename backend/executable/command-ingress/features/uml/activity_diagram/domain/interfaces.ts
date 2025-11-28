@@ -40,13 +40,13 @@ export interface ActivityLane {
   id: string;
   name: string;
 }
+
 // ======================
 // MAIN DTO
 // ======================
 export interface ActivityDiagramDTO {
-  project_id?: string;
-  version_id?: string;
-  lang?: string;
+  uml_id?: string;
+
   name: string;
   description?: string;
   lanes?: ActivityLane[]; 

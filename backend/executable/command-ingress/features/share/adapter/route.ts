@@ -88,13 +88,6 @@ export default function initShareProjectRoute(
       controller.leaveProject(req as any, res, next)
   );
 
-  // Update role of a project member
-  router.patch(
-    "/:projectId/members/:memberId/role",
-    requireAuthorizedUser,
-    (req: Request, res: Response, next: NextFunction) =>
-      controller.updateMemberRole(req as any, res, next)
-  );
 
   return router;
 }

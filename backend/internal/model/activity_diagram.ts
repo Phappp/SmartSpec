@@ -33,17 +33,8 @@ const edgeSchema = new Schema({
 
 /* ----------------- ACTIVITY DIAGRAM ------------------ */
 const activityDiagramSchema = new Schema({
-    project_id: {
-      type: Schema.Types.ObjectId,
-      ref: "projects",
-      required: true,
-    },
-    version_id: {
-      type: Schema.Types.ObjectId,
-      ref: "versions",
-      required: true,
-    },
-    lang: { type: String, required: true },
+    uml_id: { type: Schema.Types.ObjectId, ref: "umls", required: true },
+
     name: { type: String, required: true },
     description: String,
     lanes: [
