@@ -60,15 +60,6 @@ interface SequenceDiagramService {
   getSequenceDiagramsByUsecaseId(
     usecaseId: string
   ): Promise<SequenceDiagramResponse[]>;
-
-  /**
-   * Xóa một Sequence Diagram theo ID.
-   */
-  deleteSequenceDiagramById(
-    ucId: string,
-    sequenceId: string,
-    subId: string
-  ): Promise<SequenceDiagramResponse>;
 }
 
 export {

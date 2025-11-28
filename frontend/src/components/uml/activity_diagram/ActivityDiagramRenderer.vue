@@ -467,10 +467,7 @@ export default {
         },
       },
 
-      // Preview generation
       previewGenerated: false,
-
-      // Layout configuration
       nodeSpacing: 120,
       laneHeaderHeight: 60,
       horizontalSpacing: 200,
@@ -486,7 +483,6 @@ export default {
         transformOrigin: '0 0',
       }
     },
-
     safeDiagramData() {
       return {
         nodes: Array.isArray(this.diagramData?.nodes) ? this.diagramData.nodes : [],
@@ -494,19 +490,15 @@ export default {
         lanes: Array.isArray(this.diagramData?.lanes) ? this.diagramData.lanes : [],
       }
     },
-
     computedLanes() {
       return this.safeDiagramData.lanes
     },
-
     computedNodes() {
       const nodes = this.safeDiagramData.nodes
       if (!nodes || nodes.length === 0) return []
 
       return nodes.map((node, index) => {
-        // Set dimensions based on node type
         const { width, height } = this.getNodeSize(node.type)
-
         return {
           id: node.id || `node-${index}`,
           type: node.type || 'action',
@@ -518,19 +510,12 @@ export default {
         }
       })
     },
-
     positionedNodes() {
       if (this.computedNodes.length === 0) return []
-
-      // Tạo bản sao để không làm thay đổi dữ liệu gốc
       const nodes = JSON.parse(JSON.stringify(this.computedNodes))
-      
-      // Tính toán layout
       this.calculateNodeLayout(nodes)
-
       return nodes
     },
-
     computedEdges() {
       const edges = this.safeDiagramData.edges
       if (!edges || edges.length === 0) return []
@@ -557,7 +542,6 @@ export default {
     diagramData: {
       handler(newData, oldData) {
         this.updateVirtualSpace()
-
         if (this.autoGeneratePreview && !this.previewGenerated) {
           this.$nextTick(() => {
             setTimeout(() => {
@@ -606,19 +590,12 @@ export default {
     this.cleanupFullscreenListener()
   },
   methods: {
-    // Thuật toán layout mới cho activity diagram
+    // ============ LAYOUT METHODS ============
     calculateNodeLayout(nodes) {
-      // Xây dựng đồ thị từ edges
       const graph = this.buildGraph(nodes)
-      
-      // Tìm node start
-      const startNode = nodes.find(node => node.type === 'start')
+      const startNode = nodes.find((node) => node.type === 'start')
       if (!startNode) return
-
-      // Tính toán vị trí theo BFS với xử lý đặc biệt cho decision nodes
       this.calculatePositionsBFS(nodes, graph, startNode)
-      
-      // Căn chỉnh vị trí theo lanes
       this.adjustPositionsByLanes(nodes)
     },
 
@@ -626,13 +603,11 @@ export default {
       const graph = {}
       const edges = this.safeDiagramData.edges
 
-      // Khởi tạo graph
-      nodes.forEach(node => {
+      nodes.forEach((node) => {
         graph[node.id] = { node, children: [], parents: [] }
       })
 
-      // Thêm edges vào graph
-      edges.forEach(edge => {
+      edges.forEach((edge) => {
         if (graph[edge.from] && graph[edge.to]) {
           graph[edge.from].children.push(graph[edge.to])
           graph[edge.to].parents.push(graph[edge.from])
@@ -644,146 +619,235 @@ export default {
 
     calculatePositionsBFS(nodes, graph, startNode) {
       const visited = new Set()
-      const queue = [{ node: graph[startNode.id], depth: 0, horizontalOrder: 0 }]
+      const queue = [
+        {
+          node: graph[startNode.id],
+          depth: 0,
+          horizontalOrder: 0,
+          branch: 'main',
+          parentId: null,
+        },
+      ]
+
       const depthMap = new Map()
       const horizontalOrders = new Map()
+      const branchMap = new Map()
+      const parentMap = new Map()
       let maxDepth = 0
 
-      // BFS để tính depth và horizontal order
       while (queue.length > 0) {
         const current = queue.shift()
         const currentNode = current.node.node
-        
+
         if (visited.has(currentNode.id)) continue
         visited.add(currentNode.id)
 
-        // Lưu depth và horizontal order
         depthMap.set(currentNode.id, current.depth)
         horizontalOrders.set(currentNode.id, current.horizontalOrder)
+        branchMap.set(currentNode.id, current.branch)
+        parentMap.set(currentNode.id, current.parentId)
         maxDepth = Math.max(maxDepth, current.depth)
 
-        // Xử lý đặc biệt cho decision nodes
+        // Xử lý decision node - tạo nhánh mới
         if (currentNode.type === 'decision') {
-          this.layoutDecisionNode(currentNode, current.node.children, current.depth + 1, horizontalOrders)
+          this.layoutDecisionBranches(
+            currentNode,
+            current.node.children,
+            current,
+            horizontalOrders,
+            branchMap
+          )
         }
 
         // Thêm children vào queue
         current.node.children.forEach((child, index) => {
           if (!visited.has(child.node.id)) {
-            let horizontalOrder = current.horizontalOrder
-            
-            // Điều chỉnh horizontal order cho các nhánh từ decision
-            if (currentNode.type === 'decision') {
-              const condition = this.getEdgeCondition(currentNode.id, child.node.id)
-              if (condition === 'Yes') {
-                horizontalOrder = current.horizontalOrder - 1 // Nhánh Yes sang trái
-              } else if (condition === 'No') {
-                horizontalOrder = current.horizontalOrder + 1 // Nhánh No sang phải
-              }
-            } else {
-              // Các node khác giữ nguyên horizontal order
-              horizontalOrder = current.horizontalOrder + (index - (current.node.children.length - 1) / 2)
-            }
-            
-            queue.push({ 
-              node: child, 
+            const { horizontalOrder, branch } = this.calculateChildPosition(
+              currentNode,
+              child.node,
+              current,
+              index,
+              current.node.children.length
+            )
+
+            queue.push({
+              node: child,
               depth: current.depth + 1,
-              horizontalOrder: horizontalOrder
+              horizontalOrder,
+              branch,
+              parentId: currentNode.id,
             })
           }
         })
       }
 
-      // Tính toán vị trí thực tế dựa trên depth và horizontal order
       this.calculateActualPositions(nodes, depthMap, horizontalOrders, maxDepth)
+      this.adjustBranchPositions(nodes, depthMap, branchMap)
     },
 
-    layoutDecisionNode(decisionNode, children, depth, horizontalOrders) {
-      if (children.length === 0) return
+    calculateChildPosition(parentNode, childNode, currentState, childIndex, totalChildren) {
+      let horizontalOrder = currentState.horizontalOrder
+      let branch = currentState.branch
 
-      // Phân bố các children của decision node
-      children.forEach((child, index) => {
-        const condition = this.getEdgeCondition(decisionNode.id, child.node.id)
-        let horizontalOrder = horizontalOrders.get(decisionNode.id) || 0
-        
-        if (condition === 'Yes') {
-          horizontalOrder = (horizontalOrders.get(decisionNode.id) || 0) - 1
-        } else if (condition === 'No') {
-          horizontalOrder = (horizontalOrders.get(decisionNode.id) || 0) + 1
+      // Xử lý decision branches - hỗ trợ cả Yes/No và True/False
+      if (parentNode.type === 'decision') {
+        const condition = this.getEdgeCondition(parentNode.id, childNode.id)
+        const normalizedCondition = this.normalizeCondition(condition)
+
+        if (normalizedCondition === 'yes') {
+          horizontalOrder = -2
+          branch = 'yes'
+        } else if (normalizedCondition === 'no') {
+          horizontalOrder = 2
+          branch = 'no'
         }
-        
-        horizontalOrders.set(child.node.id, horizontalOrder)
+      }
+      // Xử lý merge node - trở về branch chính
+      else if (parentNode.type === 'merge') {
+        horizontalOrder = 0
+        branch = 'main'
+      }
+      // Các node khác - giữ nguyên branch, điều chỉnh horizontal order nhẹ
+      else if (branch === 'yes') {
+        horizontalOrder = currentState.horizontalOrder - 0.5
+      } else if (branch === 'no') {
+        horizontalOrder = currentState.horizontalOrder + 0.5
+      }
+      // Branch chính - phân bố đều
+      else if (totalChildren > 1) {
+        horizontalOrder =
+          currentState.horizontalOrder + (childIndex - (totalChildren - 1) / 2) * 0.8
+      }
+
+      return { horizontalOrder, branch }
+    },
+
+    // Chuẩn hóa điều kiện để hỗ trợ cả Yes/No và True/False
+    normalizeCondition(condition) {
+      if (!condition) return null
+
+      const lowerCondition = condition.toLowerCase().trim()
+      if (lowerCondition === 'yes' || lowerCondition === 'true' || lowerCondition === 'đúng') {
+        return 'yes'
+      } else if (
+        lowerCondition === 'no' ||
+        lowerCondition === 'false' ||
+        lowerCondition === 'sai'
+      ) {
+        return 'no'
+      }
+      return lowerCondition
+    },
+
+    layoutDecisionBranches(decisionNode, children, currentState, horizontalOrders, branchMap) {
+      children.forEach((child) => {
+        const condition = this.getEdgeCondition(decisionNode.id, child.node.id)
+        const normalizedCondition = this.normalizeCondition(condition)
+
+        if (normalizedCondition === 'yes') {
+          horizontalOrders.set(child.node.id, -2)
+          branchMap.set(child.node.id, 'yes')
+        } else if (normalizedCondition === 'no') {
+          horizontalOrders.set(child.node.id, 2)
+          branchMap.set(child.node.id, 'no')
+        }
       })
     },
 
-    getEdgeCondition(fromId, toId) {
-      const edge = this.safeDiagramData.edges.find(edge => 
-        edge.from === fromId && edge.to === toId
-      )
-      return edge ? edge.condition : null
-    },
-
     calculateActualPositions(nodes, depthMap, horizontalOrders, maxDepth) {
-      // Tìm phạm vi horizontal order để căn chỉnh
       let minOrder = Infinity
       let maxOrder = -Infinity
-      
-      horizontalOrders.forEach(order => {
+
+      horizontalOrders.forEach((order) => {
         minOrder = Math.min(minOrder, order)
         maxOrder = Math.max(maxOrder, order)
       })
 
-      // Tính toán vị trí thực tế
-      nodes.forEach(node => {
+      nodes.forEach((node) => {
         const depth = depthMap.get(node.id) || 0
         const horizontalOrder = horizontalOrders.get(node.id) || 0
-        
-        // Tính Y theo depth (start trên cùng, end dưới cùng)
+
+        // Tính Y position
         if (node.type === 'start') {
           node.y = this.laneHeaderHeight + 50
         } else if (node.type === 'end') {
-          node.y = this.laneHeaderHeight + 50 + ((maxDepth + 1) * this.nodeSpacing)
+          node.y = this.laneHeaderHeight + 50 + (maxDepth + 1) * this.nodeSpacing
         } else {
-          node.y = this.laneHeaderHeight + 50 + (depth * this.nodeSpacing)
+          node.y = this.laneHeaderHeight + 50 + depth * this.nodeSpacing
         }
 
-        // Tính X theo horizontal order
+        // Tính X position
         const orderRange = maxOrder - minOrder
-        const availableWidth = this.virtualSpace.width - 200 // Padding 100 mỗi bên
-        
+        const availableWidth = this.virtualSpace.width - 200
+
         if (orderRange === 0) {
-          // Chỉ có một cột, căn giữa
           node.x = this.virtualSpace.width / 2
         } else {
-          // Phân bố đều theo horizontal order
           const normalizedOrder = (horizontalOrder - minOrder) / orderRange
-          node.x = 100 + (normalizedOrder * availableWidth)
+          node.x = 100 + normalizedOrder * availableWidth
         }
       })
 
-      // Đảm bảo start và end node ở giữa
-      const startNode = nodes.find(node => node.type === 'start')
-      const endNode = nodes.find(node => node.type === 'end')
+      // Start và End luôn ở giữa
+      const startNode = nodes.find((node) => node.type === 'start')
+      const endNode = nodes.find((node) => node.type === 'end')
       if (startNode) startNode.x = this.virtualSpace.width / 2
       if (endNode) endNode.x = this.virtualSpace.width / 2
+    },
+
+    adjustBranchPositions(nodes, depthMap, branchMap) {
+      const branchNodes = { yes: [], no: [], main: [] }
+
+      nodes.forEach((node) => {
+        const branch = branchMap.get(node.id) || 'main'
+        branchNodes[branch].push(node)
+      })
+
+      const branchSpacing = 180
+
+      // Căn chỉnh nhánh Yes sang trái
+      if (branchNodes.yes.length > 0) {
+        const targetX = this.virtualSpace.width / 2 - branchSpacing
+        branchNodes.yes.forEach((node, index) => {
+          // Phân tán các node trong cùng nhánh theo chiều dọc
+          const spread = (index - (branchNodes.yes.length - 1) / 2) * 30
+          node.x = targetX + spread
+        })
+      }
+
+      // Căn chỉnh nhánh No sang phải
+      if (branchNodes.no.length > 0) {
+        const targetX = this.virtualSpace.width / 2 + branchSpacing
+        branchNodes.no.forEach((node, index) => {
+          const spread = (index - (branchNodes.no.length - 1) / 2) * 30
+          node.x = targetX + spread
+        })
+      }
+
+      // Nhánh chính giữ nguyên vị trí trung tâm
+      if (branchNodes.main.length > 0) {
+        branchNodes.main.forEach((node) => {
+          if (node.type !== 'start' && node.type !== 'end') {
+            node.x = this.virtualSpace.width / 2
+          }
+        })
+      }
     },
 
     adjustPositionsByLanes(nodes) {
       if (this.computedLanes.length === 0) return
 
       const laneWidth = this.virtualSpace.width / this.computedLanes.length
-      
-      nodes.forEach(node => {
-        const laneIndex = this.computedLanes.findIndex(lane => lane.id === node.lane_id)
+
+      nodes.forEach((node) => {
+        const laneIndex = this.computedLanes.findIndex((lane) => lane.id === node.lane_id)
         if (laneIndex !== -1) {
-          // Giới hạn node trong lane của nó, nhưng vẫn giữ vị trí tương đối
-          const laneCenter = (laneIndex * laneWidth) + (laneWidth / 2)
-          const laneMinX = laneIndex * laneWidth + 50
-          const laneMaxX = (laneIndex + 1) * laneWidth - 50
-          
+          const laneCenter = laneIndex * laneWidth + laneWidth / 2
+          const laneMinX = laneIndex * laneWidth + 60
+          const laneMaxX = (laneIndex + 1) * laneWidth - 60
+
           node.x = Math.max(laneMinX, Math.min(laneMaxX, node.x))
-          
-          // Nếu node bị giới hạn, điều chỉnh để gần với center hơn
+
           if (node.x === laneMinX || node.x === laneMaxX) {
             node.x = laneCenter
           }
@@ -791,7 +855,7 @@ export default {
       })
     },
 
-    // Node sizing
+    // ============ NODE METHODS ============
     getNodeSize(type) {
       switch (type) {
         case 'start':
@@ -813,7 +877,6 @@ export default {
       }
     },
 
-    // Lane positioning
     getLaneX(index) {
       const laneCount = Math.max(this.computedLanes.length, 1)
       return this.virtualSpace.minX + index * (this.virtualSpace.width / laneCount)
@@ -821,146 +884,6 @@ export default {
 
     getLaneWidth() {
       return this.virtualSpace.width / Math.max(this.computedLanes.length, 1)
-    },
-
-    // Virtual Space Management
-    updateVirtualSpace() {
-      const allElements = [...this.positionedNodes]
-      if (allElements.length === 0) {
-        this.virtualSpace.minX = 0
-        this.virtualSpace.maxX = this.containerWidth
-        this.virtualSpace.minY = 0
-        this.virtualSpace.maxY = this.containerHeight
-        return
-      }
-
-      const bounds = allElements.reduce(
-        (acc, element) => ({
-          minX: Math.min(acc.minX, element.x - (element.width || 60)),
-          maxX: Math.max(acc.maxX, element.x + (element.width || 60)),
-          minY: Math.min(acc.minY, element.y - (element.height || 60)),
-          maxY: Math.max(acc.maxY, element.y + (element.height || 60)),
-        }),
-        { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
-      )
-
-      const padding = 100
-      this.virtualSpace.minX = Math.min(this.virtualSpace.minX, bounds.minX - padding)
-      this.virtualSpace.maxX = Math.max(this.virtualSpace.maxX, bounds.maxX + padding)
-      this.virtualSpace.minY = Math.min(this.virtualSpace.minY, bounds.minY - padding)
-      this.virtualSpace.maxY = Math.max(this.virtualSpace.maxY, bounds.maxY + padding)
-    },
-
-    centerViewport() {
-      const centerX = this.containerWidth / 2 - this.virtualSpace.centerX * this.internalZoom
-      const centerY = this.containerHeight / 2 - this.virtualSpace.centerY * this.internalZoom
-      this.viewport.x = centerX
-      this.viewport.y = centerY
-    },
-
-    // Node and Edge Methods
-    calculateEdgePath(edge) {
-      const { source, target } = edge
-      
-      // Xử lý đặc biệt cho edges từ decision node
-      if (source.type === 'decision') {
-        return this.calculateDecisionEdgePath(edge)
-      }
-      
-      const dx = target.x - source.x
-      const dy = target.y - source.y
-      const length = Math.sqrt(dx * dx + dy * dy)
-      if (length === 0) return ''
-
-      const nx = dx / length
-      const ny = dy / length
-
-      const startX = source.x + nx * this.getNodeOffset(source, nx, ny)
-      const startY = source.y + ny * this.getNodeOffset(source, nx, ny)
-      const endX = target.x - nx * this.getNodeOffset(target, -nx, -ny)
-      const endY = target.y - ny * this.getNodeOffset(target, -nx, -ny)
-
-      return `M ${startX} ${startY} L ${endX} ${endY}`
-    },
-
-    calculateDecisionEdgePath(edge) {
-      const { source, target, condition } = edge
-      const startOffset = this.getNodeOffset(source, 0, 1) // Xuống từ đáy
-      
-      let startX = source.x
-      let startY = source.y + startOffset
-      
-      let endX = target.x
-      let endY = target.y - this.getNodeOffset(target, 0, -1) // Vào từ trên
-
-      // Điều chỉnh cho Yes/No branches
-      if (condition === 'Yes') {
-        // Yes branch - cong sang trái
-        const controlX1 = source.x - this.horizontalSpacing / 3
-        const controlY1 = startY + (endY - startY) * 0.3
-        const controlX2 = target.x - this.horizontalSpacing / 3
-        const controlY2 = endY - (endY - startY) * 0.3
-        return `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
-      } else if (condition === 'No') {
-        // No branch - cong sang phải
-        const controlX1 = source.x + this.horizontalSpacing / 3
-        const controlY1 = startY + (endY - startY) * 0.3
-        const controlX2 = target.x + this.horizontalSpacing / 3
-        const controlY2 = endY - (endY - startY) * 0.3
-        return `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
-      }
-
-      // Mặc định đường thẳng
-      return `M ${startX} ${startY} L ${endX} ${endY}`
-    },
-
-    getNodeOffset(node, nx, ny) {
-      if (node.type === 'start' || node.type === 'end') {
-        return 20
-      } else if (node.type === 'decision' || node.type === 'merge') {
-        const size = 40
-        return Math.abs(nx * size) + Math.abs(ny * size)
-      } else if (['action', 'object', 'fork', 'join'].includes(node.type)) {
-        const rx = node.width / 2
-        const ry = node.height / 2
-        if (nx === 0) return ry
-        if (ny === 0) return rx
-
-        const angle = Math.atan2(ny, nx)
-        const cosAngle = Math.cos(angle)
-        const sinAngle = Math.sin(angle)
-        return Math.sqrt((rx * cosAngle) ** 2 + (ry * sinAngle) ** 2)
-      }
-      return 30
-    },
-
-    getEdgeLabel(edge) {
-      if (edge.guard) return `[${edge.guard}]`
-      if (edge.trigger) return `/${edge.trigger}`
-      if (edge.condition) return `[${edge.condition}]`
-      return ''
-    },
-
-    getEdgeLabelPosition(edge) {
-      const { source, target } = edge
-      
-      if (source.type === 'decision') {
-        // Đặt label ở vị trí cong cho decision edges
-        const midY = (source.y + target.y) / 2
-        let midX
-        if (edge.condition === 'Yes') {
-          midX = source.x - this.horizontalSpacing / 3
-        } else if (edge.condition === 'No') {
-          midX = source.x + this.horizontalSpacing / 3
-        } else {
-          midX = (source.x + target.x) / 2
-        }
-        return { x: midX, y: midY }
-      }
-      
-      const midX = (source.x + target.x) / 2
-      const midY = (source.y + target.y) / 2
-      return { x: midX, y: midY - 10 }
     },
 
     getDecisionPoints(node) {
@@ -1009,7 +932,156 @@ export default {
       }
     },
 
-    // Drag and Drop
+    // ============ EDGE METHODS ============
+    calculateEdgePath(edge) {
+      const { source, target } = edge
+
+      if (source.type === 'decision') {
+        return this.calculateDecisionEdgePath(edge)
+      }
+
+      const condition = this.getEdgeCondition(source.id, target.id)
+      const normalizedCondition = this.normalizeCondition(condition)
+      if (normalizedCondition === 'yes' || normalizedCondition === 'no') {
+        return this.calculateBranchEdgePath(edge)
+      }
+
+      return this.calculateStraightEdgePath(edge)
+    },
+
+    calculateDecisionEdgePath(edge) {
+      const { source, target, condition } = edge
+      const normalizedCondition = this.normalizeCondition(condition)
+      const startOffset = this.getNodeOffset(source, 0, 1)
+      const endOffset = this.getNodeOffset(target, 0, -1)
+
+      const startX = source.x
+      const startY = source.y + startOffset
+      const endX = target.x
+      const endY = target.y - endOffset
+
+      if (normalizedCondition === 'yes') {
+        const controlX1 = source.x - 80
+        const controlY1 = startY + (endY - startY) * 0.4
+        const controlX2 = target.x - 60
+        const controlY2 = endY - (endY - startY) * 0.3
+        return `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
+      } else if (normalizedCondition === 'no') {
+        const controlX1 = source.x + 80
+        const controlY1 = startY + (endY - startY) * 0.4
+        const controlX2 = target.x + 60
+        const controlY2 = endY - (endY - startY) * 0.3
+        return `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
+      }
+
+      return `M ${startX} ${startY} L ${endX} ${endY}`
+    },
+
+    calculateBranchEdgePath(edge) {
+      const { source, target, condition } = edge
+      const normalizedCondition = this.normalizeCondition(condition)
+      const startOffset = this.getNodeOffset(source, 0, 1)
+      const endOffset = this.getNodeOffset(target, 0, -1)
+
+      const startX = source.x
+      const startY = source.y + startOffset
+      const endX = target.x
+      const endY = target.y - endOffset
+
+      if (normalizedCondition === 'yes') {
+        const midX = (startX + endX) / 2 - 40
+        const midY = (startY + endY) / 2
+        return `M ${startX} ${startY} Q ${midX} ${midY}, ${endX} ${endY}`
+      } else if (normalizedCondition === 'no') {
+        const midX = (startX + endX) / 2 + 40
+        const midY = (startY + endY) / 2
+        return `M ${startX} ${startY} Q ${midX} ${midY}, ${endX} ${endY}`
+      }
+
+      return `M ${startX} ${startY} L ${endX} ${endY}`
+    },
+
+    calculateStraightEdgePath(edge) {
+      const { source, target } = edge
+      const dx = target.x - source.x
+      const dy = target.y - source.y
+      const length = Math.sqrt(dx * dx + dy * dy)
+      if (length === 0) return ''
+
+      const nx = dx / length
+      const ny = dy / length
+
+      const startX = source.x + nx * this.getNodeOffset(source, nx, ny)
+      const startY = source.y + ny * this.getNodeOffset(source, nx, ny)
+      const endX = target.x - nx * this.getNodeOffset(target, -nx, -ny)
+      const endY = target.y - ny * this.getNodeOffset(target, -nx, -ny)
+
+      return `M ${startX} ${startY} L ${endX} ${endY}`
+    },
+
+    getNodeOffset(node, nx, ny) {
+      if (node.type === 'start' || node.type === 'end') {
+        return 20
+      } else if (node.type === 'decision' || node.type === 'merge') {
+        const size = 40
+        return Math.abs(nx * size) + Math.abs(ny * size)
+      } else if (['action', 'object', 'fork', 'join'].includes(node.type)) {
+        const rx = node.width / 2
+        const ry = node.height / 2
+        if (nx === 0) return ry
+        if (ny === 0) return rx
+
+        const angle = Math.atan2(ny, nx)
+        const cosAngle = Math.cos(angle)
+        const sinAngle = Math.sin(angle)
+        return Math.sqrt((rx * cosAngle) ** 2 + (ry * sinAngle) ** 2)
+      }
+      return 30
+    },
+
+    getEdgeLabel(edge) {
+      if (edge.guard) return `[${edge.guard}]`
+      if (edge.trigger) return `/${edge.trigger}`
+      if (edge.condition) return `[${edge.condition}]`
+      return ''
+    },
+
+    getEdgeLabelPosition(edge) {
+      const { source, target } = edge
+
+      const condition = this.getEdgeCondition(source.id, target.id)
+      const normalizedCondition = this.normalizeCondition(condition)
+
+      if (
+        source.type === 'decision' ||
+        normalizedCondition === 'yes' ||
+        normalizedCondition === 'no'
+      ) {
+        const midY = (source.y + target.y) / 2
+        let midX
+        if (normalizedCondition === 'yes') {
+          midX = (source.x + target.x) / 2 - 50
+        } else if (normalizedCondition === 'no') {
+          midX = (source.x + target.x) / 2 + 50
+        } else {
+          midX = (source.x + target.x) / 2
+        }
+        return { x: midX, y: midY }
+      }
+
+      const midX = (source.x + target.x) / 2
+      const midY = (source.y + target.y) / 2
+      return { x: midX, y: midY - 10 }
+    },
+
+    getEdgeCondition(fromId, toId) {
+      const edge = this.safeDiagramData.edges.find(
+        (edge) => edge.from === fromId && edge.to === toId
+      )
+      return edge ? edge.condition : null
+    },
+
+    // ============ DRAG AND DROP METHODS ============
     startDrag(element, type, event) {
       if (!this.editable || this.previewMode) return
 
@@ -1054,7 +1126,6 @@ export default {
       let newX = svgPoint.x - this.dragOffset.x
       let newY = svgPoint.y - this.dragOffset.y
 
-      // Giới hạn trong virtual space
       const safePadding = 20
       newX = Math.max(
         this.virtualSpace.minX + safePadding,
@@ -1085,41 +1156,6 @@ export default {
           newPosition: this.dragPosition,
         })
       }
-    },
-
-    showSavingIndicator() {
-      this.isSaving = true
-      this.lastSaved = null
-    },
-
-    hideSavingIndicator() {
-      this.isSaving = false
-      this.lastSaved = new Date()
-    },
-
-    getSaveStatusText() {
-      if (this.isSaving) {
-        return 'Saving...'
-      } else if (this.lastSaved) {
-        return 'Saved'
-      } else {
-        return 'No changes'
-      }
-    },
-
-    formatLastSaved() {
-      if (!this.lastSaved) return ''
-
-      const now = new Date()
-      const diffMs = now - this.lastSaved
-      const diffSec = Math.floor(diffMs / 1000)
-      const diffMin = Math.floor(diffSec / 60)
-
-      if (diffSec < 5) return 'just now'
-      if (diffSec < 60) return `${diffSec}s ago`
-      if (diffMin < 60) return `${diffMin}m ago`
-
-      return this.lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     },
 
     handleMouseUp() {
@@ -1157,7 +1193,7 @@ export default {
       document.body.style.userSelect = ''
     },
 
-    // Viewport Methods
+    // ============ VIEWPORT METHODS ============
     startPan(event) {
       if (this.previewMode || !this.editable || this.isDragging) return
       this.isPanning = true
@@ -1201,7 +1237,7 @@ export default {
       }
     },
 
-    // Zoom and View Methods
+    // ============ ZOOM AND VIEW METHODS ============
     zoomIn() {
       this.internalZoom = Math.min(5, this.internalZoom + 0.1)
       this.$emit('zoom-changed', this.internalZoom)
@@ -1244,7 +1280,41 @@ export default {
       this.$emit('zoom-changed', this.internalZoom)
     },
 
-    // Selection Methods
+    centerViewport() {
+      const centerX = this.containerWidth / 2 - this.virtualSpace.centerX * this.internalZoom
+      const centerY = this.containerHeight / 2 - this.virtualSpace.centerY * this.internalZoom
+      this.viewport.x = centerX
+      this.viewport.y = centerY
+    },
+
+    updateVirtualSpace() {
+      const allElements = [...this.positionedNodes]
+      if (allElements.length === 0) {
+        this.virtualSpace.minX = 0
+        this.virtualSpace.maxX = this.containerWidth
+        this.virtualSpace.minY = 0
+        this.virtualSpace.maxY = this.containerHeight
+        return
+      }
+
+      const bounds = allElements.reduce(
+        (acc, element) => ({
+          minX: Math.min(acc.minX, element.x - (element.width || 60)),
+          maxX: Math.max(acc.maxX, element.x + (element.width || 60)),
+          minY: Math.min(acc.minY, element.y - (element.height || 60)),
+          maxY: Math.max(acc.maxY, element.y + (element.height || 60)),
+        }),
+        { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
+      )
+
+      const padding = 100
+      this.virtualSpace.minX = Math.min(this.virtualSpace.minX, bounds.minX - padding)
+      this.virtualSpace.maxX = Math.max(this.virtualSpace.maxX, bounds.maxX + padding)
+      this.virtualSpace.minY = Math.min(this.virtualSpace.minY, bounds.minY - padding)
+      this.virtualSpace.maxY = Math.max(this.virtualSpace.maxY, bounds.maxY + padding)
+    },
+
+    // ============ SELECTION METHODS ============
     selectElement(element, type) {
       if (this.isDragging) return
       this.selectedElement = element
@@ -1265,7 +1335,42 @@ export default {
       this.selectedElementType = null
     },
 
-    // Method để parent component gọi khi save hoàn thành
+    // ============ SAVE STATUS METHODS ============
+    showSavingIndicator() {
+      this.isSaving = true
+      this.lastSaved = null
+    },
+
+    hideSavingIndicator() {
+      this.isSaving = false
+      this.lastSaved = new Date()
+    },
+
+    getSaveStatusText() {
+      if (this.isSaving) {
+        return 'Saving...'
+      } else if (this.lastSaved) {
+        return 'Saved'
+      } else {
+        return 'No changes'
+      }
+    },
+
+    formatLastSaved() {
+      if (!this.lastSaved) return ''
+
+      const now = new Date()
+      const diffMs = now - this.lastSaved
+      const diffSec = Math.floor(diffMs / 1000)
+      const diffMin = Math.floor(diffSec / 60)
+
+      if (diffSec < 5) return 'just now'
+      if (diffSec < 60) return `${diffSec}s ago`
+      if (diffMin < 60) return `${diffMin}m ago`
+
+      return this.lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    },
+
     onSaveComplete(success = true) {
       if (success) {
         this.hideSavingIndicator()
@@ -1275,12 +1380,11 @@ export default {
       }
     },
 
-    // Method để parent component gọi khi bắt đầu save
     onSaveStart() {
       this.showSavingIndicator()
     },
 
-    // Preview Generation Methods
+    // ============ EXPORT AND PREVIEW METHODS ============
     async generatePreviewImage() {
       return new Promise((resolve) => {
         setTimeout(async () => {
@@ -1479,7 +1583,6 @@ export default {
       }
     },
 
-    // Export Methods
     async exportAsPNG() {
       try {
         this.isExporting = true
@@ -1590,7 +1693,7 @@ export default {
       URL.revokeObjectURL(url)
     },
 
-    // Fullscreen Methods
+    // ============ FULLSCREEN METHODS ============
     toggleFullscreen() {
       if (!this.isFullscreen) this.enterFullscreen()
       else this.exitFullscreen()
@@ -1629,7 +1732,7 @@ export default {
       )
     },
 
-    // Utility Methods
+    // ============ UTILITY METHODS ============
     setupEventListeners() {
       document.addEventListener('mousemove', this.handleMouseMove)
       document.addEventListener('mouseup', this.handleMouseUp)
@@ -1678,7 +1781,6 @@ export default {
   },
 }
 </script>
-
 <style scoped>
 .activity-diagram-renderer {
   display: flex;

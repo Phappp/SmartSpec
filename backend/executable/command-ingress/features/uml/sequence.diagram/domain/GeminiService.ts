@@ -16,8 +16,7 @@ const sequenceDiagramPrompts: Record<string, PromptEntry> = {
       return `
 BẠN LÀ MỘT KỸ SƯ PHÂN TÍCH NGHIỆP VỤ (BUSINESS ANALYST) VÀ KIẾN TRÚC SƯ HỆ THỐNG.
 
-Nhiệm vụ của bạn là phân tích ĐỐI TƯỢNG USE CASE (dùng ngôn ngữ "vi-VN") sau đây và tạo ra một cấu trúc JSON DUY NHẤT cho BIỂU ĐỒ TUẦN TỰ (Sequence Diagram).
-**QUAN TRỌNG:** Toàn bộ nội dung ("name", "description", "content", "guard_condition") trong JSON trả về BẮT BUỘC phải bằng TIẾNG VIỆT.
+Nhiệm vụ của bạn là phân tích ĐỐI TƯỢNG USE CASE sau đây (bao gồm 'role' và 'tasks') và tạo ra một cấu trúc JSON DUY NHẤT cho BIỂU ĐỒ TUẦN TỰ (Sequence Diagram).
 
 ĐỐI TƯỢNG USE CASE CẦN VẼ:
 ${useCaseContextJson}
@@ -70,16 +69,15 @@ ${useCaseContextJson}
 
 **QUY TẮC LOGIC:**
 
-1.  **name**: Lấy 'name' hoặc 'goal' từ ĐỐI TƯỢNG USE CASE đầu vào. (Bằng Tiếng Việt)
+1.  **name**: Lấy 'name' hoặc 'goal' từ ĐỐI TƯỢNG USE CASE đầu vào.
 2.  **description**: Tự động tạo mô tả ngắn.
 3.  **lifelines**:
-    - **Bắt buộc:** Tạo lifeline cho Actor chính (từ 'role'). (Bằng Tiếng Việt)
-    - **Suy luận nâng cao:** BẮT BUỘC suy luận thêm các lifeline chi tiết (ví dụ: **:Application**, **:Controller**, **:Service**, **:Database**, **:PaymentGateway**).(In English)
+    - **Bắt buộc:** Tạo lifeline cho Actor chính (từ 'role').
+    - **Suy luận nâng cao:** BẮT BUỘC suy luận thêm các lifeline chi tiết (ví dụ: **:Application**, **:Controller**, **:Service**, **:Database**, **:PaymentGateway**).
     - 'name' phải là duy nhất.
 
 4.  **messages (QUY TẮC MỚI):**
     - **Bắt buộc có 'key':** Phải tạo một 'key' string duy nhất cho mỗi message (ví dụ: "msg_1", "msg_2").
-    - **Nội dung (content):** BẮT BUỘC phải là Tiếng Việt. Đối với các hàm kỹ thuật, hãy Việt hóa (ví dụ: 'requestRegister(data)' -> 'YeuCauDangKy(duLieu)').
     - **Phải có phản hồi (Reply):** Với mỗi lệnh 'sync' từ Actor, phải có một 'reply' tương ứng trả về.
     - **Phải có luồng nội bộ:** Tích cực tạo thêm thông điệp nội bộ giữa các lifeline hệ thống.
     - 'order', 'type', 'content' là bắt buộc.
@@ -102,7 +100,7 @@ ${useCaseContextJson}
         - **'target' của edge phải là 'name' của lifeline đích.**
         - 'data: { "label": ... }' phải chứa 'content' của message.
 
-Hãy phân tích kỹ và trả về ĐÚNG đối tượng JSON 100% bằng TIẾNG VIỆT.
+Hãy phân tích kỹ và trả về ĐÚNG đối tượng JSON này.
 `;
     },
   },
@@ -111,9 +109,7 @@ Hãy phân tích kỹ và trả về ĐÚNG đối tượng JSON 100% bằng TI�
       return `
 YOU ARE A BUSINESS ANALYST AND SYSTEM ARCHITECT.
 
-Your task is to analyze the following USE CASE OBJECT (in "en-US" language) and generate a SINGLE JSON object for a SEQUENCE DIAGRAM.
-
-**IMPORTANT:** All content ("name", "description", "content", "guard_condition") in the response JSON MUST be in ENGLISH.
+Your task is to analyze the following USE CASE OBJECT (including 'role' and 'tasks') and create a UNIQUE JSON structure for the SEQUENCE DIAGRAM.
 
 USE CASE OBJECT TO DRAW:
 ${useCaseContextJson}
@@ -166,12 +162,12 @@ The JSON object MUST strictly adhere to the following structure (using strings):
 
 **LOGIC RULES (UPDATED):**
 
-1. **name**: Get 'name' or 'goal' from the input USE CASE OBJECT.(In English)
+1. **name**: Get 'name' or 'goal' from the input USE CASE OBJECT.
 
-2. **description**: Automatically generate a short description.(In English)
+2. **description**: Automatically generate a short description.
 3. **lifelines**:
-  - **Required:** Create a lifeline for the main Actor (from 'role').(In English)
-  - **Advanced Reasoning:** REQUIRED to infer additional detailed lifelines (e.g., **:Application**, **:Controller**, **:Service**, **:Database**, **:PaymentGateway**).(In English)
+  - **Required:** Create a lifeline for the main Actor (from 'role').
+  - **Advanced Reasoning:** REQUIRED to infer additional detailed lifelines (e.g., **:Application**, **:Controller**, **:Service**, **:Database**, **:PaymentGateway**).
   - 'name' must be unique.
 
 4. **messages (NEW RULE):**
@@ -198,7 +194,7 @@ The JSON object MUST strictly adhere to the following structure (using strings):
     - **'target' of the edge must be the 'name' of the target lifeline.**
     - 'data: { "label": ... }' must contain the 'content' of the message.
 
-Analyze carefully and return ONLY this JSON object 100% in ENGLISH.
+Please parse this JSON object carefully and return the CORRECT one.
 `;
     },
   },
