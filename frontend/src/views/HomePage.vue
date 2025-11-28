@@ -12,41 +12,7 @@
       <div class="main-content">
         <header class="page-header">
           <h1>HOME PAGE</h1>
-
-          <!-- Bulk Actions khi có project được chọn -->
-          <div v-if="selectedProjects.length > 0" class="bulk-actions">
-            <span class="selected-count">{{ selectedProjects.length }} selected</span>
-            <button
-              v-if="currentView !== 'trash'"
-              @click="bulkMoveToTrash"
-              class="btn-bulk btn-bulk-delete"
-            >
-              <span class="material-symbols-outlined">delete</span>
-              Move to Trash
-            </button>
-            <button
-              v-if="currentView === 'trash'"
-              @click="bulkRestore"
-              class="btn-bulk btn-bulk-restore"
-            >
-              <span class="material-symbols-outlined">restore</span>
-              Restore
-            </button>
-            <button
-              v-if="currentView === 'trash'"
-              @click="bulkDeletePermanently"
-              class="btn-bulk btn-bulk-delete"
-            >
-              <span class="material-symbols-outlined">delete_forever</span>
-              Delete Permanently
-            </button>
-            <button @click="clearSelection" class="btn-bulk btn-bulk-cancel">
-              <span class="material-symbols-outlined">close</span>
-              Cancel
-            </button>
-          </div>
-
-          <div v-else class="header-actions">
+          <div class="header-actions">
             <button @click="openInvitationsModal" class="btn-icon invitations-btn">
               <span class="material-symbols-outlined">group</span>
               <span v-if="sentInvitations.length > 0" class="invitation-badge">
@@ -119,18 +85,6 @@
                 <option value="createdAt">Date Created</option>
                 <option value="name">Name</option>
               </select>
-
-              <!-- Toggle Multi-select Mode -->
-              <!-- <button
-                @click="toggleMultiSelectMode"
-                class="btn-multi-select"
-                :class="{ active: isMultiSelectMode }"
-              >
-                <span class="material-symbols-outlined">
-                  {{ isMultiSelectMode ? 'check_box' : 'check_box_outline_blank' }}
-                </span>
-                {{ isMultiSelectMode ? 'Cancel Selection' : 'Select Multiple' }}
-              </button> -->
             </div>
             <div class="filter-stats">
               <span class="stat-text">{{ filteredProjects.length }} projects found</span>
@@ -140,27 +94,46 @@
             </div>
           </div>
 
+          <!-- Hiển thị projects đang được tạo -->
+          <div
+            v-if="filteredCreatingProjects.length > 0 && currentView !== 'trash'"
+            class="projects-view creating-projects-section"
+          >
+            <div class="section-header">
+              <h2>Creating Projects</h2>
+              <p>{{ filteredCreatingProjects.length }} project(s) in progress</p>
+            </div>
+            <div class="projects-grid">
+              <ProjectCard
+                v-for="p in filteredCreatingProjects"
+                :key="p._id"
+                :project="p"
+                :user="user"
+                :is-creating="true"
+                @open="openProject"
+                @retry-creation="retryCreatingProject"
+                @leave="handleLeaveProject"
+              />
+            </div>
+          </div>
+
           <!-- Recent Projects -->
           <div v-if="currentView === 'recent-projects'" class="projects-view">
             <div class="section-header">
               <h2>Recent Projects</h2>
-              <!-- <p>Your recently accessed projects</p> -->
+              <p>Your recently accessed projects</p>
             </div>
             <div v-if="filteredProjects.length > 0" class="projects-grid">
               <ProjectCard
                 v-for="p in filteredProjects"
                 :key="p._id"
                 :project="p"
-                :show-multi-select="isMultiSelectMode"
-                :is-selected="selectedProjects.includes(p._id)"
+                :user="user"
                 @open="openProject"
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
                 @share="openShareModal"
                 @leave="handleLeaveProject"
-                @restore="restoreProject"
-                @delete-permanently="confirmDeletePermanently"
-                @selection-toggle="handleSelectionToggle"
               />
             </div>
             <div v-else class="empty-state">
@@ -180,23 +153,19 @@
           <div v-if="currentView === 'my-projects'" class="projects-view">
             <div class="section-header">
               <h2>My Projects</h2>
-              <!-- <p>Projects you own</p> -->
+              <p>Projects you own</p>
             </div>
             <div v-if="filteredProjects.length > 0" class="projects-grid">
               <ProjectCard
                 v-for="p in filteredProjects"
                 :key="p._id"
                 :project="p"
-                :show-multi-select="isMultiSelectMode"
-                :is-selected="selectedProjects.includes(p._id)"
+                :user="user"
                 @open="openProject"
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
                 @share="openShareModal"
                 @leave="handleLeaveProject"
-                @restore="restoreProject"
-                @delete-permanently="confirmDeletePermanently"
-                @selection-toggle="handleSelectionToggle"
               />
             </div>
             <div v-else class="empty-state">
@@ -223,16 +192,12 @@
                 v-for="p in filteredProjects"
                 :key="p._id"
                 :project="p"
-                :show-multi-select="isMultiSelectMode"
-                :is-selected="selectedProjects.includes(p._id)"
+                :user="user"
                 @open="openProject"
                 @edit="handleEditProject"
                 @delete="confirmMoveToTrash"
                 @share="openShareModal"
                 @leave="handleLeaveProject"
-                @restore="restoreProject"
-                @delete-permanently="confirmDeletePermanently"
-                @selection-toggle="handleSelectionToggle"
               />
             </div>
             <div v-else class="empty-state">
@@ -249,37 +214,18 @@
             <div class="section-header">
               <h2>Trashed Projects</h2>
               <p>Projects moved to trash</p>
-
-              <!-- Multi-select toggle for trash -->
-              <!-- <div class="trash-actions" v-if="trashedProjects.length > 0">
-                <button
-                  @click="toggleMultiSelectMode"
-                  class="btn-multi-select"
-                  :class="{ active: isMultiSelectMode }"
-                >
-                  <span class="material-symbols-outlined">
-                    {{ isMultiSelectMode ? 'check_box' : 'check_box_outline_blank' }}
-                  </span>
-                  {{ isMultiSelectMode ? 'Cancel Selection' : 'Select Multiple' }}
-                </button>
-              </div> -->
             </div>
             <div v-if="trashedProjects.length > 0" class="projects-grid">
               <ProjectCard
                 v-for="p in trashedProjects"
                 :key="p._id"
                 :project="p"
+                :user="user"
                 :is-trashed="true"
-                :show-multi-select="isMultiSelectMode"
-                :is-selected="selectedProjects.includes(p._id)"
-                @open="openProject"
-                @edit="handleEditProject"
-                @delete="confirmMoveToTrash"
-                @share="openShareModal"
-                @leave="handleLeaveProject"
                 @restore="restoreProject"
                 @delete-permanently="confirmDeletePermanently"
-                @selection-toggle="handleSelectionToggle"
+                @share="openShareModal"
+                @leave="handleLeaveProject"
               />
             </div>
             <div v-else class="empty-state">
@@ -296,7 +242,9 @@
 
     <NewProjectModal
       :show="isNewProjectModalVisible"
+      :creating-projects="creatingProjects"
       @close="closeNewProjectModal"
+      @close-during-creation="handleCloseDuringCreation"
       @project-created="handleProjectCreated"
     />
     <PersonalInfor
@@ -318,7 +266,6 @@
       :is-confirmation="modalContent.isConfirmation"
       @confirm="modalContent.onConfirm"
     />
-
     <!-- Modal xem invitations -->
     <InvitationsModal
       v-if="isInvitationsModalVisible"
@@ -350,6 +297,8 @@ import {
   getTrashedProjects,
   restoreProject as apiRestoreProject,
   updateProject,
+  getVersionStatus,
+  retryProjectAnalysis,
 } from '@/api/project'
 import {
   getMyInvitations,
@@ -387,6 +336,7 @@ export default {
       myProjects: [],
       sharedProjects: [],
       trashedProjects: [],
+      creatingProjects: [],
       isAppModalVisible: false,
       modalContent: {
         title: '',
@@ -394,6 +344,7 @@ export default {
         isConfirmation: false,
         onConfirm: () => {},
       },
+      pollingIntervals: {},
       toast: useToast(),
 
       // Filter states
@@ -404,10 +355,6 @@ export default {
       myInvitations: [],
       sentInvitations: [],
       isMobile: false,
-
-      // Multi-select states
-      isMultiSelectMode: false,
-      selectedProjects: [],
     }
   },
   mounted() {
@@ -454,6 +401,11 @@ export default {
       }
       return labels[this.languageFilter] || this.languageFilter
     },
+    filteredCreatingProjects() {
+      return this.creatingProjects.filter((project) =>
+        project.name.toLowerCase().includes(this.searchQuery.toLowerCase())
+      )
+    },
     filteredProjects() {
       let filtered = this.currentProjects.filter(
         (project) =>
@@ -485,6 +437,7 @@ export default {
     this.fetchInitialData()
   },
   beforeUnmount() {
+    this.cleanupAllPolling()
     window.removeEventListener('resize', this.checkMobile)
     if (socket) {
       socket.off('notification')
@@ -492,97 +445,14 @@ export default {
     }
   },
   methods: {
-    // Multi-select methods
-    toggleMultiSelectMode() {
-      this.isMultiSelectMode = !this.isMultiSelectMode
-      if (!this.isMultiSelectMode) {
-        this.selectedProjects = []
-      }
-    },
-
-    handleSelectionToggle(projectId) {
-      const index = this.selectedProjects.indexOf(projectId)
-      if (index > -1) {
-        this.selectedProjects.splice(index, 1)
-      } else {
-        this.selectedProjects.push(projectId)
-      }
-    },
-
-    clearSelection() {
-      this.selectedProjects = []
-      this.isMultiSelectMode = false
-    },
-
-    async bulkMoveToTrash() {
-      if (this.selectedProjects.length === 0) return
-
-      this.showConfirmation(
-        'Confirm Bulk Move to Trash',
-        `Are you sure you want to move ${this.selectedProjects.length} project(s) to trash?`,
-        async () => {
-          try {
-            const promises = this.selectedProjects.map((projectId) => deleteProject(projectId))
-            await Promise.all(promises)
-            this.toast.success(
-              `Moved ${this.selectedProjects.length} project(s) to trash successfully!`
-            )
-            this.clearSelection()
-            this.fetchInitialData()
-          } catch (err) {
-            console.error('Bulk move to trash error', err)
-            this.toast.error('Failed to move some projects to trash!')
-          }
-        }
-      )
-    },
-
-    async bulkRestore() {
-      if (this.selectedProjects.length === 0) return
-
-      this.showConfirmation(
-        'Confirm Bulk Restore',
-        `Are you sure you want to restore ${this.selectedProjects.length} project(s)?`,
-        async () => {
-          try {
-            const promises = this.selectedProjects.map((projectId) => apiRestoreProject(projectId))
-            await Promise.all(promises)
-            this.toast.success(`Restored ${this.selectedProjects.length} project(s) successfully!`)
-            this.clearSelection()
-            this.fetchInitialData()
-          } catch (err) {
-            console.error('Bulk restore error', err)
-            this.toast.error('Failed to restore some projects!')
-          }
-        }
-      )
-    },
-
-    async bulkDeletePermanently() {
-      if (this.selectedProjects.length === 0) return
-
-      this.showConfirmation(
-        'Confirm Bulk Permanent Deletion',
-        `This action is irreversible. Are you sure you want to permanently delete ${this.selectedProjects.length} project(s)?`,
-        async () => {
-          try {
-            const promises = this.selectedProjects.map((projectId) => deleteProject(projectId))
-            await Promise.all(promises)
-            this.toast.success(
-              `Permanently deleted ${this.selectedProjects.length} project(s) successfully!`
-            )
-            this.clearSelection()
-            this.fetchInitialData()
-          } catch (err) {
-            console.error('Bulk permanent delete error', err)
-            this.toast.error('Failed to permanently delete some projects!')
-          }
-        }
-      )
-    },
-
     checkMobile() {
       this.isMobile = window.innerWidth <= 768
+    },
+    cleanupAllPolling() {
+      Object.values(this.pollingIntervals).forEach((interval) => {
+        clearInterval(interval)
+      })
+      this.pollingIntervals = {}
     },
     async fetchMyInvitationsRealtime() {
       try {
@@ -620,7 +490,8 @@ export default {
         this.trashedProjects = trashedRes.data?.data || []
 
         this.myInvitations = (invRes.data?.data || []).map((inv) => ({
-          ...inv,
+          ...inv, // ✅ Giữ nguyên tất cả data từ BE
+          // Chỉ thêm id nếu cần
           id: inv.invite_id || inv._id,
         }))
 
@@ -634,6 +505,10 @@ export default {
         )
 
         this.loadSentInvitations()
+
+        this.$nextTick(() => {
+          this.restoreRetryProcesses()
+        })
       } catch (err) {
         console.error('Failed to fetch initial data:', err)
         if (err.response?.status === 401 || err.response?.status === 400) {
@@ -782,8 +657,211 @@ export default {
         this.creationSuccess = false
       }
     },
+    handleCloseDuringCreation(creationData) {
+      console.log('📝 Received creation data:', creationData)
+
+      if (!creationData.pollingData?.versionId) {
+        console.error('❌ No versionId provided for polling')
+        this.toast.error('Cannot track project creation progress. Please check the project later!')
+        this.isNewProjectModalVisible = false
+        return
+      }
+
+      const tempProject = {
+        _id: 'creating-' + Date.now(),
+        name: creationData.projectData.name,
+        description: creationData.projectData.description,
+        status: 'creating',
+        processingProgress: creationData.processingProgress || 0,
+        currentStage: creationData.currentStage || 'Initializing...',
+        creationStatus: creationData.creationStatus || 'polling',
+        isTemp: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        members: [],
+        pollingData: creationData.pollingData,
+      }
+
+      this.creatingProjects.unshift(tempProject)
+      this.isNewProjectModalVisible = false
+
+      this.startPollingForProject(tempProject._id, creationData.pollingData)
+
+      if (this.currentView !== 'my-projects') {
+        this.navigateTo('my-projects')
+      }
+    },
+    restoreRetryProcesses() {
+      const retryKeys = Object.keys(localStorage).filter((key) => key.startsWith('retry_'))
+
+      retryKeys.forEach((key) => {
+        try {
+          const retryState = JSON.parse(localStorage.getItem(key))
+          if (retryState && retryState.type === 'retry') {
+            console.log('🔄 Restoring retry process:', retryState)
+
+            const existingIndex = this.creatingProjects.findIndex(
+              (p) => p.pollingData?.projectId === retryState.projectId && p.isRetry
+            )
+
+            if (existingIndex === -1) {
+              const tempProject = {
+                _id: `retry-${Date.now()}`,
+                name: retryState.projectName,
+                description: retryState.projectDescription,
+                status: 'retrying',
+                processingProgress: retryState.processingProgress || 0,
+                currentStage: retryState.currentStage || 'Initializing...',
+                creationStatus: 'polling',
+                isTemp: true,
+                isRetry: true,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                members: [],
+                pollingData: {
+                  projectId: retryState.projectId,
+                  versionId: retryState.versionId,
+                  projectName: retryState.projectName,
+                  projectDescription: retryState.projectDescription,
+                  type: 'retry',
+                },
+              }
+
+              this.creatingProjects.unshift(tempProject)
+              this.startPollingForProject(tempProject._id, tempProject.pollingData)
+            }
+          }
+        } catch (error) {
+          console.error('Error restoring retry process:', error)
+          localStorage.removeItem(key)
+        }
+      })
+    },
+    startPollingForProject(tempProjectId, pollingData) {
+      console.log('🚀 Starting polling for project:', tempProjectId, pollingData)
+
+      const interval = setInterval(async () => {
+        try {
+          const response = await getVersionStatus(pollingData.versionId)
+          const { status, version, project } = response.data.data
+
+          console.log('📊 Polling update:', {
+            tempProjectId,
+            status,
+            progress: version?.progress,
+            stage: version?.stage,
+          })
+
+          this.updateCreatingProjectProgress(tempProjectId, {
+            processingProgress: version?.progress || 0,
+            currentStage: version?.stage || 'Processing',
+            creationStatus: status,
+          })
+
+          if (pollingData.type === 'retry') {
+            const retryState = {
+              projectId: pollingData.projectId,
+              versionId: pollingData.versionId,
+              projectName: pollingData.projectName,
+              projectDescription: pollingData.projectDescription,
+              processingProgress: version?.progress || 0,
+              currentStage: version?.stage || 'Processing',
+              timestamp: new Date().getTime(),
+              type: 'retry',
+            }
+            localStorage.setItem(`retry_${pollingData.projectId}`, JSON.stringify(retryState))
+          }
+
+          if (status !== 'processing') {
+            const isReallyCompleted =
+              status === 'completed' ||
+              status === 'has_conflicts' ||
+              version?.progress === 100 ||
+              version?.stage === 'completed'
+
+            if (isReallyCompleted) {
+              clearInterval(interval)
+              delete this.pollingIntervals[tempProjectId]
+
+              if (pollingData.type === 'retry') {
+                localStorage.removeItem(`retry_${pollingData.projectId}`)
+              }
+
+              this.updateCreatingProjectProgress(tempProjectId, {
+                processingProgress: 100,
+                currentStage: 'Completed',
+                creationStatus: 'completed',
+              })
+
+              setTimeout(() => {
+                this.moveCreatingToRealProject(tempProjectId, project)
+              }, 2000)
+            }
+          }
+        } catch (error) {
+          console.error('Polling error:', error)
+          if (this.pollingIntervals[tempProjectId]?.retryCount > 3) {
+            clearInterval(interval)
+            delete this.pollingIntervals[tempProjectId]
+            this.markCreatingProjectFailed(tempProjectId)
+          } else {
+            this.pollingIntervals[tempProjectId].retryCount =
+              (this.pollingIntervals[tempProjectId]?.retryCount || 0) + 1
+          }
+        }
+      }, 3000)
+
+      this.pollingIntervals[tempProjectId] = {
+        interval,
+        retryCount: 0,
+      }
+    },
+    updateCreatingProjectProgress(tempProjectId, progressData) {
+      const projectIndex = this.creatingProjects.findIndex((p) => p._id === tempProjectId)
+      if (projectIndex !== -1) {
+        this.creatingProjects[projectIndex] = {
+          ...this.creatingProjects[projectIndex],
+          processingProgress: progressData.processingProgress,
+          currentStage: progressData.currentStage,
+          creationStatus: progressData.creationStatus,
+          updatedAt: new Date().toISOString(),
+        }
+      }
+    },
+    moveCreatingToRealProject(tempProjectId, realProject) {
+      const projectIndex = this.creatingProjects.findIndex((p) => p._id === tempProjectId)
+      if (projectIndex !== -1) {
+        this.creatingProjects.splice(projectIndex, 1)
+        this.myProjects.unshift(realProject)
+        this.recentProjects.unshift(realProject)
+        this.toast.success(`Project created successfully!`)
+      }
+    },
+    markCreatingProjectFailed(tempProjectId) {
+      const projectIndex = this.creatingProjects.findIndex((p) => p._id === tempProjectId)
+      if (projectIndex !== -1) {
+        this.creatingProjects[projectIndex] = {
+          ...this.creatingProjects[projectIndex],
+          creationStatus: 'failed',
+          currentStage: 'Failed',
+          processingProgress: 0,
+        }
+
+        const project = this.creatingProjects[projectIndex]
+        if (project.pollingData?.type === 'retry') {
+          localStorage.removeItem(`retry_${project.pollingData.projectId}`)
+        }
+
+        setTimeout(() => {
+          this.creatingProjects = this.creatingProjects.filter((p) => p._id !== tempProjectId)
+        }, 30000)
+      }
+    },
     handleProjectCreated(newProject) {
       if (newProject) {
+        this.creatingProjects = this.creatingProjects.filter(
+          (p) => !p._id.includes('creating-') || p.name !== newProject.name
+        )
         this.myProjects.unshift(newProject)
         this.recentProjects.unshift(newProject)
       }
@@ -791,7 +869,6 @@ export default {
     },
     navigateTo(view) {
       this.currentView = view
-      this.clearSelection() // Clear selection when changing views
     },
     async handleEditProject({ projectId, data }) {
       try {
@@ -814,11 +891,20 @@ export default {
       updateProjectInArray(this.recentProjects)
       updateProjectInArray(this.myProjects)
       updateProjectInArray(this.sharedProjects)
+      updateProjectInArray(this.creatingProjects)
+    },
+    cleanupOldCreatingProjects() {
+      const now = new Date().getTime()
+      this.creatingProjects = this.creatingProjects.filter((p) => {
+        if (p.isTemp) {
+          const createdTime = new Date(p.createdAt).getTime()
+          return now - createdTime < 7200000 // 2 giờ
+        }
+        return true
+      })
     },
     openProject(project) {
-      // Don't open project if in multi-select mode
-      if (this.isMultiSelectMode) return
-
+      if (project.isTemp) return
       const id = project._id || project.id
       if (id) this.$router.push({ name: 'Editor', params: { id } })
     },
@@ -963,6 +1049,37 @@ export default {
         this.toast.error('Failed to cancel invitation')
       }
     },
+    async retryCreatingProject(projectData) {
+      try {
+        const userId = localStorage.getItem('userId')
+        if (!userId) {
+          console.error('❌ User ID not found for retry')
+          this.toast.error('User identification required for retry')
+          return
+        }
+
+        console.log('🔄 Retrying project creation:', projectData)
+
+        await retryProjectAnalysis(
+          projectData.pollingData.projectId,
+          projectData.pollingData.versionId,
+          userId
+        )
+
+        this.updateCreatingProjectProgress(projectData._id, {
+          processingProgress: 0,
+          currentStage: 'Initializing...',
+          creationStatus: 'polling',
+        })
+
+        this.startPollingForProject(projectData._id, projectData.pollingData)
+
+        this.toast.success('Retry started successfully!')
+      } catch (error) {
+        console.error('❌ Retry error:', error)
+        this.toast.error('Failed to start retry process')
+      }
+    },
   },
 }
 </script>
@@ -989,12 +1106,12 @@ export default {
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE và Edge */
 }
 
 .main-content::-webkit-scrollbar {
-  display: none;
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .page-header {
@@ -1005,7 +1122,6 @@ export default {
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
-  min-height: 80px;
 }
 
 .page-header h1 {
@@ -1013,62 +1129,6 @@ export default {
   font-weight: 700;
   color: #1a365d;
   margin: 0;
-}
-
-/* Bulk Actions */
-.bulk-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-  justify-content: flex-end;
-}
-
-.selected-count {
-  font-size: 0.875rem;
-  color: #6b7280;
-  font-weight: 500;
-  margin-right: 8px;
-}
-
-.btn-bulk {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-bulk-delete {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.btn-bulk-delete:hover {
-  background: #fecaca;
-}
-
-.btn-bulk-restore {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
-.btn-bulk-restore:hover {
-  background: #bbf7d0;
-}
-
-.btn-bulk-cancel {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.btn-bulk-cancel:hover {
-  background: #e5e7eb;
 }
 
 .header-actions {
@@ -1231,7 +1291,6 @@ export default {
   display: flex;
   gap: 12px;
   align-items: center;
-  /* flex-wrap: wrap; */
 }
 
 .search-input-container {
@@ -1278,33 +1337,6 @@ export default {
   border-color: #1a365d;
 }
 
-/* Multi-select Button */
-.btn-multi-select {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: white;
-  color: #374151;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 150px;
-}
-
-.btn-multi-select:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-}
-
-.btn-multi-select.active {
-  background: #1a365d;
-  color: white;
-  border-color: #1a365d;
-}
-
 .filter-stats {
   display: flex;
   align-items: center;
@@ -1344,9 +1376,6 @@ export default {
   margin-bottom: 30px;
   text-align: left;
   max-width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 
 .section-header h2 {
@@ -1362,11 +1391,6 @@ export default {
   margin: 0;
 }
 
-.trash-actions {
-  display: flex;
-  gap: 12px;
-}
-
 /* Projects Grid */
 .projects-grid {
   display: grid;
@@ -1374,6 +1398,23 @@ export default {
   gap: 24px;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+/* Creating Projects Section */
+.creating-projects-section {
+  border-bottom: 2px solid #e3f2fd;
+  padding-bottom: 30px;
+  margin-bottom: 30px;
+  max-width: 100%;
+}
+
+.creating-projects-section .section-header h2 {
+  color: #1a365d;
+}
+
+.creating-projects-section .section-header p {
+  color: #2c5282;
+  font-weight: 500;
 }
 
 /* Empty State */
@@ -1451,23 +1492,10 @@ export default {
     flex-direction: column;
     gap: 16px;
     align-items: flex-start;
-    min-height: auto;
   }
 
   .page-header h1 {
     font-size: 1.25rem;
-  }
-
-  .bulk-actions {
-    width: 100%;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .btn-bulk {
-    padding: 6px 12px;
-    font-size: 0.8rem;
   }
 
   .header-actions {
@@ -1511,23 +1539,8 @@ export default {
     width: 100%;
   }
 
-  .btn-multi-select {
-    width: 100%;
-    justify-content: center;
-  }
-
   .filter-stats {
     justify-content: space-between;
-    width: 100%;
-  }
-
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
-
-  .trash-actions {
     width: 100%;
   }
 

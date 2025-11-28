@@ -1,5 +1,3 @@
-[file name]: NewProjectForm.vue
-[file content begin]
 <template>
   <div v-if="show" class="modal-overlay" @click.self="() => {}">
     <div class="modal-content">
@@ -8,7 +6,7 @@
         <div class="modal-header">
           <div class="header-text">
             <h2>Create New Project</h2>
-            <p class="progress-indicator">Step {{ currentStep }} of 2</p>
+            <p class="progress-indicator">Step {{ currentStep }} of 3</p>
           </div>
           <button class="close-btn" @click="handleClose">&times;</button>
         </div>
@@ -49,8 +47,66 @@
               </div>
             </div>
 
-            <!-- Step 2 (Language Selection) -->
+            <!-- Step 2 -->
             <div v-if="currentStep === 2">
+              <!-- Thông báo yêu cầu đầu vào -->
+              <div class="input-requirement" v-if="!isStep2Valid">
+                <span class="material-symbols-outlined" style="font-size: 16px; color: #ef4444"
+                  >info</span
+                >
+                Please provide either Decribe Features or at least one attachment to continue.
+              </div>
+              <div class="form-group">
+                <label for="rawText">Decribe Features (Optional)</label>
+                <textarea
+                  id="rawText"
+                  v-model="projectData.rawText"
+                  placeholder="Paste requirements, user stories, or any context text here..."
+                  rows="5"
+                ></textarea>
+              </div>
+              <div class="form-group">
+                <label>Attachments (Optional)</label>
+                <div class="file-info">
+                  <span class="file-count">{{ selectedFiles.length }} files selected</span>
+                  <span class="file-size">Total size: {{ formatFileSize(totalFileSize) }}</span>
+                </div>
+                <div class="attachment-trigger" @click="$refs.fileInput.click()">
+                  <span class="material-symbols-outlined">upload_file</span>
+                  Click to choose files...
+                </div>
+                <input
+                  type="file"
+                  ref="fileInput"
+                  class="hidden-input"
+                  multiple
+                  @change="handleFileChange"
+                />
+                <div v-if="selectedFiles.length > 0" class="file-list-container">
+                  <div class="file-list-scroll">
+                    <div v-for="(file, idx) in selectedFiles" :key="file.id" class="file-item">
+                      <div class="file-preview" v-if="isImageFile(file)">
+                        <img :src="file.previewUrl" :alt="file.name" />
+                      </div>
+                      <div v-else class="file-icon">
+                        <span class="material-symbols-outlined">description</span>
+                      </div>
+                      <span class="file-name">{{ file.name }}</span>
+                      <span class="file-size-small">{{ formatFileSize(file.size) }}</span>
+                      <button type="button" class="remove-file-btn" @click="removeFile(idx)">
+                        &times;
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="sizeLimitExceeded" class="error-message">
+                  Total file size exceeds the limit of 150KB. Please remove some files.
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div v-if="currentStep === 3">
               <div class="form-group">
                 <label>Select Language</label>
                 <p class="lang-description">Choose the primary language for the documentation.</p>
@@ -83,13 +139,18 @@
               <button
                 type="button"
                 class="create-btn"
-                v-if="currentStep < 2"
+                v-if="currentStep < 3"
                 @click="nextStep"
                 :disabled="isNextButtonDisabled"
               >
                 Next
               </button>
-              <button type="submit" class="create-btn" v-if="currentStep === 2">
+              <button
+                type="submit"
+                class="create-btn"
+                v-if="currentStep === 3"
+                :disabled="sizeLimitExceeded"
+              >
                 Create Project
               </button>
             </div>
@@ -113,8 +174,8 @@
           <!-- FAILED -->
           <div v-if="creationStatus === 'failed'">
             <span class="status-icon fail material-symbols-outlined"> error </span>
-            <h3 class="status-title">Creation Failed</h3>
-            <p class="status-text">Something went wrong during project creation.</p>
+            <h3 class="status-title">Processing Failed</h3>
+            <p class="status-text">Something went wrong during the analysis.</p>
             <div class="button-group">
               <button class="cancel-btn" @click="handleCancelInStatus">Close</button>
               <button class="create-btn" @click="handleRetry">Retry</button>
@@ -123,37 +184,100 @@
         </div>
       </template>
     </div>
+
+    <div v-if="overlayLoading" class="fullscreen-overlay">
+      <!-- NÚT THOÁT KHI ĐANG LOADING -->
+      <button class="close-loading-btn" @click="handleCloseDuringCreation">
+        <span class="material-symbols-outlined">close</span>
+        Exit Creation
+      </button>
+      <div class="loading-box">
+        <div class="spinner-flashlight"></div>
+        <!-- PROCESSING PROGRESS -->
+        <div v-if="creationStatus === 'polling'" class="processing-status">
+          <div class="progress-container">
+            <div class="progress-info">
+              <span class="stage-text">{{ currentStage }}</span>
+              <span class="progress-percent">{{ processingProgress }}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: processingProgress + '%' }"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { ref, watch, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { createProject } from '@/api/project'
+import { createProject, getVersionStatus, retryProjectAnalysis } from '@/api/project'
 
 export default {
   name: 'NewProjectModal',
   props: {
     show: { type: Boolean, default: false },
-    creatingProjects: { type: Array, default: () => [] },
+    creatingProjects: { type: Array, default: () => [] }, // Thêm prop mới
   },
   setup(props, { emit }) {
     const router = useRouter()
 
+    // Constants
+    const MAX_TOTAL_SIZE = 20000 * 1024 // 20000KB in bytes
+
     // Form state
     const currentStep = ref(1)
-    const projectData = ref({ name: '', description: '', language: 'vi-VN' })
+    const projectData = ref({ name: '', description: '', rawText: '', language: 'vi-VN' })
+    const selectedFiles = ref([])
     const step1Error = ref({ name: '', description: '' })
 
     // Status state
-    const creationStatus = ref('idle') // idle, creating, completed, failed
+    const creationStatus = ref('idle') // idle, creating, polling, completed, failed
     const finalProjectData = ref(null)
+    const failedVersionId = ref(null)
     const processingError = ref('')
+    const pollingInterval = ref(null)
+    const isRetrying = ref(false)
+    const currentVersionId = ref(null)
+    // Processing progress state
+    const processingProgress = ref(0)
+    const currentStage = ref('Initializing...')
+
+    // Loading overlay
+    const overlayLoading = ref(false)
+    const loadingMessage = ref('Analyzing requirements...')
+    const messageIndex = ref(0)
+    let messageInterval = null
+
+    const loadingMessages = [
+      'Analyzing requirements...',
+      'Processing data...',
+      'Generating results...',
+      'Finalizing project...',
+    ]
+
+    // Computed properties
+    const totalFileSize = computed(() => {
+      return selectedFiles.value.reduce((total, file) => total + file.size, 0)
+    })
+
+    const sizeLimitExceeded = computed(() => {
+      return totalFileSize.value > MAX_TOTAL_SIZE
+    })
+
+    // Thêm computed property để kiểm tra điều kiện bước 2
+    const isStep2Valid = computed(() => {
+      return projectData.value.rawText.trim() !== '' || selectedFiles.value.length > 0
+    })
 
     // Computed property để kiểm tra nút Next có bị disable không
     const isNextButtonDisabled = computed(() => {
       if (currentStep.value === 1) {
         return !projectData.value.name.trim() || !projectData.value.description.trim()
+      } else if (currentStep.value === 2) {
+        return sizeLimitExceeded.value || !isStep2Valid.value
       }
       return false
     })
@@ -172,18 +296,115 @@ export default {
       step1Error.value = errors
     }
 
+    const startLoadingMessages = () => {
+      overlayLoading.value = true
+      messageIndex.value = 0
+      loadingMessage.value = loadingMessages[0]
+      messageInterval = setInterval(() => {
+        messageIndex.value = (messageIndex.value + 1) % loadingMessages.length
+        loadingMessage.value = loadingMessages[messageIndex.value]
+      }, 4000)
+    }
+
+    const stopLoadingMessages = () => {
+      overlayLoading.value = false
+      if (messageInterval) clearInterval(messageInterval)
+    }
+
+    // File utility methods
+    const isImageFile = (file) => {
+      return file.type.startsWith('image/')
+    }
+
+    const formatFileSize = (bytes) => {
+      if (bytes === 0) return '0 Bytes'
+      const k = 1024
+      const sizes = ['Bytes', 'KB', 'MB', 'GB']
+      const i = Math.floor(Math.log(bytes) / Math.log(k))
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+    }
+
+    const isDuplicateFile = (newFile, existingFiles) => {
+      return existingFiles.some(
+        (existingFile) => existingFile.name === newFile.name && existingFile.size === newFile.size
+      )
+    }
+
+    const createFileObject = (file) => {
+      return {
+        id: Date.now() + Math.random().toString(36).substr(2, 9),
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        file: file,
+        previewUrl: isImageFile(file) ? URL.createObjectURL(file) : null,
+      }
+    }
+
+    // Clean up object URLs when component unmounts
+    onUnmounted(() => {
+      selectedFiles.value.forEach((file) => {
+        if (file.previewUrl) {
+          URL.revokeObjectURL(file.previewUrl)
+        }
+      })
+    })
+
     // Reset form
     const resetForm = () => {
       currentStep.value = 1
       creationStatus.value = 'idle'
-      projectData.value = { name: '', description: '', language: 'vi-VN' }
+      projectData.value = { name: '', description: '', rawText: '', language: 'vi-VN' }
+      processingProgress.value = 0
+      currentStage.value = 'Initializing...'
+      currentVersionId.value = null // Thêm dòng này
       step1Error.value = { name: '', description: '' }
+
+      selectedFiles.value.forEach((file) => {
+        if (file.previewUrl) {
+          URL.revokeObjectURL(file.previewUrl)
+        }
+      })
+      selectedFiles.value = []
+
       finalProjectData.value = null
       processingError.value = ''
+      if (pollingInterval.value) clearInterval(pollingInterval.value)
+      stopLoadingMessages()
     }
 
     const handleClose = () => {
       if (creationStatus.value === 'creating') return
+      emit('close')
+    }
+
+    // Thoát khi đang loading
+    const handleCloseDuringCreation = () => {
+      if (creationStatus.value === 'creating' || creationStatus.value === 'polling') {
+        // Tạo một polling data fallback
+        const pollingData = {
+          projectId: finalProjectData.value?._id,
+          versionId: currentVersionId.value || finalProjectData.value?.current_version,
+        }
+
+        // Nếu vẫn không có versionId, thử lấy từ polling interval data
+        if (!pollingData.versionId && pollingInterval.value?.versionId) {
+          pollingData.versionId = pollingInterval.value.versionId
+        }
+
+        console.log('📤 Emitting polling data:', pollingData)
+
+        emit('close-during-creation', {
+          projectData: { ...projectData.value },
+          selectedFiles: [...selectedFiles.value],
+          processingProgress: processingProgress.value,
+          currentStage: currentStage.value,
+          creationStatus: creationStatus.value,
+          pollingData: pollingData,
+        })
+      }
+      stopLoadingMessages()
+      resetForm()
       emit('close')
     }
 
@@ -221,34 +442,181 @@ export default {
         }
       }
 
-      if (currentStep.value < 2) currentStep.value++
+      // Thêm validation cho bước 2
+      if (currentStep.value === 2) {
+        if (sizeLimitExceeded.value) {
+          alert('Please reduce total file size below 150KB before proceeding.')
+          return
+        }
+        if (!isStep2Valid.value) {
+          alert('Please provide either Raw Text or attach at least one file.')
+          return
+        }
+      }
+
+      if (currentStep.value < 3) currentStep.value++
     }
 
     const prevStep = () => {
       if (currentStep.value > 1) currentStep.value--
     }
 
+    const handleFileChange = (event) => {
+      const newFiles = Array.from(event.target.files)
+      if (newFiles.length === 0) return
+
+      let addedFiles = 0
+      let duplicateFiles = 0
+      let oversizedFiles = 0
+
+      newFiles.forEach((file) => {
+        if (isDuplicateFile(file, selectedFiles.value)) {
+          duplicateFiles++
+          return
+        }
+
+        const newTotalSize = totalFileSize.value + file.size
+        if (newTotalSize > MAX_TOTAL_SIZE) {
+          oversizedFiles++
+          return
+        }
+
+        selectedFiles.value.push(createFileObject(file))
+        addedFiles++
+      })
+
+      let message = ''
+      if (addedFiles > 0) {
+        message += `Added ${addedFiles} file(s). `
+      }
+      if (duplicateFiles > 0) {
+        message += `${duplicateFiles} duplicate file(s) skipped. `
+      }
+      if (oversizedFiles > 0) {
+        message += `${oversizedFiles} file(s) skipped due to size limit. `
+      }
+
+      if (message) {
+        if (duplicateFiles > 0 || oversizedFiles > 0) {
+          alert(message.trim())
+        }
+      }
+
+      event.target.value = ''
+    }
+
+    const removeFile = (index) => {
+      const fileToRemove = selectedFiles.value[index]
+      if (fileToRemove.previewUrl) {
+        URL.revokeObjectURL(fileToRemove.previewUrl)
+      }
+      selectedFiles.value.splice(index, 1)
+    }
+
+    // Update progress based on stage
+    const updateProgressFromStage = (stage) => {
+      const stageProgressMap = {
+        initializing: 15,
+        input: 25,
+        analyzing: 40,
+        normalization: 70,
+        finalizing: 90,
+        completed: 100,
+      }
+
+      currentStage.value = stage.charAt(0).toUpperCase() + stage.slice(1)
+      processingProgress.value = stageProgressMap[stage] || 0
+    }
+
+    const startPolling = (projectId, versionId) => {
+      pollingInterval.value = setInterval(async () => {
+        try {
+          const response = await getVersionStatus(versionId)
+          const { status, version, project } = response.data.data
+
+          // 🚀 Update progress/stage khi còn processing
+          if (status === 'processing' && version) {
+            updateProgressFromStage(version.stage || 'initializing')
+            processingProgress.value = version.progress || processingProgress.value
+            return // chưa kết thúc → tiếp tục polling
+          }
+
+          // ⛔ Nếu không còn processing → dừng polling
+          clearInterval(pollingInterval.value)
+
+          if (status === 'failed') {
+            // ❌ Trường hợp thất bại
+            currentStage.value = 'Failed'
+            failedVersionId.value = versionId
+            creationStatus.value = 'failed'
+            processingError.value =
+              version?.processing_errors?.join('\n') || 'Analysis failed without specific errors!!'
+            stopLoadingMessages()
+          } else if (status === 'completed' || status === 'has_conflicts') {
+            // ✅ Hoàn tất (có thể có conflict)
+            processingProgress.value = 100
+            currentStage.value = 'Completed'
+
+            setTimeout(() => {
+              creationStatus.value = status // 'completed' hoặc 'has_conflicts'
+              stopLoadingMessages()
+              emit('project-created', { _id: projectId, current_version: { _id: versionId } })
+            }, 1000)
+          } else {
+            // 🚨 Fallback nếu BE trả status lạ
+            currentStage.value = 'Unknown'
+            failedVersionId.value = versionId
+            creationStatus.value = 'failed'
+            processingError.value = `Unexpected status: ${status}`
+            stopLoadingMessages()
+          }
+        } catch (error) {
+          // 🔥 Lỗi gọi API
+          clearInterval(pollingInterval.value)
+          failedVersionId.value = versionId
+          creationStatus.value = 'failed'
+          processingError.value =
+            error.response?.data?.message || 'Could not fetch processing status from the server!!'
+          stopLoadingMessages()
+        }
+      }, 3000)
+    }
+
     const handleCreateProject = async () => {
+      if (sizeLimitExceeded.value) {
+        alert('Please reduce total file size below 20000KB before creating project.')
+        return
+      }
+
       creationStatus.value = 'creating'
+      processingProgress.value = 0
+      currentStage.value = 'Initializing...'
+      startLoadingMessages()
 
       const formData = new FormData()
       formData.append('name', projectData.value.name)
       formData.append('description', projectData.value.description)
       formData.append('language', projectData.value.language)
+      if (projectData.value.rawText) formData.append('rawText', projectData.value.rawText)
+
+      selectedFiles.value.forEach((fileObj) => {
+        formData.append('files', fileObj.file)
+      })
 
       try {
         const response = await createProject(formData)
         const createdProject = response.data.data
-
-        // Lưu lại project data
+        // QUAN TRỌNG: Lưu lại toàn bộ object dự án vừa tạo
         finalProjectData.value = createdProject
+        // QUAN TRỌNG: Lưu versionId ngay lập tức
+        currentVersionId.value = createdProject.current_version
 
-        // Chuyển trạng thái thành completed ngay lập tức
-        creationStatus.value = 'completed'
-        emit('project-created', createdProject)
+        creationStatus.value = 'polling'
+        startPolling(createdProject._id, createdProject.current_version)
       } catch (error) {
         creationStatus.value = 'failed'
         processingError.value = error.response?.data?.message || 'Failed to create project!!'
+        stopLoadingMessages()
       }
     }
 
@@ -258,34 +626,161 @@ export default {
       handleClose()
     }
 
+    onUnmounted(() => {
+      if (pollingInterval.value) clearInterval(pollingInterval.value)
+      stopLoadingMessages()
+    })
+
     const handleRetry = async () => {
-      // Reset form để tạo lại project
-      resetForm()
-      creationStatus.value = 'idle'
+      if (!finalProjectData.value || !failedVersionId.value) {
+        alert('Cannot retry: Project or Version ID is missing.')
+        return
+      }
+
+      const projectId = finalProjectData.value._id
+      const versionId = failedVersionId.value
+      const userId = localStorage.getItem('userId') // THÊM DÒNG NÀY
+
+      isRetrying.value = true
+      loadingMessage.value = 'Retrying analysis...'
+      processingProgress.value = 0
+      currentStage.value = 'Initializing...'
+      overlayLoading.value = true
+      creationStatus.value = 'polling'
+
+      try {
+        await retryProjectAnalysis(projectId, versionId, userId) // THÊM userId
+        startPolling(projectId, versionId)
+      } catch (error) {
+        console.error('Error retrying processing:', error)
+        creationStatus.value = 'failed'
+        processingError.value = error.response?.data?.message || 'Failed to start retry process.'
+      } finally {
+        isRetrying.value = false
+      }
     }
 
     return {
       router,
       currentStep,
       projectData,
+      selectedFiles,
       creationStatus,
       finalProjectData,
       processingError,
+      overlayLoading,
+      loadingMessage,
+      isRetrying,
+      currentVersionId,
+      totalFileSize,
+      sizeLimitExceeded,
+      isStep2Valid,
       isNextButtonDisabled,
       step1Error,
+      processingProgress,
+      currentStage,
       handleClose,
+      handleCloseDuringCreation,
       handleCancelInStatus,
       nextStep,
       prevStep,
+      handleFileChange,
+      removeFile,
       handleCreateProject,
       goToEditor,
       handleRetry,
+      isImageFile,
+      formatFileSize,
       validateStep1,
     }
   },
 }
 </script>
 <style scoped>
+/* FULLSCREEN LOADING */
+.fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 2000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(6px);
+}
+.loading-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.loading-text {
+  margin-top: 45px;
+  font-size: 1.2em;
+  color: #ece8e8;
+}
+.button-group {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+/* PROCESSING STATUS STYLES */
+.processing-status {
+  width: 100%;
+  margin-top: 25px;
+}
+
+.status-title {
+  font-size: 1.4em;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.progress-container {
+  width: 100%;
+  margin: 15px 0;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #ece8e8;
+  gap: 12px;
+}
+
+.stage-text {
+  font-weight: 500;
+  color: #ece8e8;
+}
+
+.progress-percent {
+  font-weight: 600;
+  color: #ece8e8;
+}
+
+.progress-bar {
+  min-width: 200px;
+  height: 10px;
+  background-color: #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1a365d, #2c5282);
+  border-radius: 8px;
+  transition: width 0.5s ease-in-out;
+  box-shadow: 0 2px 4px rgba(26, 54, 93, 0.3);
+}
+
 /* GENERAL MODAL STYLES */
 .modal-overlay {
   position: fixed;
@@ -378,6 +873,173 @@ export default {
 
 .required-asterisk {
   color: #ef4444;
+}
+
+/* INPUT REQUIREMENT STYLES */
+.input-requirement {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #ef4444;
+  margin-bottom: 10px;
+  padding: 8px;
+  background-color: #fef2f2;
+  border-radius: 4px;
+  border-left: 3px solid #ef4444;
+}
+
+/* FILE INPUT */
+.hidden-input {
+  display: none;
+}
+.attachment-trigger {
+  border: 2px dashed #ddd;
+  border-radius: 6px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.attachment-trigger:hover {
+  border-color: #1a365d;
+  background-color: #f8f9fa;
+}
+
+/* FILE INFO */
+.file-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+}
+.file-count {
+  font-weight: 500;
+}
+.file-size {
+  color: #1a365d;
+}
+
+/* FILE LIST STYLES */
+.file-list-container {
+  margin-top: 15px;
+}
+.file-list-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 8px 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
+.file-list-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.file-list-scroll::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+.file-list-scroll::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+.file-list-scroll::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+.file-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  min-width: 100px;
+  max-width: 120px;
+  position: relative;
+  transition: all 0.2s;
+}
+.file-item:hover {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+}
+.file-preview {
+  width: 60px;
+  height: 60px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: white;
+  border: 1px solid #e5e7eb;
+}
+.file-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.file-icon {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #e5e7eb;
+  border-radius: 4px;
+  color: #6b7280;
+}
+.file-icon .material-symbols-outlined {
+  font-size: 28px;
+}
+.file-name {
+  font-size: 11px;
+  text-align: center;
+  word-break: break-word;
+  width: 100%;
+  color: #374151;
+  line-height: 1.3;
+  font-weight: 500;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-size-small {
+  font-size: 10px;
+  color: #6b7280;
+}
+.remove-file-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(239, 68, 68, 0.9);
+  border: none;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+.remove-file-btn:hover {
+  background: #ef4444;
+  transform: scale(1.1);
 }
 
 /* ERROR MESSAGE */
@@ -499,12 +1161,72 @@ export default {
 .processing-view .cancel-btn {
   margin-top: 20px;
 }
+.error-log {
+  margin-top: 15px;
+  background-color: #f8f8f8;
+  border: 1px solid #ddd;
+  padding: 10px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-size: 0.9em;
+  text-align: left;
+  max-height: 100px;
+  overflow-y: auto;
+  width: 100%;
+}
 
 .button-group {
   display: flex;
   justify-content: center;
   gap: 15px;
   margin-top: 20px;
+}
+
+/* SPINNER */
+.spinner-flashlight {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  animation: spinner-xza56z 2s infinite linear;
+}
+
+.spinner-flashlight::before,
+.spinner-flashlight::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: #f5f5f5;
+  border-radius: 50%;
+  animation: spinner-lqsq3g 1.3s infinite ease;
+}
+
+.spinner-flashlight::before {
+  height: 75%;
+  width: 75%;
+  transform-origin: -40% -80%;
+}
+
+.spinner-flashlight::after {
+  height: 50%;
+  width: 50%;
+  transform-origin: 40% 80%;
+}
+
+@keyframes spinner-xza56z {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spinner-lqsq3g {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(0);
+  }
 }
 
 /* Success and Error Colors */
@@ -514,5 +1236,44 @@ export default {
 .fail {
   color: #ef4444;
 }
+
+/* NÚT THOÁT KHI ĐANG LOADING */
+.close-loading-btn {
+  position: fixed;
+  min-width: 150px;
+  top: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.close-loading-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+.close-loading-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* Điều chỉnh loading box để có chỗ cho nút thoát */
+.loading-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  padding-top: 60px; /* Tạo khoảng trống cho nút thoát */
+}
 </style>
-[file content end]

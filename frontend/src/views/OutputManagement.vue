@@ -27,12 +27,12 @@
 
     <!-- Output Management Content -->
     <div class="output-content">
-      <!-- <div class="output-header">
+      <div class="output-header">
         <h2>Output Management</h2>
         <p class="subtitle">
           Manage test cases, database schemas, and UML diagrams for your project
         </p>
-      </div> -->
+      </div>
 
       <!-- Main Content -->
       <div class="main-content">
@@ -886,9 +886,7 @@ export default {
   text-align: center;
   margin-bottom: 40px;
 }
-.main-content {
-  margin-top: 40px;
-}
+
 .output-header h2 {
   font-size: 2.5rem;
   font-weight: 700;

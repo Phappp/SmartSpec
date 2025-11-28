@@ -65,18 +65,18 @@ export class ProjectService {
 
       await session.commitTransaction();
 
-      // // Xử lý nền
-      // this.orchestratorService.run(
-      //   newProject._id.toString(),
-      //   newVersion._id.toString(),
-      //   { files, rawText, mode: "full" },
-      //   newProject.language,
-      //   ownerId
-      // ).catch(async (err) => {
-      //   const errorMessage = `Lỗi xử lý nền: ${err.message || 'Lỗi không xác định'}`;
-      //   console.error(`[SERVICE] ${errorMessage} cho version ${newVersion._id}`);
-      //   await Version.findByIdAndUpdate(newVersion._id, { $push: { processing_errors: errorMessage } });
-      // });
+      // Xử lý nền
+      this.orchestratorService.run(
+        newProject._id.toString(),
+        newVersion._id.toString(),
+        { files, rawText, mode: "full" },
+        newProject.language,
+        ownerId
+      ).catch(async (err) => {
+        const errorMessage = `Lỗi xử lý nền: ${err.message || 'Lỗi không xác định'}`;
+        console.error(`[SERVICE] ${errorMessage} cho version ${newVersion._id}`);
+        await Version.findByIdAndUpdate(newVersion._id, { $push: { processing_errors: errorMessage } });
+      });
 
       // Log action
       const owner = await User.findById(ownerId).select("name email").lean();

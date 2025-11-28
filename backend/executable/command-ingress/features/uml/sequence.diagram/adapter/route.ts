@@ -26,7 +26,14 @@ const initSequenceDiagramRoute: (
 
   // FIX: Sửa route get all diagrams
   router
-    .route("/versions/:versionId/sequence-diagrams") // Đổi tên route
+    // .route("/versions/:versionId/sequence-diagrams") // Đổi tên route
+    .route("/usecase/:ucId/sequence/:sequenceId")
+    .delete(
+      requireAuthorizedUser,
+      controller.deleteSequenceDiagramById.bind(controller)
+    );
+  router
+    .route("/versions/:versionId/")
     .get(
       requireAuthorizedUser,
       controller.getSequenceDiagrams.bind(controller)
