@@ -8,29 +8,19 @@
         :selectedProject="selectedProject"
         :entities="entities"
         :projects="projects"
-        :selectedEntity="selectedEntity"
-        :crudCapabilities="entityCrudCapabilities"
         @project-change="onProjectChange"
         @entity-select="onEntitySelect"
         @entity-drag-start="onEntityDragStart"
         @open-project-modal="showProjectModal = true"
-        @create-entity="openCreateEntity"
       />
 
       <MainContent
         :selectedEntity="selectedEntity"
         :entityData="currentEntityData"
         :pendingOperations="currentPendingOperations"
-        :canEditEntity="canEditSelectedEntity"
-        :canDeleteEntity="canDeleteSelectedEntity"
-        :entityMode="selectedEntityMode"
-        :isCreating="isCreatingEntity"
         @add-to-chat="addContextToChat"
         @undo-operation="undoPendingOperation"
         @keep-operation="keepPendingOperation"
-        @save-entity="handleEntitySave"
-        @cancel-create="cancelEntityCreation"
-        @delete-entity="deleteSelectedEntity"
       />
 
       <RightSidebar
@@ -73,136 +63,6 @@ import MainContent from '@/components/chatbot/main_content/MainContent.vue'
 import RightSidebar from '@/components/chatbot/right_sidebar/RightSidebar.vue'
 import ProjectModal from '@/components/chatbot/left_sidebar/ProjectModal.vue'
 import chatbotApi from '@/api/chatbot'
-import { usecaseApi, updateDatabase, deleteDatabase } from '@/api/project'
-import testcaseApi from '@/api/testcase'
-import { updateActivityDiagram, deleteActivityDiagram } from '@/api/activity_diagram'
-import { deleteUsecaseDiagram } from '@/api/ucd'
-import { deleteSequenceDiagram } from '@/api/sqd'
-
-const entityCrudConfig = {
-  usecase: {
-    label: 'Use Case',
-    helper:
-      'Các trường gợi ý: name, goal, description, status, priority, actors, preconditions, mainFlow.',
-    canCreate: true,
-    canEdit: true,
-    canDelete: true,
-  },
-  testcase: {
-    label: 'Test Case',
-    helper:
-      'Payload nên có title, description, status, priority, test_type và mảng steps (step_number, action, expected_immediate_result).',
-    canCreate: true,
-    canEdit: true,
-    canDelete: true,
-  },
-  database: {
-    label: 'Database',
-    helper:
-      'Có thể chỉnh sửa hoặc xóa database hiện tại. Payload cần bao gồm name, description và danh sách tables cùng cấu trúc columns.',
-    canCreate: false,
-    canEdit: true,
-    canDelete: true,
-  },
-  'uml-activity': {
-    label: 'Activity Diagram',
-    helper: 'Payload cần mô tả nodes và edges (bao gồm id, label, type, source, target...).',
-    canCreate: false,
-    canEdit: true,
-    canDelete: true,
-  },
-  'uml-usecase': {
-    label: 'Use Case Diagram',
-    helper: 'Hệ thống hiện chỉ hỗ trợ xóa diagram tại màn hình này. Việc tạo/sửa nằm ở trang UML.',
-    canCreate: false,
-    canEdit: false,
-    canDelete: true,
-  },
-  'uml-sequence': {
-    label: 'Sequence Diagram',
-    helper: 'Hệ thống hiện chỉ hỗ trợ xóa diagram tại màn hình này. Vui lòng quản lý chi tiết ở trang UML.',
-    canCreate: false,
-    canEdit: false,
-    canDelete: true,
-  },
-}
-
-const defaultEntityPayloads = {
-  usecase: {
-    name: 'New Use Case',
-    goal: 'Mô tả mục tiêu',
-    description: 'Mô tả chi tiết use case',
-    status: 'draft',
-    priority: 'medium',
-    actors: [],
-    preconditions: [],
-    mainFlow: [],
-    alternateFlow: [],
-    postconditions: [],
-  },
-  testcase: {
-    title: 'New Test Case',
-    description: 'Mô tả ngắn gọn test case',
-    status: 'not_executed',
-    priority: 'medium',
-    test_type: 'integration',
-    steps: [
-      {
-        step_number: 1,
-        action: 'Thao tác mô tả bước kiểm thử',
-        expected_immediate_result: 'Kết quả mong đợi',
-      },
-    ],
-  },
-  database: {
-    name: 'New Database',
-    description: 'Mô tả database',
-    tables: [
-      {
-        name: 'sample_table',
-        description: '',
-        columns: [
-          {
-            name: 'id',
-            type: 'uuid',
-            isPrimaryKey: true,
-            nullable: false,
-          },
-        ],
-      },
-    ],
-  },
-  'uml-activity': {
-    name: 'New Activity Diagram',
-    versionId: '',
-    nodes: [
-      { id: 'start', label: 'Start', type: 'start' },
-      { id: 'end', label: 'End', type: 'end' },
-    ],
-    edges: [{ id: 'edge-1', source: 'start', target: 'end', label: 'Flow' }],
-  },
-}
-
-const clonePayload = (payload = {}) => {
-  try {
-    return JSON.parse(JSON.stringify(payload))
-  } catch (error) {
-    return {}
-  }
-}
-
-const resolveEntityId = (entity) => {
-  if (!entity) return null
-  return (
-    entity.id ??
-    entity._id ??
-    entity.entityId ??
-    entity.uuid ??
-    entity.data?.id ??
-    entity.data?._id ??
-    null
-  )
-}
 
 const defaultEntitiesState = () => ({
   usecases: [],
@@ -239,7 +99,6 @@ export default {
     const chatSessions = ref([])
     const currentChatId = ref(null)
     const entities = ref(defaultEntitiesState())
-    const selectedEntityMode = ref('view')
 
     const loadingStates = ref({
       projects: false,
@@ -247,18 +106,7 @@ export default {
       conversations: false,
     })
 
-    const entityCrudCapabilities = entityCrudConfig
-
     const unwrap = (response) => response?.data?.data ?? response?.data ?? {}
-
-    const ensureProjectContext = () => {
-      if (!selectedProject.value) {
-        throw new Error('Vui lòng chọn dự án trước khi thao tác.')
-      }
-      if (!currentVersionId.value) {
-        throw new Error('Không tìm thấy versionId tương ứng.')
-      }
-    }
 
     const normalizeEntities = (data = {}) => ({
       usecases: data.usecases || [],
@@ -282,14 +130,6 @@ export default {
     }
 
     // Computed properties
-    const selectedOperationKey = computed(() => {
-      if (!selectedEntity.value) return null
-      if (selectedEntity.value.type === 'uml') {
-        return `uml-${selectedEntity.value.umlType || 'activity'}`
-      }
-      return selectedEntity.value.type
-    })
-
     const currentEntityData = computed(() => {
       if (!selectedEntity.value) return null
 
@@ -298,19 +138,14 @@ export default {
         return selectedEntity.value.data
       }
 
-      const selectedId = resolveEntityId(selectedEntity.value)
-      if (!selectedId) return null
-
       if (selectedEntity.value.type === 'uml') {
         const umlType = selectedEntity.value.umlType
         const diagramList = entities.value.umlDiagrams?.[umlType] || []
-        return (
-          diagramList.find((item) => String(resolveEntityId(item)) === String(selectedId)) || null
-        )
+        return diagramList.find((item) => String(item.id) === String(selectedEntity.value.id)) || null
       } else {
         const key = `${selectedEntity.value.type}s`
         const entityList = entities.value[key] || []
-        return entityList.find((item) => String(resolveEntityId(item)) === String(selectedId)) || null
+        return entityList.find((item) => String(item.id) === String(selectedEntity.value.id)) || null
       }
     })
 
@@ -336,7 +171,6 @@ export default {
 
     const onEntitySelect = (entity) => {
       selectedEntity.value = entity
-      selectedEntityMode.value = 'view'
     }
 
     const onEntityDragStart = (event, entity) => {
@@ -379,8 +213,7 @@ export default {
         const payload = unwrap(response)
         projects.value = payload?.projects || []
         if (!selectedProject.value && projects.value.length > 0) {
-          const firstProject = projects.value[0]
-          selectedProject.value = firstProject?.id ?? firstProject?._id
+          selectedProject.value = projects.value[0].id
         }
       } catch (error) {
         console.error('Không thể tải danh sách dự án', error)
@@ -486,168 +319,6 @@ export default {
 
     const fetchProjectData = async (projectId) => {
       await Promise.all([loadKnowledgeBase(projectId), loadConversations(projectId)])
-    }
-
-    const resetEntitySelection = () => {
-      selectedEntity.value = null
-      selectedEntityMode.value = 'view'
-    }
-
-    const openCreateEntity = (sectionType) => {
-      const key = sectionType
-      const config = entityCrudCapabilities[key]
-      if (!config?.canCreate) {
-        errorMessage.value =
-          config?.label && config.label !== ''
-            ? `Chức năng tạo ${config.label} chưa được hỗ trợ trực tiếp tại đây`
-            : 'Loại dữ liệu này chưa hỗ trợ tạo mới.'
-        return
-      }
-
-      const normalizedType = key.startsWith('uml-') ? 'uml' : key
-      const defaultPayload = clonePayload(defaultEntityPayloads[key] || {})
-      selectedEntity.value = {
-        type: normalizedType,
-        id: null,
-        umlType: normalizedType === 'uml' ? key.replace('uml-', '') : undefined,
-        name:
-          defaultPayload.name ||
-          defaultPayload.title ||
-          `${config.label || 'Entity'} mới`,
-        data: defaultPayload,
-      }
-      selectedEntityMode.value = 'create'
-    }
-
-    const performEntityCreate = async (type, payload) => {
-      switch (type) {
-        case 'usecase': {
-          ensureProjectContext()
-          await usecaseApi.createUsecase(currentVersionId.value, payload)
-          break
-        }
-        case 'testcase': {
-          ensureProjectContext()
-          const body = Array.isArray(payload)
-            ? payload
-            : Array.isArray(payload?.testCases)
-            ? payload.testCases
-            : [payload]
-          await testcaseApi.saveTestCases(selectedProject.value, currentVersionId.value, {
-            testCases: body,
-          })
-          break
-        }
-        default:
-          throw new Error('Loại dữ liệu này chưa hỗ trợ tạo mới tại màn hình chatbot.')
-      }
-    }
-
-    const performEntityUpdate = async (type, payload) => {
-      const entityId = resolveEntityId(selectedEntity.value)
-      if (!entityId) {
-        throw new Error('Không tìm thấy ID dữ liệu để cập nhật.')
-      }
-
-      switch (type) {
-        case 'usecase':
-          ensureProjectContext()
-          await usecaseApi.updateUsecase(currentVersionId.value, entityId, payload)
-          break
-        case 'testcase':
-          await testcaseApi.updateTestCase(entityId, payload)
-          break
-        case 'database':
-          await updateDatabase(entityId, payload)
-          break
-        case 'uml-activity':
-          await updateActivityDiagram(entityId, payload)
-          break
-        default:
-          throw new Error('Loại dữ liệu này chưa hỗ trợ chỉnh sửa tại màn hình chatbot.')
-      }
-    }
-
-    const performEntityDelete = async (type) => {
-      const entityId = resolveEntityId(selectedEntity.value)
-      if (!entityId) {
-        throw new Error('Không tìm thấy ID dữ liệu để xóa.')
-      }
-
-      switch (type) {
-        case 'usecase':
-          ensureProjectContext()
-          await usecaseApi.deleteUsecase(currentVersionId.value, entityId)
-          break
-        case 'testcase':
-          await testcaseApi.deleteTestCase(entityId)
-          break
-        case 'database':
-          await deleteDatabase(entityId)
-          break
-        case 'uml-activity':
-          await deleteActivityDiagram(entityId)
-          break
-        case 'uml-usecase':
-          await deleteUsecaseDiagram(entityId)
-          break
-        case 'uml-sequence':
-          await deleteSequenceDiagram(entityId)
-          break
-        default:
-          throw new Error('Loại dữ liệu này chưa hỗ trợ xóa tại màn hình chatbot.')
-      }
-    }
-
-    const handleEntitySave = async ({ type, payload }) => {
-      if (!type) return
-      try {
-        if (selectedEntityMode.value === 'create' || !resolveEntityId(selectedEntity.value)) {
-          await performEntityCreate(type, payload)
-        } else {
-          await performEntityUpdate(type, payload)
-        }
-        if (selectedProject.value) {
-          await loadKnowledgeBase(selectedProject.value)
-        }
-        resetEntitySelection()
-      } catch (error) {
-        console.error('Không thể lưu entity', error)
-        errorMessage.value =
-          error?.response?.data?.message || error.message || 'Không thể lưu dữ liệu'
-      }
-    }
-
-    const cancelEntityCreation = () => {
-      if (selectedEntityMode.value === 'create') {
-        resetEntitySelection()
-      }
-    }
-
-    const deleteSelectedEntity = async () => {
-      if (!selectedEntity.value) return
-      const key = selectedOperationKey.value
-      const config = entityCrudCapabilities[key]
-      if (!config?.canDelete) return
-
-      const confirmMessage = `Bạn có chắc chắn muốn xóa ${config.label}?`
-      if (typeof window !== 'undefined' && !window.confirm(confirmMessage)) {
-        return
-      }
-
-      try {
-        await performEntityDelete(key)
-        resetEntitySelection()
-        if (selectedProject.value) {
-          await loadKnowledgeBase(selectedProject.value)
-        }
-      } catch (error) {
-        console.error('Không thể xóa entity', error)
-        errorMessage.value =
-          error?.response?.data?.message ||
-          error?.message ||
-          `Không thể xóa ${config.label}, vui lòng thử lại.`
-      }
     }
 
     const createNewChat = async () => {
@@ -963,25 +634,11 @@ export default {
       return chat?.pendingOperations || []
     })
 
-    const isCreatingEntity = computed(() => selectedEntityMode.value === 'create')
-
-    const canEditSelectedEntity = computed(() => {
-      const key = selectedOperationKey.value
-      return key ? !!entityCrudCapabilities[key]?.canEdit : false
-    })
-
-    const canDeleteSelectedEntity = computed(() => {
-      const key = selectedOperationKey.value
-      return key ? !!entityCrudCapabilities[key]?.canDelete : false
-    })
-
     return {
       selectedProject,
       selectedEntity,
-      selectedEntityMode,
       entities,
       projects,
-      entityCrudCapabilities,
       chatSessions,
       currentChatId,
       currentEntityData,
@@ -992,9 +649,6 @@ export default {
       isStreaming,
       isWaitingResponse,
       showProjectModal,
-      isCreatingEntity,
-      canEditSelectedEntity,
-      canDeleteSelectedEntity,
       errorMessage,
       loadingStates,
       onProjectChange,
@@ -1015,10 +669,6 @@ export default {
       undoPendingOperation,
       keepPendingOperation,
       onSendMessage,
-      openCreateEntity,
-      handleEntitySave,
-      cancelEntityCreation,
-      deleteSelectedEntity,
     }
   },
 }

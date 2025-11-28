@@ -8,26 +8,16 @@
       <div class="header-left">
         <i class="material-symbols-outlined section-icon">{{ icon }}</i>
         <span class="section-title">{{ title }}</span>
-        <span class="entity-count">({{ safeEntities.length }})</span>
+        <span class="entity-count">({{ entities.length }})</span>
       </div>
-      <div class="header-right">
-        <button
-          v-if="allowCreate"
-          class="icon-button"
-          title="Thêm mới"
-          @click.stop="$emit('create')"
-        >
-          <i class="material-symbols-outlined">add</i>
-        </button>
-        <i class="material-symbols-outlined toggle-icon">{{ isOpen ? 'expand_less' : 'expand_more' }}</i>
-      </div>
+      <i class="material-symbols-outlined toggle-icon">{{ isOpen ? 'expand_less' : 'expand_more' }}</i>
     </button>
 
     <div class="section-content" :class="{ open: isOpen }">
       <div class="entities-container">
         <EntityItem
-          v-for="entity in safeEntities"
-          :key="entity.id || entity._id"
+          v-for="entity in entities"
+          :key="entity.id"
           :entity="entity"
           :type="type"
           :isActive="isActive(entity)"
@@ -37,7 +27,7 @@
         />
       </div>
 
-      <div v-if="safeEntities.length === 0" class="empty-section">
+      <div v-if="entities.length === 0" class="empty-section">
         <i class="material-symbols-outlined empty-icon">description</i>
         <span class="empty-text">Không có dữ liệu</span>
       </div>
@@ -46,7 +36,6 @@
 </template>
 
 <script>
-import { computed } from 'vue'
 import EntityItem from './EntityItem.vue'
 
 export default {
@@ -83,38 +72,11 @@ export default {
       type: Boolean,
       default: false,
     },
-    selectedEntity: {
-      type: Object,
-      default: null,
-    },
-    allowCreate: {
-      type: Boolean,
-      default: false,
-    },
   },
-  emits: ['toggle', 'select', 'drag-start', 'add-to-chat', 'create'],
+  emits: ['toggle', 'select', 'drag-start', 'add-to-chat'],
   setup(props, { emit }) {
-    const safeEntities = computed(() => props.entities || [])
-
     const isActive = (entity) => {
-      if (!props.selectedEntity) return false
-      const selectedId =
-        props.selectedEntity.id ??
-        props.selectedEntity._id ??
-        (props.selectedEntity.data?.id ?? props.selectedEntity.data?._id)
-      if (!selectedId) return false
-
-      const normalizedSelectedId = String(selectedId)
-      const entityId = String(entity.id ?? entity._id ?? '')
-      if (!entityId) return false
-
-      if (props.type.startsWith('uml-')) {
-        if (props.selectedEntity.type !== 'uml') return false
-        const umlType = props.selectedEntity.umlType || ''
-        return entityId === normalizedSelectedId && `uml-${umlType}` === props.type
-      }
-
-      return entityId === normalizedSelectedId && props.selectedEntity.type === props.type
+      return false
     }
 
     const onSelect = (entity) => {
@@ -130,7 +92,6 @@ export default {
     }
 
     return {
-      safeEntities,
       isActive,
       onSelect,
       onDragStart,
@@ -209,31 +170,6 @@ export default {
 .toggle-icon {
   color: #8b949e;
   font-size: 18px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.icon-button {
-  background: transparent;
-  border: 1px solid #30363d;
-  border-radius: 4px;
-  padding: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #8b949e;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.icon-button:hover {
-  border-color: #58a6ff;
-  color: #58a6ff;
-  background-color: rgba(88, 166, 255, 0.1);
 }
 
 .section-content {

@@ -14,8 +14,8 @@
             v-for="project in projects"
             :key="project.id"
             class="project-card"
-            :class="{ active: String(project.id ?? project._id) === String(selectedProject) }"
-            @click="$emit('select', project.id ?? project._id)"
+            :class="{ active: String(project.id) === String(selectedProject) }"
+            @click="$emit('select', project.id)"
           >
             <div class="project-header">
               <h3 class="project-name">{{ project.name }}</h3>

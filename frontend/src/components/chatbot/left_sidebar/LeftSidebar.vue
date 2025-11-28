@@ -34,13 +34,10 @@
         :entities="section.entities"
         :isOpen="section.isOpen"
         :icon="section.icon"
-        :selectedEntity="selectedEntity"
-        :allowCreate="section.allowCreate"
         @toggle="toggleSection(section.type)"
         @select="onEntitySelect"
         @drag-start="onEntityDragStart"
         @add-to-chat="onAddToChat"
-        @create="onCreateEntity(section.type)"
       />
 
       <!-- UML Sub-sections -->
@@ -54,13 +51,10 @@
           :isOpen="umlSection.isOpen"
           :icon="umlSection.icon"
           :isSubSection="true"
-          :selectedEntity="selectedEntity"
-          :allowCreate="umlSection.allowCreate"
           @toggle="toggleUmlSection(umlSection.type)"
           @select="onEntitySelect"
           @drag-start="onEntityDragStart"
           @add-to-chat="onAddToChat"
-          @create="onCreateEntity(umlSection.type)"
         />
       </div>
     </div>
@@ -89,14 +83,6 @@ export default {
       type: Array,
       default: () => [],
     },
-    selectedEntity: {
-      type: Object,
-      default: null,
-    },
-    crudCapabilities: {
-      type: Object,
-      default: () => ({}),
-    },
   },
   emits: [
     'project-change',
@@ -104,7 +90,6 @@ export default {
     'entity-drag-start',
     'add-to-chat',
     'open-project-modal',
-    'create-entity',
   ],
   setup(props, { emit }) {
     const sectionStates = ref({
@@ -117,35 +102,30 @@ export default {
       umlSequence: true,
     })
 
-    const resolveCapability = (type) => props.crudCapabilities?.[type] || {}
-
     const entitySections = computed(() => [
       {
         type: 'usecase',
         title: 'Use Cases',
-        entities: props.entities.usecases ?? [],
+        entities: props.entities.usecases,
         isOpen: sectionStates.value.usecase,
         icon: 'description',
         color: '#79c0ff',
-        allowCreate: !!resolveCapability('usecase').canCreate,
       },
       {
         type: 'testcase',
         title: 'Test Cases',
-        entities: props.entities.testcases ?? [],
+        entities: props.entities.testcases,
         isOpen: sectionStates.value.testcase,
         icon: 'science',
         color: '#7ee787',
-        allowCreate: !!resolveCapability('testcase').canCreate,
       },
       {
         type: 'database',
         title: 'Databases',
-        entities: props.entities.databases ?? [],
+        entities: props.entities.databases,
         isOpen: sectionStates.value.database,
         icon: 'storage',
         color: '#d2a8ff',
-        allowCreate: !!resolveCapability('database').canCreate,
       },
       {
         type: 'uml',
@@ -154,7 +134,6 @@ export default {
         isOpen: sectionStates.value.uml,
         icon: 'account_tree',
         color: '#ffa657',
-        allowCreate: false,
       },
     ])
 
@@ -162,34 +141,31 @@ export default {
       {
         type: 'uml-activity',
         title: 'Activity Diagrams',
-        entities: props.entities.umlDiagrams?.activity ?? [],
+        entities: props.entities.umlDiagrams.activity,
         isOpen: sectionStates.value.umlActivity,
         icon: 'swap_horiz',
         color: '#ffa657',
-        allowCreate: !!resolveCapability('uml-activity').canCreate,
       },
       {
         type: 'uml-usecase',
         title: 'Use Case Diagrams',
-        entities: props.entities.umlDiagrams?.usecase ?? [],
+        entities: props.entities.umlDiagrams.usecase,
         isOpen: sectionStates.value.umlUsecase,
         icon: 'group',
         color: '#ffa657',
-        allowCreate: !!resolveCapability('uml-usecase').canCreate,
       },
       {
         type: 'uml-sequence',
         title: 'Sequence Diagrams',
-        entities: props.entities.umlDiagrams?.sequence ?? [],
+        entities: props.entities.umlDiagrams.sequence,
         isOpen: sectionStates.value.umlSequence,
         icon: 'fast_forward',
         color: '#ffa657',
-        allowCreate: !!resolveCapability('uml-sequence').canCreate,
       },
     ])
 
     const currentProject = computed(() =>
-      props.projects.find((p) => String(p.id ?? p._id) === String(props.selectedProject))
+      props.projects.find((p) => String(p.id) === String(props.selectedProject))
     )
 
     const totalEntities = computed(() => {
@@ -233,10 +209,6 @@ export default {
       emit('entity-drag-start', event, entity)
     }
 
-    const onCreateEntity = (type) => () => {
-      emit('create-entity', type)
-    }
-
     const onAddToChat = (contextData) => {
       emit('add-to-chat', contextData)
     }
@@ -253,7 +225,6 @@ export default {
       onEntitySelect,
       onEntityDragStart,
       onAddToChat,
-      onCreateEntity,
     }
   },
 }
