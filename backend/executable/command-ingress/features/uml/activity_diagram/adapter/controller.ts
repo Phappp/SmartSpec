@@ -106,7 +106,7 @@ export class ActivityDiagramController {
       next(err);
     }
   }
-
+  
   public deleteActivityDiagram = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.getSubject();
@@ -114,18 +114,13 @@ export class ActivityDiagramController {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
         return;
       }
-
       const { activityDiagramId } = req.params;
-      const { ids } = req.body;
-
-      if (!activityDiagramId && !ids) {
-        res.status(400).json({ message: 'No Activity Diagram found to delete' });
+      if (!activityDiagramId) {
+        res.status(400).json({ message: 'activityDiagramId là bắt buộc.' });
         return;
       }
 
-      const idToDelete = activityDiagramId || ids;
-
-      const result = await this.service.deleteActivityDiagram(idToDelete, userId);
+      const result = await this.service.deleteActivityDiagram(activityDiagramId,userId);
 
       if (result.deletedCount === 0) {
         res.status(404).json({ message: 'No Activity Diagram found to delete' });

@@ -4,7 +4,7 @@ import { InferSchemaType, model, Schema } from "mongoose";
 const memberHistorySchema = new Schema({
   action: {
     type: String,
-    enum: ['invited', 'accepted', 'rejected', 'canceled', 'unshared', 'left'],
+    enum: ['invited', 'accepted', 'rejected', 'canceled', 'unshared', 'left','role_changed'],
     required: true
   },
   by: {
