@@ -14,7 +14,7 @@ import SequenceDiagram from "../../../../../internal/model/sequence_diagram";
 import { LogService } from "../../../../command-ingress/features/log/domain/service";
 import { ServiceResponse, ResponseStatus } from "../../../services/serviceResponse";
 import { versionSocketService } from "./version.socket.service";
-import {PreviewChangeDto} from "../adapter/preview.dto";
+import { PreviewChangeDto } from "../adapter/preview.dto";
 import { randomUUID } from "crypto";
 import version from '../../../../../internal/model/version';
 import project from '../../../../../internal/model/project';
@@ -24,11 +24,11 @@ import preview from '../../../../../internal/model/preview';
 export class VersionService {
   private logService = new LogService();
 
-  async createOrUpdatePreview(base_version_id: string,created_by: string,change: PreviewChangeDto) {
+  async createOrUpdatePreview(base_version_id: string, created_by: string, change: PreviewChangeDto) {
     try {
       let version = await Version.findById(base_version_id);
       if (!version) {
-        return new ServiceResponse(ResponseStatus.Failed,"Version not found",null,404);
+        return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
       }
 
       // 2️⃣ Chuẩn hoá 1 thay đổi
@@ -39,11 +39,14 @@ export class VersionService {
         change_type: change.change_type,
         before_snapshot: change.before_snapshot ?? null,
         after_snapshot: change.after_snapshot ?? null,
-        add_at:new Date(),
+        add_at: new Date(),
       };
 
-      // 3️⃣ Tìm preview đang under_review
-      let preview = await Preview.findOne({ base_version_id : base_version_id});
+      // 3️⃣ Tìm preview đang under_review (THÊM ĐIỀU KIỆN status)
+      let preview = await Preview.findOne({
+        base_version_id: base_version_id,
+        status: "under_review" // QUAN TRỌNG: chỉ tìm preview đang trong trạng thái review
+      });
 
       if (preview) {
         // ✅ Preview đã tồn tại → append thay đổi mới
@@ -52,33 +55,49 @@ export class VersionService {
 
         return new ServiceResponse(ResponseStatus.Success, "Preview updated successfully", preview, 200);
       }
+
       const project = await Project.findById(version.project_id).lean();
+      if (!project) {
+        return new ServiceResponse(ResponseStatus.Failed, "Project not found", null, 404);
+      }
+
       // 4️⃣ Lấy danh sách approvers từ project (chỉ owner và editor)
+      // FIX: Kiểm tra cấu trúc dữ liệu members thực tế
+      // Trong hàm createOrUpdatePreview, sửa filter thành:
       const approvers = (project.members ?? [])
-        .filter((m: any) => ["owner", "editor"].includes(m.role))
+        .filter((m: any) => {
+          const hasValidRole = ["owner", "editor"].includes(m.role);
+          const hasUserId = m.user_id && m.user_id.toString();
+          const isAccepted = m.status === "accepted"; // ← QUAN TRỌNG: chỉ lấy member đã accepted
+          return hasValidRole && hasUserId && isAccepted;
+        })
         .map((m: any) => ({
           user_id: m.user_id,
-          role: m.role,
+          role: m.role === "editor" ? "member" : m.role, // ← Map "editor" thành "member"
           status: "pending",
           comment: null,
           approved_at: null,
         }));
 
+      // DEBUG: Log để kiểm tra
+      console.log(`Project members: ${project.members?.length || 0}`);
+      console.log(`Approvers found: ${approvers.length}`);
+
       // 5️⃣ Nếu chưa có preview → tạo mới
       preview = new Preview({
-        project_id : version.project_id,
-        base_version_id :  base_version_id,
-        target_version_id : version._id,
-        created_by : created_by,
+        project_id: version.project_id,
+        base_version_id: base_version_id,
+        target_version_id: version._id,
+        created_by: created_by,
         changes: [normalizedChange],
-        approvers : approvers, // gắn danh sách approvers
+        approvers: approvers, // gắn danh sách approvers
         status: "under_review",
         created_at: new Date(),
       });
 
       await preview.save();
 
-      return new ServiceResponse(ResponseStatus.Success, "Preview created successfully", {preview,versionId: version._id.toString()}, 200);
+      return new ServiceResponse(ResponseStatus.Success, "Preview created successfully", { preview, versionId: version._id.toString() }, 200);
     } catch (error: any) {
       console.error("Error creating/updating preview:", error);
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
@@ -96,7 +115,7 @@ export class VersionService {
         .populate("approvers.user_id", "name email");
 
       // Nếu không tìm thấy preview, trả về null nhưng vẫn success
-      return new ServiceResponse(ResponseStatus.Success,"Preview retrieved",preview ?? null,200);
+      return new ServiceResponse(ResponseStatus.Success, "Preview retrieved", preview ?? null, 200);
     } catch (error: any) {
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     }
@@ -107,17 +126,17 @@ export class VersionService {
    * - If minor → finalize temporary version
    * - If major → finalize temporary version and bump major (+1.0)
    */
-  public async approve(baseVersionId: string,userId: string,changeType: "major" | "minor",comment?: string) {
+  public async approve(baseVersionId: string, userId: string, changeType: "major" | "minor", comment?: string) {
     try {
       // ✅ Lấy baseVersion (bây giờ chính là version tạm)
       const baseVersion = await Version.findById(baseVersionId);
       if (!baseVersion) {
-        return new ServiceResponse(ResponseStatus.Failed,"Base version not found",null,404);
+        return new ServiceResponse(ResponseStatus.Failed, "Base version not found", null, 404);
       }
 
       const preview = await Preview.findOne({ base_version_id: baseVersionId });
       if (!preview) {
-        return new ServiceResponse(ResponseStatus.Failed,"Preview not found",null,404);
+        return new ServiceResponse(ResponseStatus.Failed, "Preview not found", null, 404);
       }
 
       // ✅ Check owner
@@ -131,7 +150,7 @@ export class VersionService {
       );
 
       if (!isOwner) {
-        return new ServiceResponse(ResponseStatus.Failed,"Only project owner can approve this preview",null,403);
+        return new ServiceResponse(ResponseStatus.Failed, "Only project owner can approve this preview", null, 403);
       }
 
       // ✅ update approver log
@@ -153,22 +172,29 @@ export class VersionService {
 
       // ✅ Chuyển version tạm thành version chính thức
       baseVersion.version_temporary = false;
+
+      // ✅ Xóa preview sau khi approve thành công
+      await Preview.deleteOne({ base_version_id: baseVersionId });
+
+      // ✅ Emit event
       versionSocketService.emitVersionCreated(
         baseVersion.project_id.toString(),
         userId,
         baseVersionId,
         baseVersion
       );
+
       await baseVersion.save();
 
-      // ✅ update preview
-      preview.status = "version_upgraded";
-      await preview.save();
-
       // ✅ Kết thúc
-      return new ServiceResponse(ResponseStatus.Success,"Owner approved and version finalized.",{preview,version: baseVersion},200);
+      return new ServiceResponse(
+        ResponseStatus.Success,
+        "Owner approved and version finalized. Preview has been deleted.",
+        { version: baseVersion },
+        200
+      );
     } catch (error: any) {
-      return new ServiceResponse(ResponseStatus.Failed,error.message,null,500);
+      return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     }
   }
 
@@ -337,7 +363,7 @@ export class VersionService {
 
       await session.commitTransaction();
 
-      return new ServiceResponse(ResponseStatus.Success,"New version created with cloned entities",{newVersion,idMaps: {inputMap,dbMap,tcMap,umlMap,usecaseUMLmap,activityUMLmap,sequenceUMLmap}},201);
+      return new ServiceResponse(ResponseStatus.Success, "New version created with cloned entities", { newVersion, idMaps: { inputMap, dbMap, tcMap, umlMap, usecaseUMLmap, activityUMLmap, sequenceUMLmap } }, 201);
     } catch (e: any) {
       await session.abortTransaction();
       return new ServiceResponse(ResponseStatus.Failed, e.message, null, 500);
@@ -347,12 +373,12 @@ export class VersionService {
   }
 
 
-  async setCurrentVersion(projectId: string,versionId: string,userId: string): Promise<ServiceResponse<any>> {
+  async setCurrentVersion(projectId: string, versionId: string, userId: string): Promise<ServiceResponse<any>> {
     try {
       // 🔍 Kiểm tra version có tồn tại trong project hay không
       const version = await Version.findOne({ _id: versionId, project_id: projectId });
       if (!version) {
-        return new ServiceResponse(ResponseStatus.Failed,"Version not found in this project",null,404);
+        return new ServiceResponse(ResponseStatus.Failed, "Version not found in this project", null, 404);
       }
 
       // 🔍 Kiểm tra project tồn tại
@@ -377,7 +403,7 @@ export class VersionService {
       );
 
       // ✅ Hoàn tất
-      return new ServiceResponse(ResponseStatus.Success,"Current version updated successfully",project,200);
+      return new ServiceResponse(ResponseStatus.Success, "Current version updated successfully", project, 200);
     } catch (error: any) {
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     }
@@ -530,7 +556,7 @@ export class VersionService {
             }], { session });
           }
         }
-      }else if (entityType === "table") {
+      } else if (entityType === "table") {
         const db = await Database.findOne({
           _id: entityId,
           version_id: baseVersion._id,
@@ -575,7 +601,7 @@ export class VersionService {
           }
         }
       }
-       else if (entityType === 'testcase') {
+      else if (entityType === 'testcase') {
         if (changeType === 'added') {
           console.log(`[Testcase][Added] Deleting Testcase + related Outputs`);
           if (entityId) {
@@ -750,7 +776,7 @@ export class VersionService {
       await session.commitTransaction();
 
       console.log(`✔ Successfully reverted change ${change._id || entityId}`);
-      return new ServiceResponse(ResponseStatus.Success,"New version created with cloned entities",null,201);
+      return new ServiceResponse(ResponseStatus.Success, "New version created with cloned entities", null, 201);
     } catch (error) {
       await session.abortTransaction();
       console.error(`❌ Failed to revert change:`, error);
@@ -835,17 +861,17 @@ export class VersionService {
       const parentVersionId = version.parent_version_id;
       const parentVersion = await Version.findById(parentVersionId);
       if (!parentVersion) {
-        return new ServiceResponse(ResponseStatus.Failed,"Parent version not found", null,404);
+        return new ServiceResponse(ResponseStatus.Failed, "Parent version not found", null, 404);
       }
       // 🔍 2. Tìm preview gắn với version này
       const preview = await Preview.findOne({ target_version_id: versionId });
       if (!preview) {
-        return new ServiceResponse(ResponseStatus.Failed,"Preview not found",null,404);
+        return new ServiceResponse(ResponseStatus.Failed, "Preview not found", null, 404);
       }
       // 🔍 3. Tìm approver của user này
       const approver = preview.approvers.find(a => a.user_id.toString() === userId);
       if (!approver) {
-        return new ServiceResponse(ResponseStatus.Failed,"You are not an approver of this preview",null,403);
+        return new ServiceResponse(ResponseStatus.Failed, "You are not an approver of this preview", null, 403);
       }
       // 4️⃣ Đánh dấu user này rollback
       approver.status = "rollback";
@@ -855,7 +881,7 @@ export class VersionService {
       const allRollback = preview.approvers.every(a => a.status === "rollback");
       if (!allRollback) {
         // Một số người rollback → chờ người khác
-        return new ServiceResponse(ResponseStatus.Success,"Rollback submitted, waiting for other approvers",{ preview_status: "partial_rollback" },200);
+        return new ServiceResponse(ResponseStatus.Success, "Rollback submitted, waiting for other approvers", { preview_status: "partial_rollback" }, 200);
       }
       // ================================
       // 🎯 6️⃣ TẤT CẢ APPROVERS ĐÃ ROLLBACK → THỰC HIỆN ROLLBACK VERSION
@@ -883,7 +909,7 @@ export class VersionService {
         parentVersionId.toString(),
         oldVersionId
       );
-      return new ServiceResponse(ResponseStatus.Success,"Rollback completed by all approvers",null,200);
+      return new ServiceResponse(ResponseStatus.Success, "Rollback completed by all approvers", null, 200);
     } catch (err) {
       throw err;
     }

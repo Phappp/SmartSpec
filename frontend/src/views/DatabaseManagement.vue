@@ -273,6 +273,14 @@ import TableDetailsModal from '@/components/database/TableDetailsModal.vue'
 import CompositeKeyModal from '@/components/database/CompositeKeyModal.vue'
 import CompositeKeyDetailsModal from '@/components/database/CompositeKeyDetailsModal.vue'
 import { useActiveMembers } from '@/utils/useActiveMembers'
+import {
+  saveSelectedVersion,
+  getSelectedOrDefaultVersion,
+  filterApprovedVersions,
+  isOwner as checkIsOwner,
+} from '@/utils/versionSync'
+import eventBus from '@/utils/eventBus'
+import { socket } from '@/utils/socket'
 
 export default {
   name: 'DatabaseManagement',
@@ -379,13 +387,23 @@ export default {
 
       // ✅ THÊM: Init socket connection cho active members
       this.initSocketConnection(projectId)
+      
+      // ✅ THÊM: Init version socket listeners
+      this.initVersionSocketListeners(projectId)
     }
+    
+    // Listen for version-approved event from PreviewModal
+    eventBus.on('version-approved', this.handleVersionApproved)
   },
   beforeUnmount() {
     // ✅ THÊM: Cleanup socket connection
     if (this.project?._id) {
       this.cleanupSocketConnection(this.project._id)
+      this.cleanupVersionSocketListeners()
     }
+    
+    // Remove event listener
+    eventBus.off('version-approved', this.handleVersionApproved)
   },
   methods: {
     // Navigation methods
@@ -408,8 +426,98 @@ export default {
     },
 
     handleVersionSelect(versionId) {
+      // Chỉ Owner mới được phép select version
+      if (!checkIsOwner(this.project)) {
+        this.toast.warning('Only project owner can switch versions')
+        return
+      }
+      
+      const oldVersionId = this.selectedVersionId
       this.selectedVersionId = versionId
+      // Lưu vào localStorage để đồng bộ
+      saveSelectedVersion(this.project._id, versionId)
+      
+      // Emit socket event để các thành viên khác biết version đã được switch
+      if (socket && socket.connected) {
+        const userId = localStorage.getItem('userId')
+        socket.emit('version_event', {
+          type: 'VERSION_SWITCHED',
+          projectId: this.project._id,
+          userId: userId,
+          toVersionId: versionId,
+          fromVersionId: oldVersionId,
+          timestamp: new Date(),
+        })
+        console.log('📡 Emitted VERSION_SWITCHED socket event')
+      }
+      
       this.loadDatabaseData()
+    },
+
+    /**
+     * Xử lý khi version được approve thành công từ PreviewModal
+     */
+    async handleVersionApproved(event) {
+      // Chỉ xử lý nếu là project hiện tại
+      if (!event || event.projectId !== this.project._id) {
+        return
+      }
+
+      console.log('✅ Version approved event received:', event)
+
+      const { versionId, version, newVersion } = event
+
+      if (!versionId) {
+        console.warn('⚠️ Invalid version-approved event: missing versionId', event)
+        return
+      }
+
+      try {
+        // Đợi một chút để backend cập nhật xong
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        // Refresh project data để lấy version mới
+        await this.fetchProjectData(this.project._id)
+
+        // Đảm bảo version mới có trong danh sách (thêm vào nếu chưa có)
+        let newVersionObj = this.versions.find((v) => v._id === versionId)
+        
+        if (!newVersionObj) {
+          // Nếu chưa có trong danh sách, thử fetch lại một lần nữa
+          console.log('🔄 Version not found, fetching project data again...')
+          await new Promise((resolve) => setTimeout(resolve, 500))
+          await this.fetchProjectData(this.project._id)
+          newVersionObj = this.versions.find((v) => v._id === versionId)
+        }
+
+        // Nếu vẫn chưa có và có version object từ event, thêm vào
+        if (!newVersionObj && version) {
+          // Chỉ thêm nếu version đã được approve (version_temporary = false)
+          if (version.version_temporary === false || version.version_temporary === undefined) {
+            this.versions.push(version)
+            newVersionObj = version
+            console.log('✅ Added new approved version to list:', versionId)
+          }
+        }
+
+        // Force set selectedVersionId ngay cả khi chưa có trong danh sách
+        // Vì version đã được approve rồi, nên chắc chắn sẽ có
+        this.selectedVersionId = versionId
+
+        // Lưu vào localStorage để đồng bộ với các trang khác
+        saveSelectedVersion(this.project._id, versionId)
+
+        // Refresh database data với version mới
+        await this.loadDatabaseData()
+
+        // Thông báo cho user
+        this.toast.success(`Switched to approved version: ${newVersion || versionId}`)
+
+        this.$forceUpdate()
+      } catch (error) {
+        console.error('❌ Error handling version-approved event:', error)
+        this.toast.error('Failed to switch to approved version')
+      }
     },
 
     // Data methods
@@ -418,10 +526,20 @@ export default {
         const { data } = await getProjectDetail(projectId)
         const result = data.data || data
         this.project = result.project || result
-        this.versions = result.versions || []
+        // Lọc bỏ version tạm thời, chỉ giữ version đã được approve
+        const allVersions = result.versions || []
+        this.versions = filterApprovedVersions(allVersions)
 
-        if (this.versions.length > 0) {
-          this.selectedVersionId = this.versions[0]._id
+        // Sử dụng version sync utility
+        const currentVersionId = result.current_version?._id
+        this.selectedVersionId = getSelectedOrDefaultVersion(
+          projectId,
+          this.versions,
+          currentVersionId
+        )
+        
+        if (this.selectedVersionId) {
+          saveSelectedVersion(projectId, this.selectedVersionId)
         }
       } catch (err) {
         console.error('Error fetching project details:', err)
@@ -1325,6 +1443,92 @@ export default {
       this.databaseTables = updatedTables
       this.updateStats()
       this.generateSQL()
+    },
+
+    // Socket methods for version events
+    initVersionSocketListeners(projectId) {
+      if (!socket) return
+
+      // Join project room if not already joined
+      if (socket.connected) {
+        socket.emit('join_project', projectId)
+      }
+
+      // Listen for version events
+      socket.on('version_event', this.handleVersionEvent)
+      console.log('✅ Version socket listeners initialized for DatabaseManagement')
+    },
+
+    cleanupVersionSocketListeners() {
+      if (socket) {
+        socket.off('version_event', this.handleVersionEvent)
+        console.log('🧹 Version socket listeners cleaned up')
+      }
+    },
+
+    handleVersionEvent(event) {
+      console.log('📩 Realtime version event received in DatabaseManagement:', event)
+
+      // Bỏ qua events từ chính mình
+      const currentUserId = localStorage.getItem('userId')
+      if (event.userId === currentUserId) return
+
+      switch (event.type) {
+        case 'VERSION_SWITCHED':
+          this.handleRemoteVersionSwitched(event)
+          break
+        case 'VERSION_CREATED':
+          this.handleRemoteVersionCreated(event)
+          break
+        default:
+          console.log('ℹ️ Unhandled version event type:', event.type)
+      }
+    },
+
+    async handleRemoteVersionSwitched(event) {
+      console.log('🔄 Remote version switched event:', event)
+      
+      if (event.projectId !== this.project._id) return
+
+      const { toVersionId } = event
+
+      // Cập nhật selectedVersionId
+      this.selectedVersionId = toVersionId
+      saveSelectedVersion(this.project._id, toVersionId)
+
+      // Refresh data với version mới
+      await this.loadDatabaseData()
+
+      // Thông báo cho user
+      const version = this.versions.find((v) => v._id === toVersionId)
+      if (version) {
+        this.toast.info(`Version switched to: ${version.version_number || toVersionId}`)
+      }
+    },
+
+    async handleRemoteVersionCreated(event) {
+      console.log('🆕 Remote version created event:', event)
+      
+      if (event.projectId !== this.project._id) return
+
+      // Refresh project data để lấy version mới
+      await this.fetchProjectData(this.project._id)
+
+      // Nếu có version trong event, thêm vào danh sách
+      if (event.version) {
+        const exists = this.versions.find((v) => v._id === event.version._id)
+        if (!exists && (event.version.version_temporary === false || event.version.version_temporary === undefined)) {
+          this.versions.push(event.version)
+        }
+      }
+
+      // Tự động switch sang version mới nếu được approve
+      if (event.version && (event.version.version_temporary === false || event.version.version_temporary === undefined)) {
+        this.selectedVersionId = event.version._id
+        saveSelectedVersion(this.project._id, event.version._id)
+        await this.loadDatabaseData()
+        this.toast.info(`New version created: ${event.version.version_number || event.version._id}`)
+      }
     },
   },
 }

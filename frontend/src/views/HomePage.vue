@@ -8,6 +8,19 @@
         @logout="logout"
         @open-personal="openPersonalInfo"
       />
+      
+      <!-- Preview Modal -->
+      <PreviewModal
+        v-if="isPreviewModalVisible"
+        :is-visible="isPreviewModalVisible"
+        :project-id="previewData.projectId"
+        :version-id="previewData.versionId"
+        :version-data="previewData.versionData"
+        @close="closePreviewModal"
+        @approved="handlePreviewApproved"
+        @changes-updated="handleChangesUpdated"
+        @modal-closing="handlePreviewModalClosing"
+      />
 
       <div class="main-content">
         <header class="page-header">
@@ -119,18 +132,6 @@
                 <option value="createdAt">Date Created</option>
                 <option value="name">Name</option>
               </select>
-
-              <!-- Toggle Multi-select Mode -->
-              <!-- <button
-                @click="toggleMultiSelectMode"
-                class="btn-multi-select"
-                :class="{ active: isMultiSelectMode }"
-              >
-                <span class="material-symbols-outlined">
-                  {{ isMultiSelectMode ? 'check_box' : 'check_box_outline_blank' }}
-                </span>
-                {{ isMultiSelectMode ? 'Cancel Selection' : 'Select Multiple' }}
-              </button> -->
             </div>
             <div class="filter-stats">
               <span class="stat-text">{{ filteredProjects.length }} projects found</span>
@@ -144,7 +145,6 @@
           <div v-if="currentView === 'recent-projects'" class="projects-view">
             <div class="section-header">
               <h2>Recent Projects</h2>
-              <!-- <p>Your recently accessed projects</p> -->
             </div>
             <div v-if="filteredProjects.length > 0" class="projects-grid">
               <ProjectCard
@@ -161,6 +161,7 @@
                 @restore="restoreProject"
                 @delete-permanently="confirmDeletePermanently"
                 @selection-toggle="handleSelectionToggle"
+                @open-preview="openPreviewModal"
               />
             </div>
             <div v-else class="empty-state">
@@ -180,7 +181,6 @@
           <div v-if="currentView === 'my-projects'" class="projects-view">
             <div class="section-header">
               <h2>My Projects</h2>
-              <!-- <p>Projects you own</p> -->
             </div>
             <div v-if="filteredProjects.length > 0" class="projects-grid">
               <ProjectCard
@@ -197,6 +197,7 @@
                 @restore="restoreProject"
                 @delete-permanently="confirmDeletePermanently"
                 @selection-toggle="handleSelectionToggle"
+                @open-preview="openPreviewModal"
               />
             </div>
             <div v-else class="empty-state">
@@ -216,7 +217,6 @@
           <div v-if="currentView === 'shared-projects'" class="projects-view">
             <div class="section-header">
               <h2>Shared Projects</h2>
-              <p>Projects shared with you</p>
             </div>
             <div v-if="filteredProjects.length > 0" class="projects-grid">
               <ProjectCard
@@ -233,6 +233,7 @@
                 @restore="restoreProject"
                 @delete-permanently="confirmDeletePermanently"
                 @selection-toggle="handleSelectionToggle"
+                @open-preview="openPreviewModal"
               />
             </div>
             <div v-else class="empty-state">
@@ -249,20 +250,6 @@
             <div class="section-header">
               <h2>Trashed Projects</h2>
               <p>Projects moved to trash</p>
-
-              <!-- Multi-select toggle for trash -->
-              <!-- <div class="trash-actions" v-if="trashedProjects.length > 0">
-                <button
-                  @click="toggleMultiSelectMode"
-                  class="btn-multi-select"
-                  :class="{ active: isMultiSelectMode }"
-                >
-                  <span class="material-symbols-outlined">
-                    {{ isMultiSelectMode ? 'check_box' : 'check_box_outline_blank' }}
-                  </span>
-                  {{ isMultiSelectMode ? 'Cancel Selection' : 'Select Multiple' }}
-                </button>
-              </div> -->
             </div>
             <div v-if="trashedProjects.length > 0" class="projects-grid">
               <ProjectCard
@@ -341,6 +328,7 @@ import NewProjectModal from '@/components/NewProjectForm.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
 import AppModal from '@/components/AppModal.vue'
 import InvitationsModal from '@/components/InvitationsModal.vue'
+import PreviewModal from '@/components/PreviewModal.vue'
 import {
   getMyProjects,
   getSharedProjects,
@@ -361,6 +349,7 @@ import {
 } from '@/api/share'
 import { getUserInfo, logout as authLogout } from '@/utils/authGuard'
 import { socket } from '@/utils/socket'
+import eventBus from '@/utils/eventBus'
 
 export default {
   name: 'Homepage',
@@ -372,6 +361,7 @@ export default {
     PersonalInfor,
     ProjectSharingModal,
     InvitationsModal,
+    PreviewModal,
   },
   data() {
     return {
@@ -388,11 +378,18 @@ export default {
       sharedProjects: [],
       trashedProjects: [],
       isAppModalVisible: false,
+      refreshTrigger: 0,
       modalContent: {
         title: '',
         message: '',
         isConfirmation: false,
         onConfirm: () => {},
+      },
+      isPreviewModalVisible: false,
+      previewData: {
+        projectId: '',
+        versionId: '',
+        versionData: null,
       },
       toast: useToast(),
 
@@ -408,6 +405,10 @@ export default {
       // Multi-select states
       isMultiSelectMode: false,
       selectedProjects: [],
+
+      // Refresh tracking
+      lastPreviewProjectId: null,
+      lastPreviewVersionId: null,
     }
   },
   mounted() {
@@ -491,6 +492,21 @@ export default {
       console.log('🧹 Socket listener removed on unmount')
     }
   },
+  watch: {
+    filteredProjects: {
+      handler(newVal) {
+        console.log('🔄 filteredProjects updated:', newVal.length, 'projects')
+      },
+      deep: true,
+    },
+    currentProjects: {
+      handler(newVal) {
+        console.log('🔄 currentProjects updated:', newVal.length, 'projects')
+      },
+      deep: true,
+    },
+  },
+
   methods: {
     // Multi-select methods
     toggleMultiSelectMode() {
@@ -581,9 +597,142 @@ export default {
       )
     },
 
+    /**
+     * Mở Preview Modal khi click vào changes indicator
+     */
+    openPreviewModal(data) {
+      this.previewData = {
+        projectId: data.projectId,
+        versionId: data.versionId,
+        versionData: data.versionData,
+      }
+      
+      // Lưu thông tin preview để refresh sau này
+      this.lastPreviewProjectId = data.projectId
+      this.lastPreviewVersionId = data.versionId
+      
+      this.isPreviewModalVisible = true
+    },
+
+    /**
+     * Xử lý khi modal sắp đóng - refresh data trước khi đóng
+     */
+    async handlePreviewModalClosing(previewInfo) {
+      console.log('🔄 Preview modal closing, refreshing data...', previewInfo)
+      
+      // Refresh data ngay lập tức trước khi modal đóng hoàn toàn
+      await this.refreshProjectDataImmediately(previewInfo)
+    },
+
+    /**
+     * Đóng Preview Modal
+     */
+    async closePreviewModal() {
+      console.log('🔒 Closing preview modal')
+      
+      // Đóng modal trước
+      this.isPreviewModalVisible = false
+      
+      // Reset preview data
+      this.previewData = {
+        projectId: '',
+        versionId: '',
+        versionData: null,
+      }
+      
+      console.log('✅ Modal closed')
+    },
+
+    /**
+     * Refresh data ngay lập tức với retry mechanism
+     */
+    async refreshProjectDataImmediately(previewInfo = null) {
+      const maxRetries = 2
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`🔄 Refreshing project data (attempt ${attempt}/${maxRetries})...`)
+          
+          // Refresh tất cả data
+          await this.fetchInitialData()
+          
+          // Thêm delay nhỏ để đảm bảo Vue đã update DOM
+          await new Promise(resolve => setTimeout(resolve, 100))
+          
+          console.log('✅ Project data refreshed successfully')
+          break // Thành công, thoát khỏi vòng lặp
+          
+        } catch (error) {
+          console.error(`❌ Attempt ${attempt} failed:`, error)
+          
+          if (attempt === maxRetries) {
+            this.toast.error('Failed to refresh project data')
+          } else {
+            // Chờ trước khi retry
+            await new Promise(resolve => setTimeout(resolve, 300 * attempt))
+          }
+        }
+      }
+    },
+
+    /**
+     * Xử lý khi có changes được updated trong modal
+     */
+    async handleChangesUpdated(event) {
+      console.log('🔄 Changes updated in modal, refreshing data...', event)
+      
+      // Emit event để ProjectCard có thể refresh
+      if (event && event.projectId) {
+        eventBus.emit('project-changes-updated', event)
+      }
+      
+      await this.refreshProjectDataImmediately()
+    },
+
+    /**
+     * Xử lý khi changes được approved
+     */
+    async handlePreviewApproved(result) {
+      console.log('✅ Changes approved:', result)
+      this.toast.success(`Version ${result.newVersion} created successfully!`)
+      
+      // Refresh project data để cập nhật version mới và changes count
+      await this.refreshProjectDataImmediately()
+      
+      // Emit event global để các trang khác biết version mới được approve
+      if (result.version && result.version._id) {
+        eventBus.emit('version-approved', {
+          projectId: this.previewData.projectId,
+          versionId: result.version._id,
+          version: result.version,
+          newVersion: result.newVersion,
+        })
+        console.log('📢 Emitted version-approved event:', {
+          projectId: this.previewData.projectId,
+          versionId: result.version._id,
+          newVersion: result.newVersion,
+        })
+
+        // Emit socket event để các thành viên khác biết version mới được tạo
+        if (socket && socket.connected) {
+          const userId = localStorage.getItem('userId')
+          socket.emit('version_event', {
+            type: 'VERSION_CREATED',
+            projectId: this.previewData.projectId,
+            versionId: result.version._id,
+            userId: userId,
+            version: result.version,
+            timestamp: new Date(),
+          })
+          console.log('📡 Emitted VERSION_CREATED socket event')
+        }
+      }
+    },
+
     checkMobile() {
       this.isMobile = window.innerWidth <= 768
     },
+
     async fetchMyInvitationsRealtime() {
       try {
         const invRes = await getMyInvitations()
@@ -602,6 +751,7 @@ export default {
         console.error('❌ Failed to fetch invitations via socket:', error)
       }
     },
+
     async fetchInitialData() {
       try {
         const [userRes, myRes, sharedRes, recentRes, trashedRes, invRes] = await Promise.all([
@@ -624,16 +774,17 @@ export default {
           id: inv.invite_id || inv._id,
         }))
 
-        console.log(
-          '📥 Loaded invitations:',
-          this.myInvitations.map((inv) => ({
-            id: inv.id,
-            project: inv.projectName,
-            hasToken: !!inv.invite_token,
-          }))
-        )
+        console.log('📥 Loaded data:', {
+          myProjects: this.myProjects.length,
+          sharedProjects: this.sharedProjects.length,
+          recentProjects: this.recentProjects.length,
+          trashedProjects: this.trashedProjects.length,
+        })
 
         this.loadSentInvitations()
+
+        // Force update để đảm bảo UI được render lại
+        this.$forceUpdate()
       } catch (err) {
         console.error('Failed to fetch initial data:', err)
         if (err.response?.status === 401 || err.response?.status === 400) {
@@ -641,6 +792,7 @@ export default {
         }
       }
     },
+
     async handleLeaveProject(projectId) {
       try {
         console.log('Leaving project:', projectId)
@@ -659,9 +811,11 @@ export default {
         }
       }
     },
+
     toggleNotifications() {
       this.isNotificationsVisible = !this.isNotificationsVisible
     },
+
     async handleAcceptInvitation(inv) {
       try {
         console.log('🎯 Accepting invitation:', {
@@ -704,6 +858,7 @@ export default {
         }
       }
     },
+
     async handleRejectInvitation(inv) {
       try {
         console.log('🎯 Rejecting invitation:', {
@@ -744,17 +899,21 @@ export default {
         }
       }
     },
+
     openPersonalInfo() {
       this.showPersonalInfo = true
     },
+
     openShareModal(project) {
       this.selectedProject = project
       this.isShareModalVisible = true
     },
+
     closeShareModal() {
       this.isShareModalVisible = false
       this.fetchInitialData()
     },
+
     showNotification(title, message) {
       this.modalContent = {
         title,
@@ -763,6 +922,7 @@ export default {
       }
       this.isAppModalVisible = true
     },
+
     showConfirmation(title, message, onConfirm) {
       this.modalContent = {
         title,
@@ -772,9 +932,11 @@ export default {
       }
       this.isAppModalVisible = true
     },
+
     openNewProjectModal() {
       this.isNewProjectModalVisible = true
     },
+
     closeNewProjectModal() {
       this.isNewProjectModalVisible = false
       if (this.creationSuccess) {
@@ -782,6 +944,7 @@ export default {
         this.creationSuccess = false
       }
     },
+
     handleProjectCreated(newProject) {
       if (newProject) {
         this.myProjects.unshift(newProject)
@@ -789,10 +952,12 @@ export default {
       }
       this.creationSuccess = true
     },
+
     navigateTo(view) {
       this.currentView = view
-      this.clearSelection() // Clear selection when changing views
+      this.clearSelection()
     },
+
     async handleEditProject({ projectId, data }) {
       try {
         await updateProject(projectId, data)
@@ -803,6 +968,7 @@ export default {
         this.toast.error(`Failed to update project!`)
       }
     },
+
     updateProjectInLists(projectId, newData) {
       const updateProjectInArray = (array) => {
         const index = array.findIndex((p) => (p._id || p.id) === projectId)
@@ -815,13 +981,14 @@ export default {
       updateProjectInArray(this.myProjects)
       updateProjectInArray(this.sharedProjects)
     },
+
     openProject(project) {
-      // Don't open project if in multi-select mode
       if (this.isMultiSelectMode) return
 
       const id = project._id || project.id
       if (id) this.$router.push({ name: 'Editor', params: { id } })
     },
+
     confirmMoveToTrash(projectId) {
       this.showConfirmation(
         'Confirm Move to Trash',
@@ -829,6 +996,7 @@ export default {
         () => this.moveToTrash(projectId)
       )
     },
+
     async moveToTrash(projectId) {
       try {
         await deleteProject(projectId)
@@ -839,6 +1007,7 @@ export default {
         this.toast.error(`Failed to trash project!`)
       }
     },
+
     async restoreProject(projectId) {
       try {
         await apiRestoreProject(projectId)
@@ -849,6 +1018,7 @@ export default {
         this.toast.error(`Failed to restore project!`)
       }
     },
+
     confirmDeletePermanently(projectId) {
       this.showConfirmation(
         'Confirm Permanent Deletion',
@@ -856,6 +1026,7 @@ export default {
         () => this.deleteProjectPermanently(projectId)
       )
     },
+
     async deleteProjectPermanently(projectId) {
       try {
         await deleteProject(projectId)
@@ -866,6 +1037,7 @@ export default {
         this.toast.error(`Failed to permanently delete project!`)
       }
     },
+
     async logout() {
       console.log('🚪 Logged out')
       if (socket && socket.connected) {
@@ -875,6 +1047,7 @@ export default {
       await authLogout()
       this.$router.push('/login')
     },
+
     handleAvatarUpdated(avatarData) {
       console.log('🔄 Avatar updated in PersonalInfo:', avatarData)
 
@@ -884,6 +1057,7 @@ export default {
         this.fetchUserData()
       }
     },
+
     async fetchUserData() {
       try {
         const userRes = await getCurrentUser()
@@ -893,14 +1067,17 @@ export default {
         console.error('❌ Failed to refresh user data:', error)
       }
     },
+
     // INVITATION MODAL METHODS
     openInvitationsModal() {
       this.isInvitationsModalVisible = true
       this.loadSentInvitations()
     },
+
     closeInvitationsModal() {
       this.isInvitationsModalVisible = false
     },
+
     async loadSentInvitations() {
       try {
         const myProjects = await getMyProjects()
@@ -948,6 +1125,7 @@ export default {
         this.toast.error('Failed to load sent invitations')
       }
     },
+
     async handleCancelInvite(invitation) {
       try {
         await cancelInvite(invitation.project_id, invitation.invitee._id)

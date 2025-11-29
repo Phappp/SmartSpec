@@ -4,7 +4,7 @@ import { BaseController } from "../../../shared/base-controller";
 import { VersionService } from "../domain/service";
 import { handleServiceResponse } from "../../../services/httpHandlerResponse";
 import { ServiceResponse, ResponseStatus } from "../../../services/serviceResponse";
-import {PreviewChangeDto} from "../adapter/preview.dto";
+import { PreviewChangeDto } from "../adapter/preview.dto";
 
 export class VersionController extends BaseController {
   private service: VersionService;
@@ -61,12 +61,12 @@ export class VersionController extends BaseController {
       const { versionId } = req.params;
 
       if (!userId) {
-        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401),res);
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
         return;
       }
 
       if (!versionId) {
-        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing versionId", null, 400),res);
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing versionId", null, 400), res);
         return;
       }
 
@@ -81,17 +81,17 @@ export class VersionController extends BaseController {
   public createOrUpdatePreview = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
       const userId = req.getSubject();
-      const {versionId} = req.params;
+      const { versionId } = req.params;
       const { change } = req.body;
-      if (!userId){
+      if (!userId) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
         return;
-      } 
-      if (!versionId){
+      }
+      if (!versionId) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing required version_id", null, 400), res);
         return;
       }
-      if (!change){
+      if (!change) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing required change", null, 400), res);
         return;
       }
@@ -107,10 +107,10 @@ export class VersionController extends BaseController {
   public getPreview = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
       const userId = req.getSubject();
-      if (!userId){
+      if (!userId) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
         return;
-      } 
+      }
       const { versionId } = req.params;
       if (!versionId) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing versionId", null, 400), res);
@@ -124,7 +124,7 @@ export class VersionController extends BaseController {
   public approve = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
       const userId = req.getSubject();
-      if (!userId){
+      if (!userId) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
         return;
       }
@@ -132,14 +132,14 @@ export class VersionController extends BaseController {
       const { versionId } = req.params;
       const { changeType = "minor", comment } = req.body;
 
-      if (!versionId){
+      if (!versionId) {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing baseVersionId", null, 400), res);
         return;
       }
 
       const result = await this.service.approve(versionId, userId, changeType, comment);
       handleServiceResponse(result, res);
-    }); 
+    });
   };
 
   /**
@@ -190,7 +190,7 @@ export class VersionController extends BaseController {
     });
   };
 
-  public markEditingController = async (req: HttpRequest, res: Response,next: NextFunction) => {
+  public markEditingController = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
       const userId = req.getSubject();
       if (!userId) {
@@ -204,7 +204,7 @@ export class VersionController extends BaseController {
       res.status(result.code || 200).json(result);
     });
   };
-  public markLockedController = async (req: HttpRequest, res: Response,next: NextFunction) => {
+  public markLockedController = async (req: HttpRequest, res: Response, next: NextFunction) => {
     await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
       const userId = req.getSubject();
       if (!userId) {
@@ -214,6 +214,26 @@ export class VersionController extends BaseController {
       const { versionId } = req.params;
       const result = await this.service.markLocked(versionId, userId);
       res.status(result.code || 200).json(result);
+    });
+  };
+  // file: controller.ts
+  public rollbackVersion = async (req: HttpRequest, res: Response, next: NextFunction) => {
+    await this.execWithTryCatchBlock(req, res, next, async (req: HttpRequest, res: Response) => {
+      const userId = req.getSubject();
+      const { versionId } = req.params;
+
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+        return;
+      }
+
+      if (!versionId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing versionId", null, 400), res);
+        return;
+      }
+
+      const result = await this.service.rollbackVersion(versionId, userId);
+      handleServiceResponse(result, res);
     });
   };
 } 
