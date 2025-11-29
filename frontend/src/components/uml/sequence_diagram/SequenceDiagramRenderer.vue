@@ -410,11 +410,9 @@
 
       <div class="status-item spacer"></div>
 
+      <div class="status-item">Direction: Left to Right</div>
       <div class="status-item">
         View: ({{ Math.round(viewport.x) }}, {{ Math.round(viewport.y) }})
-      </div>
-      <div class="status-item">
-        Canvas: {{ Math.round(virtualSpace.width) }} × {{ Math.round(virtualSpace.height) }}
       </div>
       <div class="status-item">Zoom: {{ Math.round(internalZoom * 100) }}%</div>
     </div>
@@ -525,12 +523,23 @@ export default {
     computedLifelines() {
       const lifelines = this.safeDiagramData.lifelines
       if (!lifelines || lifelines.length === 0) return []
-      return lifelines.map((lifeline, index) => {
+
+      // Sort lifelines by x position (left to right)
+      const sortedLifelines = [...lifelines].sort((a, b) => {
+        const posA = a.position || { x: 0 }
+        const posB = b.position || { x: 0 }
+        return posA.x - posB.x
+      })
+
+      return sortedLifelines.map((lifeline, index) => {
         const position = lifeline.position || { x: 0, y: 0 }
+        // User always on the left, other lifelines to the right
+        const baseX = 100 + index * 200
+
         return {
           id: this.normalizeId(lifeline._id || lifeline.id || `lifeline-${index}`),
           name: lifeline.name || 'Unnamed',
-          x: position.x || 100 + index * 200,
+          x: position.x || baseX,
           y: position.y || 100,
           _originalData: lifeline,
         }
@@ -683,9 +692,8 @@ export default {
       return id.toString()
     },
 
-    // Fragment Methods - HOÀN TOÀN MỚI
+    // Fragment Methods
     calculateFragmentBounds(fragment, index = 0) {
-      // Lấy tất cả messages thuộc fragment này và các fragment con
       const allFragmentMessages = this.getAllFragmentMessages(fragment)
 
       if (allFragmentMessages.length === 0) {
@@ -698,7 +706,7 @@ export default {
         }
       }
 
-      // Tìm các lifeline có liên quan đến fragment này
+      // Find lifelines involved in this fragment
       const involvedLifelines = new Set()
       allFragmentMessages.forEach((message) => {
         if (message.source) involvedLifelines.add(message.source)
@@ -707,17 +715,18 @@ export default {
 
       const lifelineArray = Array.from(involvedLifelines)
       const lifelineXs = lifelineArray.map((ll) => ll.x)
+
       const minX = Math.min(...lifelineXs) - 100
-      const maxX = Math.max(...lifelineXs) + 100
+      const maxX = Math.max(...lifelineXs) + 200
 
-      // Tính Y bounds CHỈ dựa trên messages thuộc fragment
+      // Calculate Y bounds
       const messageYs = allFragmentMessages.map((msg) => msg.y)
-      const minY = Math.min(...messageYs) - 50 // Giảm padding
-      const maxY = Math.max(...messageYs) + 50 // Giảm padding
+      const minY = Math.min(...messageYs) - 50
+      const maxY = Math.max(...messageYs) + 50
 
-      const baseHeight = Math.max(150, maxY - minY) // Giảm chiều cao tối thiểu
+      const baseHeight = Math.max(150, maxY - minY)
 
-      // Khởi tạo fragment chính
+      // Initialize main fragment
       const mainFragment = {
         x: minX,
         y: minY,
@@ -726,9 +735,9 @@ export default {
         totalHeight: baseHeight,
       }
 
-      // Xử lý fragment con - CHÍNH XÁC HƠN
+      // Handle child fragments
       if (fragment.children && fragment.children.length > 0) {
-        // Sắp xếp fragment con theo thứ tự Y
+        // Sort child fragments
         fragment.children.forEach((child) => {
           const childMessages = child.messages
           if (childMessages.length > 0) {
@@ -742,7 +751,7 @@ export default {
 
         let currentY = mainFragment.y + 30
 
-        fragment.children.forEach((child, childIndex) => {
+        fragment.children.forEach((child) => {
           const childMessages = child.messages
 
           if (childMessages.length === 0) {
@@ -757,16 +766,14 @@ export default {
             const childMaxY = Math.max(...childMessageYs)
 
             child.x = mainFragment.x
-            child.y = childMinY - 20 // Đặt đường phân cách phía trên messages
+            child.y = childMinY - 20
             child.width = mainFragment.width
             child.height = childMaxY - childMinY + 40
-
-            // Cập nhật currentY cho fragment tiếp theo
             currentY = childMaxY + 30
           }
         })
 
-        // Điều chỉnh chiều cao tổng của fragment cha nếu cần
+        // Adjust total height
         const lastChild = fragment.children[fragment.children.length - 1]
         const lastChildMessages = lastChild.messages
         const lastChildMaxY =
@@ -873,9 +880,9 @@ export default {
         bounds.maxY = Math.max(bounds.maxY, message.y + 20)
       })
 
-      const padding = 150 // Giảm padding tổng
+      const padding = 150
       this.virtualSpace.minX = Math.min(this.virtualSpace.minX, bounds.minX - padding)
-      this.virtualSpace.maxX = Math.max(this.virtualSpace.maxX, bounds.maxX + padding)
+      this.virtualSpace.maxX = Math.max(this.virtualSpace.maxX, bounds.maxX + padding * 2)
       this.virtualSpace.minY = Math.min(this.virtualSpace.minY, bounds.minY - padding)
       this.virtualSpace.maxY = Math.max(this.virtualSpace.maxY, bounds.maxY + padding)
     },
@@ -1254,7 +1261,7 @@ export default {
     </marker>
   </defs>
   
-  <!-- Background trắng -->
+  <!-- White background -->
   <rect x="${bounds.minX - padding}" y="${
         bounds.minY - padding
       }" width="${contentWidth}" height="${contentHeight}" fill="white" />
@@ -1356,7 +1363,7 @@ export default {
     )
     .join('')}
   
-  <!-- Render Messages không thuộc fragment -->
+  <!-- Render Messages outside fragments -->
   ${this.rootMessages
     .map((message) => {
       const path = this.calculateMessagePath(message)
