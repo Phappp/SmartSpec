@@ -55,6 +55,9 @@ export class ProjectService {
       const newVersionData = {
         project_id: newProject._id,
         version_number: 1,
+        version_temporary: true,
+        status:"completed",
+        stage:"completed",
         created_by: ownerId
       };
       const createdVersions = await Version.create([newVersionData], { session });

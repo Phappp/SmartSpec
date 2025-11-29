@@ -36,7 +36,7 @@ const approverSchema = new Schema({
 // === Schema chính của Preview ===
 const previewSchema = new Schema({
   project_id: { type: Schema.Types.ObjectId, ref: "projects", required: true },
-  base_version_id: { type: Schema.Types.ObjectId, ref: "versions", required: true }, // version gốc
+  base_version_id: { type: Schema.Types.ObjectId, ref: "versions", required: false }, // version gốc
   target_version_id: { type: Schema.Types.ObjectId, ref: "versions" }, // version mới sẽ tạo sau khi approved
   created_by: { type: Schema.Types.ObjectId, ref: "users", required: true },
   created_at: { type: Date, default: Date.now },

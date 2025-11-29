@@ -84,7 +84,7 @@ export class VersionService {
       // 5️⃣ Nếu chưa có preview → tạo mới
       preview = new Preview({
         project_id : version.project_id,
-        base_version_id :  version.parent_version_id,
+        base_version_id :  version.parent_version_id||null,
         target_version_id : version._id,
         created_by : created_by,
         changes: [normalizedChange],
