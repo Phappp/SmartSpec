@@ -2,7 +2,6 @@ import mongoose, { Types } from 'mongoose';
 import Version from "../../../../../internal/model/version";
 import User from '../../../../../internal/model/user';
 import Input from "../../../../../internal/model/input";
-import Output from "../../../../../internal/model/output";
 import Project from "../../../../../internal/model/project";
 import Preview from "../../../../../internal/model/preview";
 import Database from "../../../../../internal/model/database";
@@ -19,7 +18,6 @@ import { randomUUID } from "crypto";
 import version from '../../../../../internal/model/version';
 import project from '../../../../../internal/model/project';
 import preview from '../../../../../internal/model/preview';
-
 
 export class VersionService {
   private logService = new LogService();
@@ -85,10 +83,10 @@ export class VersionService {
 
       // 5️⃣ Nếu chưa có preview → tạo mới
       preview = new Preview({
-        project_id: version.project_id,
-        base_version_id: base_version_id,
-        target_version_id: version._id,
-        created_by: created_by,
+        project_id : version.project_id,
+        base_version_id :  version.parent_version_id,
+        target_version_id : version._id,
+        created_by : created_by,
         changes: [normalizedChange],
         approvers: approvers, // gắn danh sách approvers
         status: "under_review",
@@ -202,7 +200,7 @@ export class VersionService {
    * Nâng version từ 1 preview (đã được duyệt)
    * BaseVersion => NewVersion (copy toàn bộ data)
    */
-  public async bumpVersion(baseVersionId: string, userId: string, changeType: "major" | "minor"): Promise<ServiceResponse<any>> {
+  public async bumpVersion(baseVersionId: string,userId: string,changeType: "major" | "minor"): Promise<ServiceResponse<any>> {
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -228,142 +226,186 @@ export class VersionService {
         stage: "completed",
         status: "completed",
         progress: 100,
-        requirement_model: JSON.parse(JSON.stringify(baseVersion.requirement_model || [])),
-        pending_conflicts: JSON.parse(JSON.stringify(baseVersion.pending_conflicts || [])),
+        requirement_model: baseVersion.requirement_model.map(r => r.toObject()),
+        pending_conflicts: baseVersion.pending_conflicts.map(r => r.toObject()),
         processing_errors: JSON.parse(JSON.stringify(baseVersion.processing_errors || [])),
         affects_requirement: baseVersion.affects_requirement || false,
       });
-
+      
       await newVersion.save({ session });
-
-      // ✅ 4️⃣ Maps
+      
+      // ================================
+      // 🔥 MAP LIST
+      // ================================
       const inputMap = new Map<string, string>();
       const dbMap = new Map<string, string>();
       const tcMap = new Map<string, string>();
-      const umlMap = new Map<string, string>();
 
       const usecaseUMLmap = new Map<string, string>();
       const activityUMLmap = new Map<string, string>();
       const sequenceUMLmap = new Map<string, string>();
 
       const inputIds: Types.ObjectId[] = [];
-      const outputIds: Types.ObjectId[] = [];
 
-      // ✅ 5️⃣ Clone Inputs → NHỚ LƯU MAP
+      // ================================
+      // 4️⃣ Clone Inputs
+      // ================================
       const baseInputs = await Input.find({ version_id: baseVersion._id }).lean();
       for (const inp of baseInputs) {
         const newId = new Types.ObjectId();
         inputMap.set(inp._id.toString(), newId.toString());
 
-        await Input.create([{
-          ...inp,
-          _id: newId,
-          version_id: newVersion._id,
-          created_at: new Date(),
-          updated_at: new Date()
-        }], { session });
+        await Input.create(
+          [{
+            ...inp,
+            _id: newId,
+            version_id: newVersion._id,
+            created_at: new Date(),
+            updated_at: new Date(),
+          }],
+          { session }
+        );
 
         inputIds.push(newId);
       }
 
-      // ✅ 6️⃣ Clone Databases → map
+      // ================================
+      // 5️⃣ Clone Databases
+      // ================================
       const baseDatabases = await Database.find({ version_id: baseVersion._id }).lean();
       for (const db of baseDatabases) {
         const newId = new Types.ObjectId();
         dbMap.set(db._id.toString(), newId.toString());
 
-        await Database.create([{
-          ...db,
-          _id: newId,
-          version_id: newVersion._id,
-          created_at: new Date(),
-          updated_at: new Date()
-        }], { session });
+        await Database.create(
+          [{
+            ...db,
+            _id: newId,
+            version_id: newVersion._id,
+            created_at: new Date(),
+            updated_at: new Date(),
+          }],
+          { session }
+        );
       }
 
-      // ✅ 7️⃣ Clone Testcases → map
+      // ================================
+      // 6️⃣ Clone Testcases
+      // ================================
       const baseTestcases = await Testcase.find({ version_id: baseVersion._id }).lean();
       for (const tc of baseTestcases) {
         const newId = new Types.ObjectId();
         tcMap.set(tc._id.toString(), newId.toString());
 
-        await Testcase.create([{
-          ...tc,
-          _id: newId,
-          version_id: newVersion._id,
-          created_at: new Date(),
-          updated_at: new Date()
-        }], { session });
-      }
-
-      // ✅ 8️⃣ Clone UML → map
-      const baseUmls = await Uml.find({ version_id: baseVersion._id }).lean();
-      for (const uml of baseUmls) {
-        const newId = new Types.ObjectId();
-        umlMap.set(uml._id.toString(), newId.toString());
-
-        await Uml.create([{
-          ...uml,
-          _id: newId,
-          version_id: newVersion._id,
-          created_at: new Date(),
-          updated_at: new Date()
-        }], { session });
-      }
-
-      // ✅ 9️⃣ Clone diagrams theo từng loại + tạo MAP riêng
-      const cloneDiagram = async (Model: any, targetMap: Map<string, string>) => {
-        const baseItems = await Model.find({ uml_id: { $in: Array.from(umlMap.keys()) } }).lean();
-        for (const item of baseItems) {
-          const newId = new Types.ObjectId();
-          targetMap.set(item._id.toString(), newId.toString());
-
-          await Model.create([{
-            ...item,
+        await Testcase.create(
+          [{
+            ...tc,
             _id: newId,
-            uml_id: new Types.ObjectId(umlMap.get(item.uml_id.toString())),
+            version_id: newVersion._id,
             created_at: new Date(),
-            updated_at: new Date()
-          }], { session });
-        }
-      };
+            updated_at: new Date(),
+          }],
+          { session }
+        );
+      }
 
-      await cloneDiagram(UsecaseDiagram, usecaseUMLmap);
-      await cloneDiagram(ActivityDiagram, activityUMLmap);
-      await cloneDiagram(SequenceDiagram, sequenceUMLmap);
+      // ================================
+      // 7️⃣ Clone Usecase Diagrams
+      // ================================
+      const usecaseDiagramMap = new Map<string, string>();
+      const baseUsecaseDiagrams = await UsecaseDiagram.find({
+        version_id: baseVersion._id
+      }).lean();
 
-      // ✅ 10️⃣ Clone Outputs với map
-      const baseOutputs = await Output.find({ version_id: baseVersion._id }).lean();
-      for (const out of baseOutputs) {
-        const newOutId = new Types.ObjectId();
+      for (const d of baseUsecaseDiagrams) {
+        const newId = new Types.ObjectId();
+        usecaseDiagramMap.set(d._id.toString(), newId.toString());
 
-        const copy: any = {
-          ...out,
-          _id: newOutId,
+        await UsecaseDiagram.create([{
+          ...d,
+          _id: newId,
           version_id: newVersion._id,
           created_at: new Date(),
           updated_at: new Date()
-        };
-
-        if (out.type === "database") copy.database_id = new Types.ObjectId(dbMap.get(out.database_id.toString()));
-        if (out.type === "testcase") copy.testcase_id = new Types.ObjectId(tcMap.get(out.testcase_id.toString()));
-        if (out.type === "uml") copy.uml_id = new Types.ObjectId(umlMap.get(out.uml_id.toString()));
-
-        await Output.create([copy], { session });
-        outputIds.push(newOutId);
+        }], { session });
       }
 
-      // ✅ 11️⃣ Update version
+      // ================================
+      // 8️⃣ Clone Activity Diagrams
+      // ================================
+      const activityDiagramMap = new Map<string, string>();
+      const baseActivityDiagrams = await ActivityDiagram.find({
+        version_id: baseVersion._id
+      }).lean();
+
+      for (const d of baseActivityDiagrams) {
+        const newId = new Types.ObjectId();
+        activityDiagramMap.set(d._id.toString(), newId.toString());
+
+        await ActivityDiagram.create([{
+          ...d,
+          _id: newId,
+          version_id: newVersion._id,
+          created_at: new Date(),
+          updated_at: new Date()
+        }], { session });
+      }
+
+      // ================================
+      // 9️⃣ Clone Sequence Diagrams
+      // ================================
+      const sequenceDiagramMap = new Map<string, string>();
+      const baseSequenceDiagrams = await SequenceDiagram.find({
+        version_id: baseVersion._id
+      }).lean();
+
+      for (const d of baseSequenceDiagrams) {
+        const newId = new Types.ObjectId();
+        sequenceDiagramMap.set(d._id.toString(), newId.toString());
+
+        await SequenceDiagram.create([{
+          ...d,
+          _id: newId,
+          version_id: newVersion._id,
+          created_at: new Date(),
+          updated_at: new Date()
+        }], { session });
+      }
+
+
+      // ================================
+      // 9️⃣ Update version inputs
+      // ================================
       newVersion.inputs = inputIds;
-      newVersion.outputs = outputIds;
       await newVersion.save({ session });
 
-      // ✅ 12️⃣ Project update current_version
-      await Project.findByIdAndUpdate(baseVersion.project_id, { current_version: newVersion._id }, { session });
+      // ================================
+      // 🔟 Update project current_version
+      // ================================
+      await Project.findByIdAndUpdate(
+        baseVersion.project_id,
+        { current_version: newVersion._id },
+        { session }
+      );
 
       await session.commitTransaction();
 
-      return new ServiceResponse(ResponseStatus.Success, "New version created with cloned entities", { newVersion, idMaps: { inputMap, dbMap, tcMap, umlMap, usecaseUMLmap, activityUMLmap, sequenceUMLmap } }, 201);
+      return new ServiceResponse(
+        ResponseStatus.Success,
+        "New version created with cloned entities",
+        {
+          newVersion,
+          idMaps: {
+            inputMap,
+            dbMap,
+            tcMap,
+            usecaseUMLmap,
+            activityUMLmap,
+            sequenceUMLmap,
+          },
+        },
+        201
+      );
     } catch (e: any) {
       await session.abortTransaction();
       return new ServiceResponse(ResponseStatus.Failed, e.message, null, 500);
@@ -371,9 +413,7 @@ export class VersionService {
       session.endSession();
     }
   }
-
-
-  async setCurrentVersion(projectId: string, versionId: string, userId: string): Promise<ServiceResponse<any>> {
+   async setCurrentVersion(projectId: string,versionId: string,userId: string): Promise<ServiceResponse<any>> {
     try {
       // 🔍 Kiểm tra version có tồn tại trong project hay không
       const version = await Version.findOne({ _id: versionId, project_id: projectId });
@@ -408,7 +448,6 @@ export class VersionService {
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     }
   }
-
   /**
    * Lấy version tiếp theo (major/minor)
    */
@@ -459,7 +498,6 @@ export class VersionService {
         return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
 
       await Input.deleteMany({ version_id: versionId });
-      await Output.deleteMany({ version_id: versionId });
       await Preview.deleteOne({ base_version_id: versionId });
       await Version.deleteOne({ _id: versionId });
 
@@ -485,306 +523,189 @@ export class VersionService {
     try {
       const baseVersion = await Version.findById(versionId).session(session);
       if (!baseVersion) throw new Error("Base version not found");
+
       const preview = await Preview.findOne({ base_version_id: versionId }).session(session);
       if (!preview) throw new Error("Preview not found");
 
       const change = preview.changes.find((c: any) => c.change_id === changeId);
       if (!change) throw new Error(`Change with id ${changeId} not found`);
 
-      const entityType = change.entity_type;
-      const changeType = change.change_type;
-      const entityId = change.entity_id;
-      const before = change.before_snapshot;
-      const after = change.after_snapshot;
+      const { entity_type, change_type, entity_id, before_snapshot, after_snapshot } = change;
 
-      console.log(`\n=== [REVERT] Entity: ${entityType}, ChangeType: ${changeType}, EntityID: ${entityId} ===`);
+      console.log(`\n=== [REVERT] ${entity_type} | ${change_type} | ${entity_id} ===`);
 
-      // Logic revert giống như trong for-loop của bạn
-      if (entityType === 'input') {
-        if (changeType === 'added') {
-          if (entityId) {
-            await Input.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
-            await Version.updateOne({ _id: baseVersion._id }, { $pull: { inputs: new Types.ObjectId(entityId) } }, { session });
+      // ======================================================
+      // 1️⃣ Helpers
+      // ======================================================
+      const now = new Date();
+
+      const revertDiagram = async (Model: any) => {
+        if (change_type === "added") {
+          if (entity_id) await Model.deleteOne({ _id: entity_id }).session(session);
+        }
+
+        else if (change_type === "updated") {
+          if (entity_id && before_snapshot)
+            await Model.updateOne({ _id: entity_id }, { $set: before_snapshot }).session(session);
+        }
+
+        else if (change_type === "deleted") {
+          if (before_snapshot) {
+            const newItem = {
+              ...before_snapshot,
+              _id: new Types.ObjectId(),
+              created_at: now,
+              updated_at: now,
+            };
+            await Model.create([newItem], { session });
           }
-        } else if (changeType === 'deleted' && before) {
+        }
+      };
+
+      // ======================================================
+      // 2️⃣ Xử lý entity
+      // ======================================================
+
+      // ------------------------------------------------------
+      // INPUT
+      // ------------------------------------------------------
+      if (entity_type === "input") {
+        if (change_type === "added") {
+          await Input.deleteOne({ _id: entity_id, version_id: baseVersion._id }).session(session);
+          await Version.updateOne({ _id: baseVersion._id }, { $pull: { inputs: entity_id } }, { session });
+        }
+        else if (change_type === "updated" && before_snapshot) {
+          await Input.updateOne({ _id: entity_id }, { $set: before_snapshot }).session(session);
+        }
+        else if (change_type === "deleted" && before_snapshot) {
           const newId = new Types.ObjectId();
-          const toInsert = {
-            ...before,
-            _id: newId,
-            version_id: baseVersion._id,
-            created_at: new Date(),
-            updated_at: new Date()
-          };
-          await Input.create([toInsert], { session });
+          await Input.create([{ ...before_snapshot, _id: newId, version_id: baseVersion._id, created_at: now, updated_at: now }], { session });
           await Version.updateOne({ _id: baseVersion._id }, { $addToSet: { inputs: newId } }, { session });
-        } else if (changeType === 'updated' && before) {
-          await Input.updateOne({ _id: entityId, version_id: baseVersion._id }, { $set: before }).session(session);
-        }
-      } else if (entityType === 'database') {
-        if (changeType === 'added') {
-          console.log(`[Database][Added] Deleting Database + related Outputs`);
-          if (entityId) {
-            await Database.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
-            await Output.deleteMany({ database_id: entityId, version_id: baseVersion._id }).session(session);
-            await Version.updateOne({ _id: baseVersion._id }, { $pull: { outputs: new Types.ObjectId(entityId) } }, { session });
-          }
-        } else if (changeType === 'updated') {
-          console.log(`[Database][Updated] Reverting Database: ${entityId}`);
-          if (entityId && before) {
-            await Database.updateOne({ _id: entityId, version_id: baseVersion._id }, { $set: before }).session(session);
-          }
-        } else if (changeType === 'deleted') {
-          console.log(`[Database][Deleted] Restoring Database and linked Output`);
-          if (before) {
-            const toInsert = {
-              ...before,
-              _id: new Types.ObjectId(),
-              version_id: baseVersion._id,
-              created_at: new Date(),
-              updated_at: new Date(),
-            };
-            await Database.create([toInsert], { session });
-            await Output.create([{
-              project_id: baseVersion.project_id,
-              version_id: baseVersion._id,
-              type: 'database',
-              database_id: toInsert._id,
-              generated_by: new Types.ObjectId(userId),
-              status: 'completed',
-              created_at: new Date(),
-              updated_at: new Date()
-            }], { session });
-          }
-        }
-      } else if (entityType === "table") {
-        const db = await Database.findOne({
-          _id: entityId,
-          version_id: baseVersion._id,
-        }).session(session);
-        // 1️⃣ TABLE ADDED → Rollback = xóa table đã thêm
-        if (changeType === "added") {
-          console.log(`[Table][Added] Removing newly added table: ${after?.name}`);
-
-          if (after?.name) {
-            await Database.updateOne(
-              { _id: db._id, version_id: baseVersion._id },
-              { $pull: { tables: { name: after.name } } }
-            ).session(session);
-          }
-        }
-
-        // 2️⃣ TABLE UPDATED → Rollback = khôi phục bảng trước khi update
-        else if (changeType === "updated") {
-          console.log(`[Table][Updated] Restoring table state: ${before?.name}`);
-
-          if (before?.name) {
-            await Database.updateOne(
-              {
-                _id: db._id,
-                version_id: baseVersion._id,
-                "tables.name": before.name,
-              },
-              { $set: { "tables.$": before } }
-            ).session(session);
-          }
-        }
-
-        // 3️⃣ TABLE DELETED → Rollback = chèn lại bảng đã bị xóa
-        else if (changeType === "deleted") {
-          console.log(`[Table][Deleted] Re-inserting deleted table: ${before?.name}`);
-
-          if (before) {
-            await Database.updateOne(
-              { _id: db._id, version_id: baseVersion._id },
-              { $push: { tables: before } }
-            ).session(session);
-          }
         }
       }
-      else if (entityType === 'testcase') {
-        if (changeType === 'added') {
-          console.log(`[Testcase][Added] Deleting Testcase + related Outputs`);
-          if (entityId) {
-            await Testcase.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
-            await Output.deleteMany({ testcase_id: entityId, version_id: baseVersion._id }).session(session);
-          }
-        } else if (changeType === 'updated') {
-          console.log(`[Testcase][Updated] Reverting Testcase: ${entityId}`);
-          if (entityId && before) {
-            await Testcase.updateOne({ _id: entityId, version_id: baseVersion._id }, { $set: before }).session(session);
-          }
-        } else if (changeType === 'deleted') {
-          console.log(`[Testcase][Deleted] Restoring Testcase and Output`);
-          if (before) {
-            const toInsert = {
-              ...before,
-              _id: new Types.ObjectId(),
-              version_id: baseVersion._id,
-              created_at: new Date(),
-              updated_at: new Date(),
-            };
-            await Testcase.create([toInsert], { session });
-            await Output.create([{
-              project_id: baseVersion.project_id,
-              version_id: baseVersion._id,
-              type: 'testcase',
-              testcase_id: toInsert._id,
-              generated_by: new Types.ObjectId(userId),
-              status: 'completed',
-              created_at: new Date(),
-              updated_at: new Date()
-            }], { session });
-          }
+
+      // ------------------------------------------------------
+      // DATABASE (không xử lý table ở đây)
+      // ------------------------------------------------------
+      else if (entity_type === "database") {
+        if (change_type === "added") {
+          await Database.deleteOne({ _id: entity_id }).session(session);
         }
-      } else if (entityType === 'uml') {
-        if (changeType === 'added') {
-          console.log(`[UML][Added] Deleting UML + related diagrams + outputs`);
-          if (entityId) {
-            await Uml.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
-            await Output.deleteMany({ uml_id: entityId, version_id: baseVersion._id }).session(session);
-            await UsecaseDiagram.deleteMany({ uml_id: entityId }).session(session);
-            await ActivityDiagram.deleteMany({ uml_id: entityId }).session(session);
-            await SequenceDiagram.deleteMany({ uml_id: entityId }).session(session);
-          }
-        } else if (changeType === 'updated') {
-          console.log(`[UML][Updated] Reverting UML: ${entityId}`);
-          if (entityId && before) {
-            await Uml.updateOne({ _id: entityId, version_id: baseVersion._id }, { $set: before }).session(session);
-          }
-        } else if (changeType === 'deleted') {
-          console.log(`[UML][Deleted] Restoring UML and Output`);
-          if (before) {
-            const toInsert = {
-              ...before,
-              _id: new Types.ObjectId(),
-              version_id: baseVersion._id,
-              created_at: new Date(),
-              updated_at: new Date(),
-            };
-            await Uml.create([toInsert], { session });
-            await Output.create([{
-              project_id: baseVersion.project_id,
-              version_id: baseVersion._id,
-              type: 'uml',
-              uml_id: toInsert._id,
-              generated_by: new Types.ObjectId(userId),
-              status: 'completed',
-              created_at: new Date(),
-              updated_at: new Date()
-            }], { session });
-          }
+        else if (change_type === "updated") {
+          await Database.updateOne({ _id: entity_id }, { $set: before_snapshot }).session(session);
         }
-      } else if (entityType === 'usecase_diagram') {
-        if (changeType === 'added') {
-          console.log(`[UsecaseDiagram][Added] Deleting diagram`);
-          if (entityId) await UsecaseDiagram.deleteOne({ _id: entityId }).session(session);
-        } else if (changeType === 'updated') {
-          console.log(`[UsecaseDiagram][Updated] Reverting diagram`);
-          if (entityId && before) await UsecaseDiagram.updateOne({ _id: entityId }, { $set: before }).session(session);
-        } else if (changeType === 'deleted') {
-          console.log(`[UsecaseDiagram][Deleted] Restoring diagram`);
-          if (before) {
-            const toInsert = { ...before, _id: new Types.ObjectId(), created_at: new Date(), updated_at: new Date() };
-            await UsecaseDiagram.create([toInsert], { session });
-          }
-        }
-      } else if (entityType === 'activity_diagram') {
-        if (changeType === 'added') {
-          console.log(`[ActivityDiagram][Added] Deleting diagram`);
-          if (entityId) await ActivityDiagram.deleteOne({ _id: entityId }).session(session);
-        } else if (changeType === 'updated') {
-          console.log(`[ActivityDiagram][Updated] Reverting diagram`);
-          if (entityId && before) await ActivityDiagram.updateOne({ _id: entityId }, { $set: before }).session(session);
-        } else if (changeType === 'deleted') {
-          console.log(`[ActivityDiagram][Deleted] Restoring diagram`);
-          if (before) {
-            const toInsert = { ...before, _id: new Types.ObjectId(), created_at: new Date(), updated_at: new Date() };
-            await ActivityDiagram.create([toInsert], { session });
-          }
-        }
-      } else if (entityType === 'sequence_diagram') {
-        if (changeType === 'added') {
-          console.log(`[SequenceDiagram][Added] Deleting diagram`);
-          if (entityId) await SequenceDiagram.deleteOne({ _id: entityId }).session(session);
-        } else if (changeType === 'updated') {
-          console.log(`[SequenceDiagram][Updated] Reverting diagram`);
-          if (entityId && before) await SequenceDiagram.updateOne({ _id: entityId }, { $set: before }).session(session);
-        } else if (changeType === 'deleted') {
-          console.log(`[SequenceDiagram][Deleted] Restoring diagram`);
-          if (before) {
-            const toInsert = { ...before, _id: new Types.ObjectId(), created_at: new Date(), updated_at: new Date() };
-            await SequenceDiagram.create([toInsert], { session });
-          }
-        }
-      } else if (entityType === 'output') {
-        if (changeType === 'added') {
-          console.log(`[Output][Added] Deleting Output`);
-          if (entityId) await Output.deleteOne({ _id: entityId, version_id: baseVersion._id }).session(session);
-        } else if (changeType === 'updated') {
-          console.log(`[Output][Updated] Reverting Output`);
-          if (entityId && before) await Output.updateOne({ _id: entityId, version_id: baseVersion._id }, { $set: before }).session(session);
-        } else if (changeType === 'deleted') {
-          console.log(`[Output][Deleted] Restoring Output`);
-          if (before) {
-            const toInsert = { ...before, _id: new Types.ObjectId(), version_id: baseVersion._id, created_at: new Date(), updated_at: new Date() };
-            await Output.create([toInsert], { session });
-          }
-        }
-      } else if (entityType === 'requirement') {
-        if (changeType === 'added') {
-          const reqs = baseVersion.requirement_model?.toObject?.() || baseVersion.requirement_model || [];
-          const oldId = before.id;
-          const oldIndex = parseInt(oldId.replace(/^UC/, "")) - 1;
-          reqs.splice(oldIndex, 0, before);
-          const normalized = reqs.map((uc: any, index: number) => ({
-            ...uc,
-            id: `UC${index + 1}`
-          }));
-          const idMap = new Map<string, string>();
-          for (let i = 0; i < reqs.length; i++) {
-            const oldId = reqs[i].id;
-            const newId = normalized[i].id;
-            if (oldId && newId) idMap.set(oldId, newId);
-          }
-          const synced = normalized.map((uc: any) => {
-            if (Array.isArray(uc.related_usecases) && uc.related_usecases.length > 0) {
-              uc.related_usecases = uc.related_usecases
-                .map((oldRelId: string) => idMap.get(oldRelId) || oldRelId)
-                .filter((id: string) => normalized.some((x: any) => x.id === id));
-            }
-            return uc;
-          });
-          baseVersion.set("requirement_model", synced);
-          baseVersion.updated_at = new Date();
-          baseVersion.affects_requirement = true;
-        } else if (changeType === 'updated') {
-          console.log(`[Requirement][Updated] Reverting requirement`);
-          if (entityId && before) {
-            const reqs = baseVersion.requirement_model?.toObject?.() || baseVersion.requirement_model || [];
-            baseVersion.requirement_model = reqs.map((r) => (r.id === entityId ? before : r));
-          }
-        } else if (changeType === 'deleted') {
-          console.log(`[Requirement][Deleted] Restoring deleted requirement`);
-          if (before) {
-            baseVersion.requirement_model.push(before);
-          }
+        else if (change_type === "deleted" && before_snapshot) {
+          const newItem = { ...before_snapshot, _id: new Types.ObjectId(), created_at: now, updated_at: now };
+          await Database.create([newItem], { session });
         }
       }
+
+      // ------------------------------------------------------
+      // TABLE INSIDE DATABASE
+      // ------------------------------------------------------
+      else if (entity_type === "table") {
+        const db = await Database.findOne({ _id: entity_id, version_id: baseVersion._id }).session(session);
+        if (!db) throw new Error("Database not found for table revert");
+
+        if (change_type === "added") {
+          await Database.updateOne({ _id: db._id }, { $pull: { tables: { name: after_snapshot?.name } } }).session(session);
+        }
+        else if (change_type === "updated") {
+          await Database.updateOne(
+            { _id: db._id, "tables.name": before_snapshot?.name },
+            { $set: { "tables.$": before_snapshot } }
+          ).session(session);
+        }
+        else if (change_type === "deleted") {
+          await Database.updateOne(
+            { _id: db._id },
+            { $push: { tables: before_snapshot } }
+          ).session(session);
+        }
+      }
+
+      // ------------------------------------------------------
+      // TESTCASE
+      // ------------------------------------------------------
+      else if (entity_type === "testcase") {
+        if (change_type === "added") {
+          await Testcase.deleteOne({ _id: entity_id }).session(session);
+        }
+        else if (change_type === "updated") {
+          await Testcase.updateOne({ _id: entity_id }, { $set: before_snapshot }).session(session);
+        }
+        else if (change_type === "deleted") {
+          const newTc = {
+            ...before_snapshot,
+            _id: new Types.ObjectId(),
+            version_id: baseVersion._id,
+            created_at: now,
+            updated_at: now,
+          };
+          await Testcase.create([newTc], { session });
+        }
+      }
+
+      // ------------------------------------------------------
+      // DIAGRAMS (Usecase / Activity / Sequence)
+      // ------------------------------------------------------
+      else if (entity_type === "usecase_diagram") {
+        await revertDiagram(UsecaseDiagram);
+      }
+      else if (entity_type === "activity_diagram") {
+        await revertDiagram(ActivityDiagram);
+      }
+      else if (entity_type === "sequence_diagram") {
+        await revertDiagram(SequenceDiagram);
+      }
+      // ------------------------------------------------------
+      // REQUIREMENT
+      // ------------------------------------------------------
+      else if (entity_type === "requirement") {
+        const reqs = baseVersion.requirement_model || [];
+
+        if (change_type === "added") {
+          const idx = parseInt(before_snapshot.id.replace("UC", "")) - 1;
+          reqs.splice(idx, 0, before_snapshot);
+          reqs.forEach((r, i) => (r.id = `UC${i + 1}`));
+          baseVersion.set('requirement_model',reqs);
+        }
+        else if (change_type === "updated") {
+          const updated = reqs.map(r => r.id === entity_id ? before_snapshot : r);
+          baseVersion.set('requirement_model',updated);
+        }
+        else if (change_type === "deleted") {
+          reqs.push(before_snapshot);
+          baseVersion.set('requirement_model',reqs);
+        }
+
+        baseVersion.affects_requirement = true;
+        baseVersion.updated_at = now;
+      }
+      // ======================================================
+      // 3️⃣ Commit changes
+      // ======================================================
       preview.changes.pull({ change_id: changeId });
       await preview.save({ session });
       await baseVersion.save({ session });
+
       await session.commitTransaction();
 
-      console.log(`✔ Successfully reverted change ${change._id || entityId}`);
-      return new ServiceResponse(ResponseStatus.Success, "New version created with cloned entities", null, 201);
-    } catch (error) {
+      return new ServiceResponse(
+        ResponseStatus.Success,
+        "Reverted successfully",
+        null,
+        200
+      );
+    } catch (err) {
       await session.abortTransaction();
-      console.error(`❌ Failed to revert change:`, error);
-      throw error;
+      console.error("❌ revertChange error:", err);
+      throw err;
     } finally {
-      session.endSession();
+    session.endSession();
     }
   }
+
 
   /**
    * Đánh dấu version là đang chỉnh sửa (editing)
@@ -895,10 +816,7 @@ export class VersionService {
       project.current_version = new mongoose.Types.ObjectId(parentVersionId);
       await project.save();
       await Input.deleteMany({ version_id: versionId });
-      await Output.deleteMany({ version_id: versionId });
       await Preview.deleteOne({ base_version_id: versionId });
-      await Version.deleteOne({ _id: versionId });
-      // Xoá version con
       await Version.deleteOne({ _id: versionId });
       // Xoá preview
       await preview.deleteOne();
