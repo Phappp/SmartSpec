@@ -144,7 +144,7 @@ export class UsecaseService {
 
     try {
       // Kiểm tra version tồn tại
-      let version = await Version.findById(versionId).session(session);
+      let version = await Version.findById(versionId);
       if (!version) throw new Error("Version not found");
 
       // ✅ Nếu version không phải temporary → bump trước
@@ -200,7 +200,7 @@ export class UsecaseService {
       version.updated_at = new Date();
       version.affects_requirement = true;
 
-      await version.save({ session });
+      await version.save();
 
       await this.versionService.createOrUpdatePreview(
         versionId,
@@ -274,7 +274,7 @@ export class UsecaseService {
 
     try {
       // 🔍 1. Kiểm tra version tồn tại
-      let version = await Version.findById(versionId).session(session);
+      let version = await Version.findById(versionId);
       if (!version) throw new Error("Version not found");
 
       // ✅ Nếu version không phải temporary → bump trước
@@ -341,7 +341,7 @@ export class UsecaseService {
       version.updated_at = new Date();
       version.affects_requirement = true;
 
-      await version.save({ session });
+      await version.save();
 
       await this.versionService.createOrUpdatePreview(
         versionId,
@@ -412,7 +412,7 @@ export class UsecaseService {
 
     try {
       // Kiểm tra version tồn tại
-      let version = await Version.findById(versionId).session(session);
+      let version = await Version.findById(versionId);
       if (!version) {
         throw new Error("Version not found");
       }
@@ -461,7 +461,7 @@ export class UsecaseService {
       version.updated_at = new Date();
       version.affects_requirement = true;
 
-      await version.save({ session });
+      await version.save();
 
       await this.versionService.createOrUpdatePreview(
         versionId,

@@ -36,7 +36,7 @@ export class VersionSocketService {
   /**
    * 🟩 Khi tạo version mới (bump/clone)
    */
-  emitVersionCreated(projectId: string, versionId: string, userId: string, version: any): void {
+  emitVersionBumped(projectId: string, versionId: string, userId: string, version: any): void {
     const event: VersionCreatedEvent = {
       type: 'VERSION_CREATED',
       projectId,

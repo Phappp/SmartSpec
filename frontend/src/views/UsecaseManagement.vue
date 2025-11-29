@@ -483,13 +483,18 @@ export default {
     async handleRemoteVersionBumped(event) {
       const version = event.version
       if (!version) return
-      this.toast.info(`New version created: ${version.version_number || version._id}`)
-      const exists = this.versions.find((v) => v._id === version._id)
-      if (!exists) this.versions.push(version)
+
+      // 1. Cập nhật danh sách version
+      await this.fetchProjectData(this.project._id)
+
+      // 2. Chuyển sang version mới
       this.selectedVersionId = version._id
       this.currentVersionDetails = version
-      await this.fetchProjectData(this.project._id)
-      this.$forceUpdate()
+
+      // 3. Tải lại toàn bộ dữ liệu của version mới
+      const res = await getProjectDetail(this.project._id, this.selectedVersionId)
+
+      this.toast.info(`Switched to new version: ${version.version_number || version._id}`)
     },
 
     /**
