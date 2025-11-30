@@ -6,6 +6,7 @@ import TestcaseManagement from '../views/TestcaseManagement.vue'
 import DatabaseManagement from '../views/DatabaseManagement.vue'
 import ActivityDiagramManagement from '../views/ActivityDiagramManagement.vue'
 import UmlManagement from '../views/UmlManagement.vue'
+import AICopilotView from '../views/AICopilotView.vue'
 import Login from '../pages/login.vue'
 import OauthRedirect from '../pages/OauthRedirect.vue'
 import Register from '../pages/register.vue'
@@ -61,6 +62,14 @@ const routes = [
     name: 'UmlManagement',
     component: UmlManagement,
     props: true,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/project/:id/ai-copilot',
+    name: 'AICopilot',
+    component: AICopilotView,
+    props: true,
+    beforeEnter: authGuard,
     meta: { requiresAuth: true }
   },
   { 

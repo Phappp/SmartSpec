@@ -205,6 +205,13 @@ export default {
       }
       return [
         {
+          icon: 'smart_toy',
+          title: 'AI Copilot',
+          type: 'ai-copilot',
+          action: this.openAICopilot,
+          disabled: false,
+        },
+        {
           icon: 'edit',
           title: 'Edit Project',
           type: 'edit',
@@ -472,6 +479,19 @@ export default {
 
     confirmDelete() {
       this.$emit('delete', this.project._id || this.project.id)
+      this.closeFab()
+    },
+
+    openAICopilot() {
+      const projectId = this.project._id || this.project.id
+      const versionId = this.currentVersion?._id || this.project.current_version
+      
+      // Navigate to AI Copilot page
+      this.$router.push({
+        name: 'AICopilot',
+        params: { id: projectId },
+        query: versionId ? { versionId } : {}
+      })
       this.closeFab()
     },
 

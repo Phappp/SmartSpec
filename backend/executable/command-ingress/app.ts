@@ -102,6 +102,9 @@ import { SequenceDiagramController } from "./features/uml/sequence.diagram/adapt
 import { SequenceDiagramServiceImpl } from "./features/uml/sequence.diagram/domain/service";
 import initSequenceDiagramRoute from "./features/uml/sequence.diagram/adapter/route";
 
+import { AICopilotController } from "./features/ai_copilot/adapter/controller";
+import initAICopilotRoute from "./features/ai_copilot/adapter/route";
+
 
 const app = express();
 
@@ -265,6 +268,7 @@ const createHttpServer = (redisClient: any) => {
   );
   app.use("/api/logs", initLogRoute(new LogController(new LogService())));
   app.use("/api/versions",initVersionRoute(new VersionController(new VersionService())))
+  app.use("/api/ai-copilot", initAICopilotRoute(new AICopilotController()));
   app.use(recoverMiddleware);
 
   return server;
