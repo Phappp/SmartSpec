@@ -22,8 +22,32 @@
         <!-- Changes List -->
         <div class="changes-section">
           <div class="section-header">
-            <h3>Pending Changes ({{ changes.length }})</h3>
+            <h3>Pending Changes ({{ filteredChanges.length }}/{{ changes.length }})</h3>
             <div class="section-actions">
+              <!-- Search Input -->
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="Search changes..."
+                class="search-input"
+                @input="handleSearch"
+              />
+              <!-- Filter Dropdown -->
+              <select v-model="filterType" class="filter-select" @change="handleFilter">
+                <option value="all">All Types</option>
+                <option value="requirement">Requirement</option>
+                <option value="testcase">Test Case</option>
+                <option value="database">Database</option>
+                <option value="activity_diagram">Activity Diagram</option>
+                <option value="sequence_diagram">Sequence Diagram</option>
+                <option value="usecase_diagram">Use Case Diagram</option>
+              </select>
+              <select v-model="filterChangeType" class="filter-select" @change="handleFilter">
+                <option value="all">All Changes</option>
+                <option value="added">Added</option>
+                <option value="updated">Updated</option>
+                <option value="deleted">Deleted</option>
+              </select>
               <button class="btn-refresh" @click="refreshPreview" :disabled="isLoading">
                 <span class="material-symbols-outlined">refresh</span>
                 Refresh
@@ -41,14 +65,43 @@
             <p>No pending changes</p>
           </div>
 
+          <div v-else-if="filteredChanges.length === 0" class="empty-state">
+            <span class="material-symbols-outlined">search_off</span>
+            <p>No changes match your filters</p>
+          </div>
+
           <div v-else class="changes-list">
+            <!-- Bulk Actions Bar -->
+            <div v-if="selectedChanges.length > 0" class="bulk-actions-bar">
+              <span class="bulk-info">{{ selectedChanges.length }} selected</span>
+              <button class="btn-bulk-revert" @click="bulkRevertChanges">
+                <span class="material-symbols-outlined">undo</span>
+                Revert Selected
+              </button>
+              <button class="btn-bulk-clear" @click="clearSelection">
+                <span class="material-symbols-outlined">close</span>
+                Clear
+              </button>
+            </div>
+
             <div
-              v-for="change in changes"
+              v-for="change in filteredChanges"
               :key="change.change_id"
               class="change-item"
-              :class="{ selected: selectedChangeId === change.change_id }"
+              :class="{ 
+                selected: selectedChangeId === change.change_id,
+                'bulk-selected': selectedChanges.includes(change.change_id)
+              }"
               @click="selectChange(change.change_id)"
             >
+              <!-- Bulk Selection Checkbox -->
+              <div class="bulk-checkbox" @click.stop="toggleBulkSelection(change.change_id)">
+                <input
+                  type="checkbox"
+                  :checked="selectedChanges.includes(change.change_id)"
+                  @change.stop="toggleBulkSelection(change.change_id)"
+                />
+              </div>
               <div class="change-header">
                 <span class="entity-type" :class="change.entity_type">
                   {{ formatEntityType(change.entity_type) }}
@@ -84,7 +137,7 @@
               <button class="btn-nav" @click="selectPreviousChange" :disabled="!hasPreviousChange">
                 <span class="material-symbols-outlined">chevron_left</span>
               </button>
-              <span class="nav-info"> {{ currentChangeIndex + 1 }} of {{ changes.length }} </span>
+              <span class="nav-info"> {{ currentChangeIndex + 1 }} of {{ filteredChanges.length }} </span>
               <button class="btn-nav" @click="selectNextChange" :disabled="!hasNextChange">
                 <span class="material-symbols-outlined">chevron_right</span>
               </button>
@@ -223,6 +276,12 @@ export default {
       currentVersion: null,
       toast: null,
       isApproved: false, // Flag để biết đã approve thành công
+      // Filter & Search
+      searchQuery: '',
+      filterType: 'all',
+      filterChangeType: 'all',
+      selectedChanges: [], // For bulk actions
+      refreshInterval: null, // For auto-refresh
     }
   },
   created() {
@@ -230,16 +289,16 @@ export default {
   },
   computed: {
     selectedChange() {
-      return this.changes.find((change) => change.change_id === this.selectedChangeId) || null
+      return this.filteredChanges.find((change) => change.change_id === this.selectedChangeId) || null
     },
     currentChangeIndex() {
-      return this.changes.findIndex((change) => change.change_id === this.selectedChangeId)
+      return this.filteredChanges.findIndex((change) => change.change_id === this.selectedChangeId)
     },
     hasPreviousChange() {
       return this.currentChangeIndex > 0
     },
     hasNextChange() {
-      return this.currentChangeIndex < this.changes.length - 1
+      return this.currentChangeIndex < this.filteredChanges.length - 1
     },
     nextMinorVersion() {
       if (!this.currentVersion) return '?.?'
@@ -252,8 +311,37 @@ export default {
       const major = (this.currentVersion.version_major || 1) + 1
       return `${major}.0`
     },
+    // Filtered changes based on search and filters
+    filteredChanges() {
+      let filtered = this.changes
+
+      // Filter by entity type
+      if (this.filterType !== 'all') {
+        filtered = filtered.filter(change => change.entity_type === this.filterType)
+      }
+
+      // Filter by change type
+      if (this.filterChangeType !== 'all') {
+        filtered = filtered.filter(change => change.change_type === this.filterChangeType)
+      }
+
+      // Search filter
+      if (this.searchQuery.trim()) {
+        const query = this.searchQuery.toLowerCase()
+        filtered = filtered.filter(change => {
+          const entityType = this.formatEntityType(change.entity_type).toLowerCase()
+          const changeType = this.formatChangeType(change.change_type).toLowerCase()
+          const entityId = (change.entity_id || '').toLowerCase()
+          return entityType.includes(query) || 
+                 changeType.includes(query) || 
+                 entityId.includes(query)
+        })
+      }
+
+      return filtered
+    },
   },
-  watch: {
+    watch: {
     isVisible: {
       immediate: true,
       handler(newVal) {
@@ -261,8 +349,11 @@ export default {
           // Reset flag khi mở modal mới
           this.isApproved = false
           this.loadData()
+          // Start auto-refresh every 5 seconds
+          this.startAutoRefresh()
         } else {
           // Reset khi modal đóng
+          this.stopAutoRefresh()
           this.resetModalState()
         }
       },
@@ -357,14 +448,18 @@ export default {
     selectPreviousChange() {
       if (this.hasPreviousChange) {
         const newIndex = this.currentChangeIndex - 1
-        this.selectedChangeId = this.changes[newIndex].change_id
+        if (newIndex >= 0 && newIndex < this.filteredChanges.length) {
+          this.selectedChangeId = this.filteredChanges[newIndex].change_id
+        }
       }
     },
 
     selectNextChange() {
       if (this.hasNextChange) {
         const newIndex = this.currentChangeIndex + 1
-        this.selectedChangeId = this.changes[newIndex].change_id
+        if (newIndex >= 0 && newIndex < this.filteredChanges.length) {
+          this.selectedChangeId = this.filteredChanges[newIndex].change_id
+        }
       }
     },
 
@@ -575,6 +670,92 @@ export default {
       this.projectData = null
       this.currentVersion = null
       this.isApproved = false
+      this.searchQuery = ''
+      this.filterType = 'all'
+      this.filterChangeType = 'all'
+      this.selectedChanges = []
+    },
+    // Filter & Search handlers
+    handleSearch() {
+      // Search is handled by computed property
+      // Auto-select first change if current selection is filtered out
+      if (this.selectedChangeId && !this.filteredChanges.find(c => c.change_id === this.selectedChangeId)) {
+        if (this.filteredChanges.length > 0) {
+          this.selectedChangeId = this.filteredChanges[0].change_id
+        } else {
+          this.selectedChangeId = null
+        }
+      }
+    },
+    handleFilter() {
+      // Filter is handled by computed property
+      // Auto-select first change if current selection is filtered out
+      if (this.selectedChangeId && !this.filteredChanges.find(c => c.change_id === this.selectedChangeId)) {
+        if (this.filteredChanges.length > 0) {
+          this.selectedChangeId = this.filteredChanges[0].change_id
+        } else {
+          this.selectedChangeId = null
+        }
+      }
+    },
+    // Bulk actions
+    toggleBulkSelection(changeId) {
+      const index = this.selectedChanges.indexOf(changeId)
+      if (index > -1) {
+        this.selectedChanges.splice(index, 1)
+      } else {
+        this.selectedChanges.push(changeId)
+      }
+    },
+    clearSelection() {
+      this.selectedChanges = []
+    },
+    async bulkRevertChanges() {
+      if (this.selectedChanges.length === 0) return
+
+      const count = this.selectedChanges.length
+      try {
+        const confirmMessage = `Are you sure you want to revert ${count} change(s)?`
+        if (!confirm(confirmMessage)) {
+          return
+        }
+
+        // Revert all selected changes
+        const revertPromises = this.selectedChanges.map(changeId =>
+          revertChange(this.versionId, changeId)
+        )
+
+        await Promise.all(revertPromises)
+
+        // Refresh preview
+        await this.refreshPreviewData()
+
+        // Clear selection
+        this.selectedChanges = []
+
+        this.toast.success(`Successfully reverted ${count} change(s)`)
+      } catch (error) {
+        console.error('Error reverting changes:', error)
+        this.toast.error('Failed to revert some changes')
+        // Still refresh and clear selection
+        await this.refreshPreviewData()
+        this.selectedChanges = []
+      }
+    },
+    // Auto-refresh
+    startAutoRefresh() {
+      this.stopAutoRefresh() // Clear any existing interval
+      this.refreshInterval = setInterval(() => {
+        if (this.isVisible && !this.isLoading && !this.isApproving) {
+          this.loadPreviewChanges()
+        }
+      }, 5000) // Refresh every 5 seconds
+    },
+    stopAutoRefresh() {
+      if (this.refreshInterval) {
+        clearInterval(this.refreshInterval)
+        this.refreshInterval = null
+      }
     },
 
     async closeModal() {
@@ -584,6 +765,9 @@ export default {
       })
 
       try {
+        // Stop auto-refresh
+        this.stopAutoRefresh()
+
         // 1. Emit event để component cha biết modal sắp đóng và cần refresh data
         // Chỉ emit nếu chưa approve (vì sau khi approve, preview đã bị xóa)
         if (!this.isApproved) {
@@ -607,6 +791,7 @@ export default {
       } catch (error) {
         console.error('Error closing modal:', error)
         // Vẫn phải đóng modal ngay cả khi có lỗi
+        this.stopAutoRefresh()
         this.$emit('close')
         this.resetModalState()
       }
@@ -1194,5 +1379,122 @@ export default {
     gap: 4px;
     align-items: flex-start;
   }
+}
+
+/* Search & Filter Styles */
+.search-input {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  width: 200px;
+  transition: all 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.filter-select {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-select:hover {
+  border-color: #9ca3af;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* Bulk Actions Styles */
+.bulk-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f0f8ff;
+  border-bottom: 1px solid #bee3f8;
+  margin-bottom: 8px;
+}
+
+.bulk-info {
+  font-weight: 600;
+  color: #1a365d;
+  font-size: 0.875rem;
+}
+
+.btn-bulk-revert,
+.btn-bulk-clear {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.btn-bulk-revert {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.btn-bulk-revert:hover {
+  background: #fecaca;
+}
+
+.btn-bulk-clear {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.btn-bulk-clear:hover {
+  background: #e5e7eb;
+}
+
+/* Bulk Selection Checkbox */
+.bulk-checkbox {
+  display: flex;
+  align-items: center;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.bulk-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.change-item.bulk-selected {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.change-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 </style>

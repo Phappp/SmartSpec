@@ -76,12 +76,12 @@
                     </div>
                   </div>
 
-                  <!-- Rollback Button - Only show for versions that can be rolled back -->
+                  <!-- Rollback Button - Only show for current version that can be rolled back -->
                   <button
-                    v-if="isOwner && version.parent_version_id && version._id !== selectedVersionId"
+                    v-if="isOwner && version.parent_version_id && version._id === selectedVersionId"
                     class="rollback-btn"
                     @click.stop="handleRollback(version)"
-                    title="Rollback to this version"
+                    title="Rollback to parent version"
                   >
                     <span class="material-symbols-outlined">undo</span>
                   </button>
@@ -235,10 +235,10 @@ export default {
   },
   computed: {
     // Lọc bỏ version tạm thời, chỉ hiển thị version đã được approve
+    // Deduplicate theo version_number (ưu tiên version mới nhất hoặc current version)
     approvedVersions() {
-      const approved = filterApprovedVersions(this.versions)
-      // Sắp xếp theo thời gian tạo giảm dần (mới nhất lên đầu)
-      return approved.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      const currentVersionId = this.project?.current_version?._id || this.project?.current_version
+      return filterApprovedVersions(this.versions, currentVersionId)
     },
     hasFailedVersion() {
       return this.approvedVersions.some((version) => version.status === 'failed')
@@ -393,18 +393,34 @@ export default {
     async handleRollback(version) {
       if (!this.isComponentMounted) return
 
+      // ✅ Chỉ cho phép rollback current version
+      if (version._id !== this.selectedVersionId) {
+        this.toast.error('Can only rollback the current version')
+        return
+      }
+
+      // ✅ Kiểm tra có parent version không
+      if (!version.parent_version_id) {
+        this.toast.error('This version does not have a parent version to rollback to')
+        return
+      }
+
       try {
         // Xác nhận rollback
-        const confirmMessage = `Are you sure you want to rollback to version ${version.version_number}? This will revert all changes made after this version.`
+        const confirmMessage = `Are you sure you want to rollback from version ${version.version_number}? This will revert all changes and switch to the parent version.`
         if (!confirm(confirmMessage)) {
           return
         }
 
-        // Gọi API rollback
+        // Gọi API rollback (rollback current version về parent)
         const response = await rollbackVersion(version._id)
 
         if (response.data && response.data.status === 'Success') {
-          this.toast.success(`Successfully rolled back to version ${version.version_number}`)
+          // Tìm parent version để hiển thị
+          const parentVersion = this.versions.find(v => v._id === version.parent_version_id)
+          const parentVersionNumber = parentVersion?.version_number || version.parent_version_id
+
+          this.toast.success(`Successfully rolled back to parent version ${parentVersionNumber}`)
 
           // Đóng dropdown
           this.isOpen = false
@@ -412,11 +428,11 @@ export default {
           // Fetch lại danh sách versions
           await this.fetchVersions()
 
-          // Set current version về version đã rollback
-          await setCurrentVersion(this.project._id, version._id)
-
+          // Backend đã tự động set current_version về parent, chỉ cần refresh
           // Emit event để component cha cập nhật
-          this.$emit('version-selected', version._id)
+          if (parentVersion) {
+            this.$emit('version-selected', parentVersion._id)
+          }
 
           // Refresh toàn bộ dữ liệu project
           this.$emit('version-rollback-completed')
@@ -425,7 +441,8 @@ export default {
         }
       } catch (error) {
         console.error('Error rolling back version:', error)
-        this.toast.error(error.message || 'Failed to rollback version')
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to rollback version'
+        this.toast.error(errorMessage)
       }
     },
     goBack() {

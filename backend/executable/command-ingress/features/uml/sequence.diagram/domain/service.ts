@@ -11,8 +11,10 @@ import { UserServiceImpl } from "../../../user/domain/service"; // Import servic
 import Project from "../../../../../../internal/model/project";
 import Version from "../../../../../../internal/model/version";
 import SequenceDiagram from "../../../../../../internal/model/sequence_diagram";
+import { VersionService } from "../../../version/domain/service";
 export class SequenceDiagramServiceImpl implements SequenceDiagramService {
   private geminiService: SequenceDiagramGeminiService;
+  private versionService = new VersionService();
 
   constructor() {
     this.geminiService = new SequenceDiagramGeminiService();
@@ -102,6 +104,21 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
     });
 
     const savedDocument = await newSequenceDiagram.save();
+
+    // ✅ Tạo preview change cho sequence diagram mới
+    if (userId && versionId) {
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "sequence_diagram",
+          entity_id: savedDocument._id.toString(),
+          change_type: "added",
+          before_snapshot: null,
+          after_snapshot: savedDocument.toObject()
+        }
+      );
+    }
 
     return savedDocument.toObject({ getters: true }) as SequenceDiagramResponse;
   }
@@ -202,7 +219,27 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
       );
     }
 
+    // Lưu snapshot trước khi xóa
+    const beforeSnapshot = sequenceDiagram.toObject();
+
     await SequenceDiagram.findByIdAndDelete(sequenceId);
+
+    // ✅ Tạo preview change cho sequence diagram đã xóa
+    const versionId = sequenceDiagram.version_id?.toString();
+    if (versionId && subId) {
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        subId,
+        {
+          entity_type: "sequence_diagram",
+          entity_id: sequenceId,
+          change_type: "deleted",
+          before_snapshot: beforeSnapshot,
+          after_snapshot: null
+        }
+      );
+    }
+
     return sequenceDiagram.toObject({
       getters: true,
     }) as SequenceDiagramResponse;

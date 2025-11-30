@@ -71,14 +71,46 @@ export function isOwner(project) {
 
 /**
  * Lọc bỏ các version tạm thời (chưa được approve)
+ * Và deduplicate theo version_number (ưu tiên version mới nhất)
  * @param {Array} versions - Danh sách versions
- * @returns {Array} - Danh sách versions đã được approve
+ * @param {string} currentVersionId - ID của current version (optional, để ưu tiên)
+ * @returns {Array} - Danh sách versions đã được approve và deduplicated
  */
-export function filterApprovedVersions(versions) {
+export function filterApprovedVersions(versions, currentVersionId = null) {
   if (!versions || versions.length === 0) return []
   
-  // Chỉ lấy các version đã được approve (version_temporary = false hoặc không có field này)
-  return versions.filter((v) => v.version_temporary === false || v.version_temporary === undefined)
+  // 1️⃣ Chỉ lấy các version đã được approve (version_temporary = false hoặc không có field này)
+  const approved = versions.filter((v) => v.version_temporary === false || v.version_temporary === undefined)
+  
+  // 2️⃣ Deduplicate theo version_number
+  // Nhóm theo version_number và giữ lại version mới nhất hoặc version trùng với currentVersionId
+  const versionMap = new Map()
+  
+  approved.forEach((version) => {
+    const versionNumber = version.version_number || `${version.version_major}.${version.version_minor}`
+    const existing = versionMap.get(versionNumber)
+    
+    if (!existing) {
+      // Chưa có version với số này → thêm vào
+      versionMap.set(versionNumber, version)
+    } else {
+      // Đã có version với số này → so sánh và giữ lại version phù hợp
+      const shouldReplace = 
+        // Ưu tiên version trùng với currentVersionId
+        (currentVersionId && version._id === currentVersionId && existing._id !== currentVersionId) ||
+        // Nếu không có currentVersionId, ưu tiên version mới nhất (created_at)
+        (!currentVersionId && new Date(version.created_at) > new Date(existing.created_at))
+      
+      if (shouldReplace) {
+        versionMap.set(versionNumber, version)
+      }
+    }
+  })
+  
+  // 3️⃣ Chuyển Map về Array và sắp xếp theo created_at giảm dần
+  return Array.from(versionMap.values()).sort((a, b) => {
+    return new Date(b.created_at) - new Date(a.created_at)
+  })
 }
 
 /**
@@ -91,8 +123,8 @@ export function filterApprovedVersions(versions) {
 export function getSelectedOrDefaultVersion(projectId, versions, currentVersionId) {
   if (!versions || versions.length === 0) return null
 
-  // Lọc bỏ version tạm thời
-  const approvedVersions = filterApprovedVersions(versions)
+  // Lọc bỏ version tạm thời và deduplicate (ưu tiên currentVersionId nếu có)
+  const approvedVersions = filterApprovedVersions(versions, currentVersionId)
   if (approvedVersions.length === 0) return null
 
   // Ưu tiên: saved version > current version > first approved version

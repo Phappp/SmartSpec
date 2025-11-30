@@ -25,9 +25,12 @@ const previewChangeSchema = new Schema({
 }, { _id: false });
 
 // === Cấu trúc người phê duyệt ===
+// Note: role trong approver có thể là "owner" hoặc "member" (đại diện cho editor)
+// Project members có roles: "owner", "editor", "viewer"
+// Mapping: owner -> owner, editor -> member
 const approverSchema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: "users", required: true },
-  role: { type: String, enum: ["owner", "member"], required: true },
+  role: { type: String, enum: ["owner", "member"], required: true }, // "member" = editor trong project
   approved_at: { type: Date, default: null },
   status: { type: String, enum: ["pending", "approved", "rejected","rollback"], default: "pending" },
   comment: { type: String, default: "" }

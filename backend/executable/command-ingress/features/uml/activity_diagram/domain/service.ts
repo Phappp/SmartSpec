@@ -5,11 +5,13 @@ import { ActivityCoreService } from './ActivityCoreService';
 import { ActivityGeminiService } from './ActivityGeminiService';
 import VersionModel from '../../../../../../internal/model/version';
 import Usecase from '../../../../../../internal/model/usecase';
+import { VersionService } from '../../../version/domain/service';
 import sharp from 'sharp';
 
 export class ActivityDiagramService {
   private core = new ActivityCoreService();
   private ai = new ActivityGeminiService();
+  private versionService = new VersionService();
 
   public async generateFromUsecase(requirementId: string, language: string, versionId?: string, userId?: string) {
     if (!versionId) throw new Error('versionId là bắt buộc để lấy requirement model');
@@ -78,7 +80,7 @@ export class ActivityDiagramService {
     const edges = generated?.edges || [{ from: 'n_start', to: 'n_end' }];
     const diagram_svg = this.core.renderSvg({ name, nodes: nodes as any, edges: edges as any });
 
-    return await ActivityDiagramModel.create({
+    const newDiagram = await ActivityDiagramModel.create({
       uml_id: uml._id.toString(),
       name,
       description: generated?.description || 'Generated from requirement',
@@ -88,6 +90,23 @@ export class ActivityDiagramService {
       diagram_svg,
       userId,
     } as any);
+
+    // ✅ Tạo preview change cho activity diagram mới
+    if (userId && versionId) {
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "activity_diagram",
+          entity_id: newDiagram._id.toString(),
+          change_type: "added",
+          before_snapshot: null,
+          after_snapshot: newDiagram.toObject()
+        }
+      );
+    }
+
+    return newDiagram;
   }
 
   public async generateFromActor(versionId: string, actor: string, language: string, userId?: string) {
@@ -121,7 +140,7 @@ export class ActivityDiagramService {
     const edges = generated?.edges || [{ from: 'n_start', to: 'n_end' }];
     const diagram_svg = this.core.renderSvg({ name, nodes: nodes as any, edges: edges as any });
 
-    return await ActivityDiagramModel.create({
+    const newDiagram = await ActivityDiagramModel.create({
       uml_id: uml._id.toString(),
       name,
       description: generated?.description || 'Generated from actor requirements',
@@ -131,6 +150,23 @@ export class ActivityDiagramService {
       diagram_svg,
       userId,
     } as any);
+
+    // ✅ Tạo preview change cho activity diagram mới
+    if (userId && versionId) {
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "activity_diagram",
+          entity_id: newDiagram._id.toString(),
+          change_type: "added",
+          before_snapshot: null,
+          after_snapshot: newDiagram.toObject()
+        }
+      );
+    }
+
+    return newDiagram;
   }
 
 
@@ -236,10 +272,31 @@ export class ActivityDiagramService {
       }
     }
 
+    // Lấy versionId từ UML để tạo preview
+    const firstUml = umls[0];
+    const versionId = firstUml?.version_id?.toString();
+
     // Xóa khỏi database sau khi đã xác thực quyền
     const result = await ActivityDiagramModel.deleteMany({
       _id: { $in: ids.map(i => new Types.ObjectId(i)) }
     });
+
+    // ✅ Tạo preview change cho mỗi diagram đã xóa
+    if (versionId && userId && result.deletedCount > 0) {
+      for (const diagram of diagrams) {
+        await this.versionService.createOrUpdatePreview(
+          versionId,
+          userId,
+          {
+            entity_type: "activity_diagram",
+            entity_id: diagram._id.toString(),
+            change_type: "deleted",
+            before_snapshot: diagram,
+            after_snapshot: null
+          }
+        );
+      }
+    }
 
     return { deletedCount: result.deletedCount || 0 };
   }

@@ -9,9 +9,11 @@ import {
   UseCaseDiagramService, // Giữ lại interface của bạn
 } from "../types";
 import { UserServiceImpl } from "../../../user/domain/service"; // Import service của bạn
+import { VersionService } from "../../../version/domain/service";
 import mongoose from "mongoose";
 export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
   private geminiService: UsecaseDiagramGeminiService;
+  private versionService = new VersionService();
 
   constructor() {
     this.geminiService = new UsecaseDiagramGeminiService();
@@ -68,6 +70,21 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     });
 
     const savedDocument = await newUsecaseDiagram.save();
+
+    // ✅ Tạo preview change cho usecase diagram mới
+    if (userId && versionId) {
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "usecase_diagram",
+          entity_id: savedDocument._id.toString(),
+          change_type: "added",
+          before_snapshot: null,
+          after_snapshot: savedDocument.toObject()
+        }
+      );
+    }
 
     return savedDocument.toObject({ getters: true }) as UseCaseDiagramResponse;
   }
@@ -469,11 +486,30 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       throw new Error("Only owner or editor can delete usecase diagrams");
     }
 
+    // Lưu snapshot trước khi xóa
+    const beforeSnapshot = ucd.toObject();
+    const versionId = ucd.version_id?.toString();
+
     // Thực hiện xóa
     const result = await UsecaseDiagramSchema.deleteOne({ _id: ucId });
 
     if (result.deletedCount === 0) {
       throw new Error("Failed to delete Usecase Diagram");
+    }
+
+    // ✅ Tạo preview change cho usecase diagram đã xóa
+    if (versionId && userId) {
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "usecase_diagram",
+          entity_id: ucId,
+          change_type: "deleted",
+          before_snapshot: beforeSnapshot,
+          after_snapshot: null
+        }
+      );
     }
   }
 }

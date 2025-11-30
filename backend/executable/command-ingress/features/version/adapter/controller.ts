@@ -153,14 +153,14 @@ export class VersionController extends BaseController {
         return;
       }
 
-      const { previewId } = req.params;
+      const { versionId } = req.params;
       const changeType = (req.query.changeType as "major" | "minor") || (req.body.changeType as "major" | "minor") || "minor";
 
-      if (!previewId) {
-        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing previewId", null, 400), res);
+      if (!versionId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Missing versionId", null, 400), res);
         return;
       }
-      const result = await this.service.bumpVersion(previewId, userId, changeType);
+      const result = await this.service.bumpVersion(versionId, userId, changeType);
       handleServiceResponse(result, res);
     });
   };

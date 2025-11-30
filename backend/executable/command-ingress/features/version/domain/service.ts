@@ -52,12 +52,16 @@ export class VersionService {
         return new ServiceResponse(ResponseStatus.Success, "Preview updated successfully", preview, 200);
       }
       const project = await Project.findById(version.project_id).lean();
+      if (!project) {
+        return new ServiceResponse(ResponseStatus.Failed, "Project not found", null, 404);
+      }
       // 4️⃣ Lấy danh sách approvers từ project (chỉ owner và editor)
+      // Map: owner -> owner, editor -> member (theo approver schema)
       const approvers = (project.members ?? [])
-        .filter((m: any) => ["owner", "editor"].includes(m.role))
+        .filter((m: any) => ["owner", "editor"].includes(m.role) && m.status === "accepted")
         .map((m: any) => ({
           user_id: m.user_id,
-          role: m.role,
+          role: m.role === "owner" ? "owner" : "member", // Map editor -> member
           status: "pending",
           comment: null,
           approved_at: null,
@@ -507,7 +511,20 @@ export class VersionService {
   async deleteVersion(versionId: string, userId: string): Promise<ServiceResponse<any>> {
     try {
       const version = await Version.findById(versionId);
-      if (!version)return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+      if (!version) {
+        return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+      }
+
+      // ✅ Kiểm tra version có đang là current_version không
+      const project = await Project.findById(version.project_id);
+      if (project && project.current_version?.toString() === versionId) {
+        return new ServiceResponse(
+          ResponseStatus.Failed,
+          "Cannot delete the current version. Please switch to another version first.",
+          null,
+          400
+        );
+      }
 
       await Promise.all([
         Input.deleteMany({ version_id: versionId }),
@@ -519,14 +536,9 @@ export class VersionService {
         Preview.deleteMany({base_version_id:versionId}),
       ]);
 
-      const project = await Project.findById(version.project_id);
-      if (project && project.current_version?.toString() === versionId.toString()) {
-        const latestVersion = await Version.findOne({ project_id: project._id }).sort({ created_at: -1 });
-        project.current_version = latestVersion?._id || null;
-        await project.save();
-      }
+      // Cleanup đã được xử lý ở trên, không cần xử lý lại current_version
       await Version.findByIdAndDelete(versionId);
-      versionSocketService.emitVersionDeleted(project._id.toString(), versionId, userId);
+      versionSocketService.emitVersionDeleted(version.project_id.toString(), versionId, userId);
 
       return new ServiceResponse(ResponseStatus.Success, "Version deleted successfully", { deleted: versionId }, 200);
     } catch (error: any) {
@@ -737,17 +749,30 @@ export class VersionService {
   /**
    * Đánh dấu version là đang chỉnh sửa (editing)
    * Chỉ cho phép 1 version editing cùng lúc trong project
+   * Sử dụng optimistic locking để tránh race condition
    */
   public async markEditing(versionId: string, userId: string): Promise<ServiceResponse<any>> {
     try {
       const version = await Version.findById(versionId);
-      if (!version) return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+      if (!version) {
+        return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+      }
+
+      // Kiểm tra version có bị locked không
+      if (version.edit_flag === "locked") {
+        return new ServiceResponse(
+          ResponseStatus.Failed,
+          "Version is locked and cannot be edited",
+          null,
+          403
+        );
+      }
 
       // Nếu đang là "editing" → toggle về "none"
       if (version.edit_flag === "editing") {
         version.edit_flag = "none";
       } else {
-        // Xoá cờ "editing" ở các version khác cùng project
+        // Xoá cờ "editing" ở các version khác cùng project (atomic operation)
         await Version.updateMany(
           { project_id: version.project_id, edit_flag: "editing", _id: { $ne: versionId } },
           { $set: { edit_flag: "none" } }
@@ -806,13 +831,32 @@ export class VersionService {
       if (!version) {
         return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
       }
+
+      // ✅ Kiểm tra version có đang là current_version không
+      const project = await Project.findById(version.project_id);
+      if (!project) {
+        return new ServiceResponse(ResponseStatus.Failed, "Project not found", null, 404);
+      }
+      
+      if (project.current_version?.toString() !== versionId) {
+        return new ServiceResponse(
+          ResponseStatus.Failed,
+          "Can only rollback the current version",
+          null,
+          400
+        );
+      }
+
       const parentVersionId = version.parent_version_id;
+      if (!parentVersionId) {
+        return new ServiceResponse(ResponseStatus.Failed, "Version does not have a parent version to rollback to", null, 400);
+      }
       const parentVersion = await Version.findById(parentVersionId);
       if (!parentVersion) {
         return new ServiceResponse(ResponseStatus.Failed,"Parent version not found", null,404);
       }
       // 🔍 2. Tìm preview gắn với version này
-      const preview = await Preview.findOne({ target_version_id: versionId });
+      const preview = await Preview.findOne({ base_version_id: versionId });
       if (!preview) {
         return new ServiceResponse(ResponseStatus.Failed,"Preview not found",null,404);
       }
@@ -834,19 +878,25 @@ export class VersionService {
       // ================================
       // 🎯 6️⃣ TẤT CẢ APPROVERS ĐÃ ROLLBACK → THỰC HIỆN ROLLBACK VERSION
       // ================================
-      const project = await Project.findById(version.project_id);
-      if (!project) {
-        return new ServiceResponse(ResponseStatus.Failed, "Project not found", null, 404);
-      }
+      // Project đã được lấy ở trên, không cần query lại
       const oldVersionId = project.current_version?.toString() || "";
       // Set current version về parent
       project.current_version = new mongoose.Types.ObjectId(parentVersionId);
       await project.save();
-      await Input.deleteMany({ version_id: versionId });
-      await Preview.deleteOne({ base_version_id: versionId });
+      
+      // Xóa tất cả entities liên quan (giống deleteVersion)
+      await Promise.all([
+        Input.deleteMany({ version_id: versionId }),
+        Database.deleteMany({ version_id: versionId }),
+        Testcase.deleteMany({ version_id: versionId }),
+        Usecase.deleteMany({ version_id: versionId }),
+        UsecaseDiagram.deleteMany({ version_id: versionId }),
+        ActivityDiagram.deleteMany({ version_id: versionId }),
+        SequenceDiagram.deleteMany({ version_id: versionId }),
+        Preview.deleteMany({ base_version_id: versionId }),
+      ]);
+      
       await Version.deleteOne({ _id: versionId });
-      // Xoá preview
-      await preview.deleteOne();
       // Emit
       versionSocketService.emitVersionSwitched(
         project._id.toString(),
@@ -855,8 +905,9 @@ export class VersionService {
         oldVersionId
       );
       return new ServiceResponse(ResponseStatus.Success,"Rollback completed by all approvers",null,200);
-    } catch (err) {
-      throw err;
+    } catch (error: any) {
+      console.error("Error in rollbackVersion:", error);
+      return new ServiceResponse(ResponseStatus.Failed, error.message || "Rollback failed", null, 500);
     }
   }
 }
