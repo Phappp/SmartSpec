@@ -28,7 +28,7 @@ export class InputService {
 
         let newFilesCount = 0;
         let newTextProvided = false;
-        const newInputs: any[] = [];
+        let newInputs: any[] = [];
         // --- xử lý files ---
         if (files && files.length > 0) {
             const nonDuplicateFiles = files.filter((file) => {
@@ -39,8 +39,10 @@ export class InputService {
             if (nonDuplicateFiles.length > 0) {
                 console.log(`Starting file extraction for ${nonDuplicateFiles.length} new files...`);
                 const savedInputs = await this.extractor.extractFiles(nonDuplicateFiles, projectId, versionId);
+                console.log("Input when save ",savedInputs);
                 newFilesCount = nonDuplicateFiles.length;
                 newInputs.push(...savedInputs);
+                console.log("Input when add newInput",newInputs);
             } else {
                 console.log("All files are duplicates, skipping extraction");
             }

@@ -10,6 +10,7 @@
         :current-stage="currentStage"
         :active-users="activeUsers"
         @version-selected="handleVersionSelect"
+        @version-rollback-completed="handleVersionRollbackCompleted"
         @retry-analysis="handleRetry"
         @go-back="goBack"
         @show-sharing="showSharingModal = true"
@@ -143,6 +144,13 @@ import AddInputModal from '@/components/usecase/AddInputModal.vue'
 import IncrementalAnalysis from '@/components/usecase/IncrementalAnalysis.vue'
 import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
 import { socket } from '@/utils/socket'
+import eventBus from '@/utils/eventBus'
+import {
+  saveSelectedVersion,
+  getSelectedOrDefaultVersion,
+  filterApprovedVersions,
+  isOwner as checkIsOwner,
+} from '@/utils/versionSync'
 
 export default {
   name: 'ProjectDetailView',
@@ -297,12 +305,18 @@ export default {
       this.initSocketConnection(projectId)
     }
     document.addEventListener('click', this.handleClickOutside)
+
+    // Listen for version-approved event from PreviewModal
+    eventBus.on('version-approved', this.handleVersionApproved)
   },
 
   beforeUnmount() {
     this.cleanupPolling()
     this.cleanupSocketConnection()
     document.removeEventListener('click', this.handleClickOutside)
+
+    // Remove event listener
+    eventBus.off('version-approved', this.handleVersionApproved)
   },
   watch: {
     activeUsers: {
@@ -469,13 +483,87 @@ export default {
     async handleRemoteVersionBumped(event) {
       const version = event.version
       if (!version) return
-      this.toast.info(`New version created: ${version.version_number || version._id}`)
-      const exists = this.versions.find((v) => v._id === version._id)
-      if (!exists) this.versions.push(version)
+
+      // 1. Cập nhật danh sách version
+      await this.fetchProjectData(this.project._id)
+
+      // 2. Chuyển sang version mới
       this.selectedVersionId = version._id
       this.currentVersionDetails = version
-      await this.fetchProjectData(this.project._id)
-      this.$forceUpdate()
+
+      // 3. Tải lại toàn bộ dữ liệu của version mới
+      const res = await getProjectDetail(this.project._id, this.selectedVersionId)
+
+      this.toast.info(`Switched to new version: ${version.version_number || version._id}`)
+    },
+
+    /**
+     * Xử lý khi version được approve thành công từ PreviewModal
+     */
+    async handleVersionApproved(event) {
+      // Chỉ xử lý nếu là project hiện tại
+      if (!event || event.projectId !== this.project._id) {
+        return
+      }
+
+      console.log('✅ Version approved event received:', event)
+
+      const { versionId, version, newVersion } = event
+
+      if (!versionId) {
+        console.warn('⚠️ Invalid version-approved event: missing versionId', event)
+        return
+      }
+
+      try {
+        // Đợi một chút để backend cập nhật xong
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        // Refresh project data để lấy version mới
+        await this.fetchProjectData(this.project._id)
+
+        // Đảm bảo version mới có trong danh sách (thêm vào nếu chưa có)
+        let newVersionObj = this.versions.find((v) => v._id === versionId)
+
+        if (!newVersionObj) {
+          // Nếu chưa có trong danh sách, thử fetch lại một lần nữa
+          console.log('🔄 Version not found, fetching project data again...')
+          await new Promise((resolve) => setTimeout(resolve, 500))
+          await this.fetchProjectData(this.project._id)
+          newVersionObj = this.versions.find((v) => v._id === versionId)
+        }
+
+        // Nếu vẫn chưa có và có version object từ event, thêm vào
+        if (!newVersionObj && version) {
+          // Chỉ thêm nếu version đã được approve (version_temporary = false)
+          if (version.version_temporary === false || version.version_temporary === undefined) {
+            this.versions.push(version)
+            newVersionObj = version
+            console.log('✅ Added new approved version to list:', versionId)
+          }
+        }
+
+        // Force set selectedVersionId ngay cả khi chưa có trong danh sách
+        // Vì version đã được approve rồi, nên chắc chắn sẽ có
+        this.selectedVersionId = versionId
+        if (newVersionObj) {
+          this.currentVersionDetails = newVersionObj
+        }
+
+        // Lưu vào localStorage để đồng bộ với các trang khác
+        saveSelectedVersion(this.project._id, versionId)
+
+        // Refresh use cases với version mới
+        await this.fetchUseCases()
+
+        // Thông báo cho user
+        this.toast.success(`Switched to approved version: ${newVersion || versionId}`)
+
+        this.$forceUpdate()
+      } catch (error) {
+        console.error('❌ Error handling version-approved event:', error)
+        this.toast.error('Failed to switch to approved version')
+      }
     },
 
     async handleSwitchedVersion(event) {
@@ -686,6 +774,10 @@ export default {
         params: { id: this.project._id },
       })
     },
+    // Trong methods của UsecaseManagement.vue
+    handleVersionRollbackCompleted() {
+      this.fetchProjectData(this.project._id)
+    },
 
     // ========== DATA FETCHING ==========
     async fetchProjectData(projectId) {
@@ -694,7 +786,11 @@ export default {
         const { data } = await getProjectDetail(projectId, userId)
         const result = data.data || data
         this.project = result.project
-        this.versions = result.versions
+
+        // Lọc bỏ version tạm thời, chỉ giữ version đã được approve
+        const allVersions = result.versions || []
+        this.versions = filterApprovedVersions(allVersions)
+
         this.inputs = result.inputs
 
         this.currentVersionDetails = result.current_version || null
@@ -703,10 +799,17 @@ export default {
           ? this.currentVersionDetails.requirement_model
           : []
 
-        if (this.currentVersionDetails) {
-          this.selectedVersionId = this.currentVersionDetails._id
-        } else if (this.versions.length > 0) {
-          this.selectedVersionId = this.versions[0]._id
+        // Sử dụng version sync utility để lấy selected version
+        const currentVersionId = this.currentVersionDetails?._id
+        this.selectedVersionId = getSelectedOrDefaultVersion(
+          this.project._id,
+          this.versions,
+          currentVersionId
+        )
+
+        // Lưu selected version vào localStorage
+        if (this.selectedVersionId) {
+          saveSelectedVersion(this.project._id, this.selectedVersionId)
         }
         this.checkConflictsOnLoad()
         this.checkUnprocessedInputs()
@@ -783,6 +886,12 @@ export default {
         const response = await usecaseApi.createUsecase(this.selectedVersionId, payload)
 
         if (response.data && response.data.status === 'Success') {
+          // ✅ Cập nhật selectedVersionId nếu có version mới được bump
+          if (response.data.data?.newVersionId) {
+            this.selectedVersionId = response.data.data.newVersionId
+            saveSelectedVersion(this.project._id, this.selectedVersionId)
+            console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
+          }
           this.toast.success('Use case created successfully')
           await this.fetchUseCases()
           await this.fetchProjectData(this.project._id)
@@ -812,6 +921,12 @@ export default {
         const response = await usecaseApi.updateUsecase(this.selectedVersionId, usecaseId, data)
 
         if (response.data.status === 'Success') {
+          // ✅ Cập nhật selectedVersionId nếu có version mới được bump
+          if (response.data.data?.newVersionId) {
+            this.selectedVersionId = response.data.data.newVersionId
+            saveSelectedVersion(this.project._id, this.selectedVersionId)
+            console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
+          }
           this.toast.success('Use case updated successfully')
           await this.fetchUseCases()
           await this.fetchProjectData(this.project._id)
@@ -835,6 +950,12 @@ export default {
         const response = await usecaseApi.deleteUsecase(this.selectedVersionId, usecaseId)
 
         if (response.data.status === 'Success') {
+          // ✅ Cập nhật selectedVersionId nếu có version mới được bump
+          if (response.data.data?.newVersionId) {
+            this.selectedVersionId = response.data.data.newVersionId
+            saveSelectedVersion(this.project._id, this.selectedVersionId)
+            console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
+          }
           this.toast.success('Use case deleted successfully')
           await this.fetchProjectData(this.project._id)
         } else {
@@ -1029,6 +1150,12 @@ export default {
           return
         }
 
+        // Chỉ Owner mới được phép select version
+        if (!checkIsOwner(this.project)) {
+          this.toast.warning('Only project owner can switch versions')
+          return
+        }
+
         const res = await switchCurrentVersion(this.project._id, versionId)
 
         if (!res?.data) throw new Error('No response from server')
@@ -1036,7 +1163,24 @@ export default {
           throw new Error(res.data.message || 'Failed to switch version')
         }
 
+        const oldVersionId = this.selectedVersionId
         this.selectedVersionId = versionId
+        // Lưu vào localStorage để đồng bộ giữa các trang
+        saveSelectedVersion(this.project._id, versionId)
+
+        // Emit socket event để các thành viên khác biết version đã được switch
+        if (socket && socket.connected) {
+          const userId = localStorage.getItem('userId')
+          socket.emit('version_event', {
+            type: 'VERSION_SWITCHED',
+            projectId: this.project._id,
+            userId: userId,
+            toVersionId: versionId,
+            fromVersionId: oldVersionId,
+            timestamp: new Date(),
+          })
+          console.log('📡 Emitted VERSION_SWITCHED socket event')
+        }
 
         await this.fetchProjectData(this.project._id)
         this.$forceUpdate()
@@ -1276,6 +1420,12 @@ export default {
         const [_, response] = await Promise.all([minLoadingTime, apiCall])
 
         if (response.data && response.data.status === 'Success') {
+          // ✅ Cập nhật selectedVersionId nếu có version mới được bump
+          if (response.data.data?.newVersionId) {
+            this.selectedVersionId = response.data.data.newVersionId
+            saveSelectedVersion(this.project._id, this.selectedVersionId)
+            console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
+          }
           this.toast.success('Input added successfully!')
           this.showAddInputModal = false
           await this.fetchProjectData(this.project._id)
@@ -1311,6 +1461,12 @@ export default {
 
         const response = await deleteSpecificInput(versionId, inputId)
         if (response.data?.status === 'Success') {
+          // ✅ Cập nhật selectedVersionId nếu có version mới được bump
+          if (response.data.data?.newVersionId) {
+            this.selectedVersionId = response.data.data.newVersionId
+            saveSelectedVersion(this.project._id, this.selectedVersionId)
+            console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
+          }
           this.toast.success('Input deleted successfully!')
           await this.fetchProjectData(this.project._id)
         } else {

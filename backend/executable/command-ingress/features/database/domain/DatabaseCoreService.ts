@@ -144,7 +144,7 @@ export class DatabaseCoreService {
             if (dbMap && dbMap.has(databaseId)) {
                 databaseId = dbMap.get(databaseId).toString();
             } else {
-             return new ServiceResponse(ResponseStatus.Failed,"Database no longer exists in new version after bump",null,404);
+                throw new Error("Database no longer exists in new version after bump");
             }
         }
         if (updateData.tables) {
@@ -161,14 +161,14 @@ export class DatabaseCoreService {
         if (result.matchedCount === 0) {
             throw new Error("Database not found");
         }
-        const updatedDb = await DatabaseModel.findById(databaseId).lean(); 
+        const updatedDbLean = await DatabaseModel.findById(databaseId).lean(); 
         // 6️⃣ GHI PREVIEW
         const changePayload: PreviewChangeDto = {
             entity_type: "database",
             change_type: "updated",
             entity_id: databaseId,
             before_snapshot: beforeUpdate,
-            after_snapshot: updatedDb
+            after_snapshot: updatedDbLean
         };
 
         await this.versionService.createOrUpdatePreview(
@@ -192,11 +192,23 @@ export class DatabaseCoreService {
             level: "info",
             details: {
                 before: beforeUpdate,
-                after: updatedDb,
+                after: updatedDbLean,
                 message: `${username} updated database ${databaseId} on version ${version.version_number}`
             }
         });
-        return await DatabaseModel.findById(databaseId);
+        
+        // Get full database document (not lean) để return
+        const updatedDb = await DatabaseModel.findById(databaseId);
+        if (!updatedDb) {
+            throw new Error("Database not found after update");
+        }
+        
+        // Return cả database và version info để frontend có thể cập nhật selectedVersionId
+        return {
+            database: updatedDb,
+            version: version,
+            newVersionId: version._id.toString()
+        };
     }
 
     /**
@@ -233,7 +245,7 @@ export class DatabaseCoreService {
             if (dbMap && dbMap.has(databaseId)) {
                 databaseId = dbMap.get(databaseId).toString();
             } else {
-             return new ServiceResponse(ResponseStatus.Failed,"Database no longer exists in new version after bump",null,404);
+                throw new Error("Database no longer exists in new version after bump");
             }
         }
 
@@ -275,7 +287,12 @@ export class DatabaseCoreService {
             }
         });
 
-        return deletedDb;
+        // Return cả deletedDb và version info để frontend có thể cập nhật selectedVersionId
+        return {
+            database: deletedDb,
+            version: version,
+            newVersionId: version._id.toString()
+        };
     }
 
     /**

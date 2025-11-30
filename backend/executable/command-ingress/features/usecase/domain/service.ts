@@ -144,7 +144,7 @@ export class UsecaseService {
 
     try {
       // Kiểm tra version tồn tại
-      let version = await Version.findById(versionId).session(session);
+      let version = await Version.findById(versionId);
       if (!version) throw new Error("Version not found");
 
       // ✅ Nếu version không phải temporary → bump trước
@@ -200,7 +200,7 @@ export class UsecaseService {
       version.updated_at = new Date();
       version.affects_requirement = true;
 
-      await version.save({ session });
+      await version.save();
 
       await this.versionService.createOrUpdatePreview(
         versionId,
@@ -247,7 +247,11 @@ export class UsecaseService {
       return new ServiceResponse(
         ResponseStatus.Success,
         'Usecase added successfully',
-        newUsecase,
+        {
+          usecase: newUsecase,
+          version: version,
+          newVersionId: versionId
+        },
         201
       );
 
@@ -274,7 +278,7 @@ export class UsecaseService {
 
     try {
       // 🔍 1. Kiểm tra version tồn tại
-      let version = await Version.findById(versionId).session(session);
+      let version = await Version.findById(versionId);
       if (!version) throw new Error("Version not found");
 
       // ✅ Nếu version không phải temporary → bump trước
@@ -341,7 +345,7 @@ export class UsecaseService {
       version.updated_at = new Date();
       version.affects_requirement = true;
 
-      await version.save({ session });
+      await version.save();
 
       await this.versionService.createOrUpdatePreview(
         versionId,
@@ -386,7 +390,11 @@ export class UsecaseService {
       return new ServiceResponse(
         ResponseStatus.Success,
         "Usecase updated successfully",
-        updatedUsecase,
+        {
+          usecase: updatedUsecase,
+          version: version,
+          newVersionId: versionId
+        },
         200
       );
 
@@ -412,7 +420,7 @@ export class UsecaseService {
 
     try {
       // Kiểm tra version tồn tại
-      let version = await Version.findById(versionId).session(session);
+      let version = await Version.findById(versionId);
       if (!version) {
         throw new Error("Version not found");
       }
@@ -461,7 +469,7 @@ export class UsecaseService {
       version.updated_at = new Date();
       version.affects_requirement = true;
 
-      await version.save({ session });
+      await version.save();
 
       await this.versionService.createOrUpdatePreview(
         versionId,
@@ -504,7 +512,11 @@ export class UsecaseService {
       return new ServiceResponse(
         ResponseStatus.Success,
         "Usecase deleted successfully",
-        { deleted_id: usecaseId },
+        {
+          deleted_id: usecaseId,
+          version: version,
+          newVersionId: versionId
+        },
         200
       );
 

@@ -1,6 +1,5 @@
 <template>
   <div
-    @click="handleCardClick"
     class="project-card"
     :class="{
       trashed: isTrashed,
@@ -11,65 +10,9 @@
       mobile: isMobile,
       selected: isSelected,
     }"
+    @click="handleCardClick"
   >
-    <!-- Selection checkbox - LUÔN HIỂN THỊ KHI Ở TRONG THÙNG RÁC -->
-    <!-- <div v-if="isTrashed" class="selection-checkbox">
-      <input type="checkbox" :checked="isSelected" @click.stop="toggleSelection" />
-    </div> -->
-
-    <!-- TRẠNG THÁI ĐANG TẠO HOẶC RETRY -->
-    <div v-if="isCreating" class="creating-state">
-      <div class="creating-header">
-        <h3 class="creating-title">{{ project.name }}</h3>
-        <span
-          class="creating-badge"
-          :class="{
-            failed: project.creationStatus === 'failed',
-            retrying: project.isRetry,
-          }"
-        >
-          {{ creatingLabel }}
-        </span>
-      </div>
-
-      <p class="creating-description">{{ project.description }}</p>
-
-      <!-- HIỂN THỊ PROGRESS BAR KHI ĐANG TẠO HOẶC RETRY -->
-      <div v-if="project.creationStatus !== 'failed'" class="creating-progress">
-        <div class="progress-info">
-          <span class="stage-text">{{ project.currentStage }}</span>
-          <span class="progress-percent">{{ project.processingProgress }}%</span>
-        </div>
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: project.processingProgress + '%' }"></div>
-        </div>
-      </div>
-
-      <!-- HIỂN THỊ LỖI KHI FAILED -->
-      <div v-else class="creating-failed">
-        <span class="material-symbols-outlined failed-icon">error</span>
-        <p class="failed-message">
-          {{ project.isRetry ? 'Retry failed' : 'Project creation failed' }}
-        </p>
-        <button class="retry-btn" @click.stop="retryCreation">Retry</button>
-      </div>
-
-      <div class="creating-footer">
-        <span class="creating-note">
-          <span class="material-symbols-outlined">schedule</span>
-          {{
-            project.creationStatus === 'failed'
-              ? project.isRetry
-                ? 'Retry failed - Will be removed soon'
-                : 'Creation failed - Will be removed soon'
-              : project.isRetry
-              ? 'Project is being retried in background'
-              : 'Project is being created in background'
-          }}
-        </span>
-      </div>
-    </div>
-
+    <!-- Project Content -->
     <div v-if="!isEditing" class="project-content">
       <div class="project-header">
         <h3>{{ project.name }}</h3>
@@ -82,10 +25,21 @@
       <p class="project-description">{{ project.description }}</p>
 
       <div class="project-meta">
-        <span class="update-time">
-          {{ isTrashed ? 'Trashed' : 'Updated' }}
-          {{ formatDate(isTrashed ? project.status.trashed_at : project.updatedAt) }}
-        </span>
+        <div class="meta-left">
+          <span class="update-time">
+            {{ isTrashed ? 'Trashed' : 'Updated' }}
+            {{ formatDate(isTrashed ? project.status.trashed_at : project.updatedAt) }}
+          </span>
+
+          <!-- Hiển thị version hiện tại -->
+          <div v-if="!isTrashed && currentVersion" class="version-info">
+            <span class="version-label">Version:</span>
+            <span class="version-number">{{
+              currentVersion.version_number ||
+              `${currentVersion.version_major}.${currentVersion.version_minor}`
+            }}</span>
+          </div>
+        </div>
 
         <div class="meta-right">
           <span class="project-members">
@@ -93,7 +47,19 @@
             {{ project.members?.filter((member) => member.status === 'accepted').length || 0 }}
           </span>
 
-          <!-- ẨN FAB MENU KHI Ở TRONG THÙNG RÁC -->
+          <!-- Hiển thị số lượng changes và nút mở preview -->
+          <div
+            v-if="!isTrashed && pendingChangesCount > 0"
+            class="changes-indicator"
+            @click.stop="openPreview"
+          >
+            <span class="material-symbols-outlined">sync_alt</span>
+            <span class="changes-count"
+              >{{ pendingChangesCount }} change{{ pendingChangesCount > 1 ? 's' : '' }}</span
+            >
+          </div>
+
+          <!-- FAB Menu -->
           <div v-if="!isTrashed" class="fab-container" @click.stop v-click-outside="closeFab">
             <button class="fab-main" @click="toggleFab">
               <span class="material-symbols-outlined">more_vert</span>
@@ -168,6 +134,10 @@ const clickOutside = {
   },
 }
 
+import { getPreview } from '@/api/version'
+import { getVersionInProject } from '@/api/project'
+import eventBus from '@/utils/eventBus'
+
 export default {
   name: 'ProjectCard',
   directives: {
@@ -177,7 +147,7 @@ export default {
     project: { type: Object, required: true },
     showDelete: { type: Boolean, default: true },
     isTrashed: { type: Boolean, default: false },
-    isSelected: { type: Boolean, default: false }, // Thêm prop isSelected
+    isSelected: { type: Boolean, default: false },
   },
   data() {
     return {
@@ -188,6 +158,9 @@ export default {
         description: '',
       },
       isMobile: false,
+      currentVersion: null,
+      temporaryVersion: null, // Version tạm thời có pending changes
+      pendingChangesCount: 0,
     }
   },
   computed: {
@@ -211,12 +184,6 @@ export default {
         this.project.status === 'retrying' ||
         this.project.isRetry
       )
-    },
-    creatingLabel() {
-      if (this.project.isRetry) {
-        return 'Retrying...'
-      }
-      return this.project.creationStatus === 'failed' ? 'Failed' : 'Creating...'
     },
     projectType() {
       return this.isOwner ? 'my' : 'shared'
@@ -252,13 +219,6 @@ export default {
           disabled: false,
         },
         {
-          icon: 'palette',
-          title: 'Change Color',
-          type: 'palette',
-          action: () => this.changeColor(),
-          disabled: false,
-        },
-        {
           icon: 'delete',
           title: 'Move to Trash',
           type: 'delete',
@@ -267,63 +227,163 @@ export default {
         },
       ]
     },
-    trashedActions() {
-      return [
-        {
-          icon: 'restore_from_trash',
-          title: 'Restore',
-          type: 'restore',
-          action: this.restoreProject,
-          disabled: false,
-        },
-        {
-          icon: 'delete_forever',
-          title: 'Delete Permanently',
-          type: 'delete',
-          action: this.deletePermanently,
-          disabled: false,
-        },
-      ]
-    },
   },
-  mounted() {
+  async mounted() {
     this.checkMobile()
     window.addEventListener('resize', this.checkMobile)
+
+    // Listen for changes-updated event from PreviewModal
+    eventBus.on('project-changes-updated', this.handleProjectChangesUpdated)
+    
+    // Listen for project data updates from other pages (e.g., UsecaseManagement)
+    eventBus.on('project-data-updated', this.handleProjectDataUpdated)
+
+    // Load version và changes data
+    if (!this.isTrashed) {
+      await this.loadVersionData()
+      await this.loadPendingChanges()
+    }
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.checkMobile)
+    eventBus.off('project-changes-updated', this.handleProjectChangesUpdated)
+    eventBus.off('project-data-updated', this.handleProjectDataUpdated)
   },
+  watch: {
+    'project._id': {
+      immediate: true,
+      async handler() {
+        if (!this.isTrashed) {
+          await this.loadVersionData()
+          await this.loadPendingChanges()
+        }
+      },
+    },
+    currentVersion: {
+      handler(newVersion) {
+        // Khi currentVersion thay đổi, load lại pending changes
+        if (newVersion && !this.isTrashed) {
+          this.loadPendingChanges()
+        }
+      },
+    },
+  },
+
   methods: {
+    async loadVersionData() {
+      try {
+        const response = await getVersionInProject(this.project._id)
+        if (response.data && response.data.data) {
+          const allVersions = response.data.data
+          
+          // Chỉ lấy version đã được approve (version_temporary = false) để hiển thị
+          const approvedVersions = allVersions.filter(
+            (v) => v.version_temporary === false || v.version_temporary === undefined
+          )
+          
+          // Tìm version từ project.current_version (đã được approve) để hiển thị
+          this.currentVersion =
+            approvedVersions.find((v) => v._id === this.project.current_version) ||
+            approvedVersions[0] ||
+            null
+          
+          // Tìm version tạm thời (có thể có pending changes)
+          this.temporaryVersion = allVersions.find(
+            (v) => v.version_temporary === true
+          ) || null
+        }
+      } catch (error) {
+        console.error('Error loading version data:', error)
+      }
+    },
+
+    async loadPendingChanges() {
+      try {
+        // Tìm version tạm thời có preview (pending changes)
+        // Nếu không có version tạm thời, thử load từ currentVersion
+        const versionToCheck = this.temporaryVersion || this.currentVersion
+        
+        if (!versionToCheck) {
+          console.log('⚠️ No version to check for pending changes')
+          this.pendingChangesCount = 0
+          return
+        }
+
+        console.log('🔄 Loading pending changes for version:', versionToCheck._id, {
+          isTemporary: versionToCheck.version_temporary === true
+        })
+        const response = await getPreview(versionToCheck._id)
+        console.log('📦 Preview response:', response.data)
+        
+        if (response.data && response.data.data) {
+          const changes = response.data.data.changes || []
+          this.pendingChangesCount = changes.length
+          console.log(`✅ Loaded ${this.pendingChangesCount} pending changes for project ${this.project._id}`)
+        } else {
+          this.pendingChangesCount = 0
+          console.log('⚠️ No changes data in response')
+        }
+      } catch (error) {
+        // Nếu lỗi 404 hoặc preview không tồn tại, không có pending changes
+        if (error.response?.status === 404) {
+          console.log('ℹ️ No preview found (no pending changes)')
+          this.pendingChangesCount = 0
+        } else {
+          console.error('❌ Error loading pending changes:', error)
+          this.pendingChangesCount = 0
+        }
+      }
+    },
+
+    async openPreview() {
+      // Refresh data trước khi mở modal
+      await this.loadVersionData()
+      await this.loadPendingChanges()
+
+      // Sử dụng version tạm thời nếu có (để xem pending changes)
+      // Nếu không có, sử dụng currentVersion
+      const versionToOpen = this.temporaryVersion || this.currentVersion
+      
+      if (!versionToOpen) {
+        console.warn('⚠️ No version available to open preview')
+        return
+      }
+
+      this.$emit('open-preview', {
+        projectId: this.project._id,
+        versionId: versionToOpen._id,
+        versionData: versionToOpen,
+        pendingChangesCount: this.pendingChangesCount,
+      })
+    },
+
     handleCardClick() {
-      // Nếu đang trong chế độ chỉnh sửa hoặc đang tạo, không làm gì cả
       if (this.isEditing || this.isCreating) return
 
-      // Nếu đang trong thùng rác - luôn kích hoạt chọn nhiều
       if (this.isTrashed) {
         this.toggleSelection()
         return
       }
 
-      // Xử lý bình thường cho các trường hợp khác - mở project
       this.openProject()
     },
+
     toggleSelection() {
       this.$emit('selection-toggle', this.project._id || this.project.id)
     },
+
     checkMobile() {
       this.isMobile = window.innerWidth <= 768
     },
+
     toggleFab() {
-      if (this.isMobile) {
-        // Trên mobile, hiển thị menu đơn giản
-        this.open = !this.open
-      } else {
-        this.open = !this.open
-      }
+      this.open = !this.open
     },
+
     closeFab() {
       this.open = false
     },
+
     startEditing() {
       this.editForm = {
         name: this.project.name,
@@ -336,20 +396,17 @@ export default {
         this.$refs.nameInput?.focus()
       })
     },
-    retryCreation() {
-      this.$emit('retry-creation', this.project._id)
-    },
-    changeColor() {
-      alert('Change color clicked')
-    },
+
     shareProject() {
       this.$emit('share', this.project)
       this.closeFab()
     },
+
     leaveProject() {
       this.$emit('leave', this.project._id || this.project.id)
       this.closeFab()
     },
+
     cancelEdit(event) {
       if (event) {
         event.stopPropagation()
@@ -360,6 +417,7 @@ export default {
         description: '',
       }
     },
+
     async saveProject(event) {
       if (event) {
         event.stopPropagation()
@@ -385,9 +443,9 @@ export default {
         alert('Failed to update project')
       }
     },
+
     getStyle(index, total) {
       if (this.isMobile) {
-        // Trên mobile, hiển thị menu dạng list thẳng đứng
         return {
           transform: 'none',
           position: 'static',
@@ -406,20 +464,17 @@ export default {
         transform: `translate(${x}px, ${-y}px)`,
       }
     },
+
     openProject() {
       if (this.isTrashed || this.isEditing || this.isCreating) return
       this.$emit('open', this.project)
     },
+
     confirmDelete() {
       this.$emit('delete', this.project._id || this.project.id)
       this.closeFab()
     },
-    restoreProject() {
-      this.$emit('restore', this.project._id || this.project.id)
-    },
-    deletePermanently() {
-      this.$emit('delete-permanently', this.project._id || this.project.id)
-    },
+
     formatDate(dateStr) {
       if (!dateStr) return ''
       const date = new Date(dateStr)
@@ -428,12 +483,30 @@ export default {
       const y = date.getFullYear()
       return `${d}/${m}/${y}`
     },
+    async refreshProjectData() {
+      await this.loadVersionData()
+      await this.loadPendingChanges()
+    },
+    handleProjectChangesUpdated(event) {
+      // Only refresh if this is the affected project
+      if (event && event.projectId === this.project._id) {
+        console.log('🔄 Refreshing ProjectCard after changes update:', event)
+        this.refreshProjectData()
+      }
+    },
+    handleProjectDataUpdated(event) {
+      // Refresh when project data is updated from other pages (e.g., UsecaseManagement)
+      if (event && event.projectId === this.project._id) {
+        console.log('🔄 Refreshing ProjectCard after project data update:', event)
+        this.refreshProjectData()
+      }
+    },
   },
 }
 </script>
 
 <style scoped>
-/* Các style khác giữ nguyên */
+/* Giữ nguyên tất cả CSS hiện có và thêm style mới */
 
 .project-card {
   background: #fff;
@@ -461,19 +534,16 @@ export default {
   box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2);
 }
 
-/* Thêm hiệu ứng cho thẻ được chọn trong thùng rác */
 .project-card.trashed.selected {
   background-color: #e8f4ff;
   border-color: #0056b3;
 }
 
-/* Hiệu ứng hover cho thẻ trong thùng rác */
 .project-card.trashed:not(.selected):hover {
   background-color: #f8f9fa;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* Selection checkbox */
 .selection-checkbox {
   position: absolute;
   top: 8px;
@@ -508,6 +578,10 @@ export default {
   margin: 0;
   cursor: pointer;
   transition: color 0.2s;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .project-header h3:hover {
@@ -537,19 +611,9 @@ export default {
   margin: 6px 0 12px;
   line-height: 1.5;
   text-align: left;
-}
-
-.project-description {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.project-header h3 {
-  max-width: 200px;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -560,6 +624,31 @@ export default {
   justify-content: space-between;
   font-size: 12px;
   color: #777;
+}
+
+.meta-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.version-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.version-label {
+  color: #666;
+}
+
+.version-number {
+  font-weight: 600;
+  color: #1a365d;
+  background: #e8f3ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
 }
 
 .meta-right {
@@ -579,18 +668,46 @@ export default {
   color: #555;
 }
 
+/* Changes Indicator */
+.changes-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff3cd;
+  color: #856404;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid #ffeaa7;
+}
+
+.changes-indicator:hover {
+  background: #ffeaa7;
+  transform: translateY(-1px);
+}
+
+.changes-indicator .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.changes-count {
+  font-weight: 600;
+}
+
 .project-card.trashed {
   background-color: #fdfdfd;
   border: 1px dashed #ccc;
   opacity: 0.85;
-  cursor: pointer; /* Đảm bảo con trỏ là pointer cho thẻ trong thùng rác */
+  cursor: pointer;
 }
 
 .project-card.trashed h3 {
   color: #888;
 }
 
-/* Ẩn FAB container khi ở trong thùng rác */
 .project-card.trashed .fab-container {
   display: none !important;
 }
@@ -732,8 +849,6 @@ export default {
   box-shadow: 0 0 12px rgba(121, 118, 118, 0.6);
 }
 
-/* Các style khác giữ nguyên... */
-
 /* ===== RESPONSIVE STYLES ===== */
 @media (max-width: 768px) {
   .project-card {
@@ -773,6 +888,11 @@ export default {
   .meta-right {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .changes-indicator {
+    font-size: 10px;
+    padding: 3px 6px;
   }
 
   /* Mobile FAB menu */
@@ -879,6 +999,11 @@ export default {
   }
   .fab-main span {
     font-size: 24px;
+  }
+
+  .changes-indicator {
+    font-size: 9px;
+    padding: 2px 4px;
   }
 }
 </style>

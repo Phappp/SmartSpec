@@ -247,14 +247,14 @@
               />
 
               <!-- Child fragment label -->
-              <text :x="child.x + 10" :y="child.y + 20" class="fragment-label">
+              <text :x="child.x + 10" :y="child.y + 15" class="fragment-label child-fragment-label">
                 {{ getFragmentLabel(child.type) }}
               </text>
               <text
                 v-if="child.guard_condition"
                 :x="child.x + 10"
-                :y="child.y + 40"
-                class="fragment-condition"
+                :y="child.y + 35"
+                class="fragment-condition child-fragment-condition"
               >
                 [{{ child.guard_condition }}]
               </text>
@@ -568,10 +568,12 @@ export default {
     computedFragments() {
       const fragments = this.safeDiagramData.fragments
       if (!fragments || fragments.length === 0) return []
+
       // Build fragment hierarchy
       const fragmentMap = new Map()
       const rootFragments = []
       const childFragments = []
+
       // First pass: create fragment objects and categorize
       fragments.forEach((fragment) => {
         const fragmentId = this.normalizeId(fragment._id || fragment.id)
@@ -592,6 +594,7 @@ export default {
           childFragments.push(fragmentObj)
         }
       })
+
       // Second pass: assign messages to fragments
       this.computedMessages.forEach((message) => {
         if (message.fragment_id) {
@@ -601,6 +604,7 @@ export default {
           }
         }
       })
+
       // Third pass: build parent-child relationships
       childFragments.forEach((child) => {
         const parent = fragmentMap.get(child.parentId)
@@ -608,6 +612,7 @@ export default {
           parent.children.push(child)
         }
       })
+
       // Fourth pass: calculate positions and dimensions
       return rootFragments.map((fragment, index) => {
         const bounds = this.calculateFragmentBounds(fragment, index)
@@ -677,10 +682,13 @@ export default {
       }
       return id.toString()
     },
-    // Fragment Methods
+
+    // Fragment Methods - HOÀN TOÀN MỚI
     calculateFragmentBounds(fragment, index = 0) {
-      const allMessages = this.getAllFragmentMessages(fragment)
-      if (allMessages.length === 0) {
+      // Lấy tất cả messages thuộc fragment này và các fragment con
+      const allFragmentMessages = this.getAllFragmentMessages(fragment)
+
+      if (allFragmentMessages.length === 0) {
         return {
           x: 50,
           y: 150 + index * 400,
@@ -689,40 +697,92 @@ export default {
           totalHeight: 200,
         }
       }
-      // Get all lifelines involved in this fragment
+
+      // Tìm các lifeline có liên quan đến fragment này
       const involvedLifelines = new Set()
-      allMessages.forEach((message) => {
+      allFragmentMessages.forEach((message) => {
         if (message.source) involvedLifelines.add(message.source)
         if (message.target) involvedLifelines.add(message.target)
       })
+
       const lifelineArray = Array.from(involvedLifelines)
       const lifelineXs = lifelineArray.map((ll) => ll.x)
       const minX = Math.min(...lifelineXs) - 100
       const maxX = Math.max(...lifelineXs) + 100
-      // Calculate Y bounds based on messages
-      const messageYs = allMessages.map((msg) => msg.y)
-      const minY = Math.min(...messageYs) - 80
-      const maxY = Math.max(...messageYs) + 80
-      const height = Math.max(200, maxY - minY + 60)
-      // Calculate total height including children
-      let totalHeight = height
-      if (fragment.children && fragment.children.length > 0) {
-        fragment.children.forEach((child) => {
-          const childMessages = this.getAllFragmentMessages(child)
-          const childMessageYs = childMessages.map((msg) => msg.y)
-          const childMinY = Math.min(...childMessageYs) - 80
-          const childMaxY = Math.max(...childMessageYs) + 80
-          totalHeight += Math.max(150, childMaxY - childMinY + 60)
-        })
-      }
-      return {
+
+      // Tính Y bounds CHỈ dựa trên messages thuộc fragment
+      const messageYs = allFragmentMessages.map((msg) => msg.y)
+      const minY = Math.min(...messageYs) - 50 // Giảm padding
+      const maxY = Math.max(...messageYs) + 50 // Giảm padding
+
+      const baseHeight = Math.max(150, maxY - minY) // Giảm chiều cao tối thiểu
+
+      // Khởi tạo fragment chính
+      const mainFragment = {
         x: minX,
-        y: minY - 30,
+        y: minY,
         width: maxX - minX,
-        height: height,
-        totalHeight: totalHeight,
+        height: baseHeight,
+        totalHeight: baseHeight,
       }
+
+      // Xử lý fragment con - CHÍNH XÁC HƠN
+      if (fragment.children && fragment.children.length > 0) {
+        // Sắp xếp fragment con theo thứ tự Y
+        fragment.children.forEach((child) => {
+          const childMessages = child.messages
+          if (childMessages.length > 0) {
+            child.minY = Math.min(...childMessages.map((m) => m.y))
+          } else {
+            child.minY = mainFragment.y + 30
+          }
+        })
+
+        fragment.children.sort((a, b) => a.minY - b.minY)
+
+        let currentY = mainFragment.y + 30
+
+        fragment.children.forEach((child, childIndex) => {
+          const childMessages = child.messages
+
+          if (childMessages.length === 0) {
+            child.x = mainFragment.x
+            child.y = currentY
+            child.width = mainFragment.width
+            child.height = 60
+            currentY += child.height + 10
+          } else {
+            const childMessageYs = childMessages.map((msg) => msg.y)
+            const childMinY = Math.min(...childMessageYs)
+            const childMaxY = Math.max(...childMessageYs)
+
+            child.x = mainFragment.x
+            child.y = childMinY - 20 // Đặt đường phân cách phía trên messages
+            child.width = mainFragment.width
+            child.height = childMaxY - childMinY + 40
+
+            // Cập nhật currentY cho fragment tiếp theo
+            currentY = childMaxY + 30
+          }
+        })
+
+        // Điều chỉnh chiều cao tổng của fragment cha nếu cần
+        const lastChild = fragment.children[fragment.children.length - 1]
+        const lastChildMessages = lastChild.messages
+        const lastChildMaxY =
+          lastChildMessages.length > 0
+            ? Math.max(...lastChildMessages.map((m) => m.y))
+            : lastChild.y + lastChild.height
+
+        const requiredHeight = lastChildMaxY - mainFragment.y + 40
+        if (requiredHeight > mainFragment.totalHeight) {
+          mainFragment.totalHeight = requiredHeight
+        }
+      }
+
+      return mainFragment
     },
+
     getAllFragmentMessages(fragment) {
       let messages = [...fragment.messages]
       if (fragment.children) {
@@ -732,16 +792,19 @@ export default {
       }
       return messages
     },
+
     // Diagram Element Methods
     calculateMessagePath(message) {
       const { source, target, y } = message
       return `M ${source.x} ${y} L ${target.x} ${y}`
     },
+
     getMessageLabelPosition(message) {
       const { source, target, y } = message
       const midX = (source.x + target.x) / 2
       return { x: midX, y: y - 10 }
     },
+
     getMessageMarker(type) {
       const markers = {
         sync: 'url(#sync-arrow)',
@@ -750,6 +813,7 @@ export default {
       }
       return markers[type] || 'url(#sync-arrow)'
     },
+
     getFragmentLabel(type) {
       const labels = {
         loop: 'loop',
@@ -760,6 +824,7 @@ export default {
       }
       return labels[type] || type
     },
+
     getSelectionBounds() {
       if (!this.selectedElement) return { x: 0, y: 0, width: 0, height: 0, rx: 0 }
       if (this.selectedElementType === 'lifeline') {
@@ -784,10 +849,12 @@ export default {
       }
       return { x: 0, y: 0, width: 0, height: 0, rx: 0 }
     },
+
     // Virtual Space Management
     updateVirtualSpace() {
       const allElements = [...this.computedLifelines, ...this.computedFragments]
       if (allElements.length === 0) return
+
       const bounds = allElements.reduce(
         (acc, element) => ({
           minX: Math.min(acc.minX, element.x - (element.width || 60)),
@@ -800,27 +867,32 @@ export default {
         }),
         { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
       )
+
       this.computedMessages.forEach((message) => {
         bounds.minY = Math.min(bounds.minY, message.y - 20)
         bounds.maxY = Math.max(bounds.maxY, message.y + 20)
       })
-      const padding = 200
+
+      const padding = 150 // Giảm padding tổng
       this.virtualSpace.minX = Math.min(this.virtualSpace.minX, bounds.minX - padding)
       this.virtualSpace.maxX = Math.max(this.virtualSpace.maxX, bounds.maxX + padding)
       this.virtualSpace.minY = Math.min(this.virtualSpace.minY, bounds.minY - padding)
       this.virtualSpace.maxY = Math.max(this.virtualSpace.maxY, bounds.maxY + padding)
     },
+
     centerViewport() {
       const centerX = this.containerWidth / 2 - this.virtualSpace.centerX * this.internalZoom
       const centerY = this.containerHeight / 2 - this.virtualSpace.centerY * this.internalZoom
       this.viewport.x = centerX
       this.viewport.y = centerY
     },
+
     // Drag and Drop
     startDrag(element, type, event) {
       if (!this.editable || this.previewMode) return
       event.preventDefault()
       event.stopPropagation()
+
       this.draggingElement = element
       this.draggingType = type
       const rect = this.$refs.container.getBoundingClientRect()
@@ -830,6 +902,7 @@ export default {
       const svgPoint = point.matrixTransform(
         this.$el.querySelector('.sequence-svg').getScreenCTM().inverse()
       )
+
       if (type === 'lifeline') {
         this.dragOffset = {
           x: svgPoint.x - element.x,
@@ -843,14 +916,17 @@ export default {
         }
         this.dragPosition = { x: element.x, y: element.y }
       }
+
       this.isDragging = true
       this.selectElement(element, type)
       this.initialDragPosition = { x: element.x, y: element.y }
       this.$refs.container.style.cursor = 'grabbing'
       document.body.style.userSelect = 'none'
     },
+
     handleMouseMove(event) {
       if (!this.isDragging || !this.draggingElement) return
+
       const rect = this.$refs.container.getBoundingClientRect()
       const point = this.$el.querySelector('.sequence-svg').createSVGPoint()
       point.x = event.clientX - rect.left
@@ -858,14 +934,17 @@ export default {
       const svgPoint = point.matrixTransform(
         this.$el.querySelector('.sequence-svg').getScreenCTM().inverse()
       )
+
       let newX = this.draggingElement.x
       let newY = this.draggingElement.y
+
       if (this.draggingType === 'lifeline') {
         newX = svgPoint.x - this.dragOffset.x
         newY = svgPoint.y - this.dragOffset.y
       } else if (this.draggingType === 'message') {
         newY = svgPoint.y - this.dragOffset.y
       }
+
       const safePadding = 20
       newX = Math.max(
         this.virtualSpace.minX + safePadding,
@@ -875,12 +954,15 @@ export default {
         this.virtualSpace.minY + safePadding,
         Math.min(this.virtualSpace.maxY - safePadding, newY)
       )
+
       this.dragPosition = { x: newX, y: newY }
+
       if (this.draggingElement) {
         if (this.draggingType === 'lifeline') {
           this.draggingElement.x = newX
         }
         this.draggingElement.y = newY
+
         this.showSavingIndicator()
         this.$emit('position-updated', {
           element: this.draggingElement,
@@ -894,14 +976,17 @@ export default {
         })
       }
     },
+
     showSavingIndicator() {
       this.isSaving = true
       this.lastSaved = null
     },
+
     hideSavingIndicator() {
       this.isSaving = false
       this.lastSaved = new Date()
     },
+
     getSaveStatusText() {
       if (this.isSaving) {
         return 'Saving...'
@@ -911,6 +996,7 @@ export default {
         return 'No changes'
       }
     },
+
     formatLastSaved() {
       if (!this.lastSaved) return ''
       const now = new Date()
@@ -922,12 +1008,15 @@ export default {
       if (diffMin < 60) return `${diffMin}m ago`
       return this.lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     },
+
     handleMouseUp() {
       if (!this.isDragging || !this.draggingElement) return
+
       const hasMoved =
         this.initialDragPosition &&
         (Math.abs(this.initialDragPosition.x - this.dragPosition.x) > 1 ||
           Math.abs(this.initialDragPosition.y - this.dragPosition.y) > 1)
+
       if (hasMoved && this.editable) {
         if (this.onPositionChange) {
           this.onPositionChange({
@@ -937,11 +1026,14 @@ export default {
           })
         }
       }
+
       this.endDrag()
     },
+
     handleMouseLeave() {
       this.endDrag()
     },
+
     endDrag() {
       this.isDragging = false
       this.draggingElement = null
@@ -950,9 +1042,11 @@ export default {
       this.$refs.container.style.cursor = 'grab'
       document.body.style.userSelect = ''
     },
+
     // Viewport Methods
     startPan(event) {
       if (this.previewMode || !this.editable || this.isDragging) return
+
       this.isPanning = true
       this.panStart = {
         x: event.clientX - this.viewport.x,
@@ -960,17 +1054,22 @@ export default {
       }
       this.$refs.container.style.cursor = 'grabbing'
     },
+
     handlePan(event) {
       if (!this.isPanning) return
+
       this.viewport.x = event.clientX - this.panStart.x
       this.viewport.y = event.clientY - this.panStart.y
     },
+
     endPan() {
       this.isPanning = false
       this.$refs.container.style.cursor = 'grab'
     },
+
     handleWheel(event) {
       event.preventDefault()
+
       if (event.ctrlKey) {
         const zoomIntensity = 0.1
         const wheel = event.deltaY < 0 ? 1 : -1
@@ -980,8 +1079,10 @@ export default {
         const mouseY = event.clientY - rect.top
         const worldX = (mouseX - this.viewport.x) / this.internalZoom
         const worldY = (mouseY - this.viewport.y) / this.internalZoom
+
         this.internalZoom = Math.max(0.1, Math.min(5, this.internalZoom * zoom))
         this.$emit('zoom-changed', this.internalZoom)
+
         this.viewport.x = mouseX - worldX * this.internalZoom
         this.viewport.y = mouseY - worldY * this.internalZoom
       } else {
@@ -989,23 +1090,28 @@ export default {
         this.viewport.y -= event.deltaY * 0.5
       }
     },
+
     // Zoom and View Methods
     zoomIn() {
       this.internalZoom = Math.min(5, this.internalZoom + 0.1)
       this.$emit('zoom-changed', this.internalZoom)
     },
+
     zoomOut() {
       this.internalZoom = Math.max(0.1, this.internalZoom - 0.1)
       this.$emit('zoom-changed', this.internalZoom)
     },
+
     resetZoom() {
       this.internalZoom = 1
       this.centerViewport()
       this.$emit('zoom-changed', this.internalZoom)
     },
+
     fitToViewport() {
       const allElements = [...this.computedLifelines, ...this.computedFragments]
       if (allElements.length === 0) return
+
       const bounds = allElements.reduce(
         (acc, element) => ({
           minX: Math.min(acc.minX, element.x - (element.width || 60)),
@@ -1018,26 +1124,32 @@ export default {
         }),
         { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
       )
+
       this.computedMessages.forEach((message) => {
         bounds.minY = Math.min(bounds.minY, message.y - 20)
         bounds.maxY = Math.max(bounds.maxY, message.y + 20)
       })
+
       const contentWidth = bounds.maxX - bounds.minX + 200
       const contentHeight = bounds.maxY - bounds.minY + 200
       const scaleX = this.containerWidth / contentWidth
       const scaleY = this.containerHeight / contentHeight
+
       this.internalZoom = Math.min(scaleX, scaleY, 1)
       this.viewport.x = -bounds.minX * this.internalZoom + 100
       this.viewport.y = -bounds.minY * this.internalZoom + 100
       this.$emit('zoom-changed', this.internalZoom)
     },
+
     // Selection Methods
     selectElement(element, type) {
       if (this.isDragging) return
+
       this.selectedElement = element
       this.selectedElementType = type
       this.$emit('element-selected', { element, type })
     },
+
     handleSvgClick(event) {
       if (event.target.tagName === 'svg') {
         this.selectedElement = null
@@ -1045,10 +1157,12 @@ export default {
         this.$emit('element-selected', null)
       }
     },
+
     clearSelection() {
       this.selectedElement = null
       this.selectedElementType = null
     },
+
     onSaveComplete(success = true) {
       if (success) {
         this.hideSavingIndicator()
@@ -1057,9 +1171,11 @@ export default {
         this.lastSaved = null
       }
     },
+
     onSaveStart() {
       this.showSavingIndicator()
     },
+
     // Preview Generation Methods
     async generatePreviewImage() {
       return new Promise((resolve) => {
@@ -1070,6 +1186,7 @@ export default {
               resolve(null)
               return
             }
+
             const bounds = allElements.reduce(
               (acc, element) => ({
                 minX: Math.min(acc.minX, element.x - (element.width || 60)),
@@ -1082,15 +1199,18 @@ export default {
               }),
               { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
             )
+
             this.computedMessages.forEach((message) => {
               bounds.minY = Math.min(bounds.minY, message.y - 20)
               bounds.maxY = Math.max(bounds.maxY, message.y + 20)
             })
+
             const padding = 80
             const contentWidth = Math.max(bounds.maxX - bounds.minX + padding * 2, 400)
             const contentHeight = Math.max(bounds.maxY - bounds.minY + padding * 2, 300)
             const svgString = this.generateExportSVG(bounds, padding, contentWidth, contentHeight)
             const svgData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`
+
             const img = new Image()
             img.onload = () => {
               const canvas = document.createElement('canvas')
@@ -1114,10 +1234,12 @@ export default {
         }, 100)
       })
     },
+
     generateExportSVG(bounds, padding, contentWidth, contentHeight) {
       const viewBox = `${bounds.minX - padding} ${
         bounds.minY - padding
       } ${contentWidth} ${contentHeight}`
+
       return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${contentWidth}" height="${contentHeight}" viewBox="${viewBox}">
   <defs>
@@ -1131,10 +1253,12 @@ export default {
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
     </marker>
   </defs>
+  
   <!-- Background trắng -->
   <rect x="${bounds.minX - padding}" y="${
         bounds.minY - padding
       }" width="${contentWidth}" height="${contentHeight}" fill="white" />
+  
   <!-- Render Fragments Hierarchy -->
   ${this.computedFragments
     .map(
@@ -1156,6 +1280,7 @@ export default {
             }]</text>`
           : ''
       }
+      
       ${fragment.messages
         .map((message) => {
           const path = this.calculateMessagePath(message)
@@ -1168,6 +1293,7 @@ export default {
           `
         })
         .join('')}
+      
       <!-- Child Fragments -->
       ${fragment.children
         .map(
@@ -1177,13 +1303,13 @@ export default {
             child.y
           }" stroke="#6b7280" stroke-width="1" stroke-dasharray="3,3" />
           <text x="${child.x + 10}" y="${
-            child.y + 20
-          }" font-size="12" font-weight="600" fill="#374151">${this.getFragmentLabel(
+            child.y + 15
+          }" font-size="11" font-weight="600" fill="#374151">${this.getFragmentLabel(
             child.type
           )}</text>
           ${
             child.guard_condition
-              ? `<text x="${child.x + 10}" y="${child.y + 40}" font-size="10" fill="#6b7280">[${
+              ? `<text x="${child.x + 10}" y="${child.y + 35}" font-size="9" fill="#6b7280">[${
                   child.guard_condition
                 }]</text>`
               : ''
@@ -1208,6 +1334,7 @@ export default {
   `
     )
     .join('')}
+  
   <!-- Render Lifelines -->
   ${this.computedLifelines
     .map(
@@ -1228,6 +1355,7 @@ export default {
   `
     )
     .join('')}
+  
   <!-- Render Messages không thuộc fragment -->
   ${this.rootMessages
     .map((message) => {
@@ -1243,6 +1371,7 @@ export default {
     .join('')}
 </svg>`
     },
+
     getMessageColor(type) {
       const colors = {
         sync: '#3b82f6',
@@ -1251,6 +1380,7 @@ export default {
       }
       return colors[type] || '#374151'
     },
+
     regeneratePreview() {
       this.previewGenerated = false
       if (this.autoGeneratePreview) {
@@ -1262,6 +1392,7 @@ export default {
         })
       }
     },
+
     // Export Methods
     async exportAsPNG() {
       try {
@@ -1271,6 +1402,7 @@ export default {
           alert('No content to export!')
           return
         }
+
         const bounds = allElements.reduce(
           (acc, element) => ({
             minX: Math.min(acc.minX, element.x - (element.width || 60)),
@@ -1283,15 +1415,18 @@ export default {
           }),
           { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
         )
+
         this.computedMessages.forEach((message) => {
           bounds.minY = Math.min(bounds.minY, message.y - 20)
           bounds.maxY = Math.max(bounds.maxY, message.y + 20)
         })
+
         const padding = 100
         const contentWidth = Math.max(bounds.maxX - bounds.minX + padding * 2, 800)
         const contentHeight = Math.max(bounds.maxY - bounds.minY + padding * 2, 600)
         const svgString = this.generateExportSVG(bounds, padding, contentWidth, contentHeight)
         const svgData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`
+
         const img = new Image()
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
@@ -1299,6 +1434,7 @@ export default {
         canvas.height = contentHeight
         ctx.fillStyle = 'white'
         ctx.fillRect(0, 0, contentWidth, contentHeight)
+
         return new Promise((resolve, reject) => {
           img.onload = () => {
             try {
@@ -1340,12 +1476,14 @@ export default {
         this.isExporting = false
       }
     },
+
     exportAsSVG() {
       const allElements = [...this.computedLifelines, ...this.computedFragments]
       if (allElements.length === 0) {
         alert('No content to export!')
         return
       }
+
       const bounds = allElements.reduce(
         (acc, element) => ({
           minX: Math.min(acc.minX, element.x - (element.width || 60)),
@@ -1358,10 +1496,12 @@ export default {
         }),
         { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
       )
+
       this.computedMessages.forEach((message) => {
         bounds.minY = Math.min(bounds.minY, message.y - 20)
         bounds.maxY = Math.max(bounds.maxY, message.y + 20)
       })
+
       const padding = 100
       const contentWidth = Math.max(bounds.maxX - bounds.minX + padding * 2, 800)
       const contentHeight = Math.max(bounds.maxY - bounds.minY + padding * 2, 600)
@@ -1374,32 +1514,38 @@ export default {
       a.click()
       URL.revokeObjectURL(url)
     },
+
     // Fullscreen Methods
     toggleFullscreen() {
       if (!this.isFullscreen) this.enterFullscreen()
       else this.exitFullscreen()
     },
+
     enterFullscreen() {
       const element = this.$el
       if (element.requestFullscreen) element.requestFullscreen()
       else if (element.webkitRequestFullscreen) element.webkitRequestFullscreen()
       else if (element.msRequestFullscreen) element.msRequestFullscreen()
     },
+
     exitFullscreen() {
       if (document.exitFullscreen) document.exitFullscreen()
       else if (document.webkitExitFullscreen) document.webkitExitFullscreen()
       else if (document.msExitFullscreen) document.msExitFullscreen()
     },
+
     setupFullscreenListener() {
       document.addEventListener('fullscreenchange', this.handleFullscreenChange)
       document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange)
       document.addEventListener('msfullscreenchange', this.handleFullscreenChange)
     },
+
     cleanupFullscreenListener() {
       document.removeEventListener('fullscreenchange', this.handleFullscreenChange)
       document.removeEventListener('webkitfullscreenchange', this.handleFullscreenChange)
       document.removeEventListener('msfullscreenchange', this.handleFullscreenChange)
     },
+
     handleFullscreenChange() {
       this.isFullscreen = !!(
         document.fullscreenElement ||
@@ -1407,15 +1553,18 @@ export default {
         document.msFullscreenElement
       )
     },
+
     // Utility Methods
     setupEventListeners() {
       document.addEventListener('mousemove', this.handleMouseMove)
       document.addEventListener('mouseup', this.handleMouseUp)
     },
+
     removeEventListeners() {
       document.removeEventListener('mousemove', this.handleMouseMove)
       document.removeEventListener('mouseup', this.handleMouseUp)
     },
+
     setupKeyboardShortcuts() {
       document.addEventListener('keydown', (event) => {
         if (event.ctrlKey || event.metaKey) {
@@ -1651,9 +1800,16 @@ export default {
   fill: #374151;
   font-weight: 600;
 }
+.child-fragment-label {
+  font-size: 11px;
+  font-weight: 600;
+}
 .fragment-condition {
   font-size: 10px;
   fill: #6b7280;
+}
+.child-fragment-condition {
+  font-size: 9px;
 }
 .fragment-divider {
   stroke: #6b7280;

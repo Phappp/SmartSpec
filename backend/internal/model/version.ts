@@ -58,7 +58,7 @@ const versionSchema = new Schema({
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now },
     parent_version_id: { type: Schema.Types.ObjectId, ref: "versions", default: null },
-    version_temporary: { type: Boolean, default: false }, // là version tmp -> true
+    version_temporary: { type: Boolean, default: true }, // là version tmp -> true
     inputs: [{ type: Schema.Types.ObjectId, ref: "inputs" }],
     outputs: [{ type: Schema.Types.ObjectId, ref: "outputs" }],
     progress: { type: Number, default: 0 },

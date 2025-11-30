@@ -1,3 +1,4 @@
+// file: route.ts
 import { Router, Request, Response, NextFunction } from "express";
 import { VersionController } from "./controller";
 import { requireAuthorizedUser } from "../../../middlewares/auth";
@@ -5,11 +6,19 @@ import { requireAuthorizedUser } from "../../../middlewares/auth";
 export default function initVersionRoute(controller: VersionController) {
   const router = Router();
 
-  router.post(
-    "/:versionId/bump",
+  // ✅ Version Management
+  router.get(
+    "/project/:projectId",
     requireAuthorizedUser,
     (req: Request, res: Response, next: NextFunction) =>
-      controller.bumpVersion(req as any, res, next)
+      controller.getVersionsByProject(req as any, res, next)
+  );
+
+  router.patch(
+    "/projects/:projectId/current-version/:versionId",
+    requireAuthorizedUser,
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.setCurrentVersion(req as any, res, next)
   );
 
   router.delete(
@@ -19,32 +28,19 @@ export default function initVersionRoute(controller: VersionController) {
       controller.deleteVersion(req as any, res, next)
   );
 
-  router.get(
-    "/project/:projectId",
+  // ✅ Preview & Approval Workflow
+  router.post(
+    "/:versionId/preview",
     requireAuthorizedUser,
     (req: Request, res: Response, next: NextFunction) =>
-      controller.getVersionsByProject(req as any, res, next)
+      controller.createOrUpdatePreview(req as any, res, next)
   );
-  
-  router.patch(
-    "/projects/:projectId/current-version/:versionId",
-    requireAuthorizedUser,
-    (req: Request, res: Response, next: NextFunction) =>
-      controller.setCurrentVersion(req as any, res, next)
-  );
-  
+
   router.get(
     "/:versionId/preview",
     requireAuthorizedUser,
     (req: Request, res: Response, next: NextFunction) =>
       controller.getPreview(req as any, res, next)
-  );
-
-  router.post(
-    "/:versionId",
-    requireAuthorizedUser,
-    (req: Request, res: Response, next: NextFunction) =>
-      controller.createOrUpdatePreview(req as any, res, next)
   );
 
   router.post(
@@ -54,22 +50,43 @@ export default function initVersionRoute(controller: VersionController) {
       controller.approve(req as any, res, next)
   );
 
+  // ✅ THÊM API ROLLBACK - QUAN TRỌNG
   router.post(
-    "/:versionId/changeId/:changeId/revert",
+    "/:versionId/rollback",
     requireAuthorizedUser,
-    controller.revertChangeController
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.rollbackVersion(req as any, res, next)
   );
 
-  router.patch("/:versionId/editing",
+  // ✅ Version Actions
+  router.post(
+    "/:versionId/bump",
+    requireAuthorizedUser,
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.bumpVersion(req as any, res, next)
+  );
+
+  router.post(
+    "/:versionId/change/:changeId/revert",
+    requireAuthorizedUser,
+    (req: Request, res: Response, next: NextFunction) =>
+      controller.revertChangeController(req as any, res, next)
+  );
+
+  // ✅ Version Flags
+  router.patch(
+    "/:versionId/editing",
     requireAuthorizedUser,
     (req: Request, res: Response, next: NextFunction) =>
       controller.markEditingController(req as any, res, next)
   );
 
-  router.patch("/:versionId/locked", 
+  router.patch(
+    "/:versionId/locked",
     requireAuthorizedUser,
     (req: Request, res: Response, next: NextFunction) =>
       controller.markLockedController(req as any, res, next)
   );
+
   return router;
 }

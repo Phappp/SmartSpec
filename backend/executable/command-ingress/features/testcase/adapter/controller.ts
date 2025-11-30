@@ -311,20 +311,22 @@ export class TestcaseController {
 
             console.log(`✏️ Updating test case ${testCaseId}`);
 
-            const updatedTestCase = await this.testcaseService.updateTestCase(
+            const result = await this.testcaseService.updateTestCase(
                 testCaseId,
                 updateData,
                 updatedBy
             );
 
-            if (!updatedTestCase) {
+            if (!result || !result.testcase) {
                 res.status(404).json({ message: `Test case not found: ${testCaseId}` });
                 return;
             }
 
             res.status(200).json({
                 message: "Successfully updated test case",
-                data: updatedTestCase
+                data: result.testcase,
+                version: result.version,
+                newVersionId: result.newVersionId
             });
 
         } catch (error: any) {

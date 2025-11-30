@@ -1,13 +1,13 @@
 import { UploadedFile } from "express-fileupload";
 import Version from "../../../../../internal/model/version";
 import Input from "../../../../../internal/model/input";
-
 import { InputService } from "./InputService";
 import { GeminiService } from "./GeminiService";
 import { RequirementService } from "./RequirementService";
 import { UtilService } from "./UtilService";
 import { inputSocketService } from '../../input/domain/input.socket.service';
 import { VersionService } from "../../../features/version/domain/service";
+import {PreviewChangeDto} from "../../../features/version/adapter/preview.dto";
 
 export class OrchestratorService {
     private inputService = new InputService();
@@ -38,6 +38,7 @@ export class OrchestratorService {
             const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
             if (!bumpRes.data) throw new Error("Auto bump failed");
             version = bumpRes.data.newVersion;
+            console.log("version Id after bump",version._id);
             versionId = version._id.toString();
         }
         await Version.findByIdAndUpdate(versionId, {
@@ -198,7 +199,22 @@ export class OrchestratorService {
             this.gemini,
             language
         );
-
+        const newUsecase = result.newRequirements;
+        for(const usecase of newUsecase){
+            
+            const changePayload : PreviewChangeDto  = {
+                entity_type: "requirement",
+                change_type: "added",
+                entity_id: usecase._id,
+                before_snapshot: null,
+                after_snapshot: usecase,
+            };
+            const previewRes = await this.versionService.createOrUpdatePreview(
+                versionId,
+                userId,
+                changePayload
+            );
+        }
         // 6️⃣ Hoàn tất
         await Version.findByIdAndUpdate(versionId, {
             $set: { stage: "completed", progress: 100 }
