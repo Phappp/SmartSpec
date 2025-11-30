@@ -179,7 +179,14 @@ export class VersionService {
 
       // 2️⃣ Tính version mới
       // const { major, minor } = await this.getNextVersion(baseVersion, changeType);
+      const existingVersion = await Version.findOne({
+        parent_version_id: baseVersionId
+      });
+      if (existingVersion) {
+        console.log("⚠️ Version đã tồn tại. Tiến hành xóa version cũ:", existingVersion._id);
 
+        await this.deleteVersion(existingVersion._id.toString(),userId);
+      }
       // 3️⃣ Tạo version mới
       const newVersion = new Version({
         project_id: baseVersion.project_id,
@@ -198,7 +205,6 @@ export class VersionService {
       });
       
       await newVersion.save();
-      
       // ================================
       // 🔥 MAP LIST
       // ================================
@@ -368,7 +374,8 @@ export class VersionService {
       return new ServiceResponse(ResponseStatus.Failed, e.message, null, 500);
     }
   }
-   async setCurrentVersion(projectId: string,versionId: string,userId: string): Promise<ServiceResponse<any>> {
+
+  async setCurrentVersion(projectId: string,versionId: string,userId: string): Promise<ServiceResponse<any>> {
     try {
       // 🔍 Kiểm tra version có tồn tại trong project hay không
       const version = await Version.findOne({ _id: versionId, project_id: projectId });
@@ -449,12 +456,17 @@ export class VersionService {
   async deleteVersion(versionId: string, userId: string): Promise<ServiceResponse<any>> {
     try {
       const version = await Version.findById(versionId);
-      if (!version)
-        return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
+      if (!version)return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
 
-      await Input.deleteMany({ version_id: versionId });
-      await Preview.deleteOne({ base_version_id: versionId });
-      await Version.deleteOne({ _id: versionId });
+      await Promise.all([
+        Input.deleteMany({ version_id: versionId }),
+        Database.deleteMany({ version_id: versionId }),
+        Testcase.deleteMany({ version_id: versionId }),
+        UsecaseDiagram.deleteMany({ version_id: versionId }),
+        ActivityDiagram.deleteMany({ version_id: versionId }),
+        SequenceDiagram.deleteMany({ version_id: versionId }),
+        Preview.deleteMany({base_version_id:versionId}),
+      ]);
 
       const project = await Project.findById(version.project_id);
       if (project && project.current_version?.toString() === versionId.toString()) {
@@ -462,7 +474,7 @@ export class VersionService {
         project.current_version = latestVersion?._id || null;
         await project.save();
       }
-
+      await Version.findByIdAndDelete(versionId);
       versionSocketService.emitVersionDeleted(project._id.toString(), versionId, userId);
 
       return new ServiceResponse(ResponseStatus.Success, "Version deleted successfully", { deleted: versionId }, 200);

@@ -1161,9 +1161,19 @@ export default {
         this.relationships.push(relationship)
 
         if (this.database?._id) {
-          await updateDatabase(this.database._id, {
+          const response = await updateDatabase(this.database._id, {
             relationships: this.relationships,
           })
+          // ✅ Cập nhật selectedVersionId nếu có version mới được bump
+          // Response format: { message, data, version, newVersionId }
+          const newVersionId = response.data?.newVersionId
+          if (newVersionId) {
+            this.selectedVersionId = newVersionId
+            saveSelectedVersion(this.project._id, this.selectedVersionId)
+            console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
+            // Reload database data để đồng bộ với version mới
+            await this.loadDatabaseData()
+          }
         }
 
         this.updateStats()
@@ -1180,9 +1190,19 @@ export default {
         this.relationships.splice(index, 1)
 
         if (this.database?._id) {
-          await updateDatabase(this.database._id, {
+          const response = await updateDatabase(this.database._id, {
             relationships: this.relationships,
           })
+          // ✅ Cập nhật selectedVersionId nếu có version mới được bump
+          // Response format: { message, data, version, newVersionId }
+          const newVersionId = response.data?.newVersionId
+          if (newVersionId) {
+            this.selectedVersionId = newVersionId
+            saveSelectedVersion(this.project._id, this.selectedVersionId)
+            console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
+            // Reload database data để đồng bộ với version mới
+            await this.loadDatabaseData()
+          }
         }
 
         this.updateStats()

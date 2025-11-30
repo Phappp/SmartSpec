@@ -394,7 +394,12 @@ export class TestcaseService {
                 message: `${username} updated testcase ${updatedTestcase?.title || id}`
             }
         });
-        return updatedTestcase;
+        // Return cả testcase và version info để frontend có thể cập nhật selectedVersionId
+        return {
+            testcase: updatedTestcase,
+            version: version,
+            newVersionId: versionId
+        };
     }
 
     /**

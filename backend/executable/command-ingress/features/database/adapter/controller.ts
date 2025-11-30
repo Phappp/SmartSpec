@@ -94,12 +94,23 @@ export class DatabaseController {
                 return;
             }
             const { databaseId } = req.params;
-            const updatedDatabase = await this.databaseService.updateDatabase(userId,databaseId, req.body);
-            if (!updatedDatabase) {
+            const result = await this.databaseService.updateDatabase(userId,databaseId, req.body);
+            // Type guard: kiểm tra result có phải object với property database không
+            if (!result || typeof result !== 'object') {
                 res.status(404).json({ message: "Không tìm thấy database schema để cập nhật." });
                 return;
             }
-            res.status(200).json({ message: "Cập nhật thành công!", data: updatedDatabase });
+            const resultWithDb = result as { database: any; version: any; newVersionId: string };
+            if (!resultWithDb.database) {
+                res.status(404).json({ message: "Không tìm thấy database schema để cập nhật." });
+                return;
+            }
+            res.status(200).json({ 
+                message: "Cập nhật thành công!", 
+                data: resultWithDb.database,
+                version: resultWithDb.version,
+                newVersionId: resultWithDb.newVersionId
+            });
         } catch (error: any) {
             // Xử lý lỗi validation từ service
             if (error.message.includes('foreign key') || error.message.includes('primary key') ||
@@ -121,12 +132,22 @@ export class DatabaseController {
                 return;
             }
             const { databaseId } = req.params;
-            const deletedDatabase = await this.databaseService.deleteDatabase(userId,databaseId);
-            if (!deletedDatabase) {
+            const result = await this.databaseService.deleteDatabase(userId,databaseId);
+            // Type guard: kiểm tra result có phải object với property database không
+            if (!result || typeof result !== 'object') {
                 res.status(404).json({ message: "Không tìm thấy database schema để xóa." });
                 return;
             }
-            res.status(200).json({ message: "Xóa thành công!" });
+            const resultWithDb = result as { database: any; version: any; newVersionId: string };
+            if (!resultWithDb.database) {
+                res.status(404).json({ message: "Không tìm thấy database schema để xóa." });
+                return;
+            }
+            res.status(200).json({ 
+                message: "Xóa thành công!",
+                version: resultWithDb.version,
+                newVersionId: resultWithDb.newVersionId
+            });
         } catch (error) {
             next(error);
         }

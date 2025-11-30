@@ -886,6 +886,12 @@ export default {
         const response = await usecaseApi.createUsecase(this.selectedVersionId, payload)
 
         if (response.data && response.data.status === 'Success') {
+          // ✅ Cập nhật selectedVersionId nếu có version mới được bump
+          if (response.data.data?.newVersionId) {
+            this.selectedVersionId = response.data.data.newVersionId
+            saveSelectedVersion(this.project._id, this.selectedVersionId)
+            console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
+          }
           this.toast.success('Use case created successfully')
           await this.fetchUseCases()
           await this.fetchProjectData(this.project._id)
@@ -915,6 +921,12 @@ export default {
         const response = await usecaseApi.updateUsecase(this.selectedVersionId, usecaseId, data)
 
         if (response.data.status === 'Success') {
+          // ✅ Cập nhật selectedVersionId nếu có version mới được bump
+          if (response.data.data?.newVersionId) {
+            this.selectedVersionId = response.data.data.newVersionId
+            saveSelectedVersion(this.project._id, this.selectedVersionId)
+            console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
+          }
           this.toast.success('Use case updated successfully')
           await this.fetchUseCases()
           await this.fetchProjectData(this.project._id)
@@ -938,6 +950,12 @@ export default {
         const response = await usecaseApi.deleteUsecase(this.selectedVersionId, usecaseId)
 
         if (response.data.status === 'Success') {
+          // ✅ Cập nhật selectedVersionId nếu có version mới được bump
+          if (response.data.data?.newVersionId) {
+            this.selectedVersionId = response.data.data.newVersionId
+            saveSelectedVersion(this.project._id, this.selectedVersionId)
+            console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
+          }
           this.toast.success('Use case deleted successfully')
           await this.fetchProjectData(this.project._id)
         } else {
@@ -1402,6 +1420,12 @@ export default {
         const [_, response] = await Promise.all([minLoadingTime, apiCall])
 
         if (response.data && response.data.status === 'Success') {
+          // ✅ Cập nhật selectedVersionId nếu có version mới được bump
+          if (response.data.data?.newVersionId) {
+            this.selectedVersionId = response.data.data.newVersionId
+            saveSelectedVersion(this.project._id, this.selectedVersionId)
+            console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
+          }
           this.toast.success('Input added successfully!')
           this.showAddInputModal = false
           await this.fetchProjectData(this.project._id)
@@ -1437,6 +1461,12 @@ export default {
 
         const response = await deleteSpecificInput(versionId, inputId)
         if (response.data?.status === 'Success') {
+          // ✅ Cập nhật selectedVersionId nếu có version mới được bump
+          if (response.data.data?.newVersionId) {
+            this.selectedVersionId = response.data.data.newVersionId
+            saveSelectedVersion(this.project._id, this.selectedVersionId)
+            console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
+          }
           this.toast.success('Input deleted successfully!')
           await this.fetchProjectData(this.project._id)
         } else {

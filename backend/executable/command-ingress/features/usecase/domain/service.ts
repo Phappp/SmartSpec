@@ -247,7 +247,11 @@ export class UsecaseService {
       return new ServiceResponse(
         ResponseStatus.Success,
         'Usecase added successfully',
-        newUsecase,
+        {
+          usecase: newUsecase,
+          version: version,
+          newVersionId: versionId
+        },
         201
       );
 
@@ -386,7 +390,11 @@ export class UsecaseService {
       return new ServiceResponse(
         ResponseStatus.Success,
         "Usecase updated successfully",
-        updatedUsecase,
+        {
+          usecase: updatedUsecase,
+          version: version,
+          newVersionId: versionId
+        },
         200
       );
 
@@ -504,7 +512,11 @@ export class UsecaseService {
       return new ServiceResponse(
         ResponseStatus.Success,
         "Usecase deleted successfully",
-        { deleted_id: usecaseId },
+        {
+          deleted_id: usecaseId,
+          version: version,
+          newVersionId: versionId
+        },
         200
       );
 
