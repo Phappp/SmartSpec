@@ -7,6 +7,7 @@
       :active-users="activeUsers"
       @version-selected="handleVersionSelect"
       @go-back="goBack"
+      @show-sharing="showSharingModal = true"
     />
 
     <!-- Navigation Tabs -->
@@ -503,6 +504,7 @@
       v-if="showGenerateModal"
       :project-id="project._id"
       :version-id="selectedVersionId"
+      :project="project"
       :requirements="requirements"
       :database-schema="databaseSchema"
       @close="showGenerateModal = false"
@@ -543,6 +545,13 @@
       :progress="exportProgress"
       @cancel="cancelExport"
     />
+
+    <!-- Sharing Modal -->
+    <ProjectSharingModal
+      v-if="showSharingModal"
+      :project-id="project._id"
+      @close="showSharingModal = false"
+    />
   </div>
 </template>
 
@@ -557,6 +566,7 @@ import TestcaseDetailModal from '@/components/testcase/TestcaseDetailModal.vue'
 import TestcaseExecutionModal from '@/components/testcase/TestcaseExecutionModal.vue'
 import ExportOptionsPanel from '@/components/testcase/ExportOptionsPanel.vue'
 import ExportProgressModal from '@/components/testcase/ExportProgressModal.vue'
+import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
 import { useActiveMembers } from '@/utils/useActiveMembers'
 import { getProjectDetail, usecaseApi, getDatabasesByVersion } from '@/api/project'
 import { testcaseApi } from '@/api/testcase'
@@ -579,6 +589,7 @@ export default {
     TestcaseExecutionModal,
     ExportOptionsPanel,
     ExportProgressModal,
+    ProjectSharingModal,
   },
   setup() {
     const route = useRoute()
@@ -603,6 +614,7 @@ export default {
     const editingTestcase = ref(null)
     const viewingTestcase = ref(null)
     const executingTestcase = ref(null)
+    const showSharingModal = ref(false)
 
     // Filters and sorting
     const searchQuery = ref('')
@@ -1419,6 +1431,7 @@ export default {
       editingTestcase,
       viewingTestcase,
       executingTestcase,
+      showSharingModal,
 
       // Filters and selection
       searchQuery,

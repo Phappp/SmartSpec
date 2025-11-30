@@ -88,13 +88,7 @@
               </select>
             </div>
 
-            <div class="form-group">
-              <label class="form-label">Language</label>
-              <select v-model="configuration.language" class="form-select">
-                <option value="vi-VN">Vietnamese</option>
-                <option value="en-US">English</option>
-              </select>
-            </div>
+            <!-- Language is automatically set from project settings -->
 
             <div class="form-group">
               <label class="form-label">Priority Level</label>
@@ -369,6 +363,10 @@ export default {
   props: {
     projectId: String,
     versionId: String,
+    project: {
+      type: Object,
+      default: null,
+    },
     requirements: {
       type: Array,
       default: () => [],
@@ -401,9 +399,16 @@ export default {
     // Configuration
     const configuration = ref({
       testType: 'all',
-      language: 'vi-VN',
+      language: 'vi-VN', // Will be set from project
       priority: 'auto',
     })
+    
+    // Set language from project when available
+    watch(() => props.project, (newProject) => {
+      if (newProject?.language) {
+        configuration.value.language = newProject.language
+      }
+    }, { immediate: true })
 
     // Draft management
     const draftKey = computed(() => `testcase_draft_${props.projectId}_${props.versionId}`)

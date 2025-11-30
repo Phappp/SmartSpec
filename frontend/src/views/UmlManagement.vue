@@ -7,6 +7,7 @@
       :active-users="activeUsers"
       @version-selected="handleVersionSelect"
       @go-back="goBack"
+      @show-sharing="showSharingModal = true"
     />
 
     <!-- Navigation Tabs -->
@@ -497,13 +498,7 @@
                 </select>
               </div>
 
-              <div class="form-group">
-                <label>Language</label>
-                <select v-model="generateForm.lang" required>
-                  <option value="en-US">English</option>
-                  <option value="vi-VN">Vietnamese</option>
-                </select>
-              </div>
+              <!-- Language is automatically set from project settings -->
 
               <!-- Sequence Diagram Options -->
               <div class="form-group" v-if="generateForm.type === 'sequence'">
@@ -623,6 +618,13 @@
         </div>
       </div>
     </div>
+
+    <!-- Sharing Modal -->
+    <ProjectSharingModal
+      v-if="showSharingModal"
+      :project-id="project._id"
+      @close="showSharingModal = false"
+    />
   </div>
 </template>
 
@@ -644,6 +646,7 @@ import {
 import { getSequenceDiagrams, generateSequenceDiagram, deleteSequenceDiagram } from '@/api/sqd'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
+import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
 import UCDRenderer from '@/components/uml/usecase_diagram/UCDRenderer.vue'
 import ActivityDiagramRenderer from '@/components/uml/activity_diagram/ActivityDiagramRenderer.vue'
 import SequenceDiagramRenderer from '@/components/uml/sequence_diagram/SequenceDiagramRenderer.vue'
@@ -661,6 +664,7 @@ export default {
   name: 'UmlManagement',
   components: {
     ProjectHeader,
+    ProjectSharingModal,
     UCDRenderer,
     ActivityDiagramRenderer,
     SequenceDiagramRenderer,
@@ -684,6 +688,7 @@ export default {
       sequenceDiagrams: [],
       loading: false,
       showGenerateModal: false,
+      showSharingModal: false,
       editingDiagram: null,
       generating: false,
       generateForm: {
@@ -1068,7 +1073,7 @@ export default {
     // Diagram actions
     generateNewDiagram() {
       this.generateForm.type = 'usecase'
-      this.generateForm.lang = 'en-US'
+      this.generateForm.lang = this.project?.language || 'vi-VN'
       this.generateForm.description = ''
       this.generateForm.usecaseId = ''
       this.generateForm.sourceType = 'usecase'
@@ -1079,7 +1084,7 @@ export default {
     },
     generateSpecificDiagram(type) {
       this.generateForm.type = type
-      this.generateForm.lang = 'en-US'
+      this.generateForm.lang = this.project?.language || 'vi-VN'
       this.generateForm.description = ''
       this.generateForm.usecaseId = ''
       this.generateForm.sourceType = 'usecase'
@@ -1155,31 +1160,26 @@ export default {
         }
 
         if (newDiagram) {
-          // Add to appropriate array
-          newDiagram._type = this.generateForm.type
-          switch (this.generateForm.type) {
-            case 'activity':
-              this.activityDiagrams.unshift(newDiagram)
-              break
-            case 'sequence':
-              this.sequenceDiagrams.unshift(newDiagram)
-              break
-            case 'usecase':
-            default:
-              this.usecaseDiagrams.unshift(newDiagram)
-              break
-          }
-
           this.closeGenerateModal()
           this.toast.success(`${this.getDiagramTypeName()} generated successfully!`)
 
-          setTimeout(() => {
-            this.triggerPreviewGeneration(newDiagram)
-          }, 1000)
+          // Refresh diagrams from server to ensure data consistency
+          await this.loadDiagrams()
 
-          setTimeout(() => {
-            this.editDiagram(newDiagram)
-          }, 500)
+          // Find the newly created diagram and open editor
+          const diagramId = newDiagram._id || newDiagram.id
+          const diagrams = this.getDiagramsByType(this.generateForm.type)
+          const createdDiagram = diagrams.find((d) => (d._id || d.id) === diagramId)
+          
+          if (createdDiagram) {
+            setTimeout(() => {
+              this.triggerPreviewGeneration(createdDiagram)
+            }, 1000)
+
+            setTimeout(() => {
+              this.editDiagram(createdDiagram)
+            }, 500)
+          }
         } else {
           throw new Error('No diagram data returned')
         }
@@ -1410,7 +1410,7 @@ export default {
     resetGenerateForm() {
       this.generateForm = {
         type: 'usecase',
-        lang: 'en-US',
+        lang: this.project?.language || 'vi-VN',
         description: '',
         usecaseId: '',
         sourceType: 'usecase',
