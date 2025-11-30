@@ -156,7 +156,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       throw new Error("Usecase Diagram not found");
     }
     const usecaseIndex = uc.usecases.findIndex(
-      (usecase: any) => usecase.id === usecaseId
+      (usecase: any) => (usecase._id ? String(usecase._id) : '') === usecaseId
     );
     if (usecaseIndex === -1) {
       throw new Error("Usecase not found");
@@ -175,7 +175,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       throw new Error("Usecase Diagram not found");
     }
     const usecaseIndex = uc.usecases.findIndex(
-      (usecase: any) => usecase.id === usecaseId
+      (usecase: any) => (usecase._id ? String(usecase._id) : '') === usecaseId
     );
     if (usecaseIndex === -1) {
       throw new Error("Usecase not found");
@@ -193,14 +193,14 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     }
 
     const ucBySource = ucd.usecases.findIndex(
-      (usecase: any) => usecase.id === data.source
+      (usecase: any) => (usecase._id ? String(usecase._id) : '') === data.source
     );
     if (ucBySource === -1) {
       throw new Error("Source not found in usecase diagram");
     }
 
     const ucByTarget = ucd.usecases.findIndex(
-      (usecase: any) => usecase.id === data.target
+      (usecase: any) => (usecase._id ? String(usecase._id) : '') === data.target
     );
     if (ucByTarget === -1) {
       throw new Error("Target not found in usecase diagram");
@@ -244,7 +244,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     }
 
     const ucBySource = ucd.usecases.findIndex(
-      (usecase: any) => usecase.id === data.source
+      (usecase: any) => (usecase._id ? String(usecase._id) : '') === data.source
     );
     console.log(ucBySource);
     if (ucBySource === -1) {
@@ -252,7 +252,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     }
 
     const ucByTarget = ucd.usecases.findIndex(
-      (usecase: any) => usecase.id === data.target
+      (usecase: any) => (usecase._id ? String(usecase._id) : '') === data.target
     );
     if (ucByTarget === -1) {
       throw new Error("Target not found in usecase diagram");
@@ -303,7 +303,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     }
 
     const usecaseById = ucd.usecases.findIndex(
-      (usecase: any) => usecase.id === data.usecase_id
+      (usecase: any) => (usecase._id ? String(usecase._id) : '') === data.usecase_id
     );
     if (usecaseById === -1) {
       throw new Error("Usecase not found in usecase diagram");

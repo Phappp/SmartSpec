@@ -126,13 +126,13 @@
             <div v-if="expandedGroups[role]" class="group-content">
               <div
                 v-for="uc in group"
-                :key="uc.id"
+                :key="getUsecaseId(uc)"
                 class="usecase-card"
-                :class="{ expanded: expandedUseCaseId === uc.id }"
+                :class="{ expanded: expandedUseCaseId === getUsecaseId(uc) }"
               >
-                <div class="usecase-header" @click="toggleUseCase(uc.id)">
+                <div class="usecase-header" @click="toggleUseCase(getUsecaseId(uc))">
                   <div class="usecase-basic-info">
-                    <div class="usecase-id-badge">UC-{{ uc.id }}</div>
+                    <div class="usecase-id-badge">UC-{{ getUsecaseId(uc) }}</div>
                     <h4 class="usecase-name">{{ uc.name }}</h4>
                     <span class="priority-badge" :class="`priority-${uc.priority}`">
                       {{ uc.priority }}
@@ -159,7 +159,7 @@
                 </div>
 
                 <!-- Expanded Details -->
-                <div v-if="expandedUseCaseId === uc.id" class="usecase-details">
+                <div v-if="expandedUseCaseId === getUsecaseId(uc)" class="usecase-details">
                   <div class="details-grid">
                     <!-- Row 1: Goal, Description, Context -->
                     <div class="detail-row">
@@ -457,7 +457,8 @@ export default {
         return {}
       }
       return this.useCases.reduce((map, uc) => {
-        map[uc.id] = uc
+        const id = String(uc._id || uc.id || '')
+        map[id] = uc
         return map
       }, {})
     },
@@ -504,7 +505,7 @@ export default {
             !this.searchQuery ||
             uc.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
             uc.goal?.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-            `UC-${uc.id}`.toLowerCase().includes(this.searchQuery.toLowerCase())
+            `UC-${this.getUsecaseId(uc)}`.toLowerCase().includes(this.searchQuery.toLowerCase())
 
           const matchesPriority = !this.priorityFilter || uc.priority === this.priorityFilter
 
@@ -533,18 +534,24 @@ export default {
     },
   },
   methods: {
+    // Helper: Get usecase ID (support both _id and id for backward compatibility)
+    getUsecaseId(uc) {
+      if (!uc) return ''
+      return String(uc._id || uc.id || '')
+    },
     // Use Case CRUD Operations
     async submitUsecaseForm(formData) {
       if (this.submitting) return
       this.submitting = true
       try {
         if (this.isEditing) {
-          if (!formData.id) {
+          const usecaseId = String(formData._id || formData.id || '')
+          if (!usecaseId) {
             console.warn('⚠️ No ID in submitted form — skipping update.')
             return
           }
           await this.$emit('updateUsecase', {
-            usecaseId: formData.id,
+            usecaseId: usecaseId,
             data: formData,
           })
         } else {
@@ -560,7 +567,8 @@ export default {
     async confirmDelete() {
       this.deleting = true
       try {
-        await this.$emit('deleteUsecase', this.usecaseToDelete.id)
+        const usecaseId = this.getUsecaseId(this.usecaseToDelete)
+        await this.$emit('deleteUsecase', usecaseId)
         this.closeDeleteModal()
       } catch (error) {
         console.error('Deletion failed from parent:', error)

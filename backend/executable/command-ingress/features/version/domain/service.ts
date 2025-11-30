@@ -6,6 +6,7 @@ import Project from "../../../../../internal/model/project";
 import Preview from "../../../../../internal/model/preview";
 import Database from "../../../../../internal/model/database";
 import Testcase from "../../../../../internal/model/testcase";
+import Usecase from "../../../../../internal/model/usecase";
 import Uml from "../../../../../internal/model/uml";
 import UsecaseDiagram from "../../../../../internal/model/usecase_diagram";
 import ActivityDiagram from "../../../../../internal/model/activity_diagram";
@@ -198,8 +199,10 @@ export class VersionService {
         stage: "completed",
         status: "completed",
         progress: 100,
-        requirement_model: baseVersion.requirement_model.map(r => r.toObject()),
-        pending_conflicts: baseVersion.pending_conflicts.map(r => r.toObject()),
+        pending_conflicts: baseVersion.pending_conflicts.map((c: any) => ({
+          conflict_id: c.conflict_id,
+          items: c.items || []
+        })),
         processing_errors: JSON.parse(JSON.stringify(baseVersion.processing_errors || [])),
         affects_requirement: baseVersion.affects_requirement || false,
       });
@@ -215,6 +218,7 @@ export class VersionService {
       const usecaseUMLmap = new Map<string, string>();
       const activityUMLmap = new Map<string, string>();
       const sequenceUMLmap = new Map<string, string>();
+      const usecaseMap = new Map<string, string>();
 
       const inputIds: Types.ObjectId[] = [];
 
@@ -275,6 +279,52 @@ export class VersionService {
             updated_at: new Date(),
           }],
         );
+      }
+
+      // ================================
+      // 6.5️⃣ Clone Usecases
+      // ================================
+      const baseUsecases = await Usecase.find({ version_id: baseVersion._id }).lean();
+      for (const uc of baseUsecases) {
+        const newId = new Types.ObjectId();
+        usecaseMap.set(String(uc._id), String(newId));
+
+        // Map related_usecases từ id cũ sang id mới
+        const mappedRelatedUsecases = (uc.related_usecases || [])
+          .map((relatedId: any) => {
+            const oldId = String(relatedId);
+            const newRelatedId = usecaseMap.get(oldId);
+            return newRelatedId ? new Types.ObjectId(newRelatedId) : null;
+          })
+          .filter((id: any) => id !== null);
+
+        await Usecase.create([{
+          project_id: uc.project_id,
+          version_id: newVersion._id,
+          name: uc.name,
+          role: uc.role,
+          goal: uc.goal,
+          reason: uc.reason,
+          tasks: uc.tasks,
+          inputs: uc.inputs,
+          outputs: uc.outputs,
+          context: uc.context,
+          priority: uc.priority,
+          feedback: uc.feedback,
+          rules: uc.rules,
+          triggers: uc.triggers,
+          preconditions: uc.preconditions,
+          postconditions: uc.postconditions,
+          exceptions: uc.exceptions,
+          stakeholders: uc.stakeholders,
+          constraints: uc.constraints,
+          related_usecases: mappedRelatedUsecases,
+          created_by: uc.created_by,
+          updated_by: uc.updated_by,
+          _id: newId,
+          created_at: new Date(),
+          updated_at: new Date()
+        }]);
       }
 
       // ================================
@@ -363,6 +413,7 @@ export class VersionService {
             inputMap,
             dbMap,
             tcMap,
+            usecaseMap,
             usecaseUMLmap,
             activityUMLmap,
             sequenceUMLmap,
@@ -626,24 +677,33 @@ export class VersionService {
         await revertDiagram(SequenceDiagram);
       }
       // ------------------------------------------------------
-      // REQUIREMENT
+      // REQUIREMENT (USECASE)
       // ------------------------------------------------------
       else if (entity_type === "requirement") {
-        const reqs = baseVersion.requirement_model || [];
-
         if (change_type === "added") {
-          const idx = parseInt(before_snapshot.id.replace("UC", "")) - 1;
-          reqs.splice(idx, 0, before_snapshot);
-          reqs.forEach((r, i) => (r.id = `UC${i + 1}`));
-          baseVersion.set('requirement_model',reqs);
+          // Xóa usecase đã thêm
+          await Usecase.findByIdAndDelete(entity_id, { session });
         }
         else if (change_type === "updated") {
-          const updated = reqs.map(r => r.id === entity_id ? before_snapshot : r);
-          baseVersion.set('requirement_model',updated);
+          // Khôi phục về trạng thái cũ
+          if (before_snapshot) {
+            await Usecase.findByIdAndUpdate(
+              entity_id,
+              { $set: before_snapshot },
+              { session }
+            );
+          }
         }
         else if (change_type === "deleted") {
-          reqs.push(before_snapshot);
-          baseVersion.set('requirement_model',reqs);
+          // Khôi phục usecase đã xóa
+          if (before_snapshot) {
+            await Usecase.create([{
+              ...before_snapshot,
+              _id: new Types.ObjectId(entity_id),
+              version_id: baseVersion._id,
+              project_id: baseVersion.project_id
+            }], { session });
+          }
         }
 
         baseVersion.affects_requirement = true;

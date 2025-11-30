@@ -91,25 +91,25 @@
           <div class="conflict-options-grid">
             <div
               v-for="useCase in conflict.items"
-              :key="useCase.id"
+              :key="getUsecaseId(useCase)"
               class="conflict-option"
-              :class="{ selected: selectedResolutions[conflict.conflict_id] === useCase.id }"
-              @click="$emit('select-resolution', conflict.conflict_id, useCase.id)"
+              :class="{ selected: selectedResolutions[conflict.conflict_id] === getUsecaseId(useCase) }"
+              @click="$emit('select-resolution', conflict.conflict_id, getUsecaseId(useCase))"
             >
               <div class="option-header">
-                <span class="option-badge">ID: {{ useCase.id }}</span>
+                <span class="option-badge">ID: {{ getUsecaseId(useCase) }}</span>
                 <button
                   class="select-btn"
-                  :class="{ selected: selectedResolutions[conflict.conflict_id] === useCase.id }"
+                  :class="{ selected: selectedResolutions[conflict.conflict_id] === getUsecaseId(useCase) }"
                 >
                   <span
-                    v-if="selectedResolutions[conflict.conflict_id] === useCase.id"
+                    v-if="selectedResolutions[conflict.conflict_id] === getUsecaseId(useCase)"
                     class="material-symbols-outlined"
                     >check_circle</span
                   >
                   <span v-else class="material-symbols-outlined">radio_button_unchecked</span>
                   {{
-                    selectedResolutions[conflict.conflict_id] === useCase.id ? 'Selected' : 'Select'
+                    selectedResolutions[conflict.conflict_id] === getUsecaseId(useCase) ? 'Selected' : 'Select'
                   }}
                 </button>
               </div>
@@ -214,6 +214,17 @@ export default {
       if (percentage === 0) return 'No conflicts resolved yet'
       if (percentage === 100) return 'All conflicts resolved!'
       return `${percentage}% complete`
+    },
+  },
+  methods: {
+    // Helper: Get usecase ID (support both _id and id for backward compatibility)
+    getUsecaseId(uc) {
+      if (!uc) return ''
+      // Handle ObjectId from backend (conflict.items are ObjectIds)
+      if (typeof uc === 'string') return uc
+      if (uc._id) return String(uc._id)
+      if (uc.id) return String(uc.id)
+      return ''
     },
   },
 }

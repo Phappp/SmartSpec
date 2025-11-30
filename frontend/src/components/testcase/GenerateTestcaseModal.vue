@@ -35,15 +35,15 @@
             <div class="selection-list">
               <div
                 v-for="requirement in requirements"
-                :key="requirement.id"
+                :key="getRequirementId(requirement)"
                 class="selection-item"
-                :class="{ selected: selectedRequirements.includes(requirement.id) }"
-                @click="toggleRequirement(requirement.id)"
+                :class="{ selected: isRequirementSelected(requirement) }"
+                @click="toggleRequirement(requirement)"
               >
                 <input
                   type="checkbox"
-                  :checked="selectedRequirements.includes(requirement.id)"
-                  @change="toggleRequirement(requirement.id)"
+                  :checked="isRequirementSelected(requirement)"
+                  @change="toggleRequirement(requirement)"
                 />
                 <div class="item-content">
                   <h4 class="item-title">{{ requirement.name }}</h4>
@@ -440,16 +440,37 @@ export default {
         .join(', ')
     })
 
+    // Helper: Get requirement ID (support both _id and id for backward compatibility)
+    const getRequirementId = (req) => {
+      if (!req) return ''
+      return String(req._id || req.id || req.requirement_id || '')
+    }
+
+    // Check if requirement is selected
+    const isRequirementSelected = (requirement) => {
+      const reqId = getRequirementId(requirement)
+      if (!reqId) return false
+      return selectedRequirements.value.includes(reqId)
+    }
+
     // Methods
     const selectAll = () => {
-      selectedRequirements.value = props.requirements.map((req) => req.id)
+      selectedRequirements.value = props.requirements
+        .map((req) => getRequirementId(req))
+        .filter((id) => id && id !== '')
     }
 
     const clearSelection = () => {
       selectedRequirements.value = []
     }
 
-    const toggleRequirement = (reqId) => {
+    const toggleRequirement = (requirement) => {
+      const reqId = getRequirementId(requirement)
+      if (!reqId) {
+        console.warn('⚠️ Cannot toggle requirement with no ID:', requirement)
+        return
+      }
+      
       const index = selectedRequirements.value.indexOf(reqId)
       if (index > -1) {
         selectedRequirements.value.splice(index, 1)
@@ -499,7 +520,10 @@ export default {
       }
 
       const firstReqId = requirementIds[0]
-      const requirement = props.requirements.find((req) => req.id === firstReqId)
+      const requirement = props.requirements.find((req) => {
+        const reqId = getRequirementId(req)
+        return reqId === String(firstReqId) || reqId === firstReqId
+      })
       const requirementName = requirement?.name || 'Unknown Requirement'
       const baseTitle = testcase.title || 'Test Scenario'
 
@@ -521,8 +545,27 @@ export default {
       generationProgress.value = 0
       previewTestCases.value = []
 
+      // Filter out null/undefined/empty values and validate
+      const validRequirementIds = selectedRequirements.value
+        .filter((id) => id != null && id !== '' && String(id).trim() !== '' && String(id).toLowerCase() !== 'null' && String(id).toLowerCase() !== 'undefined')
+
+      if (validRequirementIds.length === 0) {
+        toast.error('Please select at least one valid requirement')
+        return
+      }
+
       // ✅ DEBUG: Log before generation
-      console.log('🔍 DEBUG - Starting generation with requirements:', selectedRequirements.value)
+      console.log('🔍 DEBUG - Starting generation with requirements:', {
+        original: selectedRequirements.value,
+        filtered: validRequirementIds,
+        requirements: props.requirements.map(req => ({
+          _id: req._id,
+          id: req.id,
+          requirement_id: req.requirement_id,
+          name: req.name,
+          computedId: getRequirementId(req)
+        }))
+      })
 
       // Simulate progress updates
       const progressInterval = setInterval(() => {
@@ -533,7 +576,7 @@ export default {
 
       try {
         const response = await testcaseApi.generateTestCases(props.projectId, props.versionId, {
-          selectedRequirementIds: selectedRequirements.value,
+          selectedRequirementIds: validRequirementIds,
           language: configuration.value.language,
           testType: configuration.value.testType,
         })
@@ -792,7 +835,9 @@ export default {
     onMounted(() => {
       // Auto-select all requirements if there are few
       if (props.requirements.length > 0 && props.requirements.length <= 10) {
-        selectedRequirements.value = props.requirements.map((req) => req.id)
+        selectedRequirements.value = props.requirements
+          .map((req) => getRequirementId(req))
+          .filter((id) => id && id !== '')
       }
 
       // Check for existing draft - SỬA THÀNH checkDraft()
@@ -822,6 +867,8 @@ export default {
       testTypeDistribution,
       generationProgress,
       hasDraft,
+      getRequirementId,
+      isRequirementSelected,
       selectAll,
       clearSelection,
       toggleRequirement,

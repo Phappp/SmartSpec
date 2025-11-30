@@ -937,7 +937,12 @@ export default {
     }
 
     const getRequirementName = (requirementId) => {
-      const requirement = requirements.value.find((req) => req.id === requirementId)
+      // Support both _id and id for backward compatibility
+      const requirement = requirements.value.find((req) => {
+        const reqId = String(req._id || req.id || '')
+        const searchId = String(requirementId || '')
+        return reqId === searchId || reqId.toLowerCase() === searchId.toLowerCase()
+      })
       return requirement?.name || 'Unknown Requirement'
     }
 

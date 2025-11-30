@@ -355,7 +355,6 @@ export class ProjectService {
         created_by: userId,
         status: "completed",
         affects_requirement: false,
-        requirement_model: [],
         pending_conflicts: [],
         processing_errors: [],
       });

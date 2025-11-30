@@ -1,7 +1,9 @@
 // TestcaseService.ts
+import { Types } from "mongoose";
 import Testcase from "../../../../../internal/model/testcase";
 import Database from "../../../../../internal/model/database";
 import Version from "../../../../../internal/model/version";
+import Usecase from "../../../../../internal/model/usecase";
 import User from "../../../../../internal/model/user";
 import { TestcaseGeminiService } from "./GeminiService";
 import { VersionService } from "../../version/domain/service";
@@ -36,13 +38,88 @@ export class TestcaseService {
             throw new Error("Version not found");
         }
 
-        const requirementsToProcess = version.requirement_model.filter(
-            req => selectedRequirementIds.includes(req.id)
-        );
+        // Lấy usecases từ collection
+        const allUsecases = await Usecase.find({ version_id: version._id }).lean();
+        
+        // Helper: Normalize requirement ID (support both _id and id for backward compatibility)
+        const normalizeRequirementId = (req: any): string[] => {
+            const ids: string[] = [];
+            if (req._id) {
+                const idStr = String(req._id).trim();
+                ids.push(idStr);
+                // Also add without ObjectId wrapper if it's an ObjectId string
+                if (Types.ObjectId.isValid(idStr)) {
+                    ids.push(new Types.ObjectId(idStr).toString());
+                }
+            }
+            if (req.id && String(req.id).trim() !== String(req._id || '').trim()) {
+                ids.push(String(req.id).trim());
+            }
+            return Array.from(new Set(ids)); // Remove duplicates
+        };
+
+        // Normalize selectedRequirementIds from frontend (handle ObjectId strings, plain strings, etc.)
+        // Filter out null, undefined, empty strings, and invalid values
+        const normalizedSelectedIds = selectedRequirementIds
+            .filter(id => id != null && id !== '' && String(id).trim() !== '' && String(id).toLowerCase() !== 'null' && String(id).toLowerCase() !== 'undefined')
+            .map(id => {
+                const idStr = String(id).trim();
+                // Try to convert to ObjectId if valid, otherwise use as-is
+                if (Types.ObjectId.isValid(idStr)) {
+                    return new Types.ObjectId(idStr).toString();
+                }
+                return idStr;
+            })
+            .filter(id => id && id !== ''); // Final filter to ensure no empty strings
+
+        console.log('🔍 Testcase Generation Debug:', {
+            selectedRequirementIds,
+            normalizedSelectedIds,
+            totalUsecases: allUsecases.length,
+            usecaseIds: allUsecases.map(req => ({
+                _id: req._id ? String(req._id) : null,
+                id: req._id || null,
+                name: req.name
+            }))
+        });
+
+        // Filter requirements - handle both _id and id with normalized comparison
+        const requirementsToProcess = allUsecases.filter(req => {
+            const reqIds = normalizeRequirementId(req);
+            return normalizedSelectedIds.some(selectedId => {
+                const normalizedSelected = String(selectedId).trim();
+                return reqIds.some(reqId => {
+                    const normalizedReq = String(reqId).trim();
+                    // Case-insensitive comparison and handle ObjectId string variations
+                    return normalizedReq === normalizedSelected ||
+                           normalizedReq.toLowerCase() === normalizedSelected.toLowerCase() ||
+                           (Types.ObjectId.isValid(normalizedReq) && Types.ObjectId.isValid(normalizedSelected) &&
+                            new Types.ObjectId(normalizedReq).toString() === new Types.ObjectId(normalizedSelected).toString());
+                });
+            });
+        });
+
+        if (normalizedSelectedIds.length === 0) {
+            console.error('❌ No valid requirement IDs provided:', {
+                originalSelectedRequirementIds: selectedRequirementIds,
+                filteredCount: normalizedSelectedIds.length
+            });
+            throw new Error('No valid requirement IDs provided. Please select at least one requirement.');
+        }
 
         if (requirementsToProcess.length === 0) {
-            throw new Error("No matching requirements found");
+            console.error('❌ No matching requirements found:', {
+                selectedRequirementIds,
+                normalizedSelectedIds,
+                availableUsecaseIds: allUsecases.map(req => ({
+                    _id: req._id ? String(req._id) : null,
+                    name: req.name
+                }))
+            });
+            throw new Error(`No matching requirements found. Selected IDs: ${normalizedSelectedIds.join(', ')}. Available usecases: ${allUsecases.length}`);
         }
+
+        console.log(`✅ Found ${requirementsToProcess.length} matching requirements out of ${selectedRequirementIds.length} selected`);
 
         // Get database schema (optional)
         const database = await Database.findOne({
@@ -732,7 +809,11 @@ export class TestcaseService {
         if (versionId) versionQuery._id = versionId;
 
         const version = await Version.findOne(versionQuery).lean();
-        const totalRequirements = version?.requirement_model?.length || 0;
+        
+        // Lấy tổng số usecases từ collection
+        const usecaseQuery: any = { project_id: projectId };
+        if (versionId) usecaseQuery.version_id = versionId;
+        const totalRequirements = await Usecase.countDocuments(usecaseQuery);
 
         // Get covered requirements from test cases
         const coverageStats = await Testcase.aggregate([
@@ -748,13 +829,12 @@ export class TestcaseService {
             },
             {
                 $lookup: {
-                    from: "versions",
-                    let: { requirementId: "$_id", projectId: projectId },
+                    from: "usecases",
+                    let: { requirementId: "$_id", projectId: projectId, versionId: versionId },
                     pipeline: [
                         { $match: { $expr: { $eq: ["$project_id", { $toObjectId: projectId }] } } },
-                        { $unwind: "$requirement_model" },
-                        { $match: { $expr: { $eq: ["$requirement_model.id", "$$requirementId"] } } },
-                        { $replaceRoot: { newRoot: "$requirement_model" } }
+                        ...(versionId ? [{ $match: { $expr: { $eq: ["$version_id", { $toObjectId: versionId }] } } }] : []),
+                        { $match: { $expr: { $eq: [{ $toString: "$_id" }, { $toString: "$$requirementId" }] } } }
                     ],
                     as: "requirement_info"
                 }

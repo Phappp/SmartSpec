@@ -491,7 +491,10 @@ export default {
       this.selectedVersionId = version._id
       this.currentVersionDetails = version
 
-      // 3. Tải lại toàn bộ dữ liệu của version mới
+      // 3. Fetch usecases cho version mới
+      await this.fetchUseCases()
+
+      // 4. Tải lại toàn bộ dữ liệu của version mới (nếu cần)
       const res = await getProjectDetail(this.project._id, this.selectedVersionId)
 
       this.toast.info(`Switched to new version: ${version.version_number || version._id}`)
@@ -553,7 +556,7 @@ export default {
         // Lưu vào localStorage để đồng bộ với các trang khác
         saveSelectedVersion(this.project._id, versionId)
 
-        // Refresh use cases với version mới
+        // Refresh use cases với version mới (từ API, không từ requirement_model)
         await this.fetchUseCases()
 
         // Thông báo cho user
@@ -578,6 +581,9 @@ export default {
       await this.fetchProjectData(this.project._id)
       this.selectedVersionId = version._id
       this.currentVersionDetails = version
+
+      // Fetch usecases cho version mới
+      await this.fetchUseCases()
 
       this.toast.info(`Switched to version: ${version.version_number || version._id}`)
       this.$forceUpdate()
@@ -795,10 +801,6 @@ export default {
 
         this.currentVersionDetails = result.current_version || null
 
-        this.useCases = this.currentVersionDetails
-          ? this.currentVersionDetails.requirement_model
-          : []
-
         // Sử dụng version sync utility để lấy selected version
         const currentVersionId = this.currentVersionDetails?._id
         this.selectedVersionId = getSelectedOrDefaultVersion(
@@ -810,7 +812,12 @@ export default {
         // Lưu selected version vào localStorage
         if (this.selectedVersionId) {
           saveSelectedVersion(this.project._id, this.selectedVersionId)
+          // Fetch usecases từ API thay vì từ requirement_model
+          await this.fetchUseCases()
+        } else {
+          this.useCases = []
         }
+
         this.checkConflictsOnLoad()
         this.checkUnprocessedInputs()
         this.checkConflicts()
@@ -957,6 +964,7 @@ export default {
             console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
           }
           this.toast.success('Use case deleted successfully')
+          await this.fetchUseCases()
           await this.fetchProjectData(this.project._id)
         } else {
           throw new Error(response.data.message || 'Failed to delete use case')
@@ -1165,6 +1173,8 @@ export default {
 
         const oldVersionId = this.selectedVersionId
         this.selectedVersionId = versionId
+        // Fetch usecases cho version mới
+        await this.fetchUseCases()
         // Lưu vào localStorage để đồng bộ giữa các trang
         saveSelectedVersion(this.project._id, versionId)
 

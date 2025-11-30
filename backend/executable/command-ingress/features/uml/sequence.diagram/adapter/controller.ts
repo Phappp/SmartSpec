@@ -68,25 +68,48 @@ export class SequenceDiagramController extends BaseController {
           return;
         }
 
-        // 4. <-- SỬA ĐỔI QUAN TRỌNG: Tìm Usecase Context (Ngữ cảnh)
-        // Tìm 'usecase' cụ thể mà người dùng muốn vẽ
-        // từ bên trong mảng 'requirement_model' của version
-        // Trong controller.ts - method generateSchemaFromRequirements
-        const useCaseContext = version.requirement_model.find(
-          (uc: any) => uc.id === usecaseId  // ← SỬA THÀNH uc.id thay vì uc._id
-        );
+        // 4. Tìm Usecase Context từ collection - handle cả _id và id (backward compatibility)
+        const Usecase = (await import("../../../../../../internal/model/usecase")).default;
+        const { Types } = await import("mongoose");
+        
+        // Normalize usecaseId (handle ObjectId string, plain string, etc.)
+        let normalizedUsecaseId = usecaseId;
+        if (Types.ObjectId.isValid(String(usecaseId))) {
+          normalizedUsecaseId = new Types.ObjectId(usecaseId).toString();
+        }
+        
+        let useCaseContext = await Usecase.findOne({ 
+          $or: [
+            { _id: new Types.ObjectId(usecaseId) },
+            { _id: usecaseId },
+            { _id: normalizedUsecaseId },
+            { id: usecaseId }
+          ],
+          version_id: version._id 
+        }).lean();
 
+        // Nếu không tìm thấy, thử tìm bằng string comparison
         if (!useCaseContext) {
-          res.status(StatusCodes.NOT_FOUND).json({
-            message: `Usecase with id ${usecaseId} not found in version ${versionId}`
-          });
-          return;
+          const allUsecases = await Usecase.find({ version_id: version._id }).lean();
+          useCaseContext = allUsecases.find(uc => 
+            String(uc._id) === String(usecaseId) || 
+            String(uc._id) === normalizedUsecaseId
+          );
         }
 
-        // Nếu không tìm thấy Usecase đó
         if (!useCaseContext) {
+          const availableUsecases = await Usecase.find({ version_id: version._id }).select('_id name').lean();
+          console.error('❌ Sequence Diagram: Usecase not found:', {
+            usecaseId,
+            normalizedUsecaseId,
+            versionId,
+            availableUsecases: availableUsecases.map(uc => ({
+              _id: String(uc._id),
+              name: uc.name
+            }))
+          });
           res.status(StatusCodes.NOT_FOUND).json({
-            message: `Usecase with id ${usecaseId} not found in version ${versionId}`,
+            message: `Usecase with id ${usecaseId} not found in version ${versionId}. Available usecases: ${availableUsecases.length}`
           });
           return;
         }

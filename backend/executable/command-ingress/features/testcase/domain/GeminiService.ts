@@ -767,7 +767,7 @@ export class TestcaseGeminiService {
      */
     private validateRequirementIds(ids: string[] | undefined, requirements: any[]): string[] {
         if (!ids || !Array.isArray(ids)) return [];
-        const validIds = new Set(requirements.map(r => r.id));
+        const validIds = new Set(requirements.map(r => r._id ? String(r._id) : ''));
         return ids.filter(id => validIds.has(id));
     }
 

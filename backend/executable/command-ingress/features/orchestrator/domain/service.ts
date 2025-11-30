@@ -144,10 +144,14 @@ export class OrchestratorService {
                 "completed",
                 false
             );
+            // Lấy usecases từ collection
+            const Usecase = (await import("../../../../../internal/model/usecase")).default;
+            const usecases = await Usecase.find({ version_id: versionId }).lean();
+            
             return {
                 version_id: versionId,
                 inputs_count: 0,
-                requirement_model: version.requirement_model || [],
+                requirement_model: usecases || [],
                 mode: opts.mode,
             };
         }

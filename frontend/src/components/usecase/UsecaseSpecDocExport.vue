@@ -214,6 +214,11 @@ export default {
     },
   },
   methods: {
+    // Helper: Get usecase ID (support both _id and id for backward compatibility)
+    getUsecaseId(uc) {
+      if (!uc) return ''
+      return String(uc._id || uc.id || '')
+    },
     closeExportModal() {
       if (!this.exporting) {
         this.$emit('close')
@@ -463,7 +468,7 @@ export default {
         content += 'TABLE OF CONTENTS\n'
         content += '================\n'
         this.useCasesToExport.forEach((uc, index) => {
-          content += `${index + 1}. ${uc.name} (UC-${uc.id})\n`
+          content += `${index + 1}. ${uc.name} (UC-${this.getUsecaseId(uc)})\n`
         })
         content += '\n'
       }
@@ -472,7 +477,7 @@ export default {
       this.useCasesToExport.forEach((uc, index) => {
         content += `\n${index + 1}. USE CASE: ${uc.name}\n`
         content += `${'='.repeat(50)}\n`
-        content += `ID: UC-${uc.id}\n`
+        content += `ID: UC-${this.getUsecaseId(uc)}\n`
         content += `Role: ${uc.role.name || 'Not specified'}\n`
         content += `Priority: ${uc.priority || 'Not specified'}\n\n`
 
@@ -649,7 +654,7 @@ export default {
       if (this.includeTableOfContents && this.useCasesToExport.length > 0) {
         html += '<div class="toc"><h2>Table of Contents</h2><ul>'
         this.useCasesToExport.forEach((uc, index) => {
-          html += `<li>${index + 1}. ${uc.name} (UC-${uc.id})</li>`
+          html += `<li>${index + 1}. ${uc.name} (UC-${this.getUsecaseId(uc)})</li>`
         })
         html += '</ul></div>'
       }
@@ -660,7 +665,7 @@ export default {
       <div class="usecase-section page-break-avoid">
         <div class="usecase-header keep-with-next">
           <h2>${index + 1}. ${uc.name}</h2>
-          <p>UC-${uc.id} | Role: ${uc.role.name || 'Not specified'} | Priority: ${
+          <p>UC-${this.getUsecaseId(uc)} | Role: ${uc.role.name || 'Not specified'} | Priority: ${
           uc.priority || 'Not specified'
         }</p>
         </div>

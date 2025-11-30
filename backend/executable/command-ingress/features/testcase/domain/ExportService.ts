@@ -3,6 +3,7 @@ import * as ExcelJS from 'exceljs';
 import Testcase from "../../../../../internal/model/testcase";
 import Database from "../../../../../internal/model/database";
 import Version from "../../../../../internal/model/version";
+import Usecase from "../../../../../internal/model/usecase";
 
 export interface ExportFilters {
     test_type?: string;
@@ -508,7 +509,11 @@ export class TestcaseExportService {
         if (versionId) versionQuery._id = versionId;
 
         const version = await Version.findOne(versionQuery).lean();
-        const totalRequirements = version?.requirement_model?.length || 0;
+        
+        // Lấy tổng số usecases từ collection
+        const usecaseQuery: any = { project_id: projectId };
+        if (versionId) usecaseQuery.version_id = versionId;
+        const totalRequirements = await Usecase.countDocuments(usecaseQuery);
 
         // Get covered requirements from test cases
         const coverageStats = await Testcase.aggregate([
@@ -525,13 +530,12 @@ export class TestcaseExportService {
             },
             {
                 $lookup: {
-                    from: "versions",
-                    let: { requirementId: "$_id", projectId: projectId },
+                    from: "usecases",
+                    let: { requirementId: "$_id", projectId: projectId, versionId: versionId },
                     pipeline: [
                         { $match: { $expr: { $eq: ["$project_id", { $toObjectId: projectId }] } } },
-                        { $unwind: "$requirement_model" },
-                        { $match: { $expr: { $eq: ["$requirement_model.id", "$$requirementId"] } } },
-                        { $replaceRoot: { newRoot: "$requirement_model" } }
+                        ...(versionId ? [{ $match: { $expr: { $eq: ["$version_id", { $toObjectId: versionId }] } } }] : []),
+                        { $match: { $expr: { $eq: [{ $toString: "$_id" }, { $toString: "$$requirementId" }] } } }
                     ],
                     as: "requirement_info"
                 }
@@ -564,10 +568,12 @@ export class TestcaseExportService {
         const uncoveredRequirements = totalRequirements - coveredRequirements;
 
         // Get uncovered requirements
-        const uncoveredReqs = version?.requirement_model
-            ?.filter((req: any) => !coverageStats.some((stat: any) => stat.requirement_id === req.id))
+        const coveredRequirementIds = new Set(coverageStats.map((stat: any) => stat.requirement_id));
+        const allUsecases = await Usecase.find(usecaseQuery).lean();
+        const uncoveredReqs = allUsecases
+            .filter((req: any) => !coveredRequirementIds.has(String(req._id)))
             .map((req: any) => ({
-                id: req.id,
+                requirement_id: String(req._id),
                 name: req.name,
                 priority: req.priority,
                 description: req.description

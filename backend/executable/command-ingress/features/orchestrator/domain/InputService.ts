@@ -99,7 +99,10 @@ export class InputService {
         }
 
         const version = await Version.findById(versionId).lean();
-        const previousRequirements = version ? (version as any).requirement_model || [] : [];
+        
+        // Lấy usecases từ collection
+        const Usecase = (await import("../../../../../internal/model/usecase")).default;
+        const previousRequirements = version ? await Usecase.find({ version_id: versionId }).lean() : [];
 
         return {
             version_id: versionId,

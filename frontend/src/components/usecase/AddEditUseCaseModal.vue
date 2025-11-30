@@ -463,13 +463,13 @@
                     <option value="">Select a use case</option>
                     <option
                       v-for="usecase in availableUseCases"
-                      :key="usecase.id"
-                      :value="usecase.id"
+                      :key="getUsecaseId(usecase)"
+                      :value="getUsecaseId(usecase)"
                       :disabled="
-                        isCurrentUseCase(usecase.id) || isAlreadySelected(usecase.id, index)
+                        isCurrentUseCase(getUsecaseId(usecase)) || isAlreadySelected(getUsecaseId(usecase), index)
                       "
                     >
-                      {{ usecase.id }} - {{ usecase.name }}
+                      {{ getUsecaseId(usecase) }} - {{ usecase.name }}
                     </option>
                   </select>
                   <button
@@ -739,9 +739,15 @@ export default {
     },
 
     submitForm() {
-      if (this.isEditing && !this.localForm.id) {
+      if (this.isEditing && !this.localForm._id && !this.localForm.id) {
         console.warn('⚠️ No usecase ID provided — skipping submit.')
         return
+      }
+      
+      // Remove id field if _id exists (backend uses _id)
+      const formData = { ...this.localForm }
+      if (formData._id && formData.id) {
+        delete formData.id
       }
 
       // Final validation
@@ -771,8 +777,14 @@ export default {
       if (!this.isEditing) {
         delete cleanedForm.id
       }
+      
+      // Remove id field if _id exists (backend uses _id)
+      if (cleanedForm._id && cleanedForm.id) {
+        delete cleanedForm.id
+      }
+      
       console.log('📤 Data being sent to BE:', JSON.stringify(cleanedForm, null, 2))
-      console.log('✅ Submitting form with ID:', cleanedForm.id)
+      console.log('✅ Submitting form with ID:', cleanedForm._id || cleanedForm.id)
 
       // 🔥 FIX: Chỉ emit cleanedForm, không emit event object
       this.$emit('submit', cleanedForm)
@@ -1016,15 +1028,23 @@ export default {
       }
     },
 
+    // Helper: Get usecase ID (support both _id and id for backward compatibility)
+    getUsecaseId(uc) {
+      if (!uc) return ''
+      return String(uc._id || uc.id || '')
+    },
+
     // Kiểm tra xem use case có phải là use case hiện tại không
     isCurrentUseCase(usecaseId) {
-      return this.isEditing && this.localForm.id === usecaseId
+      if (!this.isEditing) return false
+      const currentId = String(this.localForm._id || this.localForm.id || '')
+      return currentId === String(usecaseId)
     },
 
     // Kiểm tra xem use case đã được chọn trong các mục khác chưa
     isAlreadySelected(usecaseId, currentIndex) {
       return this.localForm.related_usecases.some(
-        (id, index) => index !== currentIndex && id === usecaseId
+        (id, index) => index !== currentIndex && String(id) === String(usecaseId)
       )
     },
   },

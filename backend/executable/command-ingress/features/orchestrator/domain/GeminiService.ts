@@ -1,9 +1,10 @@
+import { Types } from "mongoose";
 import { ApiKeyService } from "./ApiKeyService";
 
 // THÊM MỚI: Tập trung hóa toàn bộ prompt để hỗ trợ đa ngôn ngữ
 const prompts = {
-   'vi-VN': {
-    schemaDescription: (batchSize: number, offset: number) => ` **MỤC TIÊU**: Chuyển đổi văn bản thành danh sách use case phần mềm dạng JSON
+    'vi-VN': {
+        schemaDescription: (batchSize: number, offset: number) => ` **MỤC TIÊU**: Chuyển đổi văn bản thành danh sách use case phần mềm dạng JSON
  **PHẠM VI**: CHỈ tập trung vào chức năng PHẦN MỀM - LOẠI BỎ hoàn toàn thủ tục giấy tờ thực tế
 
  **HÀNH VI CẦN TRÁNH**:
@@ -22,10 +23,9 @@ const prompts = {
 • Parse được ngay bằng JSON.parse()
 
 🛠 **CẤU TRÚC USE CASE BẮT BUỘC**:
-Mỗi use case PHẢI có đầy đủ các trường sau:
+Mỗi use case PHẢI có đầy đủ các trường sau (KHÔNG bao gồm field "id" - hệ thống sẽ tự tạo):
 [
   {
-    "id": "UC${offset + 1}",
     "name": "Đăng ký tài khoản hệ thống",
     "role": {
       "id": "guest",
@@ -56,7 +56,7 @@ Mỗi use case PHẢI có đầy đủ các trường sau:
     "exceptions": ["Email đã tồn tại", "Mất kết nối mạng", "Server lỗi"],
     "stakeholders": ["Người dùng mới", "Quản trị viên hệ thống"],
     "constraints": ["Hỗ trợ đa ngôn ngữ", "Tương thích mobile"],
-    "related_usecases": ["UC${offset + 2}"]
+    "related_usecases": []
   }
 ]
 
@@ -67,16 +67,18 @@ Mỗi use case PHẢI có đầy đủ các trường sau:
 • Ưu tiên chức năng phần mềm cốt lõi
 • Quy trình phức tạp → tách thành nhiều use case
 • Không rõ vai trò → mặc định "Người dùng hệ thống"
+• KHÔNG thêm field "id" vào response - hệ thống sẽ tự tạo identifier
 
  **KIỂM TRA CUỐI**:
 ✓ KHÔNG có thao tác thủ công ngoài đời
 ✓ CHỈ có tương tác phần mềm
 ✓ Role là object đầy đủ {id, name, description}
 ✓ Tất cả trường đều theo đúng schema
-✓ Related usecases chỉ chứa ID (ví dụ: ["UC1", "UC3"])
+✓ KHÔNG có field "id" trong response
+✓ Related usecases để mảng rỗng [] (sẽ được xử lý sau)
 
 `,
-        relatedUseCases: (simplified: any, incremental?: boolean) => `Đây là danh sách use case phần mềm đã có:\n${JSON.stringify(simplified, null, 2)}\n\nNhiệm vụ của bạn:\n${incremental ? `- KHÔNG được xóa hoặc ghi đè related_usecases cũ.\n- Chỉ bổ sung liên kết giữa use case mới và use case cũ.` : `- Phân tích và sinh lại toàn bộ related_usecases cho tất cả use case.`}\n\nYÊU CẦU:\n- related_usecases[] chỉ tham chiếu tới use case trong danh sách trên.\n- Format: CHỈ chứa ID của use case (ví dụ: "UC1").\n- Nếu không có liên quan, để mảng rỗng [].\n- Trả về toàn bộ danh sách use case với related_usecases được cập nhật.`,
+        relatedUseCases: (simplified: any, incremental?: boolean) => `Đây là danh sách use case phần mềm đã có:\n${JSON.stringify(simplified, null, 2)}\n\nNhiệm vụ của bạn:\n${incremental ? `- KHÔNG được xóa hoặc ghi đè related_usecases cũ.\n- Chỉ bổ sung liên kết giữa use case mới và use case cũ.` : `- Phân tích và sinh lại toàn bộ related_usecases cho tất cả use case.`}\n\nYÊU CẦU:\n- related_usecases[] chỉ tham chiếu tới use case trong danh sách trên.\n- Format: Sử dụng chính xác ID từ field "id" trong danh sách trên (ví dụ: nếu id là "507f1f77bcf86cd799439011" thì dùng "507f1f77bcf86cd799439011").\n- Nếu không có liên quan, để mảng rỗng [].\n- Trả về toàn bộ danh sách use case với related_usecases được cập nhật.\n- Giữ nguyên cấu trúc và các field khác của mỗi use case.`,
         conflictCheck: (textA: string, textB: string) => `
 Bạn là một công cụ kiểm tra trùng lặp use case, cần đánh giá thật nghiêm ngặt.
 
@@ -115,18 +117,19 @@ QUY TẮC:
 YÊU CẦU OUTPUT:
 - CHỈ trả về một JSON array hợp lệ và KHÔNG GÌ KHÁC.
 - Mỗi phần tử trong array là một NHÓM các 'id' của các use case bị trùng lặp.
+- Sử dụng chính xác giá trị từ field "id" trong danh sách use case trên.
 - KHÔNG giải thích, KHÔNG markdown.
 
-Ví dụ output:
+Ví dụ output (sử dụng ID thực tế từ danh sách):
 [
-  ["UC1", "UC5", "UC12"],
-  ["UC2", "UC8"]
+  ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"],
+  ["507f1f77bcf86cd799439014", "507f1f77bcf86cd799439015"]
 ]
 `
 
     },
     'en-US': {
-         schemaDescription: (batchSize: number, offset: number) => ` **OBJECTIVE**: Convert text into software use cases in JSON format
+        schemaDescription: (batchSize: number, offset: number) => ` **OBJECTIVE**: Convert text into software use cases in JSON format
  **SCOPE**: FOCUS ONLY on SOFTWARE functions - COMPLETELY REMOVE real-world paperwork procedures
 
  **BEHAVIORS TO AVOID**:
@@ -145,9 +148,9 @@ Ví dụ output:
 • Immediately parseable with JSON.parse()
 
 🛠 **REQUIRED USE CASE STRUCTURE**:
+Each use case MUST have the following fields (DO NOT include "id" field - system will auto-generate):
 [
   {
-    "id": "UC${offset + 1}",
     "name": "System Account Registration",
     "role": {
       "id": "guest",
@@ -178,7 +181,7 @@ Ví dụ output:
     "exceptions": ["Email already exists", "Network connection lost", "Server error"],
     "stakeholders": ["New user", "System administrator"],
     "constraints": ["Multi-language support", "Mobile compatibility"],
-    "related_usecases": ["UC${offset + 2}"]
+    "related_usecases": []
   }
 ]
 
@@ -189,15 +192,17 @@ Ví dụ output:
 • Prioritize core software functions
 • Complex processes → split into multiple use cases
 • Unclear role → default to "System User"
+• DO NOT add "id" field to response - system will auto-generate identifier
 
  **FINAL CHECK**:
 ✓ NO manual real-world operations
 ✓ ONLY software interactions
 ✓ Role is complete object {id, name, description}
 ✓ All fields follow exact schema
-✓ Related usecases contain ONLY IDs (example: ["UC1", "UC3"])
+✓ NO "id" field in response
+✓ Related usecases as empty array [] (will be processed later)
 :`,
-        relatedUseCases: (simplified: any, incremental?: boolean) => `Here is a list of existing software use cases:\n${JSON.stringify(simplified, null, 2)}\n\nYour task:\n${incremental ? `- DO NOT delete or overwrite existing related_usecases.\n- Only add links between new and old use cases.` : `- Analyze and regenerate all related_usecases for all use cases.`}\n\nREQUIREMENTS:\n- related_usecases[] must only reference use cases from the list above.\n- Format: ONLY the use case ID (e.g., "UC1").\n- If a use case has no relations, return an empty array [].\n- Return the entire list of use cases with the 'related_usecases' field updated.`,
+        relatedUseCases: (simplified: any, incremental?: boolean) => `Here is a list of existing software use cases:\n${JSON.stringify(simplified, null, 2)}\n\nYour task:\n${incremental ? `- DO NOT delete or overwrite existing related_usecases.\n- Only add links between new and old use cases.` : `- Analyze and regenerate all related_usecases for all use cases.`}\n\nREQUIREMENTS:\n- related_usecases[] must only reference use cases from the list above.\n- Format: Use the exact ID value from the "id" field in the list above (e.g., if id is "507f1f77bcf86cd799439011", use "507f1f77bcf86cd799439011").\n- If a use case has no relations, return an empty array [].\n- Return the entire list of use cases with the 'related_usecases' field updated.\n- Keep all other fields and structure of each use case unchanged.`,
         conflictCheck: (textA: string, textB: string) => `
 You are a strict use case comparison engine.
 
@@ -233,12 +238,13 @@ RULES:
 OUTPUT REQUIREMENTS:
 - ONLY return a valid JSON array and NOTHING ELSE.
 - Each element in the array should be a GROUP of 'id's of the duplicate use cases.
+- Use the exact ID value from the "id" field in the use case list above.
 - NO explanations, NO markdown.
 
-Example output:
+Example output (using actual IDs from the list):
 [
-  ["UC1", "UC5", "UC12"],
-  ["UC2", "UC8"]
+  ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"],
+  ["507f1f77bcf86cd799439014", "507f1f77bcf86cd799439015"]
 ]
 `
     }
@@ -404,6 +410,14 @@ export class GeminiService {
                     // Ensure role has id if it's already an object
                     it.role.id = `role_${it.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`;
                 }
+                // Bỏ field 'id' từ Gemini response và tạo _id mới
+                if (it.id) {
+                    delete it.id;
+                }
+                // Tạo _id nếu chưa có
+                if (!it._id) {
+                    it._id = new Types.ObjectId();
+                }
                 return it;
             })
             .filter(Boolean);
@@ -425,7 +439,7 @@ export class GeminiService {
             return useCases;
         }
 
-        const simplified = useCases.map((u) => ({ id: u.id, name: u.name, goal: u.goal }));
+        const simplified = useCases.map((u) => ({ id: u._id ? String(u._id) : '', name: u.name, goal: u.goal }));
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const basePrompt = prompts[lang].relatedUseCases(simplified, options?.incremental);
 
@@ -447,9 +461,34 @@ export class GeminiService {
                 const parsed = this.safeJsonParse(text);
 
                 if (Array.isArray(parsed)) {
+                    // Tạo mapping từ id (từ Gemini response) sang _id (trong useCases)
                     const updated = useCases.map((u) => {
-                        const match = parsed.find((p: any) => p.id === u.id);
-                        return match ? { ...u, related_usecases: match.related_usecases || [] } : u;
+                        const uId = u._id ? String(u._id) : '';
+                        // Tìm match theo _id hoặc id (nếu Gemini trả về id cũ)
+                        const match = parsed.find((p: any) => {
+                            const pId = p._id ? String(p._id) : (p.id || '');
+                            return pId === uId;
+                        });
+
+                        if (match && Array.isArray(match.related_usecases)) {
+                            // Map related_usecases từ id cũ (UC1) sang _id mới
+                            const mappedRelated = match.related_usecases.map((refId: string) => {
+                                // Nếu refId là format cũ (UC1, UC2), tìm trong parsed để lấy _id tương ứng
+                                if (refId.match(/^UC\d+$/)) {
+                                    const refUseCase = parsed.find((p: any) => p.id === refId || p._tempOldId === refId);
+                                    if (refUseCase && refUseCase._id) {
+                                        return String(refUseCase._id);
+                                    }
+                                    // Nếu không tìm thấy trong parsed, tìm trong useCases
+                                    // (trường hợp này ít xảy ra vì Gemini chỉ trả về related trong cùng batch)
+                                }
+                                // Nếu refId đã là _id, giữ nguyên
+                                return refId;
+                            }).filter(Boolean);
+
+                            return { ...u, related_usecases: mappedRelated };
+                        }
+                        return u;
                     });
                     return updated;
                 }
@@ -524,7 +563,39 @@ export class GeminiService {
                                 // Ensure role has id if it's already an object
                                 it.role.id = `role_${it.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`;
                             }
+                            // Bỏ field 'id' từ Gemini response và tạo _id mới
+                            const tempId = it.id; // Lưu tạm id từ Gemini để xử lý related_usecases sau
+                            if (it.id) {
+                                delete it.id;
+                            }
+                            // Tạo _id nếu chưa có
+                            if (!it._id) {
+                                it._id = new Types.ObjectId();
+                            }
+                            // Lưu mapping từ id cũ sang _id mới để xử lý related_usecases
+                            if (tempId) {
+                                it._tempOldId = tempId;
+                            }
                             return it;
+                        });
+
+                        // Xử lý related_usecases: map từ id cũ (UC1, UC2) sang _id mới
+                        const idToNewIdMap = new Map<string, string>();
+                        normalized.forEach((uc: any) => {
+                            if (uc._tempOldId && uc._id) {
+                                idToNewIdMap.set(uc._tempOldId, String(uc._id));
+                            }
+                        });
+
+                        // Cập nhật related_usecases trong normalized array
+                        normalized.forEach((uc: any) => {
+                            if (Array.isArray(uc.related_usecases) && uc.related_usecases.length > 0) {
+                                uc.related_usecases = uc.related_usecases
+                                    .map((oldId: string) => idToNewIdMap.get(oldId) || oldId)
+                                    .filter((newId: string) => idToNewIdMap.has(newId) || normalized.some((x: any) => String(x._id) === newId));
+                            }
+                            // Xóa temp field
+                            delete uc._tempOldId;
                         });
                         allResults = allResults.concat(normalized);
                         console.log(` Parsed ${normalized.length} items (incomplete=${parsed.incomplete}). total=${allResults.length}`);
@@ -618,7 +689,7 @@ export class GeminiService {
         }
 
         const simplifiedUseCases = useCases.map(uc => ({
-            id: uc.id,
+            id: uc._id ? String(uc._id) : '',
             name: uc.name,
             goal: uc.goal
         }));

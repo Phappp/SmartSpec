@@ -1,9 +1,10 @@
+import { Types } from "mongoose";
 import ActivityDiagramModel from '../../../../../../internal/model/activity_diagram';
 import UmlModel from '../../../../../../internal/model/uml';
 import { ActivityCoreService } from './ActivityCoreService';
 import { ActivityGeminiService } from './ActivityGeminiService';
 import VersionModel from '../../../../../../internal/model/version';
-import { Types } from "mongoose";
+import Usecase from '../../../../../../internal/model/usecase';
 import sharp from 'sharp';
 
 export class ActivityDiagramService {
@@ -14,9 +15,47 @@ export class ActivityDiagramService {
     if (!versionId) throw new Error('versionId là bắt buộc để lấy requirement model');
     const version = await VersionModel.findById(versionId).lean();
     if (!version) throw new Error('Không tìm thấy version');
-    const requirements = (version.requirement_model || []) as any[];
-    const requirement = requirements.find(r => r.id === requirementId);
-    if (!requirement) throw new Error('Không tìm thấy requirement theo id');
+    
+    // Lấy usecase từ collection - handle cả _id và id (backward compatibility)
+    // Normalize requirementId (handle ObjectId string, plain string, etc.)
+    let normalizedRequirementId = requirementId;
+    if (Types.ObjectId.isValid(String(requirementId))) {
+      normalizedRequirementId = new Types.ObjectId(requirementId).toString();
+    }
+    
+    let requirement = await Usecase.findOne({ 
+      $or: [
+        { _id: new Types.ObjectId(requirementId) },
+        { _id: requirementId },
+        { _id: normalizedRequirementId },
+        { id: requirementId }
+      ],
+      version_id: versionId 
+    }).lean();
+    
+    if (!requirement) {
+      // Try one more time with string comparison
+      const allUsecases = await Usecase.find({ version_id: versionId }).lean();
+      requirement = allUsecases.find(uc => 
+        String(uc._id) === String(requirementId) || 
+        String(uc._id) === normalizedRequirementId ||
+        (uc._id && String(uc._id) === String(requirementId))
+      );
+    }
+    
+    if (!requirement) {
+      const availableUsecases = await Usecase.find({ version_id: versionId }).select('_id name').lean();
+      console.error('❌ Activity Diagram: Requirement not found:', {
+        requirementId,
+        normalizedRequirementId,
+        versionId,
+        availableUsecases: availableUsecases.map(uc => ({
+          _id: String(uc._id),
+          name: uc.name
+        }))
+      });
+      throw new Error(`Không tìm thấy requirement theo id: ${requirementId}. Available usecases: ${availableUsecases.length}`);
+    }
 
     let uml = await UmlModel.findOne({ version_id: new Types.ObjectId(versionId) }).lean();
 
@@ -54,7 +93,12 @@ export class ActivityDiagramService {
   public async generateFromActor(versionId: string, actor: string, language: string, userId?: string) {
     const version = await VersionModel.findById(versionId).lean();
     if (!version) throw new Error('Không tìm thấy version');
-    const requirements = ((version.requirement_model || []) as any[]).filter(r => (r.role || '').toLowerCase() === actor.toLowerCase());
+    
+    // Lấy usecases từ collection theo role
+    const requirements = await Usecase.find({ 
+      version_id: versionId,
+      "role.name": { $regex: new RegExp(`^${actor}$`, 'i') }
+    }).lean();
     if (!requirements.length) throw new Error('Không có requirement nào cho actor này');
     let uml = await UmlModel.findOne({ version_id: new Types.ObjectId(versionId) }).lean();
 

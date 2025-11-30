@@ -212,10 +212,13 @@ export default {
       if (searchQuery.value) {
         const query = searchQuery.value.toLowerCase()
         filtered = filtered.filter(
-          (req) =>
-            req.id.toLowerCase().includes(query) ||
-            req.name.toLowerCase().includes(query) ||
+          (req) => {
+            const reqId = String(req.requirement_id || req._id || req.id || '')
+            return reqId.toLowerCase().includes(query) ||
+            req.name?.toLowerCase().includes(query) ||
+            req.title?.toLowerCase().includes(query) ||
             (req.goal && req.goal.toLowerCase().includes(query))
+          }
         )
       }
 
@@ -237,15 +240,25 @@ export default {
       }
     })
 
+    // Helper: Get requirement ID (support both requirement_id and id)
+    const getRequirementId = (req) => {
+      return String(req.requirement_id || req._id || req.id || '')
+    }
+
     const isRequirementSelected = (requirement) => {
-      return selectedRequirements.value.some((selected) => selected.id === requirement.id)
+      const reqId = getRequirementId(requirement)
+      return selectedRequirements.value.some((selected) => {
+        const selectedId = getRequirementId(selected)
+        return selectedId === reqId && selectedId !== ''
+      })
     }
 
     const toggleRequirement = (requirement) => {
       const isSelected = isRequirementSelected(requirement)
       if (isSelected) {
+        const reqId = getRequirementId(requirement)
         selectedRequirements.value = selectedRequirements.value.filter(
-          (selected) => selected.id !== requirement.id
+          (selected) => getRequirementId(selected) !== reqId
         )
       } else {
         selectedRequirements.value.push(requirement)
@@ -253,8 +266,9 @@ export default {
     }
 
     const removeRequirement = (requirement) => {
+      const reqId = getRequirementId(requirement)
       selectedRequirements.value = selectedRequirements.value.filter(
-        (selected) => selected.id !== requirement.id
+        (selected) => getRequirementId(selected) !== reqId
       )
     }
 
@@ -264,10 +278,20 @@ export default {
     }
 
     const applySelection = () => {
-      const requirementIds = selectedRequirements.value.map((req) => req.id)
+      // Map to requirement_id, filter out null/undefined/empty values
+      const requirementIds = selectedRequirements.value
+        .map((req) => getRequirementId(req))
+        .filter((id) => id && id !== '' && id !== 'null' && id !== 'undefined')
+      
+      if (requirementIds.length === 0) {
+        toast.error('Please select at least one requirement')
+        return
+      }
+      
+      console.log('📤 Applying selection with requirement IDs:', requirementIds)
       emit('select-requirements', requirementIds)
       emit('close')
-      toast.success(`Selected ${selectedRequirements.value.length} requirements`)
+      toast.success(`Selected ${requirementIds.length} requirements`)
     }
 
     const loadRequirements = async () => {
@@ -284,33 +308,49 @@ export default {
         const response = await usecaseApi.getUsecases(props.versionId)
         console.log('📦 Usecases API response:', response.data)
 
+        // Helper function to get usecase ID
+        const getUsecaseId = (uc) => {
+          if (!uc) return ''
+          return String(uc._id || uc.id || '')
+        }
+        
         if (response.data && Array.isArray(response.data.data)) {
-          requirements.value = response.data.data.map((usecase) => ({
-            ...usecase,
-            // Map usecase fields to requirement display fields
-            requirement_id: usecase.id,
-            title: usecase.name,
-            description: usecase.goal,
-            status: 'approved', // Default status for usecases
-            priority: usecase.priority || 'medium',
-            owner: usecase.role || 'Unknown',
-            created_at: usecase.created_at || new Date().toISOString(),
-            test_cases_count: usecase.test_cases_count || 0,
-          }))
+          requirements.value = response.data.data.map((usecase) => {
+            const reqId = getUsecaseId(usecase)
+            return {
+              ...usecase,
+              // Map usecase fields to requirement display fields
+              requirement_id: reqId,
+              id: reqId, // Also set id for backward compatibility
+              _id: usecase._id, // Keep original _id
+              title: usecase.name,
+              description: usecase.goal,
+              status: 'approved', // Default status for usecases
+              priority: usecase.priority || 'medium',
+              owner: usecase.role?.name || usecase.role || 'Unknown',
+              created_at: usecase.created_at || new Date().toISOString(),
+              test_cases_count: usecase.test_cases_count || 0,
+            }
+          })
           console.log(`✅ Loaded ${requirements.value.length} usecases as requirements`)
         } else if (response.data && Array.isArray(response.data)) {
           // Fallback for different response structure
-          requirements.value = response.data.map((usecase) => ({
-            ...usecase,
-            requirement_id: usecase.id,
-            title: usecase.name,
-            description: usecase.goal,
-            status: 'approved',
-            priority: usecase.priority || 'medium',
-            owner: usecase.role || 'Unknown',
-            created_at: usecase.created_at || new Date().toISOString(),
-            test_cases_count: usecase.test_cases_count || 0,
-          }))
+          requirements.value = response.data.map((usecase) => {
+            const reqId = getUsecaseId(usecase)
+            return {
+              ...usecase,
+              requirement_id: reqId,
+              id: reqId, // Also set id for backward compatibility
+              _id: usecase._id, // Keep original _id
+              title: usecase.name,
+              description: usecase.goal,
+              status: 'approved',
+              priority: usecase.priority || 'medium',
+              owner: usecase.role?.name || usecase.role || 'Unknown',
+              created_at: usecase.created_at || new Date().toISOString(),
+              test_cases_count: usecase.test_cases_count || 0,
+            }
+          })
           console.log(`✅ Loaded ${requirements.value.length} usecases as requirements (fallback)`)
         } else {
           requirements.value = []

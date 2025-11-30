@@ -37,10 +37,14 @@ export class DatabaseController {
                 return;
             }
 
+            // Lấy usecases từ collection
+                        const Usecase = (await import("../../../../../internal/model/usecase")).default;
+                        const requirements = await Usecase.find({ version_id: version._id }).lean();
+            
             const payload = {
                 versionId: version._id.toString(),
                 projectId: version.project_id.toString(),
-                requirements: version.requirement_model,
+                requirements: requirements,
             };
 
             const newDatabase = await this.databaseService.generateSchemaFromRequirements(userId,payload);

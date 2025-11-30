@@ -512,8 +512,8 @@
                   <option value="">Select Use Case</option>
                   <option
                     v-for="usecase in availableUsecases"
-                    :key="usecase.id"
-                    :value="usecase.id"
+                    :key="getUsecaseId(usecase)"
+                    :value="getUsecaseId(usecase)"
                   >
                     {{ usecase.name || usecase.title }}
                   </option>
@@ -542,8 +542,8 @@
                   <option value="">Select Use Case</option>
                   <option
                     v-for="usecase in availableUsecases"
-                    :key="usecase.id"
-                    :value="usecase.id"
+                    :key="getUsecaseId(usecase)"
+                    :value="getUsecaseId(usecase)"
                   >
                     {{ usecase.name || usecase.title }}
                   </option>
@@ -901,6 +901,11 @@ export default {
     document.removeEventListener('click', this.handleClickOutside)
   },
   methods: {
+    // Helper: Get usecase ID (support both _id and id for backward compatibility)
+    getUsecaseId(uc) {
+      if (!uc) return ''
+      return String(uc._id || uc.id || '')
+    },
     // Navigation
     navigateToUsecase() {
       this.$router.push({

@@ -1,5 +1,7 @@
+import { Types } from "mongoose";
 import Input from "../../../../../internal/model/input";
 import Version from "../../../../../internal/model/version";
+import Usecase from "../../../../../internal/model/usecase";
 import { GeminiService } from "./GeminiService";
 
 interface ProcessingContext {
@@ -22,16 +24,22 @@ export class RequirementService {
     private readonly MAX_GLOBAL_CONTEXT = 1000; // Context toàn cục tối đa
 
     /**
-     * Chuẩn hóa ID cho use case
+     * Helper function để lấy usecase ID từ _id
+     */
+    private getUsecaseId(uc: any): string {
+        if (!uc) return '';
+        return uc._id ? String(uc._id) : '';
+    }
+
+    /**
+     * Chuẩn hóa ID cho use case (không cần nữa vì dùng _id)
      */
     private normalizeUseCaseIds<T extends Record<string, any>>(
         items: T[],
         style: "UC" | "number" = "UC"
     ): T[] {
-        return items.map((item, index) => {
-            const newId = style === "UC" ? `UC${index + 1}` : String(index + 1);
-            return { ...item, id: newId } as T;
-        });
+        // Không cần normalize nữa vì dùng _id
+        return items;
     }
 
     /**
@@ -417,7 +425,8 @@ export class RequirementService {
         const version = await Version.findById(versionId).lean();
         if (!version) throw new Error("Version not found");
 
-        const previousRequirements = (version as any).requirement_model || [];
+        // Lấy usecases hiện có từ collection
+        const previousRequirements = await Usecase.find({ version_id: versionId }).lean();
         const markAsProcessed = inputs.map((i: any) => String(i._id));
 
         // 2. Chuẩn bị text đầu vào
@@ -428,7 +437,7 @@ export class RequirementService {
 
         if (!mergedText || mergedText.trim().length === 0) {
             console.log("⏩ No text to process");
-            return { version_id: versionId, requirement_model: previousRequirements };
+            return { version_id: versionId, usecases: previousRequirements };
         }
 
         console.log(`📝 Processing text: ${mergedText.length} characters`);
@@ -504,7 +513,7 @@ export class RequirementService {
 
             return {
                 version_id: versionId,
-                requirement_model: previousRequirements,
+                usecases: previousRequirements,
                 errors: processingErrors
             };
         }
@@ -523,45 +532,89 @@ export class RequirementService {
         // 8. Normalize role structure
         newRequirements = this.normalizeRoleStructure(newRequirements);
 
-        const finalRequirements = mode === 'full'
-            ? newRequirements
-            : [...previousRequirements, ...newRequirements];
+        // 8. Xử lý mode full: xóa usecases cũ nếu cần
+        if (mode === 'full') {
+            await Usecase.deleteMany({ version_id: versionId });
+        }
 
-        const normalizedRequirements = this.normalizeUseCaseIds(finalRequirements, "UC");
-
-        // 9. Bổ sung related use cases
-        let requirementsWithRelations = normalizedRequirements;
-        if (requirementsWithRelations.length > 1) {
+        // 9. Bổ sung related use cases (trước khi tạo)
+        let requirementsWithRelations = newRequirements;
+        if (newRequirements.length > 1 || (mode === 'incremental' && previousRequirements.length > 0)) {
             try {
+                const allForRelations = mode === 'incremental' 
+                    ? [...previousRequirements, ...newRequirements]
+                    : newRequirements;
                 requirementsWithRelations = await gemini.addRelatedUseCases(
-                    requirementsWithRelations,
+                    allForRelations,
                     { incremental: mode === "incremental" },
                     language
                 );
+                // Chỉ lấy phần mới nếu là incremental
+                if (mode === 'incremental') {
+                    requirementsWithRelations = requirementsWithRelations.slice(previousRequirements.length);
+                }
             } catch (err: any) {
                 console.error("⚠️ Error adding related use cases:", err.message);
             }
         }
 
-        // 10. Đánh dấu đã xử lý và cập nhật version
+        // 10. Map related_usecases từ string sang ObjectId và tạo usecases
+        const usecasesToCreate = requirementsWithRelations.map((uc: any) => {
+            const relatedIds = (uc.related_usecases || [])
+                .filter((id: any) => id && Types.ObjectId.isValid(String(id)))
+                .map((id: any) => new Types.ObjectId(String(id)));
+
+            return {
+                project_id: version.project_id,
+                version_id: new Types.ObjectId(versionId),
+                name: uc.name,
+                role: uc.role,
+                goal: uc.goal,
+                reason: uc.reason || '',
+                tasks: uc.tasks || [],
+                inputs: uc.inputs || [],
+                outputs: uc.outputs || [],
+                context: uc.context || '',
+                priority: uc.priority || 'medium',
+                feedback: uc.feedback || null,
+                rules: uc.rules || [],
+                triggers: uc.triggers || [],
+                preconditions: uc.preconditions || [],
+                postconditions: uc.postconditions || [],
+                exceptions: uc.exceptions || [],
+                stakeholders: uc.stakeholders || [],
+                constraints: uc.constraints || [],
+                related_usecases: relatedIds,
+                created_by: version.created_by
+            };
+        });
+
+        // Tạo usecases mới
+        if (usecasesToCreate.length > 0) {
+            await Usecase.insertMany(usecasesToCreate);
+        }
+
+        // 11. Đánh dấu đã xử lý và cập nhật version
         if (markAsProcessed.length > 0) {
             await Input.updateMany({ _id: { $in: markAsProcessed } }, { $set: { is_processed: true } });
         }
 
         await Version.findByIdAndUpdate(versionId, {
             $set: {
-                requirement_model: requirementsWithRelations,
                 affects_requirement: true,
                 status: "completed",
                 stage: "completed",
             }
         });
 
-        console.log(`✅ Successfully processed ${requirementsWithRelations.length} use cases`);
+        // Lấy lại danh sách usecases sau khi tạo
+        const finalUsecases = await Usecase.find({ version_id: versionId }).lean();
+
+        console.log(`✅ Successfully processed ${usecasesToCreate.length} new use cases`);
 
         return {
             version_id: versionId,
-            requirement_model: requirementsWithRelations,
+            usecases: finalUsecases,
             newRequirements: newRequirements,
         };
     }
@@ -590,42 +643,47 @@ export class RequirementService {
     // (resolveDuplicate, isConflict, findConflicts, resolveConflict)
 
     async resolveDuplicate(versionId: string, conflictId: string, keep: "old" | "new") {
-        // Giữ nguyên implementation cũ
         const version = await Version.findById(versionId);
         if (!version) throw new Error("Version not found");
 
-        const currentRequirements = version.requirement_model || [];
         const pendingConflicts = version.pending_conflicts || [];
-
         const conflictIndex = pendingConflicts.findIndex((c: any) => c.conflict_id === conflictId);
         if (conflictIndex === -1) throw new Error("Conflict not found");
 
         const conflict = pendingConflicts[conflictIndex];
-
-        let finalRequirements = [...currentRequirements];
-
-        const isSameRequirementById = (req: any, targetId: string) => {
-            return req.id === targetId;
-        };
-
+        
+        // Conflict items giờ là array of ObjectId
+        const conflictItemIds = conflict.items.map((id: any) => String(id));
+        
         if (keep === "new") {
-            finalRequirements = currentRequirements.map(req => {
-                if (isSameRequirementById(req, conflict.existing.id)) {
-                    return conflict.new;
-                }
-                return req;
+            // Xóa tất cả items trong conflict
+            await Usecase.deleteMany({ 
+                _id: { $in: conflictItemIds },
+                version_id: versionId 
             });
+        } else {
+            // Xóa tất cả trừ item đầu tiên (old)
+            const keepId = conflictItemIds[0];
+            const idsToDelete = conflictItemIds.slice(1);
+            if (idsToDelete.length > 0) {
+                await Usecase.deleteMany({ 
+                    _id: { $in: idsToDelete.map(id => new Types.ObjectId(id)) },
+                    version_id: versionId 
+                });
+            }
         }
 
+        // Xóa conflict
         version.pending_conflicts.splice(conflictIndex, 1);
-        version.set('requirement_model', this.normalizeUseCaseIds(finalRequirements, "UC"));
         version.updated_at = new Date();
-
         await version.save();
+
+        // Lấy lại danh sách usecases
+        const finalUsecases = await Usecase.find({ version_id: versionId }).lean();
 
         return {
             version_id: versionId,
-            requirement_model: version.requirement_model,
+            usecases: finalUsecases,
             resolved: { conflict_id: conflictId, kept: keep },
         };
     }
@@ -646,9 +704,10 @@ export class RequirementService {
 
     async findConflicts(versionId: string, gemini: GeminiService, language: string) {
         const version = await Version.findById(versionId);
-        if (!version || !version.requirement_model) throw new Error("Version or requirement model not found.");
+        if (!version) throw new Error("Version not found.");
 
-        const useCases = version.requirement_model;
+        // Lấy usecases từ collection
+        const useCases = await Usecase.find({ version_id: versionId }).lean();
         if (useCases.length < 2) {
             return { message: "Not enough use cases to compare.", conflicts_found: 0 };
         }
@@ -662,11 +721,15 @@ export class RequirementService {
             return { version_id: versionId, conflicts_found: 0, conflicts: [] };
         }
 
-        const useCaseMap = new Map(useCases.map(uc => [uc.id, uc]));
+        // Map conflict groups: chuyển từ id (string) sang ObjectId
         const pending_conflicts = conflictIdGroups.map(idGroup => {
+            const itemIds = idGroup
+                .filter(id => Types.ObjectId.isValid(id))
+                .map(id => new Types.ObjectId(id));
+            
             return {
                 conflict_id: `conflict_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                items: idGroup.map(id => useCaseMap.get(id)).filter(Boolean)
+                items: itemIds
             };
         });
 
@@ -691,61 +754,51 @@ export class RequirementService {
         if (conflictIndex === -1) throw new Error("Conflict not found");
 
         const conflict = version.pending_conflicts[conflictIndex];
-        const idsToRemove = new Set(
-            conflict.items
-                .map((uc: any) => uc.id)
-                .filter((id: string) => id !== keepUseCaseId)
-        );
-
-        if (idsToRemove.size !== conflict.items.length - 1) {
+        
+        // Conflict items giờ là array of ObjectId
+        const conflictItemIds = conflict.items.map((id: any) => String(id));
+        const keepUseCaseObjectId = new Types.ObjectId(keepUseCaseId);
+        
+        // Kiểm tra keepUseCaseId có trong conflict không
+        if (!conflictItemIds.includes(keepUseCaseId)) {
             throw new Error(
                 `Invalid keepUseCaseId '${keepUseCaseId}' for this conflict group.`
             );
         }
 
-        const beforeNormalize = version.requirement_model.filter(
-            (uc: any) => !idsToRemove.has(uc.id)
-        );
+        // Xóa các usecases không được giữ lại
+        const idsToRemove = conflictItemIds
+            .filter(id => id !== keepUseCaseId)
+            .map(id => new Types.ObjectId(id));
 
-        beforeNormalize.forEach((uc: any) => {
-            if (Array.isArray(uc.related_usecases) && uc.related_usecases.length > 0) {
-                uc.related_usecases = uc.related_usecases.filter(
-                    (relId: string) => !idsToRemove.has(relId)
-                );
-            }
-        });
+        if (idsToRemove.length > 0) {
+            // Xóa usecases
+            await Usecase.deleteMany({ 
+                _id: { $in: idsToRemove },
+                version_id: versionId 
+            });
 
-        const normalized = this.normalizeUseCaseIds(beforeNormalize, "UC");
-
-        const idMap = new Map<string, string>();
-        for (let i = 0; i < beforeNormalize.length; i++) {
-            const oldId = beforeNormalize[i].id;
-            const newId = normalized[i]?.id;
-            if (oldId && newId) idMap.set(oldId, newId);
+            // Xóa references từ các usecases còn lại
+            await Usecase.updateMany(
+                { version_id: versionId },
+                { $pull: { related_usecases: { $in: idsToRemove } } }
+            );
         }
 
-        const synced = normalized.map((uc: any) => {
-            if (Array.isArray(uc.related_usecases) && uc.related_usecases.length > 0) {
-                uc.related_usecases = uc.related_usecases
-                    .map((oldId: string) => idMap.get(oldId) || oldId)
-                    .filter((id: string) => normalized.some((x: any) => x.id === id));
-            }
-            return uc;
-        });
-
+        // Xóa conflict
         version.pending_conflicts.splice(conflictIndex, 1);
         if (version.pending_conflicts.length === 0) {
             version.status = "completed";
         }
-
-        version.set("requirement_model", synced);
         version.updated_at = new Date();
-
         await version.save();
+
+        // Lấy lại danh sách usecases
+        const finalUsecases = await Usecase.find({ version_id: versionId }).lean();
 
         return {
             version_id: versionId,
-            requirement_model: version.requirement_model,
+            usecases: finalUsecases,
             resolved: { conflict_id: conflictId, kept_id: keepUseCaseId },
         };
     }
