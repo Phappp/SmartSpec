@@ -153,11 +153,11 @@ export class VersionService {
       // ✅ Chuyển version tạm thành version chính thức
       baseVersion.version_temporary = false;
       await baseVersion.save();
-
+      await this.setCurrentVersion(baseVersion.project_id.toString(),baseVersionId,userId);
       // ✅ update preview
       preview.status = "version_upgraded";
       await preview.save();
-
+      await Preview.findOneAndDelete({ base_version_id: baseVersionId });
       // ✅ Kết thúc
       return new ServiceResponse(ResponseStatus.Success,"Owner approved and version finalized.",{preview,version: baseVersion},200);
     } catch (error: any) {
