@@ -39,10 +39,10 @@ export class InputService {
             if (nonDuplicateFiles.length > 0) {
                 console.log(`Starting file extraction for ${nonDuplicateFiles.length} new files...`);
                 const savedInputs = await this.extractor.extractFiles(nonDuplicateFiles, projectId, versionId);
-                console.log("11111111111",savedInputs);
+                console.log("Input when save ",savedInputs);
                 newFilesCount = nonDuplicateFiles.length;
                 newInputs.push(...savedInputs);
-                console.log("11111111111",newInputs);
+                console.log("Input when add newInput",newInputs);
             } else {
                 console.log("All files are duplicates, skipping extraction");
             }
