@@ -364,8 +364,10 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       throw new Error("Actor not found");
     }
 
-    // Cập nhật position
+    // ✅ Cập nhật position
     uc.actors[actorIndex].position = position;
+    // ✅ Mark actors array as modified để đảm bảo Mongoose lưu thay đổi nested object
+    uc.markModified('actors');
     await uc.save();
 
     return this.getUsecaseDiagramsById(ucId);
@@ -387,8 +389,10 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       throw new Error("Usecase not found");
     }
 
-    // Cập nhật position
+    // ✅ Cập nhật position
     uc.usecases[usecaseIndex].position = position;
+    // ✅ Mark usecases array as modified để đảm bảo Mongoose lưu thay đổi nested object
+    uc.markModified('usecases');
     await uc.save();
 
     return this.getUsecaseDiagramsById(ucId);
@@ -415,6 +419,8 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
           uc.actors[actorIndex].position = position;
         }
       });
+      // ✅ Mark actors array as modified để đảm bảo Mongoose lưu thay đổi nested object
+      uc.markModified('actors');
     }
 
     // Cập nhật positions cho usecases
@@ -427,6 +433,8 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
           uc.usecases[usecaseIndex].position = position;
         }
       });
+      // ✅ Mark usecases array as modified để đảm bảo Mongoose lưu thay đổi nested object
+      uc.markModified('usecases');
     }
 
     await uc.save();

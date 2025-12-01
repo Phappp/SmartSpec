@@ -643,6 +643,10 @@ import {
   generateFromActor,
   deleteActivityDiagram,
 } from '@/api/avd'
+import {
+  updateNodePosition,
+  updateMultipleNodePositions,
+} from '@/api/activity_diagram'
 import { getSequenceDiagrams, generateSequenceDiagram, deleteSequenceDiagram } from '@/api/sqd'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
@@ -1741,10 +1745,20 @@ export default {
       await updateMultiplePositions(diagramId, updates)
     },
 
-    // Placeholder cho các loại diagram khác (cần implement sau)
+    // Activity diagram position update handler
     handleActivityPositionUpdate({ element, type, position }) {
-      // TODO: Implement for activity diagrams
-      console.log('Activity diagram position update:', { element, type, position })
+      if (type === 'node') {
+        const nodeIndex = this.editingDiagram.nodes.findIndex(
+          (n) => n.id === (element.id || element._id)
+        )
+        if (nodeIndex !== -1) {
+          if (!this.editingDiagram.nodes[nodeIndex].position) {
+            this.editingDiagram.nodes[nodeIndex].position = { x: 0, y: 0 }
+          }
+          this.editingDiagram.nodes[nodeIndex].position.x = Math.round(position.x)
+          this.editingDiagram.nodes[nodeIndex].position.y = Math.round(position.y)
+        }
+      }
     },
 
     handleSequencePositionUpdate({ element, type, position }) {
@@ -1753,8 +1767,14 @@ export default {
     },
 
     async saveActivityPositions(diagramId) {
-      // TODO: Implement for activity diagrams
-      console.log('Saving activity diagram positions:', diagramId)
+      const updates = {
+        nodes: this.editingDiagram.nodes.map((node) => ({
+          id: node.id,
+          position: node.position || { x: 0, y: 0 },
+        })),
+      }
+
+      await updateMultipleNodePositions(diagramId, updates.nodes)
     },
 
     async saveSequencePositions(diagramId) {

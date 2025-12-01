@@ -1,11 +1,11 @@
 import { Types } from "mongoose";
 import ActivityDiagramModel from '../../../../../../internal/model/activity_diagram';
-import UmlModel from '../../../../../../internal/model/uml';
 import { ActivityCoreService } from './ActivityCoreService';
 import { ActivityGeminiService } from './ActivityGeminiService';
 import VersionModel from '../../../../../../internal/model/version';
 import Usecase from '../../../../../../internal/model/usecase';
 import { VersionService } from '../../../version/domain/service';
+import Project from '../../../../../../internal/model/project';
 import sharp from 'sharp';
 
 export class ActivityDiagramService {
@@ -59,20 +59,6 @@ export class ActivityDiagramService {
       throw new Error(`Không tìm thấy requirement theo id: ${requirementId}. Available usecases: ${availableUsecases.length}`);
     }
 
-    let uml = await UmlModel.findOne({ version_id: new Types.ObjectId(versionId) }).lean();
-
-    if (!uml) {
-      const newUml = await UmlModel.create({
-        project_id: version.project_id,
-        version_id: versionId,
-        name: "Default UML Diagram",
-        description: "Auto-generated UML for version " + versionId,
-        created_by: userId ? new Types.ObjectId(userId) : undefined,
-        updated_by: userId ? new Types.ObjectId(userId) : undefined,
-      });
-      // Trả về plain object (giống .lean())
-      uml = newUml.toObject();
-    }
     const generated = await this.ai.generateFromUseCase([requirement], language);
     const name = generated?.name || `${requirement.name || 'Usecase'} - Activity`;
     const lanes = generated.lanes;
@@ -81,14 +67,16 @@ export class ActivityDiagramService {
     const diagram_svg = this.core.renderSvg({ name, nodes: nodes as any, edges: edges as any });
 
     const newDiagram = await ActivityDiagramModel.create({
-      uml_id: uml._id.toString(),
+      project_id: version.project_id,
+      version_id: versionId,
+      lang: language,
       name,
       description: generated?.description || 'Generated from requirement',
       lanes,
       nodes,
       edges,
       diagram_svg,
-      userId,
+      created_by: userId ? new Types.ObjectId(userId) : undefined,
     } as any);
 
     // ✅ Tạo preview change cho activity diagram mới
@@ -119,36 +107,25 @@ export class ActivityDiagramService {
       "role.name": { $regex: new RegExp(`^${actor}$`, 'i') }
     }).lean();
     if (!requirements.length) throw new Error('Không có requirement nào cho actor này');
-    let uml = await UmlModel.findOne({ version_id: new Types.ObjectId(versionId) }).lean();
-
-    if (!uml) {
-      const newUml = await UmlModel.create({
-        project_id: version.project_id,
-        version_id: versionId,
-        name: "Default UML Diagram",
-        description: "Auto-generated UML for version " + versionId,
-        created_by: userId ? new Types.ObjectId(userId) : undefined,
-        updated_by: userId ? new Types.ObjectId(userId) : undefined,
-      });
-      // Trả về plain object (giống .lean())
-      uml = newUml.toObject();
-    }
+    
     const generated = await this.ai.generateFromUseCase(requirements, language);
     const name = generated?.name || `${actor} - Activity`;
-    const lane = generated.lanes;
+    const lanes = generated.lanes;
     const nodes = generated?.nodes || [{ id: 'n_start', type: 'start', label: 'Start' }, { id: 'n_end', type: 'end', label: 'End' }];
     const edges = generated?.edges || [{ from: 'n_start', to: 'n_end' }];
     const diagram_svg = this.core.renderSvg({ name, nodes: nodes as any, edges: edges as any });
 
     const newDiagram = await ActivityDiagramModel.create({
-      uml_id: uml._id.toString(),
+      project_id: version.project_id,
+      version_id: versionId,
+      lang: language,
       name,
       description: generated?.description || 'Generated from actor requirements',
-      lane,
+      lanes,
       nodes,
       edges,
       diagram_svg,
-      userId,
+      created_by: userId ? new Types.ObjectId(userId) : undefined,
     } as any);
 
     // ✅ Tạo preview change cho activity diagram mới
@@ -170,11 +147,51 @@ export class ActivityDiagramService {
   }
 
 
+  public async create(
+    projectId: string,
+    versionId: string,
+    lang: string,
+    name: string,
+    description?: string,
+    userId?: string
+  ): Promise<any> {
+    const version = await VersionModel.findById(versionId).lean();
+    if (!version) throw new Error('Không tìm thấy version');
+    
+    const newDiagram = await ActivityDiagramModel.create({
+      project_id: projectId,
+      version_id: versionId,
+      lang: lang,
+      name,
+      description: description || '',
+      lanes: [],
+      nodes: [{ id: 'n_start', type: 'start', label: 'Start' }, { id: 'n_end', type: 'end', label: 'End' }],
+      edges: [{ from: 'n_start', to: 'n_end' }],
+      diagram_svg: '',
+      created_by: userId ? new Types.ObjectId(userId) : undefined,
+    } as any);
+
+    // ✅ Tạo preview change cho activity diagram mới
+    if (userId && versionId) {
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "activity_diagram",
+          entity_id: newDiagram._id.toString(),
+          change_type: "added",
+          before_snapshot: null,
+          after_snapshot: newDiagram.toObject()
+        }
+      );
+    }
+
+    return newDiagram;
+  }
+
   public async getListActivityDiagram(versionId: string) {
     if (versionId) {
-      const umls = await UmlModel.find({ version_id: versionId }).select('_id');
-      const ids = umls.map(u => u._id);
-      return ActivityDiagramModel.find({ uml_id: { $in: ids } }).lean();
+      return ActivityDiagramModel.find({ version_id: versionId }).lean();
     }
     return ActivityDiagramModel.find().lean();
   }
@@ -227,30 +244,28 @@ export class ActivityDiagramService {
     // Lấy tất cả activity diagrams cần xóa
     const diagrams = await ActivityDiagramModel.find({
       _id: { $in: ids.map(i => new Types.ObjectId(i)) }
-    }).lean();
+    }).populate('project_id').lean();
 
     if (diagrams.length === 0) {
       throw new Error("Không tìm thấy activity diagram để xóa");
     }
 
-    // Lấy UML IDs từ các diagrams
-    const umlIds = diagrams.map(d => d.uml_id).filter((v, i, a) => a.indexOf(v) === i);
+    // Lấy project IDs từ các diagrams
+    const projectIds = diagrams.map(d => d.project_id).filter((v, i, a) => a.indexOf(v) === i);
 
-    // Lấy các UML documents liên quan
-    const umls = await UmlModel.find({ _id: { $in: umlIds } })
-      .populate('project_id')
+    // Lấy các projects liên quan
+    const projects = await Project.find({ _id: { $in: projectIds } })
       .lean();
 
     // Kiểm tra quyền cho từng diagram
     for (const diagram of diagrams) {
-      const uml = umls.find(u => u._id.toString() === diagram.uml_id.toString());
-      if (!uml) {
-        throw new Error(`Không tìm thấy UML liên quan cho diagram ${diagram._id}`);
+      const project = projects.find(p => p._id.toString() === (diagram.project_id as any)?.toString());
+      if (!project) {
+        throw new Error(`Không tìm thấy project liên quan cho diagram ${diagram._id}`);
       }
 
       // Kiểm tra nếu project có thông tin members
-      const project = uml.project_id as any;
-      if (project && project.members) {
+      if (project.members) {
         const userMember = project.members.find(
           (member: any) => member.user_id.toString() === userId
         );
@@ -262,19 +277,18 @@ export class ActivityDiagramService {
         }
 
         if (!["owner", "editor"].includes(userMember.role)) {
-          throw new Error("Only owner or editor can delete usecase diagrams");
+          throw new Error("Only owner or editor can delete activity diagrams");
         }
       } else {
         // Fallback: nếu không có cấu trúc members, kiểm tra created_by
-        if (uml.created_by?.toString() !== userId) {
-          throw new Error("Only owner or editor can delete usecase diagrams");
+        if (diagram.created_by?.toString() !== userId) {
+          throw new Error("Only owner or editor can delete activity diagrams");
         }
       }
     }
 
-    // Lấy versionId từ UML để tạo preview
-    const firstUml = umls[0];
-    const versionId = firstUml?.version_id?.toString();
+    // Lấy versionId từ diagram đầu tiên để tạo preview
+    const versionId = diagrams[0]?.version_id?.toString();
 
     // Xóa khỏi database sau khi đã xác thực quyền
     const result = await ActivityDiagramModel.deleteMany({
@@ -299,6 +313,70 @@ export class ActivityDiagramService {
     }
 
     return { deletedCount: result.deletedCount || 0 };
+  }
+
+  public async updateNodePosition(
+    diagramId: string,
+    nodeId: string,
+    position: { x: number; y: number }
+  ): Promise<any> {
+    const diagram = await ActivityDiagramModel.findById(diagramId);
+    if (!diagram) {
+      throw new Error("Activity Diagram not found");
+    }
+
+    const nodeIndex = diagram.nodes.findIndex(
+      (node: any) => node.id === nodeId
+    );
+    if (nodeIndex === -1) {
+      throw new Error("Node not found");
+    }
+
+    // ✅ Gán trực tiếp position (vì nodeSchema không có _id, không thể dùng set())
+    if (!diagram.nodes[nodeIndex].position) {
+      diagram.nodes[nodeIndex].position = { x: 0, y: 0 };
+    }
+    diagram.nodes[nodeIndex].position.x = position.x;
+    diagram.nodes[nodeIndex].position.y = position.y;
+    
+    // ✅ Mark nodes array as modified để đảm bảo Mongoose lưu thay đổi nested object
+    diagram.markModified('nodes');
+    await diagram.save();
+
+    return this.getActivityDiagramByID(diagramId);
+  }
+
+  public async updateMultipleNodePositions(
+    diagramId: string,
+    updates: { id: string; position: { x: number; y: number } }[]
+  ): Promise<any> {
+    const diagram = await ActivityDiagramModel.findById(diagramId);
+    if (!diagram) {
+      throw new Error("Activity Diagram not found");
+    }
+
+    // Cập nhật positions cho nodes
+    if (updates && updates.length > 0) {
+      updates.forEach(({ id, position }) => {
+        const nodeIndex = diagram.nodes.findIndex(
+          (node: any) => node.id === id
+        );
+        if (nodeIndex !== -1) {
+          // ✅ Gán trực tiếp position (vì nodeSchema không có _id, không thể dùng set())
+          if (!diagram.nodes[nodeIndex].position) {
+            diagram.nodes[nodeIndex].position = { x: 0, y: 0 };
+          }
+          diagram.nodes[nodeIndex].position.x = position.x;
+          diagram.nodes[nodeIndex].position.y = position.y;
+        }
+      });
+      
+      // ✅ Mark nodes array as modified để đảm bảo Mongoose lưu thay đổi nested object
+      diagram.markModified('nodes');
+      await diagram.save();
+    }
+
+    return this.getActivityDiagramByID(diagramId);
   }
 
 }

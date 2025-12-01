@@ -54,6 +54,25 @@ export class ActivityDiagramController {
   }
 
 
+  public create = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.getSubject();
+      if (!userId) {
+        handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
+        return;
+      }
+      const { project_id, version_id, lang, name, description } = req.body;
+      if (!project_id || !version_id || !lang || !name) {
+        res.status(400).json({ message: 'project_id, version_id, lang, và name là bắt buộc.' });
+        return;
+      }
+      const result = await this.service.create(project_id, version_id, lang, name, description, userId);
+      res.status(201).json({ message: 'Tạo activity diagram thành công!', data: result });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   public getListActivityDiagram = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { versionId } = req.params;
@@ -150,6 +169,69 @@ export class ActivityDiagramController {
         // Chuyển lỗi khác đến error handler chung
         next(err);
       }
+    }
+  }
+
+  public updateNodePosition = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { activityDiagramId, nodeId } = req.params;
+      const position = req.body;
+
+      if (!activityDiagramId) {
+        res.status(400).json({ message: "ActivityDiagramId is required." });
+        return;
+      }
+      if (!nodeId) {
+        res.status(400).json({ message: "NodeId is required." });
+        return;
+      }
+      if (!position || position.x === undefined || position.y === undefined) {
+        res.status(400).json({ message: "Valid position {x, y} is required." });
+        return;
+      }
+
+      const responseData = await this.service.updateNodePosition(
+        activityDiagramId,
+        nodeId,
+        position
+      );
+
+      res.status(200).json({
+        status: "Success",
+        message: "Update Node Position Successfully",
+        data: responseData,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public updateMultipleNodePositions = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { activityDiagramId } = req.params;
+      const { nodes } = req.body;
+
+      if (!activityDiagramId) {
+        res.status(400).json({ message: "ActivityDiagramId is required." });
+        return;
+      }
+      if (!nodes || !Array.isArray(nodes)) {
+        res.status(400).json({ message: "Valid nodes array is required." });
+        return;
+      }
+
+      const responseData = await this.service.updateMultipleNodePositions(
+        activityDiagramId,
+        nodes
+      );
+
+      res.status(200).json({
+        status: "Success",
+        message: "Update Multiple Node Positions Successfully",
+        data: responseData,
+      });
+    } catch (err) {
+      next(err);
     }
   }
 }

@@ -65,4 +65,13 @@ export function exportActivityDiagramSvg(id) {
   return axios.get(`${BASE}/${id}/export-svg`, { responseType: 'text' })
 }
 
+// ==================== POSITION ADJUSTMENT API ====================
+export function updateNodePosition(diagramId, nodeId, position) {
+  return axios.patch(`${BASE}/${diagramId}/nodes/${nodeId}/position`, position);
+}
+
+export function updateMultipleNodePositions(diagramId, nodes) {
+  return axios.patch(`${BASE}/${diagramId}/nodes/positions`, { nodes });
+}
+
 

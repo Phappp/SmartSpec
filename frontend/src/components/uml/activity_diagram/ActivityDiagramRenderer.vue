@@ -764,10 +764,17 @@ export default {
       })
 
       nodes.forEach((node) => {
+        // ✅ Ưu tiên sử dụng position đã lưu từ database nếu có
+        if (node.position && typeof node.position.x === 'number' && typeof node.position.y === 'number') {
+          node.x = node.position.x
+          node.y = node.position.y
+          return // Skip auto-calculation nếu đã có position
+        }
+
         const depth = depthMap.get(node.id) || 0
         const horizontalOrder = horizontalOrders.get(node.id) || 0
 
-        // Tính Y position
+        // Tính Y position (chỉ khi chưa có position)
         if (node.type === 'start') {
           node.y = this.laneHeaderHeight + 50
         } else if (node.type === 'end') {
@@ -776,7 +783,7 @@ export default {
           node.y = this.laneHeaderHeight + 50 + depth * this.nodeSpacing
         }
 
-        // Tính X position
+        // Tính X position (chỉ khi chưa có position)
         const orderRange = maxOrder - minOrder
         const availableWidth = this.virtualSpace.width - 200
 
@@ -786,13 +793,28 @@ export default {
           const normalizedOrder = (horizontalOrder - minOrder) / orderRange
           node.x = 100 + normalizedOrder * availableWidth
         }
+
+        // Lưu position vào node.position để đồng bộ với database
+        if (!node.position) {
+          node.position = { x: node.x, y: node.y }
+        }
       })
 
-      // Start và End luôn ở giữa
+      // Start và End luôn ở giữa (chỉ override nếu chưa có position)
       const startNode = nodes.find((node) => node.type === 'start')
       const endNode = nodes.find((node) => node.type === 'end')
-      if (startNode) startNode.x = this.virtualSpace.width / 2
-      if (endNode) endNode.x = this.virtualSpace.width / 2
+      if (startNode && (!startNode.position || (startNode.position.x === 0 && startNode.position.y === 0))) {
+        startNode.x = this.virtualSpace.width / 2
+        if (startNode.position) {
+          startNode.position.x = startNode.x
+        }
+      }
+      if (endNode && (!endNode.position || (endNode.position.x === 0 && endNode.position.y === 0))) {
+        endNode.x = this.virtualSpace.width / 2
+        if (endNode.position) {
+          endNode.position.x = endNode.x
+        }
+      }
     },
 
     adjustBranchPositions(nodes, depthMap, branchMap) {
@@ -1141,6 +1163,13 @@ export default {
       if (this.draggingElement) {
         this.draggingElement.x = newX
         this.draggingElement.y = newY
+
+        // ✅ Cập nhật position vào node.position để đồng bộ với database
+        if (!this.draggingElement.position) {
+          this.draggingElement.position = { x: 0, y: 0 }
+        }
+        this.draggingElement.position.x = newX
+        this.draggingElement.position.y = newY
 
         this.showSavingIndicator()
 

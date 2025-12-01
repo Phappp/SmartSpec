@@ -341,7 +341,7 @@ export default {
       return filtered
     },
   },
-    watch: {
+  watch: {
     isVisible: {
       immediate: true,
       handler(newVal) {
