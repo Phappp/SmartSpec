@@ -45,3 +45,4 @@ class EventBus {
 // Export singleton instance
 export default new EventBus()
 
+

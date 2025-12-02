@@ -49,13 +49,6 @@ const routes = [
     props: true,
     meta: { requiresAuth: true }
   },
-  // {
-  //   path: '/project/:id/activity-diagrams',
-  //   name: 'ActivityDiagramManagement',
-  //   component: ActivityDiagramManagement,
-  //   props: true,
-  //   meta: { requiresAuth: true }
-  // },
   {
     path: '/project/:id/uml',
     name: 'UmlManagement',
@@ -98,13 +91,6 @@ const routes = [
     props: true,
     meta: { requiresAuth: true }
   },
-  // {
-  //   path: '/project/:id/activity-diagrams',
-  //   name: 'ActivityDiagramManagement',
-  //   component: ActivityDiagramManagement,
-  //   props: true,
-  //   meta: { requiresAuth: true }
-  // },
   {
     path: '/project/:id/uml',
     name: 'UmlManagement',

@@ -642,11 +642,10 @@ import {
   generateFromUsecase,
   generateFromActor,
   deleteActivityDiagram,
-} from '@/api/avd'
-import {
   updateNodePosition,
   updateMultipleNodePositions,
-} from '@/api/activity_diagram'
+} from '@/api/avd'
+
 import { getSequenceDiagrams, generateSequenceDiagram, deleteSequenceDiagram } from '@/api/sqd'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
@@ -733,6 +732,8 @@ export default {
       },
       toast: useToast(),
       saveTimeout: null,
+      // Track changed nodes for activity diagram (debounce save)
+      activityChangedNodes: null,
     }
   },
   computed: {
@@ -895,7 +896,7 @@ export default {
       this.initVersionSocketListeners(projectId)
     }
     document.addEventListener('click', this.handleClickOutside)
-    
+
     // Listen for version-approved event from PreviewModal
     eventBus.on('version-approved', this.handleVersionApproved)
   },
@@ -904,7 +905,7 @@ export default {
       this.cleanupSocketConnection(this.project._id)
       this.cleanupVersionSocketListeners()
     }
-    
+
     // Remove event listener
     eventBus.off('version-approved', this.handleVersionApproved)
     document.removeEventListener('click', this.handleClickOutside)
@@ -938,7 +939,7 @@ export default {
         // Lọc bỏ version tạm thời, chỉ giữ version đã được approve
         const allVersions = result.versions || []
         this.versions = filterApprovedVersions(allVersions)
-        
+
         // Sử dụng version sync utility
         const currentVersionId = result.current_version?._id
         this.selectedVersionId = getSelectedOrDefaultVersion(
@@ -946,7 +947,7 @@ export default {
           this.versions,
           currentVersionId
         )
-        
+
         if (this.selectedVersionId) {
           saveSelectedVersion(projectId, this.selectedVersionId)
         }
@@ -1174,7 +1175,7 @@ export default {
           const diagramId = newDiagram._id || newDiagram.id
           const diagrams = this.getDiagramsByType(this.generateForm.type)
           const createdDiagram = diagrams.find((d) => (d._id || d.id) === diagramId)
-          
+
           if (createdDiagram) {
             setTimeout(() => {
               this.triggerPreviewGeneration(createdDiagram)
@@ -1205,12 +1206,23 @@ export default {
       this.editingDiagram = { ...diagram }
       this.selectedElement = null
       this.zoomLevel = 1
+      // Reset activity changed nodes khi mở editor mới
+      this.activityChangedNodes = null
     },
     closeEditor() {
       const editedDiagramId = this.editingDiagram
         ? this.editingDiagram.id || this.editingDiagram._id
         : null
       const diagramType = this.editingDiagram?._type
+
+      // Clear save timeout nếu có
+      if (this.saveTimeout) {
+        clearTimeout(this.saveTimeout)
+        this.saveTimeout = null
+      }
+
+      // Clear activity changed nodes
+      this.activityChangedNodes = null
 
       this.editingDiagram = null
       this.selectedElement = null
@@ -1298,9 +1310,7 @@ export default {
         this.toast.success(`Diagram deleted successfully`)
       } catch (err) {
         console.error('Error deleting diagram:', err)
-        this.toast.error(
-          (err.response?.data?.message || err.message)
-        )
+        this.toast.error(err.response?.data?.message || err.message)
       } finally {
         if (deleteButton) {
           deleteButton.innerHTML = originalHTML
@@ -1428,12 +1438,12 @@ export default {
         this.toast.warning('Only project owner can switch versions')
         return
       }
-      
+
       const oldVersionId = this.selectedVersionId
       this.selectedVersionId = versionId
       // Lưu vào localStorage để đồng bộ
       saveSelectedVersion(this.project._id, versionId)
-      
+
       // Emit socket event để các thành viên khác biết version đã được switch
       if (socket && socket.connected) {
         const userId = localStorage.getItem('userId')
@@ -1447,7 +1457,7 @@ export default {
         })
         console.log('📡 Emitted VERSION_SWITCHED socket event')
       }
-      
+
       this.loadAvailableUsecases()
       this.loadDiagrams()
     },
@@ -1479,7 +1489,7 @@ export default {
 
         // Đảm bảo version mới có trong danh sách (thêm vào nếu chưa có)
         let newVersionObj = this.versions.find((v) => v._id === versionId)
-        
+
         if (!newVersionObj) {
           // Nếu chưa có trong danh sách, thử fetch lại một lần nữa
           console.log('🔄 Version not found, fetching project data again...')
@@ -1586,7 +1596,10 @@ export default {
     async handleRemoteVersionCreated(event) {
       if (event.projectId !== this.project._id) return
       await this.fetchProjectData(this.project._id)
-      if (event.version && (event.version.version_temporary === false || event.version.version_temporary === undefined)) {
+      if (
+        event.version &&
+        (event.version.version_temporary === false || event.version.version_temporary === undefined)
+      ) {
         const exists = this.versions.find((v) => v._id === event.version._id)
         if (!exists) {
           this.versions.push(event.version)
@@ -1652,6 +1665,23 @@ export default {
           break
         case 'activity':
           this.handleActivityPositionUpdate({ element, type, position })
+          // Lưu thông tin node đã thay đổi để debounce save
+          if (type === 'node') {
+            const nodeId = element.id || element._id
+            if (nodeId) {
+              // Lưu node đã thay đổi vào map để debounce save
+              if (!this.activityChangedNodes) {
+                this.activityChangedNodes = new Map()
+              }
+              this.activityChangedNodes.set(nodeId, {
+                id: nodeId,
+                position: {
+                  x: Math.round(position.x),
+                  y: Math.round(position.y),
+                },
+              })
+            }
+          }
           break
         case 'sequence':
           this.handleSequencePositionUpdate({ element, type, position })
@@ -1767,14 +1797,46 @@ export default {
     },
 
     async saveActivityPositions(diagramId) {
-      const updates = {
-        nodes: this.editingDiagram.nodes.map((node) => ({
-          id: node.id,
-          position: node.position || { x: 0, y: 0 },
-        })),
+      // Save đơn lẻ từng node đã thay đổi (với debounce 1.5s)
+      if (!this.activityChangedNodes || this.activityChangedNodes.size === 0) {
+        return
       }
 
-      await updateMultipleNodePositions(diagramId, updates.nodes)
+      const nodesToSave = Array.from(this.activityChangedNodes.values())
+      
+      // Save từng node một (đơn lẻ) và cập nhật UI
+      for (const node of nodesToSave) {
+        try {
+          const response = await updateNodePosition(diagramId, node.id, node.position)
+          // ✅ Cập nhật editingDiagram với dữ liệu mới từ server để UI cập nhật
+          if (response?.data?.data) {
+            const updatedDiagram = response.data.data
+            if (this.editingDiagram && (this.editingDiagram.id || this.editingDiagram._id) === diagramId) {
+              // Cập nhật nodes với position mới - dùng Vue.set để đảm bảo reactivity
+              if (updatedDiagram.nodes) {
+                updatedDiagram.nodes.forEach((updatedNode) => {
+                  const localNodeIndex = this.editingDiagram.nodes.findIndex(
+                    (n) => n.id === updatedNode.id
+                  )
+                  if (localNodeIndex !== -1 && updatedNode.position) {
+                    // ✅ Dùng Vue.set để đảm bảo Vue detect được thay đổi
+                    this.$set(this.editingDiagram.nodes[localNodeIndex], 'position', {
+                      x: updatedNode.position.x,
+                      y: updatedNode.position.y,
+                    })
+                  }
+                })
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`❌ Error saving node ${node.id}:`, err)
+          // Tiếp tục save các node khác dù có lỗi
+        }
+      }
+
+      // Clear changed nodes sau khi save xong
+      this.activityChangedNodes.clear()
     },
 
     async saveSequencePositions(diagramId) {

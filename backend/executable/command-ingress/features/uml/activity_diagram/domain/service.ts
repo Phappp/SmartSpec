@@ -17,34 +17,34 @@ export class ActivityDiagramService {
     if (!versionId) throw new Error('versionId là bắt buộc để lấy requirement model');
     const version = await VersionModel.findById(versionId).lean();
     if (!version) throw new Error('Không tìm thấy version');
-    
+
     // Lấy usecase từ collection - handle cả _id và id (backward compatibility)
     // Normalize requirementId (handle ObjectId string, plain string, etc.)
     let normalizedRequirementId = requirementId;
     if (Types.ObjectId.isValid(String(requirementId))) {
       normalizedRequirementId = new Types.ObjectId(requirementId).toString();
     }
-    
-    let requirement = await Usecase.findOne({ 
+
+    let requirement = await Usecase.findOne({
       $or: [
         { _id: new Types.ObjectId(requirementId) },
         { _id: requirementId },
         { _id: normalizedRequirementId },
         { id: requirementId }
       ],
-      version_id: versionId 
+      version_id: versionId
     }).lean();
-    
+
     if (!requirement) {
       // Try one more time with string comparison
       const allUsecases = await Usecase.find({ version_id: versionId }).lean();
-      requirement = allUsecases.find(uc => 
-        String(uc._id) === String(requirementId) || 
+      requirement = allUsecases.find(uc =>
+        String(uc._id) === String(requirementId) ||
         String(uc._id) === normalizedRequirementId ||
         (uc._id && String(uc._id) === String(requirementId))
       );
     }
-    
+
     if (!requirement) {
       const availableUsecases = await Usecase.find({ version_id: versionId }).select('_id name').lean();
       console.error('❌ Activity Diagram: Requirement not found:', {
@@ -100,14 +100,14 @@ export class ActivityDiagramService {
   public async generateFromActor(versionId: string, actor: string, language: string, userId?: string) {
     const version = await VersionModel.findById(versionId).lean();
     if (!version) throw new Error('Không tìm thấy version');
-    
+
     // Lấy usecases từ collection theo role
-    const requirements = await Usecase.find({ 
+    const requirements = await Usecase.find({
       version_id: versionId,
       "role.name": { $regex: new RegExp(`^${actor}$`, 'i') }
     }).lean();
     if (!requirements.length) throw new Error('Không có requirement nào cho actor này');
-    
+
     const generated = await this.ai.generateFromUseCase(requirements, language);
     const name = generated?.name || `${actor} - Activity`;
     const lanes = generated.lanes;
@@ -157,7 +157,7 @@ export class ActivityDiagramService {
   ): Promise<any> {
     const version = await VersionModel.findById(versionId).lean();
     if (!version) throw new Error('Không tìm thấy version');
-    
+
     const newDiagram = await ActivityDiagramModel.create({
       project_id: projectId,
       version_id: versionId,
@@ -338,7 +338,7 @@ export class ActivityDiagramService {
     }
     diagram.nodes[nodeIndex].position.x = position.x;
     diagram.nodes[nodeIndex].position.y = position.y;
-    
+
     // ✅ Mark nodes array as modified để đảm bảo Mongoose lưu thay đổi nested object
     diagram.markModified('nodes');
     await diagram.save();
@@ -370,7 +370,7 @@ export class ActivityDiagramService {
           diagram.nodes[nodeIndex].position.y = position.y;
         }
       });
-      
+
       // ✅ Mark nodes array as modified để đảm bảo Mongoose lưu thay đổi nested object
       diagram.markModified('nodes');
       await diagram.save();

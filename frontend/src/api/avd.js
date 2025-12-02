@@ -63,3 +63,10 @@ export const bulkDeleteDiagrams = (diagramIds) =>
 
 export const deleteActivityDiagram = (activityDiagramId) =>
     axiosClient.delete(`/api/activity-diagrams/${activityDiagramId}`);
+
+// ==================== POSITION ADJUSTMENT API ====================
+export const updateNodePosition = (activityDiagramId, nodeId, position) =>
+    axiosClient.patch(`/api/activity-diagrams/${activityDiagramId}/nodes/${nodeId}/position`, position);
+
+export const updateMultipleNodePositions = (activityDiagramId, nodes) =>
+    axiosClient.patch(`/api/activity-diagrams/${activityDiagramId}/nodes/positions`, { nodes });

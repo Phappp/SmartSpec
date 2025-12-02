@@ -506,6 +506,8 @@ export default {
           lane_id: node.lane_id || null,
           width: width,
           height: height,
+          // ✅ Copy position từ node gốc để UI cập nhật đúng
+          position: node.position ? { ...node.position } : null,
           _originalData: node,
         }
       })
@@ -765,7 +767,11 @@ export default {
 
       nodes.forEach((node) => {
         // ✅ Ưu tiên sử dụng position đã lưu từ database nếu có
-        if (node.position && typeof node.position.x === 'number' && typeof node.position.y === 'number') {
+        if (
+          node.position &&
+          typeof node.position.x === 'number' &&
+          typeof node.position.y === 'number'
+        ) {
           node.x = node.position.x
           node.y = node.position.y
           return // Skip auto-calculation nếu đã có position
@@ -803,13 +809,19 @@ export default {
       // Start và End luôn ở giữa (chỉ override nếu chưa có position)
       const startNode = nodes.find((node) => node.type === 'start')
       const endNode = nodes.find((node) => node.type === 'end')
-      if (startNode && (!startNode.position || (startNode.position.x === 0 && startNode.position.y === 0))) {
+      if (
+        startNode &&
+        (!startNode.position || (startNode.position.x === 0 && startNode.position.y === 0))
+      ) {
         startNode.x = this.virtualSpace.width / 2
         if (startNode.position) {
           startNode.position.x = startNode.x
         }
       }
-      if (endNode && (!endNode.position || (endNode.position.x === 0 && endNode.position.y === 0))) {
+      if (
+        endNode &&
+        (!endNode.position || (endNode.position.x === 0 && endNode.position.y === 0))
+      ) {
         endNode.x = this.virtualSpace.width / 2
         if (endNode.position) {
           endNode.position.x = endNode.x

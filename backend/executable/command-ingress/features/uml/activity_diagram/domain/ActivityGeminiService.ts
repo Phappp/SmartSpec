@@ -1,4 +1,4 @@
-import { ActivityEdge, ActivityNode,ActivityLane, ActivityDiagramDTO } from './interfaces';
+import { ActivityEdge, ActivityNode, ActivityLane, ActivityDiagramDTO } from './interfaces';
 import { ApiKeyService } from '../../../orchestrator/domain/ApiKeyService';
 import { Types } from 'mongoose';
 
@@ -41,6 +41,9 @@ hợp nhất trở lại.
 4. **CỘT HỆ THỐNG:**
    - Trường **"diagram_svg"** = null.
    - Trường **"label"** là **bắt buộc** với **"action"**, **"decision"**, **"merge"**.
+   - Trường **"position"** là **bắt buộc** cho TẤT CẢ các nodes, phải là object với **"x"** và **"y"** (số nguyên).
+   - **Position** phải được tính toán hợp lý: nodes trong cùng lane nên có X tương tự nhau, Y tăng dần theo thứ tự luồng.
+   - X nên nằm trong khoảng 100-1100, Y nên nằm trong khoảng 100-1500.
 5. **XÁC ĐỊNH USE CASE:**
    - Node loại **"action"**, **"decision"**, **"merge"** phải có **requirement_ids** tương ứng.
    - Nếu không rõ nguồn, để **[]**.
@@ -71,29 +74,29 @@ Dưới dây là 1 ví dụ:
     { "id": "lane_system", "name": "System" }
   ],
   "nodes": [
-    { "id": "n_start", "type": "start", "label": "Start", "lane_id": "lane_user" },
+    { "id": "n_start", "type": "start", "label": "Start", "lane_id": "lane_user", "position": { "x": 300, "y": 100 } },
 
-    { "id": "n_select_change", "type": "action", "label": "Select Change Password", "lane_id": "lane_user" },
+    { "id": "n_select_change", "type": "action", "label": "Select Change Password", "lane_id": "lane_user", "position": { "x": 300, "y": 200 } },
 
-    { "id": "n_show_form", "type": "action", "label": "Show Change Password Form", "lane_id": "lane_system" },
+    { "id": "n_show_form", "type": "action", "label": "Show Change Password Form", "lane_id": "lane_system", "position": { "x": 800, "y": 200 } },
 
-    { "id": "n_input", "type": "action", "label": "Input Old/New Password", "lane_id": "lane_user" },
+    { "id": "n_input", "type": "action", "label": "Input Old/New Password", "lane_id": "lane_user", "position": { "x": 300, "y": 300 } },
 
-    { "id": "n_confirm_cancel", "type": "decision", "label": "Confirm or Cancel?", "lane_id": "lane_user" },
+    { "id": "n_confirm_cancel", "type": "decision", "label": "Confirm or Cancel?", "lane_id": "lane_user", "position": { "x": 300, "y": 400 } },
 
-    { "id": "n_check_valid", "type": "action", "label": "Validate New Password", "lane_id": "lane_system" },
+    { "id": "n_check_valid", "type": "action", "label": "Validate New Password", "lane_id": "lane_system", "position": { "x": 800, "y": 400 } },
 
-    { "id": "n_decision_valid", "type": "decision", "label": "Password Valid?", "lane_id": "lane_system" },
+    { "id": "n_decision_valid", "type": "decision", "label": "Password Valid?", "lane_id": "lane_system", "position": { "x": 800, "y": 500 } },
 
-    { "id": "n_show_error", "type": "action", "label": "Show Error Message", "lane_id": "lane_system" },
+    { "id": "n_show_error", "type": "action", "label": "Show Error Message", "lane_id": "lane_system", "position": { "x": 800, "y": 600 } },
 
-    { "id": "n_merge", "type": "merge", "label": "Return to End", "lane_id": "lane_system" },
+    { "id": "n_merge", "type": "merge", "label": "Return to End", "lane_id": "lane_system", "position": { "x": 800, "y": 700 } },
 
-    { "id": "n_update", "type": "action", "label": "Update Password", "lane_id": "lane_system" },
+    { "id": "n_update", "type": "action", "label": "Update Password", "lane_id": "lane_system", "position": { "x": 800, "y": 550 } },
 
-    { "id": "n_success", "type": "action", "label": "Show Success Message", "lane_id": "lane_system" },
+    { "id": "n_success", "type": "action", "label": "Show Success Message", "lane_id": "lane_system", "position": { "x": 800, "y": 650 } },
 
-    { "id": "n_end", "type": "end", "label": "End", "lane_id": "lane_system" }
+    { "id": "n_end", "type": "end", "label": "End", "lane_id": "lane_system", "position": { "x": 800, "y": 800 } }
   ],
   "edges": [
     { "from": "n_start", "to": "n_select_change" },
@@ -162,10 +165,13 @@ reconcile back.
 - All edges coming from the **"decision"** node must have an explicit **"condition"**,Each decision must have at least two branches (true/false or yes/no).
 - For action nodes, there can only be 1 Edge to go to another node or to the end node when finished.
 4. **SYSTEM COLUMNS:**
-- Field **"diagram_svg"** = null.
-- Field **"label"** is **required** for **"action"**, **"decision"**, **"merge"**.
+   - Field **"diagram_svg"** = null.
+   - Field **"label"** is **required** for **"action"**, **"decision"**, **"merge"**.
+   - Field **"position"** is **required** for ALL nodes, must be an object with **"x"** and **"y"** (integers).
+   - **Position** must be calculated logically: nodes in the same lane should have similar X values, Y increases along the flow order.
+   - X should be in range 100-1100, Y should be in range 100-1500.
 5. **DETERMINING USE CASE:**
-- Nodes of type **"action"**, **"decision"**, **"merge"** must have corresponding **requirement_ids**.
+   - Nodes of type **"action"**, **"decision"**, **"merge"** must have corresponding **requirement_ids**.
 If the source is unknown, leave **[]**.
 **DETECTING NODE FROM USE CASE:**
 - Each action → **action**
@@ -194,29 +200,29 @@ Return ONLY a single, valid JSON object with:
     { "id": "lane_system", "name": "System" }
   ],
   "nodes": [
-    { "id": "n_start", "type": "start", "label": "Start", "lane_id": "lane_user" },
+    { "id": "n_start", "type": "start", "label": "Start", "lane_id": "lane_user", "position": { "x": 300, "y": 100 } },
 
-    { "id": "n_select_change", "type": "action", "label": "Select Change Password", "lane_id": "lane_user" },
+    { "id": "n_select_change", "type": "action", "label": "Select Change Password", "lane_id": "lane_user", "position": { "x": 300, "y": 200 } },
 
-    { "id": "n_show_form", "type": "action", "label": "Show Change Password Form", "lane_id": "lane_system" },
+    { "id": "n_show_form", "type": "action", "label": "Show Change Password Form", "lane_id": "lane_system", "position": { "x": 800, "y": 200 } },
 
-    { "id": "n_input", "type": "action", "label": "Input Old/New Password", "lane_id": "lane_user" },
+    { "id": "n_input", "type": "action", "label": "Input Old/New Password", "lane_id": "lane_user", "position": { "x": 300, "y": 300 } },
 
-    { "id": "n_confirm_cancel", "type": "decision", "label": "Confirm or Cancel?", "lane_id": "lane_user" },
+    { "id": "n_confirm_cancel", "type": "decision", "label": "Confirm or Cancel?", "lane_id": "lane_user", "position": { "x": 300, "y": 400 } },
 
-    { "id": "n_check_valid", "type": "action", "label": "Validate New Password", "lane_id": "lane_system" },
+    { "id": "n_check_valid", "type": "action", "label": "Validate New Password", "lane_id": "lane_system", "position": { "x": 800, "y": 400 } },
 
-    { "id": "n_decision_valid", "type": "decision", "label": "Password Valid?", "lane_id": "lane_system" },
+    { "id": "n_decision_valid", "type": "decision", "label": "Password Valid?", "lane_id": "lane_system", "position": { "x": 800, "y": 500 } },
 
-    { "id": "n_show_error", "type": "action", "label": "Show Error Message", "lane_id": "lane_system" },
+    { "id": "n_show_error", "type": "action", "label": "Show Error Message", "lane_id": "lane_system", "position": { "x": 800, "y": 600 } },
 
-    { "id": "n_merge", "type": "merge", "label": "Return to End", "lane_id": "lane_system" },
+    { "id": "n_merge", "type": "merge", "label": "Return to End", "lane_id": "lane_system", "position": { "x": 800, "y": 700 } },
 
-    { "id": "n_update", "type": "action", "label": "Update Password", "lane_id": "lane_system" },
+    { "id": "n_update", "type": "action", "label": "Update Password", "lane_id": "lane_system", "position": { "x": 800, "y": 550 } },
 
-    { "id": "n_success", "type": "action", "label": "Show Success Message", "lane_id": "lane_system" },
+    { "id": "n_success", "type": "action", "label": "Show Success Message", "lane_id": "lane_system", "position": { "x": 800, "y": 650 } },
 
-    { "id": "n_end", "type": "end", "label": "End", "lane_id": "lane_system" }
+    { "id": "n_end", "type": "end", "label": "End", "lane_id": "lane_system", "position": { "x": 800, "y": 800 } }
   ],
   "edges": [
     { "from": "n_start", "to": "n_select_change" },
@@ -278,7 +284,7 @@ export class ActivityGeminiService {
         if (msg.includes('invalid') || msg.includes('unauthorized')) {
           try {
             await this.apiKeyService.disableKey(k._id);
-          } catch {}
+          } catch { }
         }
         continue;
       }
@@ -287,7 +293,7 @@ export class ActivityGeminiService {
   }
 
   private cleanJson(text: string): string {
-     if (!text) return '';
+    if (!text) return '';
 
     let cleanedText = text.trim();
 
@@ -299,20 +305,20 @@ export class ActivityGeminiService {
 
     // 3️⃣ Loại bỏ các dòng thừa
     const lines = cleanedText.split('\n').filter(line => {
-        const l = line.trim();
-        return !l.match(/^(Đây là|Here is|Output:|Kết quả:|JSON:|===|---)/i)
-            && !l.match(/^[#*-]{3,}/)
-            && !l.match(/^(Ví dụ|Example):/i);
+      const l = line.trim();
+      return !l.match(/^(Đây là|Here is|Output:|Kết quả:|JSON:|===|---)/i)
+        && !l.match(/^[#*-]{3,}/)
+        && !l.match(/^(Ví dụ|Example):/i);
     });
     cleanedText = lines.join('\n').trim();
 
     // 4️⃣ Thử parse JSON, nếu fail trả về fallback object
     try {
-        const parsed = JSON.parse(cleanedText);
-        if (typeof parsed === 'object') return JSON.stringify(parsed); // đảm bảo là string JSON chuẩn
+      const parsed = JSON.parse(cleanedText);
+      if (typeof parsed === 'object') return JSON.stringify(parsed); // đảm bảo là string JSON chuẩn
     } catch {
-        console.warn('⚠️ Could not parse AI response, using fallback ActivityDiagram.');
-        return null;
+      console.warn('⚠️ Could not parse AI response, using fallback ActivityDiagram.');
+      return null;
     }
   }
 
@@ -354,7 +360,7 @@ export class ActivityGeminiService {
     let parsed: any = {};
     try {
       parsed = cleanedJson ? JSON.parse(cleanedJson) : {};
-    } catch (err) { 
+    } catch (err) {
       console.error('Error parsing cleaned AI response:', err);
       parsed = {};
     }
