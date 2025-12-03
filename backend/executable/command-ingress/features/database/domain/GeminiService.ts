@@ -1661,7 +1661,7 @@ export class DatabaseGeminiService {
   /**
    * Một hàm chung để gửi prompt tới Gemini và trả về kết quả dạng chuỗi JSON đã được làm sạch.
    */
-  private async generateJsonContent(prompt: string): Promise<string> {
+  private async generateJsonContent(prompt: string, userId?: string, projectId?: string): Promise<string> {
     const keys = await this.apiKeyService.getAllActiveKeys("gemini");
     if (!keys || keys.length === 0) {
       throw new Error("No active Gemini API key found.");
@@ -1669,6 +1669,7 @@ export class DatabaseGeminiService {
 
     let lastError: any;
     for (const k of keys) {
+      const startTime = Date.now();
       try {
         console.log(
           `🔑 Trying Gemini key for database content: ${k.key_value.slice(
@@ -1686,17 +1687,51 @@ export class DatabaseGeminiService {
           contents: [{ role: "user", parts: [{ text: prompt }] }],
         });
 
+        const responseTime = Date.now() - startTime;
+        const { logApiUsage, extractGeminiTokens } = await import("../../stats/domain/apiUsageLogger");
+        const tokens = extractGeminiTokens(resp);
+
+        logApiUsage({
+          api_key_id: k._id.toString(),
+          provider: 'gemini',
+          model_name: 'gemini-2.0-flash-001',
+          user_id: userId,
+          project_id: projectId,
+          request_type: 'text',
+          endpoint: 'generateDatabase',
+          ...tokens,
+          status: 'success',
+          status_code: 200,
+          response_time: responseTime,
+        }).catch(err => console.error('Failed to log API usage:', err));
+
         const text: string = resp?.response?.text?.() || "";
 
         // Trả về ngay sau khi thành công
         return this.cleanJsonStringDatabase(text);
       } catch (err: any) {
+        const responseTime = Date.now() - startTime;
         lastError = err;
         const msg = (err?.message || "").toLowerCase();
         console.error(
           `❌ Gemini key ${k._id} failed during database content generation:`,
           err?.message || err
         );
+
+        const { logApiUsage } = await import("../../stats/domain/apiUsageLogger");
+        logApiUsage({
+          api_key_id: k._id.toString(),
+          provider: 'gemini',
+          model_name: 'gemini-2.0-flash-001',
+          user_id: userId,
+          project_id: projectId,
+          request_type: 'text',
+          endpoint: 'generateDatabase',
+          status: 'failed',
+          status_code: err.status || 500,
+          error_message: err.message || 'Unknown error',
+          response_time: responseTime,
+        }).catch(logErr => console.error('Failed to log API usage:', logErr));
 
         // Vô hiệu hóa key nếu nó không hợp lệ
         if (msg.includes("invalid") || msg.includes("unauthorized")) {

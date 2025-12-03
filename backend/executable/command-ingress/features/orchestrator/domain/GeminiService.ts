@@ -1,5 +1,6 @@
 import { Types } from "mongoose";
 import { ApiKeyService } from "./ApiKeyService";
+import { logApiUsage, extractGeminiTokens } from "../../stats/domain/apiUsageLogger";
 
 // THÊM MỚI: Tập trung hóa toàn bộ prompt để hỗ trợ đa ngôn ngữ
 const prompts = {
@@ -511,7 +512,7 @@ export class GeminiService {
         return useCases;
     }
 
-    async analyzeRequirements(cleanText: string, language: string): Promise<any[]> {
+    async analyzeRequirements(cleanText: string, language: string, userId?: string, projectId?: string): Promise<any[]> {
         console.log(` Analyzing text with Gemini (lang: ${language}). Text length: ${cleanText?.length ?? 0}`);
 
         const keys = await this.apiKeyService.getAllActiveKeys("gemini");
@@ -532,6 +533,7 @@ export class GeminiService {
                 attemptsForThisOffset++;
 
                 const key = k.key_value;
+                const startTime = Date.now();
                 try {
                     console.log(`🔑 Trying Gemini key: ${key.slice(0, 12)}... (offset=${offset})`);
                     const { GoogleGenerativeAI } = await import("@google/generative-ai");
@@ -543,6 +545,24 @@ export class GeminiService {
                     const resp: any = await model.generateContent({
                         contents: [{ role: "user", parts: [{ text: prompt }] }],
                     });
+
+                    const responseTime = Date.now() - startTime;
+                    const tokens = extractGeminiTokens(resp);
+
+                    // Log API usage
+                    logApiUsage({
+                        api_key_id: k._id.toString(),
+                        provider: 'gemini',
+                        model_name: 'gemini-2.0-flash-001',
+                        user_id: userId,
+                        project_id: projectId,
+                        request_type: 'text',
+                        endpoint: 'analyzeRequirements',
+                        ...tokens,
+                        status: 'success',
+                        status_code: 200,
+                        response_time: responseTime,
+                    }).catch(err => console.error('Failed to log API usage:', err));
 
                     let text: string = resp?.response?.text?.() || "";
                     text = this.cleanJsonString(text);
@@ -616,9 +636,26 @@ export class GeminiService {
                         continue;
                     }
                 } catch (err: any) {
+                    const responseTime = Date.now() - startTime;
                     lastError = err;
                     const msg = (err?.message || "").toLowerCase();
                     console.error(` Gemini key ${k._id} failed:`, err?.message || err);
+                    
+                    // Log failed API usage
+                    logApiUsage({
+                        api_key_id: k._id.toString(),
+                        provider: 'gemini',
+                        model_name: 'gemini-2.0-flash-001',
+                        user_id: userId,
+                        project_id: projectId,
+                        request_type: 'text',
+                        endpoint: 'analyzeRequirements',
+                        status: 'failed',
+                        status_code: err.status || 500,
+                        error_message: err.message || 'Unknown error',
+                        response_time: responseTime,
+                    }).catch(logErr => console.error('Failed to log API usage:', logErr));
+
                     if (msg.includes("invalid") || msg.includes("unauthorized")) {
                         try {
                             await this.apiKeyService.disableKey(k._id);
@@ -639,7 +676,7 @@ export class GeminiService {
         throw lastError || new Error("All Gemini API keys failed or no parsable output");
     }
 
-    async checkConflictWithGemini(textA: string, textB: string, language: string): Promise<boolean> {
+    async checkConflictWithGemini(textA: string, textB: string, language: string, userId?: string, projectId?: string): Promise<boolean> {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const prompt = prompts[lang].conflictCheck(textA, textB);
 
@@ -648,6 +685,7 @@ export class GeminiService {
 
         let lastError: any;
         for (const k of keys) {
+            const startTime = Date.now();
             try {
                 const { GoogleGenerativeAI } = await import("@google/generative-ai");
                 const client = new GoogleGenerativeAI(k.key_value);
@@ -656,6 +694,23 @@ export class GeminiService {
                 const resp: any = await model.generateContent({
                     contents: [{ role: "user", parts: [{ text: prompt }] }],
                 });
+
+                const responseTime = Date.now() - startTime;
+                const tokens = extractGeminiTokens(resp);
+
+                logApiUsage({
+                    api_key_id: k._id.toString(),
+                    provider: 'gemini',
+                    model_name: 'gemini-2.0-flash-001',
+                    user_id: userId,
+                    project_id: projectId,
+                    request_type: 'text',
+                    endpoint: 'checkConflict',
+                    ...tokens,
+                    status: 'success',
+                    status_code: 200,
+                    response_time: responseTime,
+                }).catch(err => console.error('Failed to log API usage:', err));
 
                 let text: string = resp?.response?.text?.() || "{}";
                 text = this.cleanJsonString(text);
@@ -673,9 +728,25 @@ export class GeminiService {
                 } else {
                     console.warn("⚠️ Gemini did not return a valid { conflict: boolean } object:", text);
                 }
-            } catch (err) {
+            } catch (err: any) {
+                const responseTime = Date.now() - startTime;
                 lastError = err;
                 console.error(" Gemini checkConflictWithGemini error:", err);
+                
+                logApiUsage({
+                    api_key_id: k._id.toString(),
+                    provider: 'gemini',
+                    model_name: 'gemini-2.0-flash-001',
+                    user_id: userId,
+                    project_id: projectId,
+                    request_type: 'text',
+                    endpoint: 'checkConflict',
+                    status: 'failed',
+                    status_code: err.status || 500,
+                    error_message: err.message || 'Unknown error',
+                    response_time: responseTime,
+                }).catch(logErr => console.error('Failed to log API usage:', logErr));
+                
                 continue;
             }
         }
@@ -683,7 +754,7 @@ export class GeminiService {
     }
 
     // --- HÀM MỚI: Gọi Gemini để tìm các nhóm ID xung đột ---
-    async findConflictGroups(useCases: any[], language: string): Promise<string[][]> {
+    async findConflictGroups(useCases: any[], language: string, userId?: string, projectId?: string): Promise<string[][]> {
         if (!useCases || useCases.length < 2) {
             return [];
         }
@@ -702,6 +773,7 @@ export class GeminiService {
 
         let lastError: any;
         for (const k of keys) {
+            const startTime = Date.now();
             try {
                 const { GoogleGenerativeAI } = await import("@google/generative-ai");
                 const client = new GoogleGenerativeAI(k.key_value);
@@ -710,6 +782,23 @@ export class GeminiService {
                 const resp: any = await model.generateContent({
                     contents: [{ role: "user", parts: [{ text: prompt }] }],
                 });
+
+                const responseTime = Date.now() - startTime;
+                const tokens = extractGeminiTokens(resp);
+
+                logApiUsage({
+                    api_key_id: k._id.toString(),
+                    provider: 'gemini',
+                    model_name: 'gemini-2.0-flash-001',
+                    user_id: userId,
+                    project_id: projectId,
+                    request_type: 'text',
+                    endpoint: 'findConflictGroups',
+                    ...tokens,
+                    status: 'success',
+                    status_code: 200,
+                    response_time: responseTime,
+                }).catch(err => console.error('Failed to log API usage:', err));
 
                 let text: string = resp?.response?.text?.() || "[]";
                 text = this.cleanJsonString(text);
@@ -721,9 +810,25 @@ export class GeminiService {
                 } else {
                     console.warn("⚠️ Gemini did not return a valid array of arrays:", text);
                 }
-            } catch (err) {
+            } catch (err: any) {
+                const responseTime = Date.now() - startTime;
                 lastError = err;
                 console.error(" Gemini findConflictGroups error:", err);
+                
+                logApiUsage({
+                    api_key_id: k._id.toString(),
+                    provider: 'gemini',
+                    model_name: 'gemini-2.0-flash-001',
+                    user_id: userId,
+                    project_id: projectId,
+                    request_type: 'text',
+                    endpoint: 'findConflictGroups',
+                    status: 'failed',
+                    status_code: err.status || 500,
+                    error_message: err.message || 'Unknown error',
+                    response_time: responseTime,
+                }).catch(logErr => console.error('Failed to log API usage:', logErr));
+                
                 continue;
             }
         }

@@ -215,6 +215,10 @@
                   <span class="summary-value">{{ formatNumber(totalApiRequests) }}</span>
                 </div>
                 <div class="summary-item">
+                  <span class="summary-label">Tổng tokens</span>
+                  <span class="summary-value">{{ formatNumber(totalApiTokens) }}</span>
+                </div>
+                <div class="summary-item">
                   <span class="summary-label">Thành công</span>
                   <span class="summary-value success">{{ apiSuccessRate }}%</span>
                 </div>
@@ -631,90 +635,25 @@ const currentUser = ref({
   avatar_url: '',
 })
 
-const stats = ref({
-  totalUsers: 1247,
-  activeUsers: 893,
-  newUsersToday: 12,
-  pendingUsers: 5,
-  totalProjects: 567,
-  activeProjects: 432,
-  newProjectsToday: 8,
-  activeApiKeys: 23,
-  dailyActive: 234,
-  totalLogs: 12456,
-  errorLogsToday: 3,
-  warningLogsToday: 12,
-})
-
-const systemStats = ref({
-  totalConfigs: 45,
-  activeServices: 8,
-  lastBackup: '2h',
-  systemUptime: '99.8%',
-})
+const stats = ref({})
+const systemStats = ref({})
+const apiUsage = ref([])
+const apiStats = ref({})
+const totalApiRequests = ref(0)
+const totalApiTokens = ref(0)
+const apiSuccessRate = ref(0)
+const apiErrorRate = ref(0)
 
 const userDistribution = ref([
 ])
 const userList = ref([])
-const apiUsage = ref([
-  { name: 'Gemini', usage: '1,234', percentage: 45, color: '#1a365d', trend: 'up', change: '+12%' },
-  { name: 'OpenAI', usage: '987', percentage: 35, color: '#2d3748', trend: 'up', change: '+8%' },
-  { name: 'Claude', usage: '543', percentage: 20, color: '#4a5568', trend: 'down', change: '-3%' },
-])
 
-const apiStats = ref({
-  gemini: 12,
-  openai: 8,
-  claude: 3,
-  totalRequests: 2764,
-  successRate: 98.2,
-  errorRate: 1.8,
-})
-
-
-const systemServices = ref([
-  {
-    name: 'API Gateway',
-    description: 'Cổng kết nối API chính',
-    status: 'online',
-    statusText: 'Online',
-    uptime: '99.9%',
-  },
-  {
-    name: 'Database',
-    description: 'Hệ thống cơ sở dữ liệu',
-    status: 'online',
-    statusText: 'Online',
-    uptime: '99.8%',
-  },
-  {
-    name: 'Authentication',
-    description: 'Dịch vụ xác thực',
-    status: 'online',
-    statusText: 'Online',
-    uptime: '100%',
-  },
-  {
-    name: 'File Storage',
-    description: 'Lưu trữ file',
-    status: 'maintenance',
-    statusText: 'Bảo trì',
-    uptime: '95.2%',
-  },
-  {
-    name: 'Cache Service',
-    description: 'Dịch vụ cache',
-    status: 'online',
-    statusText: 'Online',
-    uptime: '99.7%',
-  },
-])
-
+const systemServices = ref([])
 const systemMetrics = ref({
-  cpu: 45,
-  memory: 68,
-  disk: 32,
-  network: 12,
+  cpu: 0,
+  memory: 0,
+  disk: 0,
+  network: 0,
 })
 
 const systemLogs = ref([])
@@ -724,50 +663,13 @@ const logFilter = ref({
   type: 'all',
 })
 
-const systemSettings = ref({
-  systemName: 'SmartSpec',
-  adminEmail: 'admin@smartspec.com',
-  maxProjectsPerUser: 10,
-  dailyApiLimit: 1000,
-  sessionTimeout: 30,
-  backupInterval: 24,
-  logRetention: 30,
-  maintenanceMode: false,
-})
+const systemSettings = ref({})
 
 // Computed
-const totalApiRequests = computed(() => {
-  return apiUsage.value.reduce((total, provider) => {
-    return total + parseInt(provider.usage.replace(',', ''))
-  }, 0)
-})
-
-const apiSuccessRate = computed(() => apiStats.value.successRate)
-const apiErrorRate = computed(() => apiStats.value.errorRate)
-
-const userTrend = computed(() => ({
-  type: 'positive',
-  icon: 'trending_up',
-  value: '+12%',
-}))
-
-const apiTrend = computed(() => ({
-  type: 'positive',
-  icon: 'trending_up',
-  value: '+8%',
-}))
-
-const projectTrend = computed(() => ({
-  type: 'positive',
-  icon: 'trending_up',
-  value: '+15%',
-}))
-
-const activityTrend = computed(() => ({
-  type: 'negative',
-  icon: 'trending_down',
-  value: '-3%',
-}))
+const userTrend = ref({ type: 'positive', icon: 'trending_up', value: '+0%' })
+const apiTrend = ref({ type: 'positive', icon: 'trending_up', value: '+0%' })
+const projectTrend = ref({ type: 'positive', icon: 'trending_up', value: '+0%' })
+const activityTrend = ref({ type: 'negative', icon: 'trending_down', value: '-0%' })
 
 const filteredLogs = computed(() => {
   return systemLogs.value.filter((log) => {
@@ -962,12 +864,10 @@ const refreshUserStats = async () => {
 
 const refreshApiStats = async () => {
   try {
-    const res = await axiosClient.get('http://localhost:8000/api/keys')
-
-    if (res.data?.status === 'Success' && Array.isArray(res.data.data)) {
-      const keys = res.data.data
-
-      // Đếm số lượng key đang hoạt động
+    // Lấy số lượng keys
+    const keysRes = await axiosClient.get('/api/keys')
+    if (keysRes.data?.status === 'Success' && Array.isArray(keysRes.data.data)) {
+      const keys = keysRes.data.data
       const activeKeys = keys.filter((k) => k.is_active).length
       stats.value.activeApiKeys = activeKeys
 
@@ -978,54 +878,72 @@ const refreshApiStats = async () => {
         return acc
       }, {})
 
-      // Gán vào biến thống kê chính
       apiStats.value.gemini = providerStats['gemini'] || 0
       apiStats.value.openai = providerStats['openai'] || 0
       apiStats.value.claude = providerStats['claude'] || 0
-      apiStats.value.totalRequests = keys.length
-      apiStats.value.successRate = 100 // nếu API chưa trả dữ liệu này, để tạm
-      apiStats.value.errorRate = 0
-
-      // Cập nhật biểu đồ hiển thị
-      const total = keys.length
-      apiUsage.value = Object.entries(providerStats).map(([provider, count]) => ({
-        name:
-          provider === 'gemini'
-            ? 'Gemini'
-            : provider === 'openai'
-            ? 'OpenAI'
-            : provider === 'claude'
-            ? 'Claude'
-            : 'Khác',
-        usage: count.toString(),
-        percentage: total ? Math.round((count / total) * 100) : 0,
-        color:
-          provider === 'gemini'
-            ? '#1a365d'
-            : provider === 'openai'
-            ? '#2d3748'
-            : provider === 'claude'
-            ? '#4a5568'
-            : '#718096',
-        trend: 'up',
-        change: '+0%',
-      }))
-
-      console.log('✅ API key stats loaded:', apiUsage.value)
-    } else {
-      console.warn('⚠️ Không nhận được dữ liệu hợp lệ từ API /api/keys')
     }
+
+    // Lấy usage từ API stats
+    const [usageRes, providerRes] = await Promise.all([
+      axiosClient.get('/api/stats/usage-summary'),
+      axiosClient.get('/api/stats/provider-usage'),
+    ])
+
+    if (usageRes.data) {
+      totalApiRequests.value = usageRes.data.total_requests || 0
+      totalApiTokens.value = usageRes.data.total_tokens || 0
+      apiSuccessRate.value = usageRes.data.total_requests 
+        ? Math.round((usageRes.data.total_success / usageRes.data.total_requests) * 100) 
+        : 0
+      apiErrorRate.value = usageRes.data.total_requests 
+        ? Math.round((usageRes.data.total_failed / usageRes.data.total_requests) * 100) 
+        : 0
+    }
+
+    if (providerRes.data && Array.isArray(providerRes.data)) {
+      const totalRequests = providerRes.data.reduce((sum, p) => sum + (p.requests || 0), 0)
+      apiUsage.value = providerRes.data.map(p => ({
+        name: p.provider,
+        usage: formatNumber(p.requests || 0),
+        percentage: totalRequests > 0 ? Math.round((p.requests / totalRequests) * 100) : 0,
+        color: p.provider === 'Gemini' ? '#1a365d' : p.provider === 'OpenAI' ? '#2d3748' : '#4a5568',
+        trend: (p.success || 0) > (p.failed || 0) ? 'up' : 'down',
+        change: p.failed > 0 ? `-${Math.round((p.failed / p.requests) * 100)}%` : '+0%',
+      }))
+    }
+
+    console.log('✅ API stats loaded:', { apiUsage: apiUsage.value, totalRequests: totalApiRequests.value })
   } catch (error) {
     console.error('❌ Lỗi khi tải API key stats:', error)
   }
 }
 
 const refreshActivities = async () => {
-  console.log('Refreshing activities...')
+  try {
+    const res = await axiosClient.get('/api/stats/activities')
+    if (res.data?.dailyActive !== undefined) {
+      stats.value.dailyActive = res.data.dailyActive
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi tải activities:', error)
+  }
 }
 
 const refreshSystemStatus = async () => {
-  console.log('Refreshing system status...')
+  try {
+    const res = await axiosClient.get('/api/stats/system')
+    if (res.data) {
+      systemServices.value = res.data.services || []
+      systemMetrics.value = {
+        cpu: res.data.cpu || 0,
+        memory: res.data.memory || 0,
+        disk: res.data.disk || 0,
+        network: res.data.network || 0,
+      }
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi tải system status:', error)
+  }
 }
 
 const refreshLogs = async () => {
@@ -1179,10 +1097,19 @@ const addApiKey = (apiKeyData) => {
   showAddApiKeyModal.value = false
 }
 
-const saveSystemSettings = (settings) => {
-  console.log('Saving system settings:', settings)
-  systemSettings.value = { ...systemSettings.value, ...settings }
-  showSystemSettingsModal.value = false
+const saveSystemSettings = async (settings) => {
+  try {
+    const res = await axiosClient.put('/api/stats/settings', settings)
+    if (res.data) {
+      systemSettings.value = { ...systemSettings.value, ...settings }
+      toast.success('Cập nhật cài đặt hệ thống thành công')
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi lưu system settings:', error)
+    toast.error('Lỗi khi lưu cài đặt hệ thống')
+  } finally {
+    showSystemSettingsModal.value = false
+  }
 }
 
 const logout = () => {
@@ -1217,38 +1144,96 @@ onMounted(() => {
   initSocketConnection()
   // 🔥 Lắng nghe log realtime từ server (cả project + system)
   socket.on("log_event", (event) => {
-  console.log("🧩 Realtime log event:", event);
+    console.log("🧩 Realtime log event:", event);
 
-  // Nếu log hệ thống (không có projectId)
-  if (!event.projectId) {
-    const log = event.log || event;
-    systemLogs.value.unshift({
-      id: log._id || log.id,
-      user: log.user_name || log.user_email || 'Hệ thống',
-      action: log.action || '-',
-      type: log.target_type?.toLowerCase() || 'system',
-      level: log.level?.toLowerCase() || 'info',
-      message: log.details?.message || log.action || 'Không có mô tả hành động',
-      timestamp: new Date(log.created_at || log.timestamp || event.timestamp),
-      ip: log.ip || '-',
-      userAgent: log.user_agent || '-',
-    });
+    // Nếu log hệ thống (không có projectId)
+    if (!event.projectId) {
+      const log = event.log || event;
+      systemLogs.value.unshift({
+        id: log._id || log.id,
+        user: log.user_name || log.user_email || 'Hệ thống',
+        action: log.action || '-',
+        type: log.target_type?.toLowerCase() || 'system',
+        level: log.level?.toLowerCase() || 'info',
+        message: log.details?.message || log.action || 'Không có mô tả hành động',
+        timestamp: new Date(log.created_at || log.timestamp || event.timestamp),
+        ip: log.ip || '-',
+        userAgent: log.user_agent || '-',
+      });
 
-    // Giới hạn tối đa 100 log
-    if (systemLogs.value.length > 100) systemLogs.value.pop();
-  }
-})
+      // Giới hạn tối đa 100 log
+      if (systemLogs.value.length > 100) systemLogs.value.pop();
+    }
+  })
 
-  // Fetch initial data
+  // Load tất cả dữ liệu từ API
+  loadDashboardStatsFromAPI()
+  
+  // Fetch initial data từ các API riêng lẻ (nếu cần)
   refreshUserStats()
   refreshProjectStats()
   refreshApiStats()
-  refreshActivities()
-  refreshSystemStatus()
   refreshLogs()
   fetchCurrentUser()
   console.log('Admin dashboard mounted')
 })
+
+async function loadDashboardStatsFromAPI() {
+  try {
+    // Song song các request
+    const [usage, provider, quick, sys, trends, activities, settings] = await Promise.all([
+      axiosClient.get('/api/stats/usage-summary'),
+      axiosClient.get('/api/stats/provider-usage'),
+      axiosClient.get('/api/stats/quick'),
+      axiosClient.get('/api/stats/system'),
+      axiosClient.get('/api/stats/trends'),
+      axiosClient.get('/api/stats/activities'),
+      axiosClient.get('/api/stats/settings'),
+    ])
+    // Tổng hợp vào biến
+    stats.value = { ...stats.value, ...(quick.data || {}) }
+    if (activities.data?.dailyActive !== undefined) {
+      stats.value.dailyActive = activities.data.dailyActive
+    }
+    
+    systemStats.value = sys.data || {}
+    systemServices.value = sys.data?.services || []
+    systemMetrics.value = {
+      cpu: sys.data?.cpu || 0,
+      memory: sys.data?.memory || 0,
+      disk: sys.data?.disk || 0,
+      network: sys.data?.network || 0,
+    }
+    
+    const totalProviderRequests = (provider.data || []).reduce((sum, p) => sum + (p.requests || 0), 0)
+    apiUsage.value = (provider.data || []).map(p => ({
+      name: p.provider,
+      usage: formatNumber(p.requests || 0),
+      percentage: totalProviderRequests > 0 ? Math.round((p.requests / totalProviderRequests) * 100) : 0,
+      color: p.provider === 'Gemini' ? '#1a365d' : p.provider === 'OpenAI' ? '#2d3748' : '#4a5568',
+      trend: (p.success || 0) > (p.failed || 0) ? 'up' : 'down',
+      change: p.failed > 0 ? `-${Math.round((p.failed / p.requests) * 100)}%` : '+0%',
+    }))
+    
+    totalApiRequests.value = usage.data?.total_requests || 0
+    totalApiTokens.value = usage.data?.total_tokens || 0
+    apiSuccessRate.value = usage.data && usage.data.total_requests ? Math.round((usage.data.total_success / usage.data.total_requests) * 100) : 0
+    apiErrorRate.value = usage.data && usage.data.total_requests ? Math.round((usage.data.total_failed / usage.data.total_requests) * 100) : 0
+    
+    // Trends
+    if (trends.data) {
+      userTrend.value = trends.data.userTrend || userTrend.value
+      apiTrend.value = trends.data.apiTrend || apiTrend.value
+      projectTrend.value = trends.data.projectTrend || projectTrend.value
+      activityTrend.value = trends.data.activityTrend || activityTrend.value
+    }
+    
+    // Settings
+    systemSettings.value = settings.data || {}
+  } catch (err) {
+    console.error('Lỗi load dashboard stats:', err)
+  }
+}
 
 </script>
 

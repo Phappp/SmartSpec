@@ -884,7 +884,7 @@ export class TestcaseGeminiService {
     /**
      * Call Gemini API
      */
-    private async callGeminiAPI(prompt: string): Promise<string> {
+    private async callGeminiAPI(prompt: string, userId?: string, projectId?: string): Promise<string> {
         const keys = await this.apiKeyService.getAllActiveKeys("gemini");
         if (!keys || keys.length === 0) {
             throw new Error("No active Gemini API keys found");
@@ -893,6 +893,7 @@ export class TestcaseGeminiService {
         let lastError: any;
 
         for (const key of keys) {
+            const startTime = Date.now();
             try {
                 console.log(`🔑 Trying Gemini key: ${key.key_value.slice(0, 12)}...`);
                 const { GoogleGenerativeAI } = await import("@google/generative-ai");
@@ -903,12 +904,46 @@ export class TestcaseGeminiService {
                     contents: [{ role: "user", parts: [{ text: prompt }] }],
                 });
 
+                const responseTime = Date.now() - startTime;
+                const { logApiUsage, extractGeminiTokens } = await import("../../stats/domain/apiUsageLogger");
+                const tokens = extractGeminiTokens(response);
+
+                logApiUsage({
+                    api_key_id: key._id.toString(),
+                    provider: 'gemini',
+                    model_name: 'gemini-2.0-flash-001',
+                    user_id: userId,
+                    project_id: projectId,
+                    request_type: 'text',
+                    endpoint: 'generateTestcase',
+                    ...tokens,
+                    status: 'success',
+                    status_code: 200,
+                    response_time: responseTime,
+                }).catch(err => console.error('Failed to log API usage:', err));
+
                 const text = response?.response?.text() || "";
                 return this.cleanJSONResponse(text);
 
             } catch (error: any) {
+                const responseTime = Date.now() - startTime;
                 lastError = error;
                 console.error(`❌ Gemini key failed:`, error.message);
+
+                const { logApiUsage } = await import("../../stats/domain/apiUsageLogger");
+                logApiUsage({
+                    api_key_id: key._id.toString(),
+                    provider: 'gemini',
+                    model_name: 'gemini-2.0-flash-001',
+                    user_id: userId,
+                    project_id: projectId,
+                    request_type: 'text',
+                    endpoint: 'generateTestcase',
+                    status: 'failed',
+                    status_code: error.status || 500,
+                    error_message: error.message || 'Unknown error',
+                    response_time: responseTime,
+                }).catch(logErr => console.error('Failed to log API usage:', logErr));
 
                 // Disable invalid keys
                 const message = error.message.toLowerCase();

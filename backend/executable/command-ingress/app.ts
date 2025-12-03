@@ -102,6 +102,10 @@ import { SequenceDiagramController } from "./features/uml/sequence.diagram/adapt
 import { SequenceDiagramServiceImpl } from "./features/uml/sequence.diagram/domain/service";
 import initSequenceDiagramRoute from "./features/uml/sequence.diagram/adapter/route";
 
+import initStatsRoute from "./features/stats/adapter/route";
+import { StatsController } from "./features/stats/adapter/controller";
+import { StatsService } from "./features/stats/domain/service";
+
 
 const app = express();
 
@@ -266,6 +270,10 @@ const createHttpServer = (redisClient: any) => {
   app.use("/api/logs", initLogRoute(new LogController(new LogService())));
   app.use("/api/versions",initVersionRoute(new VersionController(new VersionService())))
   app.use(recoverMiddleware);
+  app.use(
+    "/api/stats",
+    initStatsRoute(new StatsController())
+  );
 
   return server;
 };
