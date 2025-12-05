@@ -667,17 +667,43 @@
             </div>
             <div class="log-list">
               <div v-for="log in filteredLogs" :key="log.id" class="log-item" :class="log.level">
-                <div class="log-level" :class="log.level">{{ log.level }}</div>
+                <div class="log-icon-wrapper" :class="log.level">
+                  <span class="material-symbols-outlined">{{ getLogIcon(log) }}</span>
+                </div>
                 <div class="log-content">
-                  <div class="log-message">{{ log.message }}</div>
-                  <div class="log-meta">
-                    <span class="log-type">{{ log.type }}</span>
-                    <span class="log-time">{{ formatTime(log.timestamp) }}</span>
-                    <span class="log-user" v-if="log.user">{{ log.user }}</span>
+                  <div class="log-header-enhanced">
+                    <div class="log-user-info">
+                      <span class="log-user-name">{{ log.user || 'System' }}</span>
+                      <span class="log-action-type">{{ formatLogAction(log.action) }}</span>
+                    </div>
+                    <div class="log-badges">
+                      <span class="log-type-badge">{{ formatLogType(log.type) }}</span>
+                      <span class="log-status-badge" :class="getLogStatus(log)">
+                        <span class="material-symbols-outlined">{{ getStatusIcon(log) }}</span>
+                        {{ getLogStatusText(log) }}
+                      </span>
+                      <span class="log-level-badge" :class="log.level">
+                        <span class="material-symbols-outlined">{{ getLevelIcon(log.level) }}</span>
+                        {{ formatLogLevel(log.level) }}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="log-message-enhanced">
+                    {{ log.message }}
+                  </div>
+                  <div class="log-meta-enhanced">
+                    <span class="log-time-enhanced" :title="formatFullTime(log.timestamp)">
+                      <span class="material-symbols-outlined">schedule</span>
+                      {{ formatTime(log.timestamp) }}
+                    </span>
+                    <span v-if="log.ip && log.ip !== '-'" class="log-ip" :title="`IP: ${log.ip}`">
+                      <span class="material-symbols-outlined">language</span>
+                      {{ log.ip }}
+                    </span>
                   </div>
                 </div>
                 <div class="log-actions">
-                  <button class="btn-icon small" @click="viewLogDetails(log)">
+                  <button class="btn-icon small" @click="viewLogDetails(log)" title="Xem chi tiết">
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
                 </div>
@@ -997,6 +1023,86 @@ const formatTime = (date) => {
   if (minutes < 60) return `${minutes} phút trước`
   if (hours < 24) return `${hours} giờ trước`
   return `${days} ngày trước`
+}
+
+const formatFullTime = (date) => {
+  const d = new Date(date)
+  return d.toLocaleString('vi-VN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+const formatLogLevel = (level) => {
+  const levelMap = {
+    info: 'Thông tin',
+    warning: 'Cảnh báo',
+    error: 'Lỗi'
+  }
+  return levelMap[level] || level
+}
+
+const formatLogType = (type) => {
+  const typeMap = {
+    system: 'Hệ thống',
+    user: 'Người dùng',
+    project: 'Dự án',
+    member: 'Thành viên'
+  }
+  return typeMap[type] || type
+}
+
+const formatLogAction = (action) => {
+  if (!action) return ''
+  return action
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+const getLogIcon = (log) => {
+  const action = log.action?.toLowerCase() || ''
+  if (action.includes('login')) return 'login'
+  if (action.includes('logout')) return 'logout'
+  if (action.includes('create')) return 'add_circle'
+  if (action.includes('update')) return 'edit'
+  if (action.includes('delete')) return 'delete'
+  if (action.includes('generate')) return 'auto_awesome'
+  if (action.includes('export')) return 'download'
+  if (action.includes('error') || action.includes('failed')) return 'error'
+  return 'info'
+}
+
+const getLevelIcon = (level) => {
+  const iconMap = {
+    info: 'info',
+    warning: 'warning',
+    error: 'error'
+  }
+  return iconMap[level] || 'circle'
+}
+
+const getLogStatus = (log) => {
+  // Xác định status dựa trên level và action
+  if (log.level === 'error' || log.action?.toLowerCase().includes('failed') || log.action?.toLowerCase().includes('error')) {
+    return 'status-failed'
+  }
+  // Nếu không phải error thì coi là success
+  return 'status-success'
+}
+
+const getLogStatusText = (log) => {
+  const status = getLogStatus(log)
+  return status === 'status-failed' ? 'Thất bại' : 'Thành công'
+}
+
+const getStatusIcon = (log) => {
+  const status = getLogStatus(log)
+  return status === 'status-failed' ? 'cancel' : 'check_circle'
 }
 
 
@@ -3504,6 +3610,9 @@ async function loadDashboardStatsFromAPI() {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
   border: 1px solid #e2e8f0;
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .column-card .card-header {
@@ -3797,70 +3906,279 @@ async function loadDashboardStatsFromAPI() {
   padding: 0;
   max-height: 506px;
   overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.log-list:empty::after {
+  content: 'Không có log nào';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.9rem;
 }
 
 .log-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
-  padding: 16px 24px;
-  border-bottom: 1px solid #f7fafc;
-  transition: background 0.2s;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+  background: white;
+  border-left: 4px solid transparent;
+  overflow: hidden;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .log-item:hover {
-  background: #f7fafc;
+  background: #f8fafc;
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .log-item:last-child {
   border-bottom: none;
 }
 
-.log-level {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  width: 60px;
-  text-align: center;
+.log-item.info {
+  border-left-color: #3b82f6;
 }
 
-.log-level.info {
-  background: #bee3f8;
-  color: #2b6cb0;
+.log-item.warning {
+  border-left-color: #f59e0b;
 }
 
-.log-level.warning {
-  background: #faf089;
-  color: #d69e2e;
+.log-item.error {
+  border-left-color: #ef4444;
 }
 
-.log-level.error {
-  background: #fed7d7;
-  color: #c53030;
+.log-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+}
+
+.log-item:hover .log-icon-wrapper {
+  transform: scale(1.1);
+}
+
+.log-icon-wrapper.info {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+}
+
+.log-icon-wrapper.warning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+}
+
+.log-icon-wrapper.error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.log-icon-wrapper .material-symbols-outlined {
+  font-size: 20px;
 }
 
 .log-content {
   flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
-.log-message {
+.log-header-enhanced {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.log-user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.log-user-name {
+  font-weight: 600;
+  color: #1a365d;
+  font-size: 0.9rem;
+}
+
+.log-action-type {
+  background: #e2e8f0;
+  color: #475569;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.log-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.log-type-badge {
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.log-level-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.log-level-badge.info {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.log-level-badge.warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.log-level-badge.error {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.log-level-badge .material-symbols-outlined {
   font-size: 14px;
-  color: #4a5568;
-  margin-bottom: 4px;
+}
+
+.log-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.log-status-badge.status-success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.log-status-badge.status-failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.log-status-badge .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.log-message-enhanced {
+  font-size: 0.9rem;
+  color: #1e293b;
+  margin-bottom: 8px;
+  font-weight: 500;
+  line-height: 1.5;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border-left: 3px solid #e2e8f0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+.log-item.info .log-message-enhanced {
+  border-left-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.log-item.warning .log-message-enhanced {
+  border-left-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.log-item.error .log-message-enhanced {
+  border-left-color: #ef4444;
+  background: #fef2f2;
+}
+
+.log-meta-enhanced {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.log-time-enhanced {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #64748b;
   font-weight: 500;
 }
 
-.log-meta {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: #718096;
+.log-time-enhanced .material-symbols-outlined {
+  font-size: 14px;
 }
 
-.log-type {
-  text-transform: capitalize;
+.log-ip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.log-ip .material-symbols-outlined {
+  font-size: 12px;
 }
 
 .log-actions {
@@ -3999,8 +4317,33 @@ async function loadDashboardStatsFromAPI() {
     gap: 12px;
   }
 
+  .log-header-enhanced {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .log-badges {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .log-meta-enhanced {
+    width: 100%;
+  }
+
   .log-actions {
     align-self: flex-end;
+  }
+
+  .log-icon-wrapper {
+    width: 32px;
+    height: 32px;
+  }
+
+  .log-message-enhanced {
+    font-size: 0.85rem;
+    padding: 6px 10px;
   }
 }
 
