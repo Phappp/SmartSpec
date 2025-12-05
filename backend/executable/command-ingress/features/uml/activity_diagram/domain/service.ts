@@ -5,13 +5,16 @@ import { ActivityGeminiService } from './ActivityGeminiService';
 import VersionModel from '../../../../../../internal/model/version';
 import Usecase from '../../../../../../internal/model/usecase';
 import { VersionService } from '../../../version/domain/service';
+import { LogService } from '../../../log/domain/service';
 import Project from '../../../../../../internal/model/project';
+import User from '../../../../../../internal/model/user';
 import sharp from 'sharp';
 
 export class ActivityDiagramService {
   private core = new ActivityCoreService();
   private ai = new ActivityGeminiService();
   private versionService = new VersionService();
+  private logService = new LogService();
 
   public async generateFromUsecase(requirementId: string, language: string, versionId?: string, userId?: string) {
     if (!versionId) throw new Error('versionId là bắt buộc để lấy requirement model');
@@ -143,6 +146,31 @@ export class ActivityDiagramService {
       );
     }
 
+    // ✅ Ghi log cho generate activity diagram from actor
+    try {
+      if (userId) {
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+        await this.logService.createLog({
+          project_id: version.project_id.toString(),
+          user_id: userId,
+          action: "generate_output",
+          target_id: newDiagram._id.toString(),
+          target_type: "activity_diagrams",
+          version_number: version.version_number,
+          affects_requirement: true,
+          level: "info",
+          performed_by_ai: true,
+          details: {
+            after: { name: newDiagram.name, actor: actor },
+            message: `${username} generated activity diagram "${newDiagram.name}" from actor "${actor}"`
+          }
+        });
+      }
+    } catch (logError) {
+      console.error("❌ Error logging activity diagram generation:", logError);
+    }
+
     return newDiagram;
   }
 
@@ -184,6 +212,34 @@ export class ActivityDiagramService {
           after_snapshot: newDiagram.toObject()
         }
       );
+    }
+
+    // ✅ Ghi log cho create activity diagram
+    try {
+      if (userId) {
+        const version = await VersionModel.findById(versionId).lean();
+        if (version) {
+          const user = await User.findById(userId).lean();
+          const username = user?.name || "Unknown User";
+          await this.logService.createLog({
+            project_id: projectId,
+            user_id: userId,
+            action: "generate_output",
+            target_id: newDiagram._id.toString(),
+            target_type: "activity_diagrams",
+            version_number: version.version_number,
+            affects_requirement: false,
+            level: "info",
+            performed_by_ai: false,
+            details: {
+              after: { name: newDiagram.name },
+              message: `${username} created activity diagram "${newDiagram.name}"`
+            }
+          });
+        }
+      }
+    } catch (logError) {
+      console.error("❌ Error logging activity diagram creation:", logError);
     }
 
     return newDiagram;
@@ -309,6 +365,33 @@ export class ActivityDiagramService {
             after_snapshot: null
           }
         );
+      }
+
+      // ✅ Ghi log cho delete activity diagrams
+      try {
+        const version = await VersionModel.findById(versionId).lean();
+        if (version) {
+          const user = await User.findById(userId).lean();
+          const username = user?.name || "Unknown User";
+          for (const diagram of diagrams) {
+            await this.logService.createLog({
+              project_id: (diagram.project_id as any)?.toString() || version.project_id.toString(),
+              user_id: userId,
+              action: "delete_output",
+              target_id: diagram._id.toString(),
+              target_type: "activity_diagrams",
+              version_number: version.version_number,
+              affects_requirement: false,
+              level: "warning",
+              details: {
+                before: diagram,
+                message: `${username} deleted activity diagram "${diagram.name}"`
+              }
+            });
+          }
+        }
+      } catch (logError) {
+        console.error("❌ Error logging activity diagram deletion:", logError);
       }
     }
 

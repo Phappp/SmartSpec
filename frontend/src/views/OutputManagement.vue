@@ -167,12 +167,26 @@
             <div v-else class="logs-container">
               <!-- Empty State -->
               <div v-if="filteredActivities.length === 0" class="empty-logs">
-                <span class="material-symbols-outlined">info</span>
-                <p>No activity logs found</p>
-                <button @click="clearFilters" class="retry-button" v-if="hasActiveFilters">
-                  Clear Filters
-                </button>
-                <button @click="refreshActivities" class="retry-button" v-else>Refresh</button>
+                <div class="empty-icon">
+                  <span class="material-symbols-outlined">inbox</span>
+                </div>
+                <h3>Không có log nào</h3>
+                <p v-if="hasActiveFilters">
+                  Không tìm thấy log phù hợp với bộ lọc hiện tại
+                </p>
+                <p v-else>
+                  Chưa có hoạt động nào được ghi lại
+                </p>
+                <div class="empty-actions">
+                  <button @click="clearFilters" class="retry-button" v-if="hasActiveFilters">
+                    <span class="material-symbols-outlined">clear_all</span>
+                    Xóa bộ lọc
+                  </button>
+                  <button @click="refreshActivities" class="retry-button" v-else>
+                    <span class="material-symbols-outlined">refresh</span>
+                    Làm mới
+                  </button>
+                </div>
               </div>
 
               <!-- Logs List -->
@@ -183,7 +197,7 @@
                   class="log-item"
                   :class="[
                     getActivityType(activity),
-                    getActivityLevel(activity),
+                    getActionType(activity),
                     { highlighted: isHighlighted(activity) },
                   ]"
                 >
@@ -193,9 +207,33 @@
 
                   <div class="log-content">
                     <div class="log-header">
-                      <!-- <span class="log-user">{{ activity.user_id?.name || 'Unknown User' }}</span> -->
-                      <span class="log-action">{{ formatAction(activity.action) }}</span>
-                      <span class="log-target">{{ formatTarget(activity.target_type) }}</span>
+                      <div class="log-user-info">
+                        <div 
+                          class="user-avatar-small"
+                          :title="activity.user_id?.name || 'System'"
+                        >
+                          <img
+                            v-if="activity.user_id?.avatar_url"
+                            :src="activity.user_id.avatar_url"
+                            :alt="activity.user_id.name"
+                            @error="(e) => (e.target.style.display = 'none')"
+                          />
+                          <span v-else class="material-symbols-outlined">person</span>
+                        </div>
+                        <span class="log-user-name">{{ activity.user_id?.name || 'System' }}</span>
+                        <span v-if="activity.performed_by_ai" class="ai-badge" title="Performed by AI">
+                          <span class="material-symbols-outlined">smart_toy</span>
+                          AI
+                        </span>
+                      </div>
+                      <div class="log-action-badges">
+                        <span class="log-action-badge">{{ formatAction(activity.action) }}</span>
+                        <span class="log-target-badge">{{ formatTarget(activity.target_type) }}</span>
+                        <span v-if="activity.version_number" class="log-version-badge" :title="`Version ${activity.version_number}`">
+                          <span class="material-symbols-outlined">history</span>
+                          v{{ activity.version_number }}
+                        </span>
+                      </div>
                     </div>
 
                     <div class="log-message">
@@ -203,10 +241,16 @@
                     </div>
 
                     <div class="log-meta">
-                      <span class="log-time">{{ formatTime(activity.created_at) }}</span>
-                      <span class="log-level" :class="getActivityLevel(activity)">
-                        {{ getActivityLevel(activity) }}
-                      </span>
+                      <div class="log-meta-left">
+                        <span class="log-time" :title="formatFullTime(activity.created_at)">
+                          <span class="material-symbols-outlined">schedule</span>
+                          {{ formatTime(activity.created_at) }}
+                        </span>
+                        <span v-if="activity.affects_requirement" class="log-requirement-badge" title="Affects requirements">
+                          <span class="material-symbols-outlined">description</span>
+                          Requirement
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -692,6 +736,18 @@ export default {
       return 'default'
     },
 
+    getActionType(activity) {
+      const action = activity.action?.toLowerCase() || ''
+      if (action.includes('create') || action.includes('generate') || action.includes('add')) {
+        return 'action-create'
+      } else if (action.includes('delete') || action.includes('remove')) {
+        return 'action-delete'
+      } else if (action.includes('update') || action.includes('edit') || action.includes('modify')) {
+        return 'action-update'
+      }
+      return 'action-default'
+    },
+
     getActivityIcon(activity) {
       const type = this.getActivityType(activity)
 
@@ -736,46 +792,84 @@ export default {
     },
 
     formatActivityText(activity) {
-      // Use details.message if available
+      // Use details.message if available (preferred)
       if (activity.details?.message) {
         return activity.details.message
       }
 
-      // Fallback to default formatting
-      const userName = activity.user_id?.name || 'Someone'
+      // Fallback to default formatting with better messages
+      const userName = activity.user_id?.name || 'System'
       const action = activity.action
+      const targetType = activity.target_type
 
+      // Enhanced action mapping with more context
       const actionMap = {
+        // Input operations
+        create_input: `${userName} added new input`,
+        update_input: `${userName} updated input`,
+        delete_input: `${userName} removed input`,
+
         // Test cases
-        create_testcase: `${userName} created a test case`,
-        update_testcase: `${userName} updated a test case`,
-        delete_testcase: `${userName} deleted a test case`,
-        execute_testcase: `${userName} executed a test case`,
+        generate_output: activity.target_type === 'testcases' 
+          ? `${userName} generated ${activity.details?.after?.count || 'test cases'}`
+          : activity.target_type === 'activity_diagrams'
+          ? `${userName} generated activity diagram "${activity.details?.after?.name || ''}"`
+          : activity.target_type === 'sequence_diagrams'
+          ? `${userName} generated sequence diagram "${activity.details?.after?.name || ''}"`
+          : activity.target_type === 'usecase_diagrams'
+          ? `${userName} generated usecase diagram "${activity.details?.after?.name || ''}"`
+          : `${userName} generated ${targetType}`,
+        update_output: `${userName} updated ${targetType}`,
+        delete_output: `${userName} deleted ${targetType}`,
+        export_data: `${userName} exported ${targetType}`,
 
-        // Database
-        create_table: `${userName} created a table`,
-        update_table: `${userName} updated a table`,
-        delete_table: `${userName} deleted a table`,
-        create_column: `${userName} added a column`,
-        update_column: `${userName} updated a column`,
-        delete_column: `${userName} deleted a column`,
-        create_relation: `${userName} created a relationship`,
-        update_relation: `${userName} updated a relationship`,
-        delete_relation: `${userName} deleted a relationship`,
+        // Database operations
+        create_table: `${userName} created table "${activity.details?.after?.name || ''}"`,
+        update_table: `${userName} updated table`,
+        delete_table: `${userName} deleted table`,
+        create_column: `${userName} added column`,
+        update_column: `${userName} updated column`,
+        delete_column: `${userName} removed column`,
+        create_relation: `${userName} created relationship`,
+        update_relation: `${userName} updated relationship`,
+        delete_relation: `${userName} deleted relationship`,
 
-        // Version actions
-        create_version: `${userName} created a new version`,
-        update_version: `${userName} updated a version`,
-        delete_version: `${userName} deleted a version`,
+        // Version operations
+        create_version: `${userName} created version ${activity.version_number || ''}`,
+        update_version: `${userName} updated version ${activity.version_number || ''}`,
+        delete_version: `${userName} deleted version ${activity.version_number || ''}`,
+        rollback: `${userName} rolled back to version ${activity.details?.after?.version_number || ''}`,
 
-        // Project actions
-        create_project: `${userName} created project`,
+        // Project operations
+        create_project: `${userName} created project "${activity.details?.after?.name || ''}"`,
         update_project: `${userName} updated project`,
-        generate_output: `${userName} generated output`,
-        export_data: `${userName} exported data`,
+        delete_project: `${userName} deleted project`,
+        restore_project: `${userName} restored project`,
+
+        // Usecase/Requirement operations
+        generate_data: `${userName} generated usecase${activity.details?.after?.length ? ` (${activity.details.after.length} items)` : ''}`,
+        update_data: `${userName} updated usecase`,
+        delete_data: `${userName} deleted usecase`,
+        resolve_conflict: `${userName} resolved conflict`,
+
+        // Member operations
+        invite_member: `${userName} invited member`,
+        accept_invite: `${userName} accepted invitation`,
+        reject_invite: `${userName} rejected invitation`,
+        cancel_invite: `${userName} cancelled invitation`,
+        remove_member: `${userName} removed member`,
+        leave_project: `${userName} left project`,
+        change_member_role: `${userName} changed member role`,
+
+        // User operations
+        create_user: `${userName} created user account`,
+        update_user: `${userName} updated user account`,
+        login: `${userName} logged in`,
+        logout: `${userName} logged out`,
+        failed_login: `Failed login attempt`,
       }
 
-      return actionMap[action] || `${userName} performed ${action.replace(/_/g, ' ')}`
+      return actionMap[action] || `${userName} performed ${action.replace(/_/g, ' ')} on ${targetType}`
     },
 
     formatAction(action) {
@@ -812,14 +906,48 @@ export default {
       const activityTime = new Date(timestamp)
       const diffInMinutes = Math.floor((now - activityTime) / (1000 * 60))
 
-      if (diffInMinutes < 1) return 'Just now'
-      if (diffInMinutes < 60) return `${diffInMinutes}m ago`
+      if (diffInMinutes < 1) return 'Vừa xong'
+      if (diffInMinutes < 60) return `${diffInMinutes} phút trước`
       if (diffInMinutes < 1440) {
         const hours = Math.floor(diffInMinutes / 60)
-        return `${hours}h ago`
+        return `${hours} giờ trước`
       }
       const days = Math.floor(diffInMinutes / 1440)
-      return `${days}d ago`
+      return `${days} ngày trước`
+    },
+
+    formatFullTime(timestamp) {
+      const date = new Date(timestamp)
+      return date.toLocaleString('vi-VN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    },
+
+    formatLevel(level) {
+      const levelMap = {
+        info: 'Thông tin',
+        warning: 'Cảnh báo',
+        error: 'Lỗi',
+        success: 'Thành công',
+        default: 'Mặc định'
+      }
+      return levelMap[level] || level
+    },
+
+    getLevelIcon(level) {
+      const iconMap = {
+        info: 'info',
+        warning: 'warning',
+        error: 'error',
+        success: 'check_circle',
+        default: 'circle'
+      }
+      return iconMap[level] || 'circle'
     },
 
     // Filter methods
@@ -1165,6 +1293,10 @@ export default {
   padding: 24px;
   box-shadow: 0 2px 8px rgba(26, 54, 93, 0.1);
   margin-bottom: 40px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .section-header {
@@ -1350,9 +1482,12 @@ export default {
 .logs-container {
   max-height: 500px;
   overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #f9fafb;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .empty-logs {
@@ -1360,20 +1495,51 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: 80px 20px;
   text-align: center;
-  color: #9ca3af;
+  color: #64748b;
 }
 
-.empty-logs .material-symbols-outlined {
-  font-size: 36px;
-  margin-bottom: 12px;
-  opacity: 0.5;
+.empty-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.empty-icon .material-symbols-outlined {
+  font-size: 48px;
+  color: #94a3b8;
+}
+
+.empty-logs h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
 }
 
 .empty-logs p {
-  margin-bottom: 12px;
+  margin: 0 0 20px 0;
   font-size: 0.9rem;
+  color: #64748b;
+  max-width: 400px;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.empty-actions .retry-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Log Items */
@@ -1386,81 +1552,107 @@ export default {
 .log-item {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 16px;
+  padding: 16px 20px;
   border-bottom: 1px solid #e5e7eb;
   transition: all 0.2s ease;
   position: relative;
+  background: white;
+  border-left: 4px solid transparent;
+  overflow: hidden;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .log-item:last-child {
   border-bottom: none;
 }
 
-.log-item:hover {
+/* Màu nền theo action type */
+.log-item.action-create {
+  background: #f0fdf4;
+  border-left-color: #10b981;
+}
+
+.log-item.action-create:hover {
+  background: #dcfce7;
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+}
+
+.log-item.action-delete {
+  background: #fef2f2;
+  border-left-color: #ef4444;
+}
+
+.log-item.action-delete:hover {
+  background: #fee2e2;
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+}
+
+.log-item.action-update {
+  background: #eff6ff;
+  border-left-color: #3b82f6;
+}
+
+.log-item.action-update:hover {
+  background: #dbeafe;
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+}
+
+.log-item.action-default {
   background: #f8fafc;
+  border-left-color: #94a3b8;
+}
+
+.log-item.action-default:hover {
+  background: #f1f5f9;
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .log-item.highlighted {
-  background: #fffbf0;
-  border-left: 4px solid #f59e0b;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
 }
 
-/* Log Type Colors */
-.log-item.testcase {
-  border-left: 4px solid #10b981;
+/* Log Type Colors - chỉ dùng cho icon */
+.log-item.testcase .log-icon {
+  background: transparent;
 }
 
-.log-item.database {
-  border-left: 4px solid #3b82f6;
+.log-item.database .log-icon {
+  background: transparent;
 }
 
-.log-item.uml {
-  border-left: 4px solid #8b5cf6;
+.log-item.uml .log-icon {
+  background: transparent;
 }
 
-.log-item.version {
-  border-left: 4px solid #f59e0b;
+.log-item.version .log-icon {
+  background: transparent;
 }
 
-.log-item.project {
-  border-left: 4px solid #ef4444;
-}
-
-/* Log Level Colors */
-.log-item.error {
-  background: #fef2f2;
-}
-
-.log-item.success {
-  /* background: #f0fdf4; */
-  border: 2px solid #bbf7d0;
-}
-
-.log-item.warning {
-  /* background: #fffbeb; */
-  border: 2px solid #fed7aa;
-}
-
-.log-item.info {
-  /* background: #f0f9ff; */
-  border: 2px solid #bae6fd;
-}
-
-.log-item.default {
-  /* background: #f9fafb; */
-  border: 2px solid #d1d5db;
+.log-item.project .log-icon {
+  background: transparent;
 }
 
 .log-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   margin-top: 2px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+}
+
+.log-item:hover .log-icon {
+  transform: scale(1.1);
 }
 
 .log-icon.testcase {
@@ -1495,42 +1687,157 @@ export default {
 .log-content {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .log-header {
   display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.log-user-info {
+  display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
-  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
 }
 
-.log-user {
+.user-avatar-small {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.user-avatar-small img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-avatar-small .material-symbols-outlined {
+  font-size: 16px;
+  color: #64748b;
+}
+
+.log-user-name {
   font-weight: 600;
   color: #1a365d;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.log-action {
-  color: #6b7280;
-  font-size: 0.8rem;
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.ai-badge .material-symbols-outlined {
+  font-size: 12px;
+}
+
+.log-action-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.log-action-badge {
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.log-target-badge {
+  background: #e2e8f0;
+  color: #475569;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
   font-weight: 500;
+  white-space: nowrap;
 }
 
-.log-target {
-  background: #e5e7eb;
-  color: #4b5563;
-  padding: 2px 6px;
-  border-radius: 4px;
+.log-version-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fef3c7;
+  color: #d97706;
+  padding: 4px 8px;
+  border-radius: 6px;
   font-size: 0.7rem;
-  font-weight: 500;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.log-version-badge .material-symbols-outlined {
+  font-size: 14px;
 }
 
 .log-message {
-  margin-bottom: 6px;
-  line-height: 1.4;
-  color: #374151;
-  font-size: 0.85rem;
+  margin-bottom: 8px;
+  line-height: 1.5;
+  color: #1e293b;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+.log-item.action-create .log-message {
+  border-left-color: #10b981;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.log-item.action-delete .log-message {
+  border-left-color: #ef4444;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.log-item.action-update .log-message {
+  border-left-color: #3b82f6;
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .log-message :deep(.highlight) {
@@ -1542,23 +1849,48 @@ export default {
 
 .log-meta {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.75rem;
+  margin-top: 4px;
+}
+
+.log-meta-left {
+  display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .log-time {
-  color: #9ca3af;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #64748b;
+  font-weight: 500;
 }
 
-.log-level {
-  padding: 2px 6px;
-  border-radius: 10px;
+.log-time .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.log-requirement-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 2px 8px;
+  border-radius: 12px;
   font-size: 0.65rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
+
+.log-requirement-badge .material-symbols-outlined {
+  font-size: 12px;
+}
+
 
 .log-level.error {
   background: #fecaca;
@@ -1829,13 +2161,26 @@ export default {
   .log-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: 8px;
+  }
+
+  .log-user-info {
+    width: 100%;
+  }
+
+  .log-action-badges {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .log-meta {
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: 6px;
+  }
+
+  .log-meta-left {
+    width: 100%;
   }
 
   .filter-select-group {
@@ -1845,6 +2190,16 @@ export default {
   .filter-select {
     min-width: auto;
     width: 100%;
+  }
+
+  .log-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .log-message {
+    font-size: 0.85rem;
+    padding: 6px 10px;
   }
 }
 </style>

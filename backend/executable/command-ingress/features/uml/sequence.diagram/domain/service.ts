@@ -12,9 +12,12 @@ import Project from "../../../../../../internal/model/project";
 import Version from "../../../../../../internal/model/version";
 import SequenceDiagram from "../../../../../../internal/model/sequence_diagram";
 import { VersionService } from "../../../version/domain/service";
+import { LogService } from "../../../log/domain/service";
+import User from "../../../../../../internal/model/user";
 export class SequenceDiagramServiceImpl implements SequenceDiagramService {
   private geminiService: SequenceDiagramGeminiService;
   private versionService = new VersionService();
+  private logService = new LogService();
 
   constructor() {
     this.geminiService = new SequenceDiagramGeminiService();
@@ -118,6 +121,29 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
           after_snapshot: savedDocument.toObject()
         }
       );
+    }
+
+    // ✅ Ghi log cho generate sequence diagram
+    try {
+      const user = await User.findById(userId).lean();
+      const username = user?.name || "Unknown User";
+      await this.logService.createLog({
+        project_id: projectId,
+        user_id: userId,
+        action: "generate_output",
+        target_id: savedDocument._id.toString(),
+        target_type: "sequence_diagrams",
+        version_number: version.version_number,
+        affects_requirement: true,
+        level: "info",
+        performed_by_ai: true,
+        details: {
+          after: { name: savedDocument.name, usecase_ref_id: usecaseId },
+          message: `${username} generated sequence diagram "${savedDocument.name}" from usecase`
+        }
+      });
+    } catch (logError) {
+      console.error("❌ Error logging sequence diagram generation:", logError);
     }
 
     return savedDocument.toObject({ getters: true }) as SequenceDiagramResponse;
@@ -238,6 +264,31 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
           after_snapshot: null
         }
       );
+
+      // ✅ Ghi log cho delete sequence diagram
+      try {
+        const version = await Version.findById(versionId).lean();
+        if (version) {
+          const user = await User.findById(subId).lean();
+          const username = user?.name || "Unknown User";
+          await this.logService.createLog({
+            project_id: sequenceDiagram.project_id?.toString() || project._id.toString(),
+            user_id: subId,
+            action: "delete_output",
+            target_id: sequenceId,
+            target_type: "sequence_diagrams",
+            version_number: version.version_number,
+            affects_requirement: false,
+            level: "warning",
+            details: {
+              before: beforeSnapshot,
+              message: `${username} deleted sequence diagram "${sequenceDiagram.name}"`
+            }
+          });
+        }
+      } catch (logError) {
+        console.error("❌ Error logging sequence diagram deletion:", logError);
+      }
     }
 
     return sequenceDiagram.toObject({

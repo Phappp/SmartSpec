@@ -14,7 +14,7 @@ import SequenceDiagram from "../../../../../internal/model/sequence_diagram";
 import { LogService } from "../../../../command-ingress/features/log/domain/service";
 import { ServiceResponse, ResponseStatus } from "../../../services/serviceResponse";
 import { versionSocketService } from "./version.socket.service";
-import {PreviewChangeDto} from "../adapter/preview.dto";
+import { PreviewChangeDto } from "../adapter/preview.dto";
 import { randomUUID } from "crypto";
 import version from '../../../../../internal/model/version';
 import project from '../../../../../internal/model/project';
@@ -51,7 +51,7 @@ export class VersionService {
     // Xử lý các trường hợp đối nghịch
     for (const relatedChange of relatedChanges) {
       const relatedEntityId = relatedChange.entity_id?.toString() || null;
-      
+
       // Chỉ xử lý nếu cùng entity_id
       if (relatedEntityId !== newEntityId) {
         continue;
@@ -159,11 +159,11 @@ export class VersionService {
     return { shouldAdd: true, updatedChanges };
   }
 
-  async createOrUpdatePreview(base_version_id: string,created_by: string,change: PreviewChangeDto) {
+  async createOrUpdatePreview(base_version_id: string, created_by: string, change: PreviewChangeDto) {
     try {
       let version = await Version.findById(base_version_id);
       if (!version) {
-        return new ServiceResponse(ResponseStatus.Failed,"Version not found",null,404);
+        return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
       }
 
       // 2️⃣ Chuẩn hoá 1 thay đổi
@@ -174,11 +174,11 @@ export class VersionService {
         change_type: change.change_type,
         before_snapshot: change.before_snapshot ?? null,
         after_snapshot: change.after_snapshot ?? null,
-        add_at:new Date(),
+        add_at: new Date(),
       };
 
       // 3️⃣ Tìm preview đang under_review
-      let preview = await Preview.findOne({ base_version_id : base_version_id});
+      let preview = await Preview.findOne({ base_version_id: base_version_id });
 
       if (preview) {
         // ✅ Preview đã tồn tại → xử lý conflicts trước khi thêm change mới
@@ -227,18 +227,18 @@ export class VersionService {
 
       // 5️⃣ Nếu chưa có preview → tạo mới
       preview = new Preview({
-        project_id : version.project_id,
-        base_version_id :  version._id,
-        created_by : created_by,
+        project_id: version.project_id,
+        base_version_id: version._id,
+        created_by: created_by,
         changes: [normalizedChange],
-        approvers : approvers, // gắn danh sách approvers
+        approvers: approvers, // gắn danh sách approvers
         status: "under_review",
         created_at: new Date(),
       });
 
       await preview.save();
 
-      return new ServiceResponse(ResponseStatus.Success, "Preview created successfully", {preview,versionId: version._id.toString()}, 200);
+      return new ServiceResponse(ResponseStatus.Success, "Preview created successfully", { preview, versionId: version._id.toString() }, 200);
     } catch (error: any) {
       console.error("Error creating/updating preview:", error);
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
@@ -256,7 +256,7 @@ export class VersionService {
         .populate("approvers.user_id", "name email");
 
       // Nếu không tìm thấy preview, trả về null nhưng vẫn success
-      return new ServiceResponse(ResponseStatus.Success,"Preview retrieved",preview ?? null,200);
+      return new ServiceResponse(ResponseStatus.Success, "Preview retrieved", preview ?? null, 200);
     } catch (error: any) {
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     }
@@ -267,17 +267,17 @@ export class VersionService {
    * - If minor → finalize temporary version
    * - If major → finalize temporary version and bump major (+1.0)
    */
-  public async approve(baseVersionId: string,userId: string,changeType: "major" | "minor",comment?: string) {
+  public async approve(baseVersionId: string, userId: string, changeType: "major" | "minor", comment?: string) {
     try {
       // ✅ Lấy baseVersion (bây giờ chính là version tạm)
       const baseVersion = await Version.findById(baseVersionId);
       if (!baseVersion) {
-        return new ServiceResponse(ResponseStatus.Failed,"Base version not found",null,404);
+        return new ServiceResponse(ResponseStatus.Failed, "Base version not found", null, 404);
       }
 
       const preview = await Preview.findOne({ base_version_id: baseVersionId });
       if (!preview) {
-        return new ServiceResponse(ResponseStatus.Failed,"Preview not found",null,404);
+        return new ServiceResponse(ResponseStatus.Failed, "Preview not found", null, 404);
       }
 
       // ✅ Check owner
@@ -291,7 +291,7 @@ export class VersionService {
       );
 
       if (!isOwner) {
-        return new ServiceResponse(ResponseStatus.Failed,"Only project owner can approve this preview",null,403);
+        return new ServiceResponse(ResponseStatus.Failed, "Only project owner can approve this preview", null, 403);
       }
 
       // ✅ update approver log
@@ -309,22 +309,60 @@ export class VersionService {
         // tăng major
         baseVersion.version_major += 1;
         baseVersion.version_minor = 0;
-      }else{
+      } else {
         baseVersion.version_minor += 1;
       }
 
       // ✅ Chuyển version tạm thành version chính thức
+      const oldVersionNumber = baseVersion.version_number;
+      const oldVersionMajor = baseVersion.version_major;
+      const oldVersionMinor = baseVersion.version_minor;
+
       baseVersion.version_temporary = false;
       await baseVersion.save();
-      await this.setCurrentVersion(baseVersion.project_id.toString(),baseVersionId,userId);
+      await this.setCurrentVersion(baseVersion.project_id.toString(), baseVersionId, userId);
       // ✅ update preview
       preview.status = "version_upgraded";
       await preview.save();
       await Preview.findOneAndDelete({ base_version_id: baseVersionId });
+
+      // ✅ Ghi log cho update version (approve)
+      try {
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+        await this.logService.createLog({
+          project_id: baseVersion.project_id.toString(),
+          user_id: userId,
+          action: "update_version",
+          target_id: baseVersionId,
+          target_type: "version",
+          version_number: baseVersion.version_number,
+          affects_requirement: true,
+          level: "info",
+          details: {
+            before: {
+              version_number: oldVersionNumber,
+              version_major: oldVersionMajor,
+              version_minor: oldVersionMinor,
+              version_temporary: true
+            },
+            after: {
+              version_number: baseVersion.version_number,
+              version_major: baseVersion.version_major,
+              version_minor: baseVersion.version_minor,
+              version_temporary: false
+            },
+            message: `${username} approved and finalized version ${baseVersion.version_number} (${changeType} change)`
+          }
+        });
+      } catch (logError) {
+        console.error("❌ Error logging version update:", logError);
+      }
+
       // ✅ Kết thúc
-      return new ServiceResponse(ResponseStatus.Success,"Owner approved and version finalized.",{preview,version: baseVersion},200);
+      return new ServiceResponse(ResponseStatus.Success, "Owner approved and version finalized.", { preview, version: baseVersion }, 200);
     } catch (error: any) {
-      return new ServiceResponse(ResponseStatus.Failed,error.message,null,500);
+      return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     }
   }
 
@@ -332,7 +370,7 @@ export class VersionService {
    * Nâng version từ 1 preview (đã được duyệt)
    * BaseVersion => NewVersion (copy toàn bộ data)
    */
-  public async bumpVersion(baseVersionId: string,userId: string,changeType: "major" | "minor"): Promise<ServiceResponse<any>> {
+  public async bumpVersion(baseVersionId: string, userId: string, changeType: "major" | "minor"): Promise<ServiceResponse<any>> {
     try {
       // 1️⃣ Lấy base version
       const baseVersion = await Version.findById(baseVersionId);
@@ -348,7 +386,7 @@ export class VersionService {
       if (existingVersion) {
         console.log("⚠️ Version đã tồn tại. Tiến hành xóa version cũ:", existingVersion._id);
 
-        await this.deleteVersion(existingVersion._id.toString(),userId);
+        await this.deleteVersion(existingVersion._id.toString(), userId);
       }
       // 3️⃣ Tạo version mới
       const newVersion = new Version({
@@ -368,7 +406,7 @@ export class VersionService {
         processing_errors: JSON.parse(JSON.stringify(baseVersion.processing_errors || [])),
         affects_requirement: baseVersion.affects_requirement || false,
       });
-      
+
       await newVersion.save();
       // ================================
       // 🔥 MAP LIST
@@ -559,13 +597,41 @@ export class VersionService {
       newVersion.inputs = inputIds;
       await newVersion.save();
 
-      await this.setCurrentVersion(newVersion.project_id.toString(),newVersion._id.toString(),userId);
+      await this.setCurrentVersion(newVersion.project_id.toString(), newVersion._id.toString(), userId);
       versionSocketService.emitVersionBumped(
         newVersion.project_id.toString(),
         baseVersionId,
         userId,
         newVersion
       );
+
+      // ✅ Ghi log cho create version
+      try {
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+        await this.logService.createLog({
+          project_id: newVersion.project_id.toString(),
+          user_id: userId,
+          action: "create_version",
+          target_id: newVersion._id.toString(),
+          target_type: "version",
+          version_number: newVersion.version_number,
+          affects_requirement: true,
+          level: "info",
+          details: {
+            after: {
+              version_number: newVersion.version_number,
+              version_major: newVersion.version_major,
+              version_minor: newVersion.version_minor,
+              parent_version_id: baseVersionId
+            },
+            message: `${username} created new version ${newVersion.version_number} from version ${baseVersion.version_number}`
+          }
+        });
+      } catch (logError) {
+        console.error("❌ Error logging version creation:", logError);
+      }
+
       return new ServiceResponse(
         ResponseStatus.Success,
         "New version created with cloned entities",
@@ -588,12 +654,12 @@ export class VersionService {
     }
   }
 
-  async setCurrentVersion(projectId: string,versionId: string,userId: string): Promise<ServiceResponse<any>> {
+  async setCurrentVersion(projectId: string, versionId: string, userId: string): Promise<ServiceResponse<any>> {
     try {
       // 🔍 Kiểm tra version có tồn tại trong project hay không
       const version = await Version.findOne({ _id: versionId, project_id: projectId });
       if (!version) {
-        return new ServiceResponse(ResponseStatus.Failed,"Version not found in this project",null,404);
+        return new ServiceResponse(ResponseStatus.Failed, "Version not found in this project", null, 404);
       }
 
       // 🔍 Kiểm tra project tồn tại
@@ -618,7 +684,7 @@ export class VersionService {
       );
 
       // ✅ Hoàn tất
-      return new ServiceResponse(ResponseStatus.Success,"Current version updated successfully",project,200);
+      return new ServiceResponse(ResponseStatus.Success, "Current version updated successfully", project, 200);
     } catch (error: any) {
       return new ServiceResponse(ResponseStatus.Failed, error.message, null, 500);
     }
@@ -691,12 +757,38 @@ export class VersionService {
         UsecaseDiagram.deleteMany({ version_id: versionId }),
         ActivityDiagram.deleteMany({ version_id: versionId }),
         SequenceDiagram.deleteMany({ version_id: versionId }),
-        Preview.deleteMany({base_version_id:versionId}),
+        Preview.deleteMany({ base_version_id: versionId }),
       ]);
 
       // Cleanup đã được xử lý ở trên, không cần xử lý lại current_version
       await Version.findByIdAndDelete(versionId);
       versionSocketService.emitVersionDeleted(version.project_id.toString(), versionId, userId);
+
+      // ✅ Ghi log cho delete version
+      try {
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+        await this.logService.createLog({
+          project_id: version.project_id.toString(),
+          user_id: userId,
+          action: "delete_version",
+          target_id: versionId,
+          target_type: "version",
+          version_number: version.version_number,
+          affects_requirement: true,
+          level: "warning",
+          details: {
+            before: {
+              version_number: version.version_number,
+              version_major: version.version_major,
+              version_minor: version.version_minor
+            },
+            message: `${username} deleted version ${version.version_number}`
+          }
+        });
+      } catch (logError) {
+        console.error("❌ Error logging version deletion:", logError);
+      }
 
       return new ServiceResponse(ResponseStatus.Success, "Version deleted successfully", { deleted: versionId }, 200);
     } catch (error: any) {
@@ -899,7 +991,7 @@ export class VersionService {
       console.error("❌ revertChange error:", err);
       throw err;
     } finally {
-    session.endSession();
+      session.endSession();
     }
   }
 
@@ -995,7 +1087,7 @@ export class VersionService {
       if (!project) {
         return new ServiceResponse(ResponseStatus.Failed, "Project not found", null, 404);
       }
-      
+
       if (project.current_version?.toString() !== versionId) {
         return new ServiceResponse(
           ResponseStatus.Failed,
@@ -1011,17 +1103,17 @@ export class VersionService {
       }
       const parentVersion = await Version.findById(parentVersionId);
       if (!parentVersion) {
-        return new ServiceResponse(ResponseStatus.Failed,"Parent version not found", null,404);
+        return new ServiceResponse(ResponseStatus.Failed, "Parent version not found", null, 404);
       }
       // 🔍 2. Tìm preview gắn với version này
       const preview = await Preview.findOne({ base_version_id: versionId });
       if (!preview) {
-        return new ServiceResponse(ResponseStatus.Failed,"Preview not found",null,404);
+        return new ServiceResponse(ResponseStatus.Failed, "Preview not found", null, 404);
       }
       // 🔍 3. Tìm approver của user này
       const approver = preview.approvers.find(a => a.user_id.toString() === userId);
       if (!approver) {
-        return new ServiceResponse(ResponseStatus.Failed,"You are not an approver of this preview",null,403);
+        return new ServiceResponse(ResponseStatus.Failed, "You are not an approver of this preview", null, 403);
       }
       // 4️⃣ Đánh dấu user này rollback
       approver.status = "rollback";
@@ -1031,7 +1123,7 @@ export class VersionService {
       const allRollback = preview.approvers.every(a => a.status === "rollback");
       if (!allRollback) {
         // Một số người rollback → chờ người khác
-        return new ServiceResponse(ResponseStatus.Success,"Rollback submitted, waiting for other approvers",{ preview_status: "partial_rollback" },200);
+        return new ServiceResponse(ResponseStatus.Success, "Rollback submitted, waiting for other approvers", { preview_status: "partial_rollback" }, 200);
       }
       // ================================
       // 🎯 6️⃣ TẤT CẢ APPROVERS ĐÃ ROLLBACK → THỰC HIỆN ROLLBACK VERSION
@@ -1041,7 +1133,7 @@ export class VersionService {
       // Set current version về parent
       project.current_version = new mongoose.Types.ObjectId(parentVersionId);
       await project.save();
-      
+
       // Xóa tất cả entities liên quan (giống deleteVersion)
       await Promise.all([
         Input.deleteMany({ version_id: versionId }),
@@ -1053,7 +1145,7 @@ export class VersionService {
         SequenceDiagram.deleteMany({ version_id: versionId }),
         Preview.deleteMany({ base_version_id: versionId }),
       ]);
-      
+
       await Version.deleteOne({ _id: versionId });
       // Emit
       versionSocketService.emitVersionSwitched(
@@ -1062,7 +1154,39 @@ export class VersionService {
         parentVersionId.toString(),
         oldVersionId
       );
-      return new ServiceResponse(ResponseStatus.Success,"Rollback completed by all approvers",null,200);
+
+      // ✅ Ghi log cho rollback version
+      try {
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+        await this.logService.createLog({
+          project_id: project._id.toString(),
+          user_id: userId,
+          action: "rollback",
+          target_id: versionId,
+          target_type: "version",
+          version_number: version.version_number,
+          affects_requirement: true,
+          level: "warning",
+          details: {
+            before: {
+              version_number: version.version_number,
+              version_major: version.version_major,
+              version_minor: version.version_minor
+            },
+            after: {
+              version_number: parentVersion.version_number,
+              version_major: parentVersion.version_major,
+              version_minor: parentVersion.version_minor
+            },
+            message: `${username} rolled back from version ${version.version_number} to ${parentVersion.version_number}`
+          }
+        });
+      } catch (logError) {
+        console.error("❌ Error logging version rollback:", logError);
+      }
+
+      return new ServiceResponse(ResponseStatus.Success, "Rollback completed by all approvers", null, 200);
     } catch (error: any) {
       console.error("Error in rollbackVersion:", error);
       return new ServiceResponse(ResponseStatus.Failed, error.message || "Rollback failed", null, 500);

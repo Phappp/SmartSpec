@@ -135,21 +135,52 @@ export class TestcaseService {
         console.log(`📊 Processing ${requirementsToProcess.length} requirements with ${databaseSchema.tables?.length || 0} tables`);
 
         // XỬ LÝ LOGIC KHI testType = "all"
+        let generatedTestCases: any[];
         if (testType === 'all') {
-            return await this.generateAllTestTypes(
+            generatedTestCases = await this.generateAllTestTypes(
                 requirementsToProcess,
                 databaseSchema,
                 language
             );
         } else {
             // Generate với testType cụ thể
-            return await this.testcaseGeminiService.generateTestCases(
+            generatedTestCases = await this.testcaseGeminiService.generateTestCases(
                 requirementsToProcess,
                 databaseSchema,
                 language,
                 testType
             );
         }
+
+        // ✅ Ghi log cho generate testcase
+        try {
+            const user = await User.findById(userId).lean();
+            const username = user?.name || "Unknown User";
+            await this.logService.createLog({
+                project_id: projectId,
+                user_id: userId,
+                action: "generate_output",
+                target_id: versionId,
+                target_type: "testcases",
+                version_number: version.version_number,
+                affects_requirement: true,
+                level: "info",
+                performed_by_ai: true,
+                details: {
+                    after: {
+                        count: generatedTestCases.length,
+                        test_type: testType,
+                        requirement_count: requirementsToProcess.length
+                    },
+                    message: `${username} generated ${generatedTestCases.length} test cases from ${requirementsToProcess.length} requirement(s) (type: ${testType})`
+                }
+            });
+        } catch (logError) {
+            console.error("❌ Error logging testcase generation:", logError);
+            // Không throw error để không ảnh hưởng đến flow chính
+        }
+
+        return generatedTestCases;
     }
 
     private async generateAllTestTypes(requirements: any[], databaseSchema: any, language: string): Promise<any[]> {
@@ -298,6 +329,37 @@ export class TestcaseService {
             });
 
             console.log(`✅ Successfully processed ${savedTestCases.length} test cases`);
+
+            // ✅ Ghi log cho save testcase
+            try {
+                const version = await Version.findById(versionId).lean();
+                if (version && createdBy) {
+                    const user = await User.findById(createdBy).lean();
+                    const username = user?.name || "Unknown User";
+                    await this.logService.createLog({
+                        project_id: projectId,
+                        user_id: createdBy,
+                        action: "generate_output",
+                        target_id: versionId,
+                        target_type: "testcases",
+                        version_number: version.version_number,
+                        affects_requirement: true,
+                        level: "info",
+                        performed_by_ai: false,
+                        details: {
+                            after: {
+                                count: savedTestCases.length,
+                                saved_ids: savedTestCases.map((tc: any) => tc._id?.toString() || tc.id)
+                            },
+                            message: `${username} saved ${savedTestCases.length} test cases to database`
+                        }
+                    });
+                }
+            } catch (logError) {
+                console.error("❌ Error logging testcase save:", logError);
+                // Không throw error để không ảnh hưởng đến flow chính
+            }
+
             return savedTestCases;
 
         } catch (error: any) {

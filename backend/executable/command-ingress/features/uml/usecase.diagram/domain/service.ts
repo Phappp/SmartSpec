@@ -10,10 +10,14 @@ import {
 } from "../types";
 import { UserServiceImpl } from "../../../user/domain/service"; // Import service của bạn
 import { VersionService } from "../../../version/domain/service";
+import { LogService } from "../../../log/domain/service";
+import Version from "../../../../../../internal/model/version";
+import User from "../../../../../../internal/model/user";
 import mongoose from "mongoose";
 export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
   private geminiService: UsecaseDiagramGeminiService;
   private versionService = new VersionService();
+  private logService = new LogService();
 
   constructor() {
     this.geminiService = new UsecaseDiagramGeminiService();
@@ -84,6 +88,32 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
           after_snapshot: savedDocument.toObject()
         }
       );
+    }
+
+    // ✅ Ghi log cho generate usecase diagram
+    try {
+      const version = await Version.findById(versionId).lean();
+      if (version) {
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+        await this.logService.createLog({
+          project_id: projectId,
+          user_id: userId,
+          action: "generate_output",
+          target_id: savedDocument._id.toString(),
+          target_type: "usecase_diagrams",
+          version_number: version.version_number,
+          affects_requirement: true,
+          level: "info",
+          performed_by_ai: true,
+          details: {
+            after: { name: savedDocument.name, requirement_count: requirements.length },
+            message: `${username} generated usecase diagram "${savedDocument.name}" from ${requirements.length} requirement(s)`
+          }
+        });
+      }
+    } catch (logError) {
+      console.error("❌ Error logging usecase diagram generation:", logError);
     }
 
     return savedDocument.toObject({ getters: true }) as UseCaseDiagramResponse;
@@ -518,6 +548,31 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
           after_snapshot: null
         }
       );
+
+      // ✅ Ghi log cho delete usecase diagram
+      try {
+        const version = await Version.findById(versionId).lean();
+        if (version) {
+          const user = await User.findById(userId).lean();
+          const username = user?.name || "Unknown User";
+          await this.logService.createLog({
+            project_id: ucd.project_id?.toString() || project._id.toString(),
+            user_id: userId,
+            action: "delete_output",
+            target_id: ucId,
+            target_type: "usecase_diagrams",
+            version_number: version.version_number,
+            affects_requirement: false,
+            level: "warning",
+            details: {
+              before: beforeSnapshot,
+              message: `${username} deleted usecase diagram "${ucd.name}"`
+            }
+          });
+        }
+      } catch (logError) {
+        console.error("❌ Error logging usecase diagram deletion:", logError);
+      }
     }
   }
 }
