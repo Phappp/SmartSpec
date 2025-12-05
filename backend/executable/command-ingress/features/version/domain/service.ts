@@ -23,6 +23,142 @@ import preview from '../../../../../internal/model/preview';
 export class VersionService {
   private logService = new LogService();
 
+  /**
+   * Helper function: Xử lý loại bỏ/cancel các changes đối nghịch
+   * Ví dụ: thêm input rồi xóa input đó → loại bỏ cả hai changes
+   */
+  private processConflictingChanges(
+    existingChanges: any[],
+    newChange: any
+  ): { shouldAdd: boolean; updatedChanges: any[] } {
+    const updatedChanges = [...existingChanges];
+    const newEntityId = newChange.entity_id?.toString() || null;
+    const newEntityType = newChange.entity_type;
+    const newChangeType = newChange.change_type;
+
+    // Tìm các changes liên quan đến cùng entity
+    const relatedChanges = updatedChanges.filter(
+      (c: any) =>
+        c.entity_type === newEntityType &&
+        c.entity_id?.toString() === newEntityId
+    );
+
+    // Nếu không có entity_id, không thể so sánh → thêm bình thường
+    if (!newEntityId) {
+      return { shouldAdd: true, updatedChanges };
+    }
+
+    // Xử lý các trường hợp đối nghịch
+    for (const relatedChange of relatedChanges) {
+      const relatedEntityId = relatedChange.entity_id?.toString() || null;
+      
+      // Chỉ xử lý nếu cùng entity_id
+      if (relatedEntityId !== newEntityId) {
+        continue;
+      }
+
+      // Trường hợp 1: added → deleted (hoặc ngược lại) → loại bỏ cả hai
+      if (
+        (newChangeType === "added" && relatedChange.change_type === "deleted") ||
+        (newChangeType === "deleted" && relatedChange.change_type === "added")
+      ) {
+        // Loại bỏ change cũ
+        const index = updatedChanges.findIndex(
+          (c: any) => c.change_id === relatedChange.change_id
+        );
+        if (index !== -1) {
+          updatedChanges.splice(index, 1);
+        }
+        // Không thêm change mới
+        return { shouldAdd: false, updatedChanges };
+      }
+
+      // Trường hợp 2: updated → deleted → chuyển thành deleted (giữ before_snapshot từ updated)
+      if (newChangeType === "deleted" && relatedChange.change_type === "updated") {
+        const index = updatedChanges.findIndex(
+          (c: any) => c.change_id === relatedChange.change_id
+        );
+        if (index !== -1) {
+          // Thay thế change "updated" bằng "deleted" với before_snapshot từ updated
+          updatedChanges[index] = {
+            ...newChange,
+            before_snapshot: relatedChange.before_snapshot,
+            change_id: relatedChange.change_id, // Giữ change_id cũ để không tạo change mới
+          };
+        }
+        return { shouldAdd: false, updatedChanges };
+      }
+
+      // Trường hợp 3: deleted → updated → chuyển thành updated (giữ before_snapshot từ deleted)
+      if (newChangeType === "updated" && relatedChange.change_type === "deleted") {
+        const index = updatedChanges.findIndex(
+          (c: any) => c.change_id === relatedChange.change_id
+        );
+        if (index !== -1) {
+          // Thay thế change "deleted" bằng "updated"
+          updatedChanges[index] = {
+            ...newChange,
+            before_snapshot: relatedChange.before_snapshot,
+            change_id: relatedChange.change_id,
+          };
+        }
+        return { shouldAdd: false, updatedChanges };
+      }
+
+      // Trường hợp 4: added → updated → gộp thành added với after_snapshot mới
+      if (newChangeType === "updated" && relatedChange.change_type === "added") {
+        const index = updatedChanges.findIndex(
+          (c: any) => c.change_id === relatedChange.change_id
+        );
+        if (index !== -1) {
+          // Cập nhật after_snapshot của change "added"
+          updatedChanges[index] = {
+            ...relatedChange,
+            after_snapshot: newChange.after_snapshot,
+            change_id: relatedChange.change_id,
+          };
+        }
+        return { shouldAdd: false, updatedChanges };
+      }
+
+      // Trường hợp 5: updated → added → không nên xảy ra (added chỉ có sau khi tạo mới)
+      // Nhưng nếu có, gộp thành added với after_snapshot mới
+      if (newChangeType === "added" && relatedChange.change_type === "updated") {
+        const index = updatedChanges.findIndex(
+          (c: any) => c.change_id === relatedChange.change_id
+        );
+        if (index !== -1) {
+          // Chuyển thành added với after_snapshot mới
+          updatedChanges[index] = {
+            ...newChange,
+            before_snapshot: null,
+            change_id: relatedChange.change_id,
+          };
+        }
+        return { shouldAdd: false, updatedChanges };
+      }
+
+      // Trường hợp 6: updated → updated → gộp thành một updated (before từ lần đầu, after từ lần cuối)
+      if (newChangeType === "updated" && relatedChange.change_type === "updated") {
+        const index = updatedChanges.findIndex(
+          (c: any) => c.change_id === relatedChange.change_id
+        );
+        if (index !== -1) {
+          // Giữ before_snapshot từ change đầu tiên, lấy after_snapshot từ change mới
+          updatedChanges[index] = {
+            ...relatedChange,
+            after_snapshot: newChange.after_snapshot,
+            change_id: relatedChange.change_id,
+          };
+        }
+        return { shouldAdd: false, updatedChanges };
+      }
+    }
+
+    // Không có conflict → thêm change mới
+    return { shouldAdd: true, updatedChanges };
+  }
+
   async createOrUpdatePreview(base_version_id: string,created_by: string,change: PreviewChangeDto) {
     try {
       let version = await Version.findById(base_version_id);
@@ -45,10 +181,32 @@ export class VersionService {
       let preview = await Preview.findOne({ base_version_id : base_version_id});
 
       if (preview) {
-        // ✅ Preview đã tồn tại → append thay đổi mới
-        preview.changes.push(normalizedChange);
-        await preview.save();
+        // ✅ Preview đã tồn tại → xử lý conflicts trước khi thêm change mới
+        const { shouldAdd, updatedChanges } = this.processConflictingChanges(
+          preview.changes.toObject ? preview.changes.toObject() : preview.changes,
+          normalizedChange
+        );
 
+        // Cập nhật changes
+        preview.changes = updatedChanges as any;
+
+        // Nếu cần thêm change mới và không bị cancel
+        if (shouldAdd) {
+          preview.changes.push(normalizedChange);
+        }
+
+        // Nếu không còn changes nào → xóa preview
+        if (preview.changes.length === 0) {
+          await Preview.findByIdAndDelete(preview._id);
+          return new ServiceResponse(
+            ResponseStatus.Success,
+            "Preview removed as all changes were cancelled",
+            null,
+            200
+          );
+        }
+
+        await preview.save();
         return new ServiceResponse(ResponseStatus.Success, "Preview updated successfully", preview, 200);
       }
       const project = await Project.findById(version.project_id).lean();
