@@ -148,7 +148,7 @@ export class AuthServiceImpl implements AuthService {
       target_id: sub?.toString(),
       action: "logout",
       target_type: "system",
-      details: { message: `🚪 User "${sub}" logged out successfully (Session ID: ${sid}).` },
+      details: { message: ` User "${sub}" logged out successfully (Session ID: ${sid}).` },
       level: "info",
       ip: ip,
       user_agent: userAgent

@@ -412,7 +412,12 @@ export class LogService {
     console.log("🔵 [LogService._query] Final mongoFilter:", mongoFilter);
     const sort = options.sort ?? { created_at: -1 };
     const [items, total] = await Promise.all([
-      LogModel.find(mongoFilter).sort(sort).skip(skip).limit(limit).lean(),
+      LogModel.find(mongoFilter)
+        .populate('user_id', 'name email')
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       LogModel.countDocuments(mongoFilter),
     ]);
     console.log(`✅ [LogService._query] Found ${total} logs`);

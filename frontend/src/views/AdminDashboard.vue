@@ -682,14 +682,14 @@
                         <span class="material-symbols-outlined">{{ getStatusIcon(log) }}</span>
                         {{ getLogStatusText(log) }}
                       </span>
-                      <span class="log-level-badge" :class="log.level">
+                      <!-- <span class="log-level-badge" :class="log.level">
                         <span class="material-symbols-outlined">{{ getLevelIcon(log.level) }}</span>
                         {{ formatLogLevel(log.level) }}
-                      </span>
+                      </span> -->
                     </div>
                   </div>
                   <div class="log-message-enhanced">
-                    {{ log.message }}
+                    {{ formatLogMessage(log) }}
                   </div>
                   <div class="log-meta-enhanced">
                     <span class="log-time-enhanced" :title="formatFullTime(log.timestamp)">
@@ -1103,6 +1103,77 @@ const getLogStatusText = (log) => {
 const getStatusIcon = (log) => {
   const status = getLogStatus(log)
   return status === 'status-failed' ? 'cancel' : 'check_circle'
+}
+
+const formatLogMessage = (log) => {
+  if (!log.message) return 'Không có mô tả hành động'
+  
+  let message = String(log.message)
+  const userName = log.user || 'Hệ thống'
+  const userId = log.userId || ''
+  
+  // Pattern 1: Thay thế user ID (ObjectId format) bằng tên người dùng
+  // "6927fdb0baa4bc0eafe6e990" → tên người dùng
+  if (userId && typeof userId === 'string' && userId.length === 24) {
+    // ObjectId pattern: 24 ký tự hex
+    const objectIdPattern = new RegExp(`\\b${userId}\\b`, 'gi')
+    message = message.replace(objectIdPattern, userName)
+  }
+  
+  // Pattern 2: "User "ID" logged out successfully (Session ID: ...)" 
+  // → "Người dùng [Tên] đã đăng xuất thành công"
+  message = message.replace(/User\s+["']?([^"'\s]+)["']?\s+logged\s+out\s+successfully[^.]*/gi, 
+    () => `Người dùng ${userName} đã đăng xuất thành công`)
+  
+  // Pattern 3: "User "ID" logged in successfully"
+  message = message.replace(/User\s+["']?([^"'\s]+)["']?\s+logged\s+in\s+successfully[^.]*/gi, 
+    () => `Người dùng ${userName} đã đăng nhập thành công`)
+  
+  // Pattern 4: "ID updated usecase X in version Y"
+  // → "Người dùng [Tên] đã cập nhật usecase 'X' trong version Y"
+  message = message.replace(/([a-f0-9]{24})\s+updated\s+usecase\s+([^i]+?)\s+in\s+version\s+([\d.]+)/gi, 
+    (match, id, usecase, version) => {
+      const name = (id === userId || id.length === 24) ? userName : id
+      return `${name} đã cập nhật usecase "${usecase.trim()}" trong version ${version}`
+    })
+  
+  // Pattern 5: "ID created usecase X in version Y"
+  message = message.replace(/([a-f0-9]{24})\s+created\s+usecase\s+([^i]+?)\s+in\s+version\s+([\d.]+)/gi, 
+    (match, id, usecase, version) => {
+      const name = (id === userId || id.length === 24) ? userName : id
+      return `${name} đã tạo usecase "${usecase.trim()}" trong version ${version}`
+    })
+  
+  // Pattern 6: "ID deleted usecase X in version Y"
+  message = message.replace(/([a-f0-9]{24})\s+deleted\s+usecase\s+([^i]+?)\s+in\s+version\s+([\d.]+)/gi, 
+    (match, id, usecase, version) => {
+      const name = (id === userId || id.length === 24) ? userName : id
+      return `${name} đã xóa usecase "${usecase.trim()}" trong version ${version}`
+    })
+  
+  // Pattern 7: Bất kỳ ObjectId nào còn lại trong message → thay bằng userName nếu match userId
+  if (userId && userId.length === 24) {
+    const remainingObjectIdPattern = new RegExp(`\\b${userId}\\b`, 'gi')
+    message = message.replace(remainingObjectIdPattern, userName)
+  }
+  
+  // Loại bỏ Session ID không cần thiết
+  message = message.replace(/\s*\(Session ID:\s*[^)]+\)/gi, '')
+  message = message.replace(/\s*\(session id:\s*[^)]+\)/gi, '')
+  
+  // Loại bỏ các dấu ngoặc kép thừa và chuẩn hóa
+  message = message.replace(/["']{2,}/g, '"')
+  message = message.replace(/^["']|["']$/g, '')
+  
+  // Loại bỏ khoảng trắng thừa
+  message = message.replace(/\s+/g, ' ').trim()
+  
+  // Đảm bảo câu đầu tiên viết hoa
+  if (message.length > 0) {
+    message = message.charAt(0).toUpperCase() + message.slice(1)
+  }
+  
+  return message
 }
 
 
@@ -1803,21 +1874,52 @@ const refreshLogs = async () => {
     const logItems = res.data?.data?.items || res.data?.data || []
 
     if (res.data?.status === 'Success' && Array.isArray(logItems)) {
-      systemLogs.value = logItems.map((log) => ({
-        id: log._id || log.id,
-        userId: log.user_id,
-        user: log.user_name || log.user_email || 'Hệ thống',
-        action: log.action || '-',
-        type: log.target_type?.toLowerCase() || 'system',  // ✅ chuẩn hóa type
-        level: log.level?.toLowerCase() || 'info',
-        message:
-          log.details?.message ||
-          log.action ||
-          'Không có mô tả hành động',
-        timestamp: new Date(log.created_at || log.timestamp),
-        ip: log.ip || '-',
-        userAgent: log.user_agent || '-',
-      }))
+      systemLogs.value = logItems.map((log) => {
+        // Xử lý user_id - có thể là ObjectId hoặc populated object
+        const userId = log.user_id?._id || log.user_id?.id || log.user_id || null
+        const userIdString = userId ? String(userId) : null
+        
+        // Xử lý user name - ưu tiên từ populated user_id (backend đã populate)
+        let userName = null
+        if (log.user_id && typeof log.user_id === 'object' && !log.user_id._id) {
+          // Populated user object
+          userName = log.user_id.name || log.user_id.email
+        } else if (log.user_id?.name) {
+          // Nested populated
+          userName = log.user_id.name
+        } else if (log.user_id?.email) {
+          userName = log.user_id.email
+        } else if (log.user_name) {
+          userName = log.user_name
+        } else if (log.user_email) {
+          userName = log.user_email
+        }
+        
+        // Chỉ dùng "Hệ thống" nếu thực sự không có user_id
+        // Nếu có user_id nhưng không có tên, có thể user đã bị xóa - dùng "Người dùng [ID ngắn]"
+        if (!userName && !userIdString) {
+          userName = 'Hệ thống'
+        } else if (!userName && userIdString) {
+          // Có user_id nhưng không lấy được tên (user có thể đã bị xóa)
+          userName = `Người dùng ${userIdString.substring(0, 8)}...`
+        }
+        
+        return {
+          id: log._id || log.id,
+          userId: userIdString,
+          user: userName,
+          action: log.action || '-',
+          type: log.target_type?.toLowerCase() || 'system',  // ✅ chuẩn hóa type
+          level: log.level?.toLowerCase() || 'info',
+          message:
+            log.details?.message ||
+            log.action ||
+            'Không có mô tả hành động',
+          timestamp: new Date(log.created_at || log.timestamp),
+          ip: log.ip || '-',
+          userAgent: log.user_agent || '-',
+        }
+      })
 
       console.log(`✅ Loaded ${systemLogs.value.length} logs`)
     } else {
@@ -1992,9 +2094,18 @@ onMounted(() => {
     // Nếu log hệ thống (không có projectId)
     if (!event.projectId) {
       const log = event.log || event;
+      const userId = log.user_id?._id || log.user_id?.id || log.user_id || null
+      const userIdString = userId ? String(userId) : null
+      const userName = log.user_id?.name || 
+                      log.user_id?.email || 
+                      log.user_name || 
+                      log.user_email || 
+                      'Hệ thống'
+      
       systemLogs.value.unshift({
         id: log._id || log.id,
-        user: log.user_name || log.user_email || 'Hệ thống',
+        userId: userIdString,
+        user: userName,
         action: log.action || '-',
         type: log.target_type?.toLowerCase() || 'system',
         level: log.level?.toLowerCase() || 'info',
