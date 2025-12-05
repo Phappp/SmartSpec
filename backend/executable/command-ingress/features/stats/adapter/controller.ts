@@ -11,7 +11,13 @@ export class StatsController {
     // Tổng hợp usage toàn hệ thống
     async usageSummary(req: Request, res: Response, next: NextFunction) {
         try {
-            const data = await this.statsService.fetchUsageSummary();
+            const { dateFrom, dateTo, provider, status } = req.query;
+            const data = await this.statsService.fetchUsageSummary({
+                dateFrom: dateFrom as string,
+                dateTo: dateTo as string,
+                provider: provider as string,
+                status: status as 'success' | 'failed' | 'timeout',
+            });
             res.json(data);
         } catch (err) {
             next(err);
@@ -21,7 +27,13 @@ export class StatsController {
     // Thống kê usage theo provider
     async providerUsage(req: Request, res: Response, next: NextFunction) {
         try {
-            const data = await this.statsService.fetchProviderUsage();
+            const { dateFrom, dateTo, provider, status } = req.query;
+            const data = await this.statsService.fetchProviderUsage({
+                dateFrom: dateFrom as string,
+                dateTo: dateTo as string,
+                provider: provider as string,
+                status: status as 'success' | 'failed' | 'timeout',
+            });
             res.json(data);
         } catch (err) {
             next(err);
@@ -47,6 +59,20 @@ export class StatsController {
             next(err);
         }
     }
+
+  // User analytics (new registrations, online users, timeline)
+  async userAnalytics(req: Request, res: Response, next: NextFunction) {
+      try {
+          const { rangeDays } = req.query;
+          const range = rangeDays ? parseInt(rangeDays as string, 10) : 7;
+          const data = await this.statsService.fetchUserAnalytics({
+              rangeDays: isNaN(range) ? 7 : range,
+          });
+          res.json(data);
+      } catch (err) {
+          next(err);
+      }
+  }
 
     // Trends (user, api, project, activity)
     async trends(req: Request, res: Response, next: NextFunction) {
@@ -106,6 +132,42 @@ export class StatsController {
                 message: 'Settings updated successfully',
                 data: req.body
             });
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    // Lọc API usage với filters
+    async filteredUsage(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { dateFrom, dateTo, provider, status, groupBy } = req.query;
+            const data = await this.statsService.fetchFilteredUsage({
+                dateFrom: dateFrom as string,
+                dateTo: dateTo as string,
+                provider: provider as string,
+                status: status as 'success' | 'failed' | 'timeout',
+                groupBy: groupBy as 'day' | 'month' | 'year',
+            });
+            res.json(data);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    // Lấy dữ liệu cho biểu đồ
+    async chartData(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { dateFrom, dateTo, provider, chartType } = req.query;
+            if (!chartType || !['timeline', 'provider', 'status'].includes(chartType as string)) {
+                return res.status(400).json({ error: 'Invalid chartType. Must be timeline, provider, or status' });
+            }
+            const data = await this.statsService.fetchChartData({
+                dateFrom: dateFrom as string,
+                dateTo: dateTo as string,
+                provider: provider as string,
+                chartType: chartType as 'timeline' | 'provider' | 'status',
+            });
+            res.json(data);
         } catch (err) {
             next(err);
         }

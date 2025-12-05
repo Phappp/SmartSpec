@@ -6,6 +6,24 @@ const apiKeySchema = new Schema({
     model_name: { type: String, default: '' },      
     is_active: { type: Boolean, default: true },
     created_by: { type: Schema.Types.ObjectId, ref: 'users' },
+    // Các field mới cho quản lý nâng cao
+    display_name: { type: String, default: '' },
+    description: { type: String, default: '' },
+    daily_limit: { type: Number, default: null },
+    rate_limit: { type: Number, default: null },
+    priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+    expires_at: { type: Date, default: null },
+    permissions: {
+        text_generation: { type: Boolean, default: true },
+        code_generation: { type: Boolean, default: true },
+        analysis: { type: Boolean, default: true },
+        chat_models: { type: Boolean, default: true },
+        vision_models: { type: Boolean, default: false },
+        embedding_models: { type: Boolean, default: false },
+    },
+    // Thống kê sử dụng
+    usage_count: { type: Number, default: 0 },
+    last_used: { type: Date, default: null },
 }, { timestamps: true });
 
 type ApiKeySchemaInferType = InferSchemaType<typeof apiKeySchema>;

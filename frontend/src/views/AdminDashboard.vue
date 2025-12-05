@@ -120,87 +120,283 @@
       <!-- Charts and Analytics -->
       <section class="analytics-section">
         <div class="analytics-grid">
-          <!-- User Distribution Chart -->
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>Phân bố người dùng</h3>
+          <!-- User Distribution & User Analytics (full-width) -->
+          <div class="analytics-card modern-card user-analytics-card">
+            <div class="card-header-modern">
+              <div class="header-content">
+                <span class="material-symbols-outlined header-icon">pie_chart</span>
+                <div>
+                  <h3>Phân bố người dùng</h3>
+                  <p class="header-subtitle">Tổng quan vai trò, đăng ký mới và người dùng đang hoạt động</p>
+                </div>
+              </div>
               <div class="chart-actions">
-                <button class="btn-icon" @click="refreshUserStats">
+                <div class="user-filters-modern">
+                  <select
+                    v-model="userAnalyticsFilters.rangeDays"
+                    @change="loadUserAnalytics"
+                    class="filter-select-modern small"
+                  >
+                    <option :value="7">7 ngày</option>
+                    <option :value="30">30 ngày</option>
+                    <option :value="90">90 ngày</option>
+                  </select>
+                  <select
+                    v-model="userAnalyticsFilters.viewMode"
+                    @change="loadUserTimelineChart"
+                    class="filter-select-modern small"
+                  >
+                    <option value="day">Theo ngày</option>
+                    <option value="month">Theo tháng</option>
+                    <option value="year">Theo năm</option>
+                  </select>
+                </div>
+                <button class="btn-icon-modern" @click="() => { loadUserAnalytics(); loadUserTimelineChart(); }" title="Làm mới">
                   <span class="material-symbols-outlined">refresh</span>
                 </button>
-                <button class="btn-icon" @click="exportUserStats">
+                <button class="btn-icon-modern" @click="exportUserStats" title="Xuất dữ liệu">
                   <span class="material-symbols-outlined">download</span>
                 </button>
               </div>
             </div>
-            <div class="chart-container">
-              <div class="pie-chart" :style="{ background: pieBackground }">
-                <div class="pie-center">
-                  <div class="center-content">
-                    <span class="center-value">
-                      {{
-                        hoveredSegment !== null
-                          ? userDistribution[hoveredSegment].percentage + '%'
-                          : '100%'
-                      }}
-                    </span>
-                    <span class="center-label">
-                      {{
-                        hoveredSegment !== null
-                          ? userDistribution[hoveredSegment].label
-                          : 'Tổng'
-                      }}
-                    </span>
+            <div class="user-analytics-content">
+              <!-- Top counters -->
+              <div class="user-counters-grid">
+                <div class="user-counter-card">
+                  <div class="counter-icon total">
+                    <span class="material-symbols-outlined">group</span>
+                  </div>
+                  <div class="counter-info">
+                    <span class="counter-label">Tổng người dùng</span>
+                    <span class="counter-value">{{ formatNumber(userAnalytics.counters.totalUsers || 0) }}</span>
+                  </div>
+                </div>
+                <div class="user-counter-card">
+                  <div class="counter-icon active">
+                    <span class="material-symbols-outlined">verified_user</span>
+                  </div>
+                  <div class="counter-info">
+                    <span class="counter-label">Đang hoạt động</span>
+                    <span class="counter-value">{{ formatNumber(userAnalytics.counters.activeUsers || 0) }}</span>
+                  </div>
+                </div>
+                <div class="user-counter-card">
+                  <div class="counter-icon new">
+                    <span class="material-symbols-outlined">person_add</span>
+                  </div>
+                  <div class="counter-info">
+                    <span class="counter-label">Đăng ký hôm nay</span>
+                    <span class="counter-value">{{ formatNumber(userAnalytics.counters.newUsersToday || 0) }}</span>
+                  </div>
+                </div>
+                <div class="user-counter-card">
+                  <div class="counter-icon online">
+                    <span class="material-symbols-outlined">online_prediction</span>
+                  </div>
+                  <div class="counter-info">
+                    <span class="counter-label">Online hôm nay</span>
+                    <span class="counter-value">{{ formatNumber(userAnalytics.counters.onlineToday || 0) }}</span>
                   </div>
                 </div>
               </div>
 
-              <div class="chart-legend">
-                <div
-                  v-for="(item, index) in userDistribution"
-                  :key="item.label"
-                  class="legend-item"
-                  :class="{ active: hoveredSegment === index }"
-                  @mouseenter="hoveredSegment = index"
-                  @mouseleave="hoveredSegment = null"
-                >
-                  <div class="legend-color" :style="{ backgroundColor: item.color }"></div>
-                  <span class="legend-label">{{ item.label }}</span>
-                  <span class="legend-value">{{ item.value }} ({{ item.percentage }}%)</span>
+              <!-- Charts row: distribution & registrations timeline -->
+              <div class="user-charts-grid">
+                <!-- User distribution doughnut + legend -->
+                <div class="chart-container-modern">
+                  <div class="chart-header-inline">
+                    <div>
+                      <h4 class="chart-title-modern">
+                        <span class="material-symbols-outlined">donut_small</span>
+                        Phân bố theo vai trò
+                      </h4>
+                      <p class="chart-subtitle">Tỷ lệ người dùng theo nhóm quyền</p>
+                    </div>
+                  </div>
+                  <div class="chart-content-modern">
+                    <div class="chart-visual">
+                      <canvas ref="userDistributionChart" id="userDistributionChart"></canvas>
+                    </div>
+                    <div class="chart-legend-modern">
+                      <div
+                        v-for="(item, index) in userDistribution"
+                        :key="item.label"
+                        class="legend-item-modern"
+                        :class="{ active: hoveredSegment === index }"
+                        @mouseenter="hoveredSegment = index"
+                        @mouseleave="hoveredSegment = null"
+                      >
+                        <div class="legend-indicator">
+                          <div class="legend-color-modern" :style="{ backgroundColor: item.color }"></div>
+                          <div class="legend-pulse" :style="{ backgroundColor: item.color }"></div>
+                        </div>
+                        <div class="legend-info">
+                          <span class="legend-label-modern">{{ item.label }}</span>
+                          <span class="legend-value-modern">{{ item.value }} người ({{ item.percentage }}%)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Registrations timeline -->
+                <div class="chart-container-modern user-timeline-container">
+                  <div class="chart-header-inline">
+                  <div>
+                    <h4 class="chart-title-modern">
+                      <span class="material-symbols-outlined">timeline</span>
+                      Đăng ký mới {{ userAnalytics.rangeDays || 7 }}
+                      {{
+                        userAnalyticsFilters.viewMode === 'day'
+                          ? 'ngày gần đây'
+                          : userAnalyticsFilters.viewMode === 'month'
+                          ? 'tháng gần đây'
+                          : 'năm gần đây'
+                      }}
+                    </h4>
+                    <p class="chart-subtitle">
+                      Xu hướng người dùng đăng ký mới theo
+                      {{
+                        userAnalyticsFilters.viewMode === 'day'
+                          ? 'ngày'
+                          : userAnalyticsFilters.viewMode === 'month'
+                          ? 'tháng'
+                          : 'năm'
+                      }}
+                    </p>
+                  </div>
+                  </div>
+                  <div class="chart-canvas-wrapper small">
+                    <canvas ref="userTimelineChart" id="userTimelineChart"></canvas>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- API Usage Chart -->
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>Sử dụng API theo nhà cung cấp</h3>
+          <!-- API Usage Analytics -->
+          <div class="analytics-card modern-card api-analytics-card">
+            <div class="card-header-modern">
+              <div class="header-content">
+                <span class="material-symbols-outlined header-icon">analytics</span>
+                <div>
+                  <h3>Phân tích sử dụng API</h3>
+                  <p class="header-subtitle">Thống kê chi tiết theo nhà cung cấp</p>
+                </div>
+              </div>
               <div class="chart-actions">
-                <button class="btn-icon" @click="refreshApiStats">
+                <button class="btn-icon-modern" @click="refreshApiStats" title="Làm mới">
                   <span class="material-symbols-outlined">refresh</span>
                 </button>
-                <button class="btn-icon" @click="exportApiStats">
+                <button class="btn-icon-modern" @click="exportApiStats" title="Xuất dữ liệu">
                   <span class="material-symbols-outlined">download</span>
                 </button>
               </div>
             </div>
-            <div class="chart-container">
-              <div class="usage-stats">
-                <div v-for="provider in apiUsage" :key="provider.name" class="usage-item">
-                  <div class="usage-header">
-                    <span class="provider-name">{{ provider.name }}</span>
-                    <span class="usage-percentage">{{ provider.percentage }}%</span>
+
+            <!-- Enhanced Filters -->
+            <div class="filters-modern">
+              <div class="filters-header">
+                <span class="material-symbols-outlined">filter_list</span>
+                <span>Bộ lọc</span>
+              </div>
+              <div class="filters-grid">
+                <div class="filter-item-modern">
+                  <label class="filter-label">
+                    <span class="material-symbols-outlined">calendar_today</span>
+                    Từ ngày
+                  </label>
+                  <input type="date" v-model="apiFilters.dateFrom" @change="applyApiFilters" class="filter-input-modern" />
+                </div>
+                <div class="filter-item-modern">
+                  <label class="filter-label">
+                    <span class="material-symbols-outlined">event</span>
+                    Đến ngày
+                  </label>
+                  <input type="date" v-model="apiFilters.dateTo" @change="applyApiFilters" class="filter-input-modern" />
+                </div>
+                <div class="filter-item-modern">
+                  <label class="filter-label">
+                    <span class="material-symbols-outlined">cloud</span>
+                    Provider
+                  </label>
+                  <select v-model="apiFilters.provider" @change="applyApiFilters" class="filter-select-modern">
+                    <option value="">Tất cả</option>
+                    <option value="gemini">Gemini</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="claude">Claude</option>
+                  </select>
+                </div>
+                <div class="filter-item-modern">
+                  <label class="filter-label">
+                    <span class="material-symbols-outlined">check_circle</span>
+                    Trạng thái
+                  </label>
+                  <select v-model="apiFilters.status" @change="applyApiFilters" class="filter-select-modern">
+                    <option value="">Tất cả</option>
+                    <option value="success">Thành công</option>
+                    <option value="failed">Thất bại</option>
+                    <option value="timeout">Timeout</option>
+                  </select>
+                </div>
+                <button class="btn-reset-modern" @click="resetApiFilters">
+                  <span class="material-symbols-outlined">clear_all</span>
+                  <span>Đặt lại</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- API Summary Cards -->
+            <div class="api-summary-modern">
+              <div class="summary-card-modern">
+                <div class="summary-icon requests">
+                  <span class="material-symbols-outlined">api</span>
+                </div>
+                <div class="summary-content">
+                  <span class="summary-label-modern">Tổng requests</span>
+                  <span class="summary-value-modern">{{ formatNumber(totalApiRequests) }}</span>
+                </div>
+              </div>
+              <div class="summary-card-modern">
+                <div class="summary-icon tokens">
+                  <span class="material-symbols-outlined">token</span>
+                </div>
+                <div class="summary-content">
+                  <span class="summary-label-modern">Tổng tokens</span>
+                  <span class="summary-value-modern">{{ formatNumber(totalApiTokens) }}</span>
+                </div>
+              </div>
+              <div class="summary-card-modern">
+                <div class="summary-icon success">
+                  <span class="material-symbols-outlined">check_circle</span>
+                </div>
+                <div class="summary-content">
+                  <span class="summary-label-modern">Thành công</span>
+                  <span class="summary-value-modern success-text">{{ apiSuccessRate }}%</span>
+                </div>
+              </div>
+              <div class="summary-card-modern">
+                <div class="summary-icon error">
+                  <span class="material-symbols-outlined">error</span>
+                </div>
+                <div class="summary-content">
+                  <span class="summary-label-modern">Lỗi</span>
+                  <span class="summary-value-modern error-text">{{ apiErrorRate }}%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Provider Usage List -->
+            <div class="provider-list-modern">
+              <div v-for="provider in apiUsage" :key="provider.name" class="provider-item-modern">
+                <div class="provider-header-modern">
+                  <div class="provider-info">
+                    <div class="provider-badge" :style="{ backgroundColor: provider.color }"></div>
+                    <span class="provider-name-modern">{{ provider.name }}</span>
                   </div>
-                  <div class="usage-bar">
-                    <div
-                      class="usage-fill"
-                      :style="{ width: provider.percentage + '%', backgroundColor: provider.color }"
-                    ></div>
-                  </div>
-                  <div class="usage-details">
-                    <span class="usage-count">{{ provider.usage }} requests</span>
-                    <span class="usage-trend" :class="provider.trend">
+                  <div class="provider-stats">
+                    <span class="provider-percentage">{{ provider.percentage }}%</span>
+                    <span class="provider-trend" :class="provider.trend">
                       <span class="material-symbols-outlined">
                         {{ provider.trend === 'up' ? 'trending_up' : 'trending_down' }}
                       </span>
@@ -208,23 +404,62 @@
                     </span>
                   </div>
                 </div>
+                <div class="progress-bar-modern">
+                  <div
+                    class="progress-fill-modern"
+                    :style="{ width: provider.percentage + '%', backgroundColor: provider.color }"
+                  ></div>
+                </div>
+                <div class="provider-details-modern">
+                  <span class="provider-count">{{ provider.usage }} requests</span>
+                </div>
               </div>
-              <div class="api-summary">
-                <div class="summary-item">
-                  <span class="summary-label">Tổng requests</span>
-                  <span class="summary-value">{{ formatNumber(totalApiRequests) }}</span>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="charts-section-modern">
+              <div class="chart-container-modern timeline-chart">
+                <div class="chart-header-inline">
+                  <div>
+                    <h4 class="chart-title-modern">
+                      <span class="material-symbols-outlined">show_chart</span>
+                      Biểu đồ theo thời gian
+                    </h4>
+                    <p class="chart-subtitle">Xu hướng requests theo ngày</p>
+                  </div>
                 </div>
-                <div class="summary-item">
-                  <span class="summary-label">Tổng tokens</span>
-                  <span class="summary-value">{{ formatNumber(totalApiTokens) }}</span>
+                <div class="chart-canvas-wrapper">
+                  <canvas ref="timelineChart" id="timelineChart"></canvas>
                 </div>
-                <div class="summary-item">
-                  <span class="summary-label">Thành công</span>
-                  <span class="summary-value success">{{ apiSuccessRate }}%</span>
+              </div>
+              <div class="charts-grid-modern">
+                <div class="chart-container-modern">
+                  <div class="chart-header-inline">
+                    <div>
+                      <h4 class="chart-title-modern">
+                        <span class="material-symbols-outlined">donut_large</span>
+                        Phân bố Provider
+                      </h4>
+                      <p class="chart-subtitle">Tỷ lệ sử dụng</p>
+                    </div>
+                  </div>
+                  <div class="chart-canvas-wrapper">
+                    <canvas ref="providerChart" id="providerChart"></canvas>
+                  </div>
                 </div>
-                <div class="summary-item">
-                  <span class="summary-label">Lỗi</span>
-                  <span class="summary-value error">{{ apiErrorRate }}%</span>
+                <div class="chart-container-modern">
+                  <div class="chart-header-inline">
+                    <div>
+                      <h4 class="chart-title-modern">
+                        <span class="material-symbols-outlined">bar_chart</span>
+                        Thành công / Thất bại
+                      </h4>
+                      <p class="chart-subtitle">Tỷ lệ trạng thái</p>
+                    </div>
+                  </div>
+                  <div class="chart-canvas-wrapper">
+                    <canvas ref="statusChart" id="statusChart"></canvas>
+                  </div>
                 </div>
               </div>
             </div>
@@ -665,6 +900,44 @@ const logFilter = ref({
 
 const systemSettings = ref({})
 
+// API Filters
+const apiFilters = ref({
+  dateFrom: '',
+  dateTo: '',
+  provider: '',
+  status: '',
+})
+
+// User analytics filters
+const userAnalyticsFilters = ref({
+  rangeDays: 7,
+  viewMode: 'day', // 'day' | 'month' | 'year'
+})
+
+// Chart refs
+const timelineChart = ref(null)
+const providerChart = ref(null)
+const statusChart = ref(null)
+const userDistributionChart = ref(null)
+const userTimelineChart = ref(null)
+let timelineChartInstance = null
+let providerChartInstance = null
+let statusChartInstance = null
+let userDistributionChartInstance = null
+let userTimelineChartInstance = null
+
+const userAnalytics = ref({
+  counters: {
+    totalUsers: 0,
+    activeUsers: 0,
+    pendingUsers: 0,
+    newUsersToday: 0,
+    onlineToday: 0,
+  },
+  registrationTimeline: [],
+  rangeDays: 7,
+})
+
 // Computed
 const userTrend = ref({ type: 'positive', icon: 'trending_up', value: '+0%' })
 const apiTrend = ref({ type: 'positive', icon: 'trending_up', value: '+0%' })
@@ -848,6 +1121,14 @@ const refreshUserStats = async () => {
 
       userDistribution.value = distribution
 
+      // Đồng bộ counters cơ bản với userAnalytics (fallback nếu API analytics chưa trả về)
+      userAnalytics.value.counters.totalUsers = users.length
+      userAnalytics.value.counters.activeUsers = stats.value.activeUsers || 0
+      // Load chart after data is ready
+      setTimeout(() => {
+        loadUserDistributionChart()
+      }, 100)
+
       console.log('✅ User stats loaded:', {
         total: users.length,
         active: stats.value.activeUsers,
@@ -860,6 +1141,43 @@ const refreshUserStats = async () => {
   } catch (error) {
     console.error('❌ Lỗi khi tải thống kê người dùng:', error)
   }
+}
+
+// Load user analytics (new registrations, online users, timeline)
+const loadUserAnalytics = async () => {
+  try {
+    const params = {
+      rangeDays: userAnalyticsFilters.value.rangeDays,
+    }
+    const res = await axiosClient.get('/api/stats/users/analytics', { params })
+    if (res.data) {
+      userAnalytics.value = {
+        counters: res.data.counters || userAnalytics.value.counters,
+        registrationTimeline: res.data.registrationTimeline || [],
+        rangeDays: res.data.rangeDays || userAnalytics.value.rangeDays,
+      }
+
+      // Load user timeline chart
+      await loadUserTimelineChart()
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi tải user analytics:', error)
+  }
+}
+
+const applyApiFilters = async () => {
+  await refreshApiStats()
+  await loadChartData()
+}
+
+const resetApiFilters = () => {
+  apiFilters.value = {
+    dateFrom: '',
+    dateTo: '',
+    provider: '',
+    status: '',
+  }
+  applyApiFilters()
 }
 
 const refreshApiStats = async () => {
@@ -883,10 +1201,16 @@ const refreshApiStats = async () => {
       apiStats.value.claude = providerStats['claude'] || 0
     }
 
-    // Lấy usage từ API stats
+    // Lấy usage từ API stats với filters
+    const params = {}
+    if (apiFilters.value.dateFrom) params.dateFrom = apiFilters.value.dateFrom
+    if (apiFilters.value.dateTo) params.dateTo = apiFilters.value.dateTo
+    if (apiFilters.value.provider) params.provider = apiFilters.value.provider
+    if (apiFilters.value.status) params.status = apiFilters.value.status
+
     const [usageRes, providerRes] = await Promise.all([
-      axiosClient.get('/api/stats/usage-summary'),
-      axiosClient.get('/api/stats/provider-usage'),
+      axiosClient.get('/api/stats/usage-summary', { params }),
+      axiosClient.get('/api/stats/provider-usage', { params }),
     ])
 
     if (usageRes.data) {
@@ -915,6 +1239,419 @@ const refreshApiStats = async () => {
     console.log('✅ API stats loaded:', { apiUsage: apiUsage.value, totalRequests: totalApiRequests.value })
   } catch (error) {
     console.error('❌ Lỗi khi tải API key stats:', error)
+  }
+}
+
+const loadChartData = async () => {
+  try {
+    const params = {}
+    if (apiFilters.value.dateFrom) params.dateFrom = apiFilters.value.dateFrom
+    if (apiFilters.value.dateTo) params.dateTo = apiFilters.value.dateTo
+    if (apiFilters.value.provider) params.provider = apiFilters.value.provider
+
+    const [timelineRes, providerRes, statusRes] = await Promise.all([
+      axiosClient.get('/api/stats/usage/charts', { params: { ...params, chartType: 'timeline' } }),
+      axiosClient.get('/api/stats/usage/charts', { params: { ...params, chartType: 'provider' } }),
+      axiosClient.get('/api/stats/usage/charts', { params: { ...params, chartType: 'status' } }),
+    ])
+
+    // Load Chart.js dynamically
+    const Chart = (await import('chart.js/auto')).default
+
+    // Timeline Chart (Line)
+    if (timelineRes.data?.data) {
+      const ctx = timelineChart.value?.getContext('2d')
+      if (ctx) {
+        if (timelineChartInstance) timelineChartInstance.destroy()
+        timelineChartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: timelineRes.data.data.map(d => d.date),
+            datasets: [
+              {
+                label: 'Requests',
+                data: timelineRes.data.data.map(d => d.requests),
+                borderColor: '#1a365d',
+                backgroundColor: 'rgba(26, 54, 93, 0.1)',
+                tension: 0.4,
+                fill: true,
+                borderWidth: 3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: '#1a365d',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+              },
+              {
+                label: 'Success',
+                data: timelineRes.data.data.map(d => d.success),
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4,
+                fill: true,
+                borderWidth: 3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: '#10b981',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+              },
+              {
+                label: 'Failed',
+                data: timelineRes.data.data.map(d => d.failed),
+                borderColor: '#ef4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                tension: 0.4,
+                fill: true,
+                borderWidth: 3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: '#ef4444',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: 'index',
+              intersect: false,
+            },
+            plugins: {
+              legend: { 
+                position: 'top',
+                labels: {
+                  usePointStyle: true,
+                  padding: 20,
+                  font: { size: 13, weight: '600' }
+                }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                padding: 16,
+                titleFont: { size: 14, weight: '600' },
+                bodyFont: { size: 13 },
+                cornerRadius: 8,
+                position: 'nearest',
+                intersect: false,
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                ticks: { font: { size: 12 } }
+              },
+              x: {
+                grid: { display: false },
+                ticks: { font: { size: 12 } }
+              }
+            }
+          },
+          plugins: [
+            {
+              id: 'timelineCrosshair',
+              afterDraw(chart) {
+                const activePoints = chart.getActiveElements()
+                if (!activePoints || activePoints.length === 0) return
+
+                const ctx = chart.ctx
+                const chartArea = chart.chartArea
+                const x = activePoints[0].element.x
+
+                ctx.save()
+                ctx.beginPath()
+                ctx.moveTo(x, chartArea.top)
+                ctx.lineTo(x, chartArea.bottom)
+                ctx.lineWidth = 1
+                ctx.strokeStyle = 'rgba(26, 54, 93, 0.6)'
+                ctx.setLineDash([4, 4])
+                ctx.stroke()
+                ctx.restore()
+              },
+            },
+          ],
+        })
+      }
+    }
+
+    // Provider Chart (Pie)
+    if (providerRes.data?.data) {
+      const ctx = providerChart.value?.getContext('2d')
+      if (ctx) {
+        if (providerChartInstance) providerChartInstance.destroy()
+        providerChartInstance = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: providerRes.data.data.map(d => d.provider),
+            datasets: [{
+              data: providerRes.data.data.map(d => d.requests),
+              backgroundColor: ['#1a365d', '#2d3748', '#4a5568', '#718096'],
+              borderWidth: 0,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { 
+                position: 'bottom',
+                labels: {
+                  usePointStyle: true,
+                  padding: 20,
+                  font: { size: 13, weight: '600' }
+                }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                padding: 16,
+                titleFont: { size: 14, weight: '600' },
+                bodyFont: { size: 13 },
+                cornerRadius: 8,
+                callbacks: {
+                  label: (context) => {
+                    const label = context.label || ''
+                    const value = context.parsed || 0
+                    const total = context.dataset.data.reduce((a, b) => a + b, 0)
+                    const percentage = total > 0 ? Math.round((value / total) * 100) : 0
+                    return `${label}: ${value} requests (${percentage}%)`
+                  }
+                }
+              }
+            },
+            cutout: '60%',
+          },
+        })
+      }
+    }
+
+    // Status Chart (Bar)
+    if (statusRes.data?.data) {
+      const ctx = statusChart.value?.getContext('2d')
+      if (ctx) {
+        if (statusChartInstance) statusChartInstance.destroy()
+        statusChartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: statusRes.data.data.map(d => d.status === 'success' ? 'Thành công' : d.status === 'failed' ? 'Thất bại' : 'Timeout'),
+            datasets: [{
+              label: 'Số lượng',
+              data: statusRes.data.data.map(d => d.count),
+              backgroundColor: ['#10b981', '#ef4444', '#f59e0b'],
+              borderRadius: 8,
+              borderSkipped: false,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                padding: 16,
+                titleFont: { size: 14, weight: '600' },
+                bodyFont: { size: 13 },
+                cornerRadius: 8,
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                ticks: { font: { size: 12 } }
+              },
+              x: {
+                grid: { display: false },
+                ticks: { font: { size: 12, weight: '600' } }
+              }
+            }
+          },
+        })
+      }
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi tải chart data:', error)
+  }
+}
+
+const loadUserTimelineChart = async () => {
+  try {
+    const Chart = (await import('chart.js/auto')).default
+    const ctx = userTimelineChart.value?.getContext('2d')
+
+    // Chuẩn hóa dữ liệu: luôn hiển thị đủ rangeDays ngày, nếu không có dữ liệu thì = 0
+    const range = userAnalytics.value.rangeDays || 7
+    const raw = userAnalytics.value.registrationTimeline || []
+    const countsByDate = raw.reduce((acc, item) => {
+      acc[item.date] = item.count
+      return acc
+    }, {})
+
+    const labels = []
+    const data = []
+    const today = new Date()
+
+    for (let i = range - 1; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(d.getDate() - i)
+      const label = d.toISOString().slice(0, 10) // YYYY-MM-DD
+      labels.push(label)
+      data.push(countsByDate[label] || 0)
+    }
+
+    // Gộp dữ liệu theo tháng/năm nếu cần
+    const mode = userAnalyticsFilters.value.viewMode || 'day'
+    if (mode === 'month' || mode === 'year') {
+      const grouped = {}
+
+      labels.forEach((label, idx) => {
+        const count = data[idx] || 0
+        if (!label) return
+
+        let key = label
+        let display = label
+
+        if (mode === 'month') {
+          // YYYY-MM -> MM/YYYY
+          const parts = label.split('-')
+          if (parts.length === 3) {
+            const year = parts[0]
+            const month = parts[1]
+            key = `${year}-${month}`
+            display = `${month}/${year}`
+          }
+        } else if (mode === 'year') {
+          const year = label.split('-')[0]
+          key = year
+          display = year
+        }
+
+        if (!grouped[key]) {
+          grouped[key] = { label: display, count: 0 }
+        }
+        grouped[key].count += count
+      })
+
+      const sortedKeys = Object.keys(grouped).sort()
+      const aggLabels = []
+      const aggData = []
+      sortedKeys.forEach((k) => {
+        aggLabels.push(grouped[k].label)
+        aggData.push(grouped[k].count)
+      })
+
+      // Gán lại labels/data sau khi gộp
+      labels.length = 0
+      data.length = 0
+      aggLabels.forEach((l) => labels.push(l))
+      aggData.forEach((v) => data.push(v))
+    }
+
+    if (ctx) {
+      if (userTimelineChartInstance) userTimelineChartInstance.destroy()
+
+      userTimelineChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Đăng ký mới',
+              data,
+              borderColor: '#4299e1',
+              backgroundColor: 'rgba(66, 153, 225, 0.15)',
+              tension: 0.4,
+              fill: true,
+              borderWidth: 3,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              pointBackgroundColor: '#3182ce',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              padding: 16,
+              titleFont: { size: 14, weight: '600' },
+              bodyFont: { size: 13 },
+              cornerRadius: 8,
+              position: 'nearest',
+              intersect: false,
+              callbacks: {
+                label: (context) => {
+                  const value = context.parsed.y || 0
+                  return `Đăng ký mới: ${value} người`
+                },
+              },
+            },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(0, 0, 0, 0.05)' },
+              ticks: { font: { size: 12 } },
+            },
+            x: {
+              grid: { display: false },
+              ticks: {
+                font: { size: 12 },
+                callback: (value, index, ticks) => {
+                  // ticks[index].label trong runtime là string ngày 'YYYY-MM-DD'
+                  const tick = ticks[index]
+                  const label = tick && typeof tick.label === 'string' ? tick.label : ''
+                  if (!label) return ''
+                  const parts = label.split('-')
+                  if (parts.length !== 3) return label
+                  const day = parts[2]
+                  const month = parts[1]
+                  // Hiển thị dạng dd/MM
+                  return `${day}/${month}`
+                },
+              },
+            },
+          },
+        },
+        plugins: [
+          {
+            id: 'userTimelineCrosshair',
+            afterDraw(chart) {
+              const activePoints = chart.getActiveElements()
+              if (!activePoints || activePoints.length === 0) return
+
+              const ctx = chart.ctx
+              const chartArea = chart.chartArea
+              const x = activePoints[0].element.x
+
+              ctx.save()
+              ctx.beginPath()
+              ctx.moveTo(x, chartArea.top)
+              ctx.lineTo(x, chartArea.bottom)
+              ctx.lineWidth = 1
+              ctx.strokeStyle = 'rgba(66, 153, 225, 0.6)'
+              ctx.setLineDash([4, 4])
+              ctx.stroke()
+              ctx.restore()
+            },
+          },
+        ],
+      })
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi vẽ user timeline chart:', error)
   }
 }
 
@@ -1171,12 +1908,70 @@ onMounted(() => {
   
   // Fetch initial data từ các API riêng lẻ (nếu cần)
   refreshUserStats()
+  loadUserAnalytics()
   refreshProjectStats()
   refreshApiStats()
   refreshLogs()
   fetchCurrentUser()
+  
+  // Load charts after a short delay to ensure canvas is ready
+  setTimeout(() => {
+    loadChartData()
+    loadUserDistributionChart()
+  }, 500)
+  
   console.log('Admin dashboard mounted')
 })
+
+const loadUserDistributionChart = async () => {
+  try {
+    if (!userDistribution.value || userDistribution.value.length === 0) return
+    
+    const Chart = (await import('chart.js/auto')).default
+    const ctx = userDistributionChart.value?.getContext('2d')
+    
+    if (ctx) {
+      if (userDistributionChartInstance) userDistributionChartInstance.destroy()
+      
+      userDistributionChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: userDistribution.value.map(d => d.label),
+          datasets: [{
+            data: userDistribution.value.map(d => d.value),
+            backgroundColor: userDistribution.value.map(d => d.color),
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              padding: 12,
+              titleFont: { size: 14, weight: '600' },
+              bodyFont: { size: 13 },
+              callbacks: {
+                label: (context) => {
+                  const label = context.label || ''
+                  const value = context.parsed || 0
+                  const total = context.dataset.data.reduce((a, b) => a + b, 0)
+                  const percentage = total > 0 ? Math.round((value / total) * 100) : 0
+                  return `${label}: ${value} người (${percentage}%)`
+                }
+              }
+            }
+          },
+          cutout: '60%',
+        },
+      })
+    }
+  } catch (error) {
+    console.error('❌ Lỗi khi tải user distribution chart:', error)
+  }
+}
 
 async function loadDashboardStatsFromAPI() {
   try {
@@ -1560,7 +2355,7 @@ async function loadDashboardStatsFromAPI() {
   font-size: 14px;
 }
 
-/* Analytics Section */
+/* Analytics Section - Modern Design */
 .analytics-section {
   margin-bottom: 32px;
 }
@@ -1571,12 +2366,630 @@ async function loadDashboardStatsFromAPI() {
   gap: 24px;
 }
 
-.chart-card {
+.modern-card {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.modern-card:hover {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.api-analytics-card {
+  grid-column: span 2;
+}
+
+.user-analytics-card {
+  grid-column: span 2;
+}
+
+.card-header-modern {
+  background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+  padding: 24px;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon {
+  font-size: 32px;
+  color: #63b3ed;
+  background: rgba(255, 255, 255, 0.1);
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-header-modern h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+}
+
+.header-subtitle {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 400;
+}
+
+.btn-icon-modern {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  color: white;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+}
+
+.btn-icon-modern:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+.chart-content-modern {
+  padding: 24px;
+  display: flex;
+  gap: 32px;
+  align-items: center;
+}
+
+.user-analytics-content {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.user-counters-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.user-counter-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f7fafc 100%);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.counter-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.counter-icon.total {
+  background: linear-gradient(135deg, #3182ce 0%, #2b6cb0 100%);
+}
+
+.counter-icon.active {
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+}
+
+.counter-icon.new {
+  background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+}
+
+.counter-icon.online {
+  background: linear-gradient(135deg, #805ad5 0%, #6b46c1 100%);
+}
+
+.counter-icon .material-symbols-outlined {
+  font-size: 22px;
+}
+
+.counter-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.counter-label {
+  font-size: 12px;
+  color: #718096;
+}
+
+.counter-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a365d;
+}
+
+.user-timeline-container {
+  margin-top: 0;
+}
+
+.chart-canvas-wrapper.small {
+  height: 260px;
+}
+
+.user-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.chart-visual {
+  flex-shrink: 0;
+  width: 280px;
+  height: 280px;
+  position: relative;
+}
+
+.chart-visual canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.chart-legend-modern {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.legend-item-modern {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.legend-item-modern:hover {
+  background: #f7fafc;
+  border-color: #e2e8f0;
+  transform: translateX(4px);
+}
+
+.legend-item-modern.active {
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  border-color: #1a365d;
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.1);
+}
+
+.legend-indicator {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.legend-color-modern {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  position: absolute;
+  z-index: 2;
+}
+
+.legend-pulse {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  position: absolute;
+  opacity: 0.3;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.3); opacity: 0; }
+}
+
+.legend-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.legend-label-modern {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.legend-value-modern {
+  font-size: 13px;
+  color: #718096;
+}
+
+/* Filters Modern */
+.filters-modern {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.filters-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  color: #1a365d;
+  font-size: 14px;
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+
+.filter-select-modern.small {
+  padding: 6px 10px;
+  font-size: 12px;position: absolute;
+  right: 100px;
+  top: 24px;
+}
+
+.filter-item-modern {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.filter-label .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.filter-input-modern,
+.filter-select-modern {
+  padding: 10px 14px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  background: white;
+  color: #2d3748;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.filter-input-modern:focus,
+.filter-select-modern:focus {
+  outline: none;
+  border-color: #1a365d;
+  box-shadow: 0 0 0 4px rgba(26, 54, 93, 0.1);
+  transform: translateY(-1px);
+}
+
+.btn-reset-modern {
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%);
+  color: #2d3748;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  height: fit-content;
+}
+
+.btn-reset-modern:hover {
+  background: linear-gradient(135deg, #cbd5e0 0%, #a0aec0 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* API Summary Modern */
+.api-summary-modern {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 24px;
+  background: #f8fafc;
+}
+
+.summary-card-modern {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.summary-card-modern:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  border-color: #1a365d;
+}
+
+.summary-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.summary-icon.requests {
+  background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+  color: white;
+}
+
+.summary-icon.tokens {
+  background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+  color: white;
+}
+
+.summary-icon.success {
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+  color: white;
+}
+
+.summary-icon.error {
+  background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+  color: white;
+}
+
+.summary-icon .material-symbols-outlined {
+  font-size: 28px;
+}
+
+.summary-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-label-modern {
+  font-size: 12px;
+  color: #718096;
+  font-weight: 500;
+}
+
+.summary-value-modern {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a365d;
+}
+
+.summary-value-modern.success-text {
+  color: #38a169;
+}
+
+.summary-value-modern.error-text {
+  color: #e53e3e;
+}
+
+/* Provider List Modern */
+.provider-list-modern {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.provider-item-modern {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 14px;
+  padding: 20px;
+  border: 2px solid #e2e8f0;
+  transition: all 0.3s ease;
+}
+
+.provider-item-modern:hover {
+  border-color: #1a365d;
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.1);
+  transform: translateX(4px);
+}
+
+.provider-header-modern {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.provider-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.provider-badge {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(26, 54, 93, 0.1);
+}
+
+.provider-name-modern {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a365d;
+}
+
+.provider-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.provider-percentage {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a365d;
+}
+
+.provider-trend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.provider-trend.up {
+  color: #38a169;
+}
+
+.provider-trend.down {
+  color: #e53e3e;
+}
+
+.progress-bar-modern {
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 10px;
+  position: relative;
+}
+
+.progress-fill-modern {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill-modern::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.provider-details-modern {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.provider-count {
+  color: #718096;
+  font-weight: 500;
+}
+
+/* Charts Section Modern */
+.charts-section-modern {
+  padding: 24px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.chart-container-modern {
   background: white;
   border-radius: 16px;
   padding: 24px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   border: 1px solid #e2e8f0;
+  max-width: calc(100% - 20px);
+}
+
+.chart-container-modern.timeline-chart {
+  margin-bottom: 24px;
+}
+
+.chart-header-inline {
+  margin-bottom: 20px;
+}
+
+.chart-title-modern {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a365d;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chart-title-modern .material-symbols-outlined {
+  font-size: 24px;
+  color: #4299e1;
+}
+
+.chart-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: #718096;
+  font-weight: 400;
+}
+
+.chart-canvas-wrapper {
+  height: 320px;
+  position: relative;
+}
+
+.charts-grid-modern {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.charts-grid-modern .chart-canvas-wrapper {
+  height: 280px;
 }
 
 .chart-header {
@@ -1813,6 +3226,111 @@ async function loadDashboardStatsFromAPI() {
   margin-top: 20px;
   padding-top: 20px;
   border-top: 1px solid #e2e8f0;
+}
+
+/* API Filters */
+.api-filters {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: #f7fafc;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 150px;
+}
+
+.filter-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.filter-input,
+.filter-select {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  color: #2d3748;
+  transition: all 0.2s;
+}
+
+.filter-input:focus,
+.filter-select:focus {
+  outline: none;
+  border-color: #1a365d;
+  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
+}
+
+.btn-filter-reset {
+  padding: 8px 16px;
+  background: #e2e8f0;
+  color: #4a5568;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  height: fit-content;
+}
+
+.btn-filter-reset:hover {
+  background: #cbd5e0;
+  color: #2d3748;
+}
+
+/* Charts Section */
+.charts-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.chart-wrapper {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.chart-wrapper h4 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.chart-wrapper canvas {
+  max-height: 300px;
+}
+
+#timelineChart {
+  height: 300px !important;
+}
+
+#providerChart,
+#statusChart {
+  height: 250px !important;
 }
 
 .summary-item {
@@ -2374,6 +3892,33 @@ async function loadDashboardStatsFromAPI() {
     grid-template-columns: 1fr;
   }
 
+  .api-analytics-card {
+    grid-column: span 1;
+  }
+
+  .chart-content-modern {
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .chart-visual {
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .api-summary-modern {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .charts-grid-modern {
+    grid-template-columns: 1fr;
+  }
+
   .chart-container {
     flex-direction: column;
   }
@@ -2396,6 +3941,20 @@ async function loadDashboardStatsFromAPI() {
 
   .api-summary {
     grid-template-columns: 1fr;
+  }
+
+  .api-summary-modern {
+    grid-template-columns: 1fr;
+  }
+
+  .card-header-modern {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .chart-actions {
+    align-self: flex-end;
   }
 
   .log-filters {

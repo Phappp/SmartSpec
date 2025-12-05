@@ -176,7 +176,19 @@ class ApiKeyController extends BaseController {
       res,
       next,
       async (req, res, _next) => {
-        const { key_value, provider, model_name, is_active } = req.body;
+        const { 
+          key_value, 
+          provider, 
+          model_name, 
+          is_active,
+          display_name,
+          description,
+          daily_limit,
+          rate_limit,
+          priority,
+          expires_at,
+          permissions
+        } = req.body;
         const { id } = req.params;
         if (!id) {
           res.status(StatusCodes.BAD_REQUEST).json({
@@ -185,18 +197,30 @@ class ApiKeyController extends BaseController {
           });
           return;
         }
-        const serviceResponse = await this.service.updateAPIKey(id, {
-          key_value,
-          provider,
-          model_name,
-          is_active,
-        });
+        try {
+          const serviceResponse = await this.service.updateAPIKey(id, {
+            key_value,
+            provider,
+            model_name,
+            is_active,
+            display_name,
+            description,
+            daily_limit,
+            rate_limit,
+            priority,
+            expires_at,
+            permissions,
+          });
 
-        res.status(StatusCodes.OK).json({
-          status: "Success",
-          message: "Update API keys successfully",
-          data: serviceResponse,
-        });
+          res.status(StatusCodes.OK).json({
+            status: "Success",
+            message: "Update API keys successfully",
+            data: serviceResponse,
+          });
+        } catch (serviceError) {
+          console.error("❌ Error in updateAPIKey service:", serviceError);
+          throw serviceError;
+        }
       }
     );
   }

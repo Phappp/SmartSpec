@@ -18,6 +18,22 @@ interface APIKeysResponse {
   created_by: string;
   createAt: Date;
   updatedAt: Date;
+  display_name?: string;
+  description?: string;
+  daily_limit?: number | null;
+  rate_limit?: number | null;
+  priority?: string;
+  expires_at?: Date | null;
+  permissions?: {
+    text_generation?: boolean;
+    code_generation?: boolean;
+    analysis?: boolean;
+    chat_models?: boolean;
+    vision_models?: boolean;
+    embedding_models?: boolean;
+  };
+  usage_count?: number;
+  last_used?: Date | null;
 }
 
 interface ApiKeyService {
@@ -39,7 +55,26 @@ interface ApiKeyService {
   getAPIKeyById(id: string): Promise<APIKeysResponse>;
   updateAPIKey(
     id: string,
-    body: { key_value?: string; provider?: string; model_name?: string,  is_active?: boolean }
+    body: { 
+      key_value?: string; 
+      provider?: string; 
+      model_name?: string;
+      is_active?: boolean;
+      display_name?: string;
+      description?: string;
+      daily_limit?: number | null;
+      rate_limit?: number | null;
+      priority?: string;
+      expires_at?: string | null;
+      permissions?: {
+        text_generation?: boolean;
+        code_generation?: boolean;
+        analysis?: boolean;
+        chat_models?: boolean;
+        vision_models?: boolean;
+        embedding_models?: boolean;
+      };
+    }
   ): Promise<APIKeysResponse>;
   deleteAPIKey(id: string): Promise<string>;
 }

@@ -12,5 +12,8 @@ export default function initStatsRoute(controller: StatsController): Router {
   router.get('/activities', requireAuthorizedUser, requireRole('ADMIN'), controller.activities.bind(controller));
   router.get('/settings', requireAuthorizedUser, requireRole('ADMIN'), controller.getSettings.bind(controller));
   router.put('/settings', requireAuthorizedUser, requireRole('ADMIN'), controller.updateSettings.bind(controller));
+  router.get('/usage/filtered', requireAuthorizedUser, requireRole('ADMIN'), controller.filteredUsage.bind(controller));
+  router.get('/usage/charts', requireAuthorizedUser, requireRole('ADMIN'), controller.chartData.bind(controller));
+  router.get('/users/analytics', requireAuthorizedUser, requireRole('ADMIN'), controller.userAnalytics.bind(controller));
   return router;
 }

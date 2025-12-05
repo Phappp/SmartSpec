@@ -11,10 +11,13 @@ export class BaseController {
     try {
       await handler(req, res, next);
     } catch (error) {
-      console.log("error: ", error);
+      console.error("❌ Error in execWithTryCatchBlock:", error);
       if (!res.headersSent) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         res.status(400).json({
-          message: error instanceof Error ? error.message : String(error),
+          status: "Error",
+          message: errorMessage,
+          error: error instanceof Error ? error.name : "UnknownError",
         });
       }
     }
