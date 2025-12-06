@@ -1418,7 +1418,7 @@ export default {
       return codes[lang] || 'EN'
     },
     formatDate(dateString) {
-      if (!dateString) return 'N/A'
+      if (!dateString) return 'Not available'
       return new Date(dateString).toLocaleDateString()
     },
     resetGenerateForm() {

@@ -122,7 +122,8 @@
           <!-- Empty State -->
           <div v-if="filteredInputs.length === 0 && !isCollapsed" class="empty-state">
             <span class="material-symbols-outlined empty-icon">description</span>
-            <p>No {{ activeFilter === 'all' ? '' : activeFilter }} inputs found</p>
+            <p v-if="activeFilter === 'all'">No inputs added yet. Add your first input to get started.</p>
+            <p v-else>No {{ activeFilter }} inputs found. Try a different filter or add new inputs.</p>
             <button class="btn-secondary" @click="$emit('add-input-click')">
               <span class="material-symbols-outlined">add</span>
               Add Input
@@ -336,12 +337,12 @@ export default {
     },
 
     formatDate(dateString) {
-      if (!dateString) return 'N/A'
+      if (!dateString) return 'Not available'
       return new Date(dateString).toLocaleDateString('en-US')
     },
 
     formatDateTime(dateString) {
-      if (!dateString) return 'N/A'
+      if (!dateString) return 'Not available'
       return new Date(dateString).toLocaleString('en-US')
     },
   },

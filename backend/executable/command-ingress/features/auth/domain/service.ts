@@ -190,7 +190,21 @@ export class AuthServiceImpl implements AuthService {
     if (!user) {
       throw new Error("User not found");
     }
-    return user;
+    
+    // Transform user object để đảm bảo dob được serialize đúng
+    const userObj = user.toObject ? user.toObject() : user;
+    
+    // Đảm bảo dob là Date object hoặc ISO string
+    if (userObj.dob) {
+      // Nếu là Date object, giữ nguyên (Express sẽ serialize thành ISO string)
+      // Nếu đã là string, giữ nguyên
+      if (!(userObj.dob instanceof Date) && typeof userObj.dob !== 'string') {
+        // Nếu là object khác, thử convert
+        userObj.dob = new Date(userObj.dob);
+      }
+    }
+    
+    return userObj;
   }
 
 

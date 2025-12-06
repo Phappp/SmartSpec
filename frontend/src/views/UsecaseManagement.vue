@@ -914,8 +914,8 @@ export default {
           console.error('🔍 BE Error details:', error.response.data)
         }
 
-        const errorMessage =
-          error.response?.data?.message || error.message || 'Failed to create use case'
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        const errorMessage = formatErrorForDisplay(error, 'Failed to create use case. Please try again.')
         this.toast.error(errorMessage)
       } finally {
         this.isManagingUsecase = false
@@ -1079,7 +1079,8 @@ export default {
         await this.fetchProjectData(this.project._id)
       } catch (error) {
         console.error('Error skipping conflict:', error)
-        this.toast.error(error.response?.data?.error || 'Failed to skip conflict')
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        this.toast.error(formatErrorForDisplay(error, 'Failed to skip conflict. Please try again.'))
       } finally {
         this.isSkippingConflict = false
       }
@@ -1440,7 +1441,8 @@ export default {
           this.showAddInputModal = false
           await this.fetchProjectData(this.project._id)
         } else {
-          this.toast.error(response.data.message || 'Failed to add input')
+          const { formatErrorForDisplay } = require('@/utils/errorMessages')
+          this.toast.error(formatErrorForDisplay({ response: { data: response.data } }, 'Failed to add input. Please try again.'))
         }
       } catch (error) {
         console.error('Error adding inputs:', error)
@@ -1480,7 +1482,8 @@ export default {
           this.toast.success('Input deleted successfully!')
           await this.fetchProjectData(this.project._id)
         } else {
-          this.toast.error(response.data?.message || 'Delete failed')
+          const { formatErrorForDisplay } = require('@/utils/errorMessages')
+          this.toast.error(formatErrorForDisplay({ response: { data: response.data } }, 'Failed to delete input. Please try again.'))
         }
       } catch (err) {
         console.error(err)
@@ -1572,7 +1575,8 @@ export default {
         console.error('Error retrying incremental analysis:', error)
         this.isProcessingFailed = true
         this.isProcessingIncremental = false
-        this.toast.error(error.message || 'Failed to retry incremental analysis')
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        this.toast.error(formatErrorForDisplay(error, 'Failed to retry incremental analysis. Please try again.'))
       }
     },
   },

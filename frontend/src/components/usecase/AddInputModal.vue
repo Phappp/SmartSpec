@@ -44,7 +44,7 @@
           <h4>Describe your project</h4>
           <textarea
             v-model="rawText"
-            placeholder="Enter your describe here..."
+            placeholder="Describe your requirements, use cases, or system specifications here..."
             class="text-input"
             rows="6"
           ></textarea>

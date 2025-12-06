@@ -186,7 +186,11 @@ const fetchUser = async () => {
 
     if (user.dob) {
       const d = new Date(user.dob)
-      formData.dob = d.toISOString().split('T')[0]
+      // Sử dụng UTC để tránh timezone issues
+      const year = d.getUTCFullYear()
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+      const day = String(d.getUTCDate()).padStart(2, '0')
+      formData.dob = `${year}-${month}-${day}`
     }
   } catch (err) {
     console.error('❌ Error fetching user:', err)

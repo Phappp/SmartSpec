@@ -358,9 +358,9 @@
                       v-for="reqId in testcase.source_requirement_ids || []"
                       :key="reqId"
                       class="requirement-tag"
-                      :title="getRequirementName(reqId)"
+                      :title="`Requirement ID: ${reqId}`"
                     >
-                      {{ reqId }}
+                      {{ getRequirementName(reqId) || `Req-${String(reqId).substring(0, 8)}...` }}
                     </span>
                     <span
                       v-if="
@@ -369,7 +369,7 @@
                       "
                       class="no-requirements"
                     >
-                      -
+                      No requirements
                     </span>
                   </div>
                 </td>
@@ -917,7 +917,8 @@ export default {
       } catch (error) {
         console.error('Export error:', error)
         exportProgress.value.status = 'error'
-        toast.error(`Export failed: ${error.message}`)
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        toast.error(formatErrorForDisplay(error, 'Failed to export test cases. Please try again.'))
       } finally {
         exportLoading.value = false
       }
@@ -945,7 +946,8 @@ export default {
       const requirementName = getRequirementName(firstReqId)
       const baseTitle = testcase.title || 'Test Scenario'
 
-      return `[${firstReqId}] - ${requirementName} - ${baseTitle}`
+      // Show requirement name instead of ID
+      return requirementName ? `${requirementName} - ${baseTitle}` : baseTitle
     }
 
     const getRequirementName = (requirementId) => {
@@ -974,7 +976,8 @@ export default {
         await loadTestCases()
       } catch (error) {
         console.error('Error saving generated test cases:', error)
-        const errorMessage = error.response?.data?.message || error.message
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        const errorMessage = formatErrorForDisplay(error, 'An error occurred')
         toast.error(`Failed to save test cases: ${errorMessage}`)
       }
     }
@@ -1008,7 +1011,8 @@ export default {
         closeModal()
       } catch (error) {
         console.error('Error saving test case:', error)
-        const errorMessage = error.response?.data?.message || error.message
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        const errorMessage = formatErrorForDisplay(error, 'An error occurred')
         toast.error(`Failed to save test case: ${errorMessage}`)
       }
     }
@@ -1035,7 +1039,8 @@ export default {
         executingTestcase.value = null
       } catch (error) {
         console.error('Error executing test case:', error)
-        const errorMessage = error.response?.data?.message || error.message
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        const errorMessage = formatErrorForDisplay(error, 'An error occurred')
         toast.error(`Failed to execute test case: ${errorMessage}`)
       }
     }
@@ -1057,7 +1062,8 @@ export default {
         await loadTestCases()
       } catch (error) {
         console.error('Error bulk executing:', error)
-        const errorMessage = error.response?.data?.message || error.message
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        const errorMessage = formatErrorForDisplay(error, 'An error occurred')
         toast.error(`Failed to update test cases: ${errorMessage}`)
       }
     }
@@ -1084,7 +1090,8 @@ export default {
         await loadTestCases()
       } catch (error) {
         console.error('Error bulk deleting:', error)
-        const errorMessage = error.response?.data?.message || error.message
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        const errorMessage = formatErrorForDisplay(error, 'An error occurred')
         toast.error(`Failed to delete test cases: ${errorMessage}`)
       }
     }
@@ -1100,7 +1107,8 @@ export default {
         await loadTestCases()
       } catch (error) {
         console.error('Error deleting test case:', error)
-        const errorMessage = error.response?.data?.message || error.message
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        const errorMessage = formatErrorForDisplay(error, 'An error occurred')
         toast.error(`Failed to delete test case: ${errorMessage}`)
       }
     }

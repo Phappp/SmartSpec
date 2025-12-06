@@ -125,14 +125,14 @@
 
             <div v-if="expandedGroups[role]" class="group-content">
               <div
-                v-for="uc in group"
+                v-for="(uc, ucIndex) in group"
                 :key="getUsecaseId(uc)"
                 class="usecase-card"
                 :class="{ expanded: expandedUseCaseId === getUsecaseId(uc) }"
               >
                 <div class="usecase-header" @click="toggleUseCase(getUsecaseId(uc))">
-                  <div class="usecase-basic-info">
-                    <div class="usecase-id-badge">UC-{{ getUsecaseId(uc) }}</div>
+                    <div class="usecase-basic-info">
+                    <div class="usecase-id-badge">{{ formatUsecaseId(uc, ucIndex) }}</div>
                     <h4 class="usecase-name">{{ uc.name }}</h4>
                     <span class="priority-badge" :class="`priority-${uc.priority}`">
                       {{ uc.priority }}
@@ -296,8 +296,10 @@
                             :key="relatedId"
                             class="tag tag-related"
                           >
-                            <template v-if="useCaseMap[relatedId]"> UC-{{ relatedId }} </template>
-                            <template v-else> {{ relatedId }} </template>
+                            <template v-if="useCaseMap[relatedId]">
+                              {{ getUsecaseName(useCaseMap[relatedId]) }}
+                            </template>
+                            <template v-else> Use Case {{ String(relatedId).substring(0, 8) }}... </template>
                           </span>
                           <span
                             v-if="!uc.related_usecases || uc.related_usecases.length === 0"
@@ -539,6 +541,26 @@ export default {
       if (!uc) return ''
       return String(uc._id || uc.id || '')
     },
+    // Helper: Format usecase ID to short readable format (e.g., UC-001, UC-002)
+    formatUsecaseId(uc, index = null) {
+      if (!uc) return 'UC-???'
+      const id = String(uc._id || uc.id || '')
+      // If we have an index, use it for a short readable ID
+      if (index !== null && index !== undefined) {
+        const paddedIndex = String(index + 1).padStart(3, '0')
+        return `UC-${paddedIndex}`
+      }
+      // Otherwise, use first 8 characters of the ID for a shorter display
+      if (id.length > 8) {
+        return `UC-${id.substring(0, 8)}...`
+      }
+      return `UC-${id}`
+    },
+    // Helper: Get usecase name for display
+    getUsecaseName(uc) {
+      if (!uc) return 'Unknown Use Case'
+      return uc.name || uc.goal || 'Unnamed Use Case'
+    },
     // Use Case CRUD Operations
     async submitUsecaseForm(formData) {
       if (this.submitting) return
@@ -559,7 +581,8 @@ export default {
         }
         this.closeUsecaseModal()
       } catch (error) {
-        this.toast.error(error.message || 'Failed to save use case')
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        this.toast.error(formatErrorForDisplay(error, 'Failed to save use case. Please try again.'))
       } finally {
         this.submitting = false
       }

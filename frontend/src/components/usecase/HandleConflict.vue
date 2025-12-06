@@ -73,7 +73,7 @@
           <div class="conflict-header">
             <div class="conflict-title">
               <h4>Conflict Group {{ index + 1 }}</h4>
-              <span class="conflict-id">ID: {{ conflict.conflict_id }}</span>
+              <span class="conflict-id">Reference: {{ formatConflictId(conflict.conflict_id) }}</span>
             </div>
             <div class="conflict-actions">
               <button
@@ -97,7 +97,7 @@
               @click="$emit('select-resolution', conflict.conflict_id, getUsecaseId(useCase))"
             >
               <div class="option-header">
-                <span class="option-badge">ID: {{ getUsecaseId(useCase) }}</span>
+                <span class="option-badge">{{ formatUsecaseId(useCase) }}</span>
                 <button
                   class="select-btn"
                   :class="{ selected: selectedResolutions[conflict.conflict_id] === getUsecaseId(useCase) }"
@@ -225,6 +225,29 @@ export default {
       if (uc._id) return String(uc._id)
       if (uc.id) return String(uc.id)
       return ''
+    },
+    // Helper: Format usecase ID to short readable format
+    formatUsecaseId(uc) {
+      if (!uc) return 'UC-???'
+      const id = this.getUsecaseId(uc)
+      if (id.length > 8) {
+        return `UC-${id.substring(0, 8)}...`
+      }
+      return `UC-${id}`
+    },
+    // Helper: Get usecase display name
+    getUsecaseDisplayName(uc) {
+      if (!uc) return 'Unknown Use Case'
+      return uc.name || uc.goal || 'Unnamed Use Case'
+    },
+    // Helper: Format conflict ID to short readable format
+    formatConflictId(conflictId) {
+      if (!conflictId) return 'CONF-???'
+      const id = String(conflictId)
+      if (id.length > 8) {
+        return `CONF-${id.substring(0, 8)}...`
+      }
+      return `CONF-${id}`
     },
   },
 }

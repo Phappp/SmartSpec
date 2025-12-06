@@ -187,7 +187,7 @@
                   <span v-else class="no-project">-</span>
                 </td>
                 <td>
-                  <code class="ip-address">{{ log.ip || 'N/A' }}</code>
+                  <code class="ip-address">{{ log.ip || 'Not available' }}</code>
                 </td>
                 <td>
                   <div class="action-buttons">

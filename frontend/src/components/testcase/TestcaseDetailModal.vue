@@ -341,7 +341,7 @@
                       {{
                         testcase.automation?.last_run_duration
                           ? `${testcase.automation.last_run_duration}s`
-                          : 'N/A'
+                          : 'Not available'
                       }}
                     </div>
                   </div>
@@ -595,7 +595,14 @@ export default {
     }
 
     const getRequirementName = (reqId) => {
-      return `Requirement ${reqId}`
+      // For now, return a shortened ID format
+      // In a full implementation, this would fetch from usecases API
+      if (!reqId) return 'Unknown Requirement'
+      const idStr = String(reqId)
+      if (idStr.length > 12) {
+        return `Use Case ${idStr.substring(0, 8)}...`
+      }
+      return `Use Case ${idStr}`
     }
 
     const getExecutedByName = (executedBy) => {

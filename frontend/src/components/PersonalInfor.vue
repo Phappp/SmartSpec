@@ -259,12 +259,93 @@ export default {
       try {
         const res = await axiosClient.get('/api/auth/me')
         const user = res.data?.data
-        if (!user) return
+        
+        // Debug: Log toàn bộ response để kiểm tra
+        console.log('📥 Full API Response:', res.data)
+        console.log('👤 User data:', user)
+        console.log('📅 User.dob raw:', user?.dob, 'Type:', typeof user?.dob)
+        
+        if (!user) {
+          console.warn('⚠️ No user data in response')
+          return
+        }
 
         let formatted = ''
+        
+        // Xử lý dob từ nhiều format khác nhau
         if (user.dob) {
-          const d = new Date(user.dob)
-          formatted = d.toISOString().split('T')[0]
+          console.log('🔍 Processing dob:', user.dob)
+          
+          // Case 1: Đã là string YYYY-MM-DD
+          if (typeof user.dob === 'string') {
+            if (/^\d{4}-\d{2}-\d{2}$/.test(user.dob)) {
+              // Format YYYY-MM-DD
+              formatted = user.dob
+              console.log('✅ Found YYYY-MM-DD format:', formatted)
+            } else if (/^\d{4}-\d{2}-\d{2}T/.test(user.dob)) {
+              // Format ISO string YYYY-MM-DDTHH:mm:ss.sssZ
+              formatted = user.dob.split('T')[0]
+              console.log('✅ Found ISO format, extracted:', formatted)
+            } else {
+              // Thử parse như ISO string
+              const d = new Date(user.dob)
+              if (!isNaN(d.getTime())) {
+                // Sử dụng UTC để tránh timezone issues
+                const year = d.getUTCFullYear()
+                const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+                const day = String(d.getUTCDate()).padStart(2, '0')
+                formatted = `${year}-${month}-${day}`
+                console.log('✅ Parsed from string (UTC) to:', formatted)
+              } else {
+                console.warn('⚠️ Cannot parse dob string:', user.dob)
+              }
+            }
+          } 
+          // Case 2: Là Date object (nếu backend trả về object)
+          else if (user.dob instanceof Date || (user.dob.constructor && user.dob.constructor.name === 'Date')) {
+            const d = new Date(user.dob)
+            if (!isNaN(d.getTime())) {
+              // Sử dụng UTC để tránh timezone issues
+              const year = d.getUTCFullYear()
+              const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+              const day = String(d.getUTCDate()).padStart(2, '0')
+              formatted = `${year}-${month}-${day}`
+              console.log('✅ Parsed from Date object (UTC) to:', formatted)
+            }
+          }
+          // Case 3: Có thể là object với các field day, month, year
+          else if (typeof user.dob === 'object' && user.dob.day && user.dob.month && user.dob.year) {
+            const { day, month, year } = user.dob
+            formatted = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+            console.log('✅ Constructed from object to:', formatted)
+          }
+          // Case 4: Fallback - thử parse bất kỳ giá trị nào
+          else {
+            const d = new Date(user.dob)
+            if (!isNaN(d.getTime())) {
+              // Sử dụng UTC để tránh timezone issues
+              const year = d.getUTCFullYear()
+              const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+              const day = String(d.getUTCDate()).padStart(2, '0')
+              formatted = `${year}-${month}-${day}`
+              console.log('✅ Fallback parse (UTC) to:', formatted)
+            } else {
+              console.error('❌ Cannot parse dob:', user.dob)
+            }
+          }
+        } else {
+          console.warn('⚠️ user.dob is null, undefined, or empty')
+        }
+
+        // Parse dob để lưu vào localUser.dob object
+        let dobObject = { day: '', month: '', year: '' }
+        if (formatted) {
+          const parts = formatted.split('-')
+          if (parts.length === 3) {
+            const [year, month, day] = parts.map(Number)
+            dobObject = { day, month, year }
+            console.log('✅ Final dobObject:', dobObject)
+          }
         }
 
         this.localUser = {
@@ -273,18 +354,15 @@ export default {
           gender: user.gender || 'female',
           status: user.status || 'ACTIVE',
           avatar_url: user.avatar_url || '',
-          dob: user.dob
-            ? {
-                day: new Date(user.dob).getUTCDate(),
-                month: new Date(user.dob).getUTCMonth() + 1,
-                year: new Date(user.dob).getUTCFullYear(),
-              }
-            : { day: '', month: '', year: '' },
+          dob: dobObject,
         }
         this.formattedDOB = formatted
         this.twoFAEnabled = user.isTwoFactorEnabled || false
+        
+        console.log('✅ Final formattedDOB:', this.formattedDOB)
+        console.log('✅ Final localUser.dob:', this.localUser.dob)
       } catch (err) {
-        console.error('Error fetching user:', err.response?.data || err.message)
+        console.error('❌ Error fetching user:', err.response?.data || err.message)
         this.showNotification({
           type: 'error',
           title: 'Error',
@@ -468,74 +546,6 @@ export default {
     getAvatarColor(name) {
       const colors = ['#4A90E2', '#50E3C2', '#B8E986', '#F5A623', '#D0021B', '#BD10E0']
       return colors[(name?.charCodeAt(0) || 0) % colors.length]
-    },
-    async handleAvatarUpload(e) {
-      const file = e.target.files[0]
-      if (!file) return
-
-      // Validate file
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-      if (!allowedTypes.includes(file.type)) {
-        this.showNotification({
-          type: 'error',
-          title: 'Invalid File',
-          message: 'Only JPEG, PNG, GIF, and WebP images are allowed.',
-        })
-        return
-      }
-
-      // Validate file size (5MB)
-      const maxSize = 5 * 1024 * 1024
-      if (file.size > maxSize) {
-        this.showNotification({
-          type: 'error',
-          title: 'File Too Large',
-          message: 'File size must be less than 5MB.',
-        })
-        return
-      }
-
-      this.isUploadingAvatar = true
-
-      try {
-        // Tạo FormData
-        const formData = new FormData()
-        formData.append('avatar', file)
-
-        // Gọi API upload
-        const response = await axiosClient.post('/api/users/upload-avatar', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        })
-
-        // Cập nhật avatar_url từ response
-        const newAvatarUrl = response.data.data.avatar_url
-        this.localUser.avatar_url = newAvatarUrl
-
-        // 🔥 QUAN TRỌNG: Emit event để thông báo avatar đã thay đổi
-        this.$emit('avatar-updated', {
-          avatar_url: newAvatarUrl,
-          user: this.localUser,
-        })
-
-        this.showNotification({
-          type: 'success',
-          title: 'Success',
-          message: 'Avatar uploaded successfully!',
-        })
-      } catch (err) {
-        console.error('Error uploading avatar:', err.response?.data || err.message)
-        this.showNotification({
-          type: 'error',
-          title: 'Upload Failed',
-          message: err.response?.data?.message || 'Failed to upload avatar.',
-        })
-      } finally {
-        this.isUploadingAvatar = false
-        // Reset file input
-        this.$refs.fileInput.value = ''
-      }
     },
   },
 }

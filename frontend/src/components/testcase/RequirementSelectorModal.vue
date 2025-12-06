@@ -32,7 +32,7 @@
                   v-model="searchQuery"
                   type="text"
                   class="search-input"
-                  placeholder="Search requirements by ID or title..."
+                  placeholder="Search by use case name or description..."
                 />
               </div>
               <div class="filter-controls">
@@ -70,7 +70,7 @@
                     <div class="requirement-header">
                       <div class="requirement-info">
                         <h4 class="requirement-id">
-                          {{ requirement.requirement_id || requirement.id }}
+                          {{ requirement.title || requirement.name || 'Unnamed Requirement' }}
                         </h4>
                         <span :class="['status-badge', requirement.status]">
                           {{ requirement.status }}
@@ -112,7 +112,7 @@
                 <!-- Empty State for Requirements -->
                 <div v-if="filteredRequirements.length === 0 && !loading" class="empty-state">
                   <span class="material-symbols-outlined empty-icon">description</span>
-                  <p>No requirements found</p>
+                  <p>No requirements available. Use cases will appear here once they are created.</p>
                   <span class="empty-hint">Try adjusting your search or filters</span>
                 </div>
               </div>

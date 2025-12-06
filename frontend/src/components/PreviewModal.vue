@@ -111,7 +111,9 @@
                 </span>
               </div>
               <div class="change-details">
-                <span class="entity-id" v-if="change.entity_id"> ID: {{ change.entity_id }} </span>
+                <span class="entity-name" v-if="change.entity_name || change.entity_id">
+                  {{ change.entity_name || formatEntityId(change.entity_id) }}
+                </span>
                 <span class="change-time">
                   {{ formatDate(change.add_at) }}
                 </span>
@@ -529,7 +531,7 @@ export default {
       try {
         const userId = localStorage.getItem('userId')
         if (!userId) {
-          this.toast.error('User ID not found')
+          this.toast.error('Unable to identify user. Please log in again.')
           this.isApproving = false
           return
         }
@@ -613,7 +615,8 @@ export default {
           error.message || 
           'Failed to approve changes'
         
-        this.toast.error(`Approval failed: ${errorMessage}`)
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        this.toast.error(formatErrorForDisplay(error, 'Failed to approve changes. Please try again.'))
       } finally {
         this.isApproving = false
       }
@@ -661,6 +664,20 @@ export default {
       if (!dateString) return ''
       const date = new Date(dateString)
       return date.toLocaleString()
+    },
+
+    formatEntityId(entityId) {
+      if (!entityId) return ''
+      const idStr = String(entityId)
+      // If it's a MongoDB ObjectId (24 hex characters), show shortened version
+      if (idStr.length === 24 && /^[a-f0-9]{24}$/i.test(idStr)) {
+        return `ID: ${idStr.substring(0, 8)}...`
+      }
+      // Otherwise show full ID if short, or truncated if long
+      if (idStr.length > 16) {
+        return `ID: ${idStr.substring(0, 12)}...`
+      }
+      return `ID: ${idStr}`
     },
 
     resetModalState() {
@@ -736,7 +753,8 @@ export default {
         this.toast.success(`Successfully reverted ${count} change(s)`)
       } catch (error) {
         console.error('Error reverting changes:', error)
-        this.toast.error('Failed to revert some changes')
+        const { formatErrorForDisplay } = require('@/utils/errorMessages')
+        this.toast.error(formatErrorForDisplay(error, 'Failed to revert some changes. Please try again.'))
         // Still refresh and clear selection
         await this.refreshPreviewData()
         this.selectedChanges = []
@@ -1168,6 +1186,7 @@ export default {
   border-radius: 8px;
   padding: 16px;
   background: #f8fafc;
+  display:none;
 }
 
 .change-summary h4 {

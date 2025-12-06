@@ -142,7 +142,8 @@ class AuthController extends BaseController {
       } = req.body;
 
       const { day, month, year } = dob;
-      const newDob = new Date(year, month - 1, day);
+      // Sử dụng UTC để tránh timezone issues - tạo Date với UTC time 00:00:00
+      const newDob = new Date(Date.UTC(year, month - 1, day));
       console.log(req.body);
 
       const registerRequestBody = new RegisterRequestBody(req.body);

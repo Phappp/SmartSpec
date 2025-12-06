@@ -61,7 +61,8 @@ class UserController extends BaseController {
 
         const { name, dob, gender, avatar_url, status } = req.body;
         const { day, month, year } = dob;
-        const newDob = new Date(year, month - 1, day);
+        // Sử dụng UTC để tránh timezone issues - tạo Date với UTC time 00:00:00
+        const newDob = new Date(Date.UTC(year, month - 1, day));
         const updateProfileRequestBody = new UpdateProfileRequestBody(req.body);
         const validationResult = await updateProfileRequestBody.validate();
 
@@ -245,7 +246,8 @@ class UserController extends BaseController {
         const { name, dob, gender, avatar_url, status } = req.body;
 
         const { day, month, year } = dob;
-        const newDob = new Date(year, month - 1, day);
+        // Sử dụng UTC để tránh timezone issues - tạo Date với UTC time 00:00:00
+        const newDob = new Date(Date.UTC(year, month - 1, day));
         const updateProfileRequestBody = new UpdateProfileRequestBody(req.body);
         const validationResult = await updateProfileRequestBody.validate();
 

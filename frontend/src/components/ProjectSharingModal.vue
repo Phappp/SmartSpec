@@ -416,7 +416,7 @@ async function loadData() {
     project.value = projectRes.data?.data?.project || null
 
     if (!project.value) {
-      addToast('Project not found', 'error')
+      addToast('Project not found. It may have been deleted or you may not have access.', 'error')
       return
     }
 
@@ -430,7 +430,7 @@ async function loadData() {
     await loadProjectInvites()
   } catch (err) {
     console.error('Error loading project data:', err)
-    addToast('Failed to load project data', 'error')
+    addToast('Unable to load project information. Please refresh the page or try again later.', 'error')
   }
 }
 
@@ -490,7 +490,7 @@ async function loadProjectInvites() {
     }
   } catch (err) {
     console.error('Error loading project invites:', err)
-    addToast('Failed to load project members', 'error')
+    addToast('Unable to load project members. Please refresh the page.', 'error')
   }
 }
 
@@ -502,7 +502,7 @@ async function handleSearch() {
       members.value = searchRes.data?.data || []
     } catch (err) {
       console.error('Error searching members:', err)
-      addToast('Failed to search members', 'error')
+      addToast('Unable to search members. Please try again.', 'error')
     }
   } else {
     isSearching.value = false
@@ -534,7 +534,7 @@ async function handleEmailInput() {
       userSuggestions.value = []
 
       if (err.response?.status !== 400) {
-        addToast('Failed to search users', 'error')
+        addToast('Unable to search users. Please check your connection and try again.', 'error')
       }
     } finally {
       isSearchingUsers.value = false
@@ -559,13 +559,13 @@ function filterMembers() {
 
 async function handleInviteMemberSubmit() {
   if (!inviteForm.email) {
-    addToast('Please enter an email', 'error')
+    addToast('Please enter an email address to invite.', 'error')
     return
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailRegex.test(inviteForm.email)) {
-    addToast('Please enter a valid email address', 'error')
+    addToast('Please enter a valid email address (e.g., user@example.com).', 'error')
     return
   }
 
@@ -629,7 +629,7 @@ function confirmRemoveMember(member) {
     `Are you sure you want to remove ${member.name} from the project? This action cannot be undone.`,
     async () => {
       if (isOwner.value && member.id === currentUser.value._id) {
-        addToast('Owner cannot remove themselves.', 'error')
+        addToast('Owners cannot remove themselves. Please transfer ownership first.', 'error')
         return
       }
 
@@ -639,7 +639,7 @@ function confirmRemoveMember(member) {
         addToast('Member removed successfully', 'success')
       } catch (err) {
         console.error('Error removing member:', err)
-        addToast('Failed to remove member', 'error')
+        addToast('Unable to remove member. Please try again.', 'error')
       }
     }
   )
@@ -647,7 +647,7 @@ function confirmRemoveMember(member) {
 
 function handleLeaveProject() {
   if (isOwner.value) {
-    addToast('Owners must transfer ownership before leaving.', 'error')
+    addToast('Owners must transfer ownership to another member before leaving the project.', 'error')
     return
   }
 
@@ -661,7 +661,7 @@ function handleLeaveProject() {
         emit('close')
       } catch (err) {
         console.error('Error leaving project:', err)
-        addToast('Failed to leave project', 'error')
+        addToast('Unable to leave project. Please try again or contact support if the problem persists.', 'error')
       }
     }
   )
