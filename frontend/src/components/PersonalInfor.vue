@@ -288,7 +288,7 @@ export default {
               console.log('✅ Found ISO format, extracted:', formatted)
             } else {
               // Thử parse như ISO string
-              const d = new Date(user.dob)
+          const d = new Date(user.dob)
               if (!isNaN(d.getTime())) {
                 // Sử dụng UTC để tránh timezone issues
                 const year = d.getUTCFullYear()

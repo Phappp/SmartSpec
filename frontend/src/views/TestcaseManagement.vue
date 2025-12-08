@@ -96,11 +96,14 @@
 
       <!-- Export Modal -->
       <ExportOptionsPanel
-        v-if="showExportModal"
+        v-if="showExportModal && project._id"
         :project-id="project._id"
         :version-id="selectedVersionId"
         :filters="currentFilters"
         :loading="exportLoading"
+        :test-cases="testCases"
+        :requirements="requirements"
+        :selected-test-cases="selectedTestCases"
         @export="handleExport"
         @close="showExportModal = false"
         @clearFilters="clearFilters"
@@ -108,8 +111,8 @@
       <div class="export-section">
         <button
           class="btn-secondary export-btn"
-          @click="showExportModal = true"
-          :disabled="loading"
+          @click="openExportModal"
+          :disabled="loading || !project._id"
         >
           <span class="material-symbols-outlined">download</span>
           Export Test Cases
@@ -174,6 +177,40 @@
           </button>
         </div>
         <div class="view-actions">
+          <!-- Column Visibility Toggle -->
+          <div class="column-visibility-menu">
+            <button class="btn-icon" @click="showColumnMenu = !showColumnMenu" title="Column Options">
+              <span class="material-symbols-outlined">view_column</span>
+            </button>
+            <div v-if="showColumnMenu" class="column-menu-dropdown" @click.stop>
+              <div class="column-menu-header">
+                <h4>Show/Hide Columns</h4>
+                <button class="btn-close-menu" @click="showColumnMenu = false">
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              <div class="column-menu-content">
+                <label
+                  v-for="column in columnOptions"
+                  :key="column.key"
+                  class="column-menu-item"
+                  :class="{ disabled: column.required }"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="visibleColumns[column.key]"
+                    :disabled="column.required"
+                    @change="toggleColumn(column.key)"
+                  />
+                  <span class="column-label">{{ column.label }}</span>
+                  <span v-if="column.required" class="required-badge">Required</span>
+                </label>
+              </div>
+              <div class="column-menu-footer">
+                <button class="btn-reset-columns" @click="resetColumns">Reset to Default</button>
+              </div>
+            </div>
+          </div>
           <button class="btn-icon" @click="loadTestCases" title="Refresh" :disabled="loading">
             <span class="material-symbols-outlined" :class="{ spinning: loading }">refresh</span>
           </button>
@@ -276,12 +313,12 @@
                 </th>
                 <th class="id-column">ID</th>
                 <th class="title-column">Title</th>
-                <th class="type-column">Type</th>
-                <th class="priority-column">Priority</th>
+                <th v-if="visibleColumns.type" class="type-column">Type</th>
+                <th v-if="visibleColumns.priority" class="priority-column">Priority</th>
                 <th class="status-column">Status</th>
-                <th class="tables-column">Database Tables</th>
-                <th class="requirements-column">Requirements</th>
-                <th class="date-column">Last Executed</th>
+                <th v-if="visibleColumns.database_tables" class="tables-column">Database Tables</th>
+                <th v-if="visibleColumns.requirements" class="requirements-column">Requirements</th>
+                <th v-if="visibleColumns.last_executed" class="date-column">Last Executed</th>
                 <th class="actions-column">Actions</th>
               </tr>
             </thead>
@@ -315,12 +352,12 @@
                     </div>
                   </div>
                 </td>
-                <td class="type-column">
+                <td v-if="visibleColumns.type" class="type-column">
                   <span class="type-badge" :class="testcase.test_type || 'integration'">
                     {{ testcase.test_type || 'integration' }}
                   </span>
                 </td>
-                <td class="priority-column">
+                <td v-if="visibleColumns.priority" class="priority-column">
                   <span class="priority-badge" :class="testcase.priority || 'medium'">
                     {{ testcase.priority || 'medium' }}
                   </span>
@@ -335,7 +372,7 @@
                     </span>
                   </div>
                 </td>
-                <td class="tables-column">
+                <td v-if="visibleColumns.database_tables" class="tables-column">
                   <div class="database-tags">
                     <span
                       v-for="table in testcase.database_tables || []"
@@ -352,7 +389,7 @@
                     </span>
                   </div>
                 </td>
-                <td class="requirements-column">
+                <td v-if="visibleColumns.requirements" class="requirements-column">
                   <div class="requirement-tags">
                     <span
                       v-for="reqId in testcase.source_requirement_ids || []"
@@ -373,7 +410,7 @@
                     </span>
                   </div>
                 </td>
-                <td class="date-column">
+                <td v-if="visibleColumns.last_executed" class="date-column">
                   <span class="last-executed">
                     {{ formatDate(testcase.executed_at) || 'Never' }}
                   </span>
@@ -570,6 +607,7 @@ import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
 import { useActiveMembers } from '@/utils/useActiveMembers'
 import { getProjectDetail, usecaseApi, getDatabasesByVersion } from '@/api/project'
 import { testcaseApi } from '@/api/testcase'
+import axiosClient from '@/utils/axiosClient'
 import {
   saveSelectedVersion,
   getSelectedOrDefaultVersion,
@@ -607,6 +645,41 @@ export default {
     const loading = ref(false)
     const exportLoading = ref(false)
     const showExportPanel = ref(false)
+    const showColumnMenu = ref(false)
+
+    // Column visibility
+    const columnOptions = [
+      { key: 'type', label: 'Type', required: false },
+      { key: 'priority', label: 'Priority', required: false },
+      { key: 'database_tables', label: 'Database Tables', required: false },
+      { key: 'requirements', label: 'Requirements', required: false },
+      { key: 'last_executed', label: 'Last Executed', required: false },
+    ]
+
+    const defaultVisibleColumns = {
+      type: true,
+      priority: true,
+      database_tables: true,
+      requirements: true,
+      last_executed: true,
+    }
+
+    // Load column visibility function (must be defined before use)
+    const loadColumnVisibility = () => {
+      try {
+        const saved = localStorage.getItem('testcaseColumnVisibility')
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          // Merge with defaults to ensure all keys exist
+          return { ...defaultVisibleColumns, ...parsed }
+        }
+      } catch (error) {
+        console.error('Error loading column visibility:', error)
+      }
+      return { ...defaultVisibleColumns }
+    }
+
+    const visibleColumns = ref(loadColumnVisibility())
 
     // UI states
     const showGenerateModal = ref(false)
@@ -896,13 +969,55 @@ export default {
         exportProgress.value.status = 'exporting'
         exportProgress.value.progress = 30
 
-        // Chỉ xử lý export test cases
-        const result = await testcaseApi.handleExcelExport(
-          testcaseApi.exportTestCasesToExcel,
-          project.value._id,
-          exportConfig.options,
-          `testcases-${project.value._id}-${Date.now()}.xlsx`
-        )
+        // Check if custom sheets and fields are provided
+        if (exportConfig.sheets && exportConfig.fields) {
+          // Custom export with sheets and fields - use POST request
+          try {
+            const response = await axiosClient.post(
+              `/api/testcases/projects/${project.value._id}/export-excel`,
+              {
+                versionId: exportConfig.options.versionId,
+                sheets: exportConfig.sheets,
+                fields: exportConfig.fields,
+                ...exportConfig.options,
+              },
+              {
+                responseType: 'blob',
+              }
+            )
+
+            // Download the file
+            const url = window.URL.createObjectURL(new Blob([response.data]))
+            const link = document.createElement('a')
+            link.href = url
+            link.setAttribute('download', `testcases-${project.value._id}-${Date.now()}.xlsx`)
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+            window.URL.revokeObjectURL(url)
+          } catch (error) {
+            throw error
+          }
+        } else {
+          // Default export - use GET request
+          const exportParams = {
+            ...exportConfig.options,
+          }
+
+          // Handle different selection modes
+          if (exportConfig.selectionMode === 'selected' && exportConfig.options.testCaseIds) {
+            exportParams.testCaseIds = exportConfig.options.testCaseIds
+          } else if (exportConfig.selectionMode === 'usecase' && exportConfig.options.requirementIds) {
+            exportParams.requirementIds = exportConfig.options.requirementIds
+          }
+
+          const result = await testcaseApi.handleExcelExport(
+            testcaseApi.exportTestCasesToExcel,
+            project.value._id,
+            exportParams,
+            `testcases-${project.value._id}-${Date.now()}.xlsx`
+          )
+        }
 
         exportProgress.value.progress = 100
         exportProgress.value.status = 'completed'
@@ -1350,6 +1465,36 @@ export default {
       }
     }
 
+    const openExportModal = () => {
+      if (!project.value._id) {
+        toast.warning('Please wait for project data to load')
+        return
+      }
+      showExportModal.value = true
+    }
+
+    // Column visibility methods
+    const saveColumnVisibility = () => {
+      try {
+        localStorage.setItem('testcaseColumnVisibility', JSON.stringify(visibleColumns.value))
+      } catch (error) {
+        console.error('Error saving column visibility:', error)
+      }
+    }
+
+    const toggleColumn = (columnKey) => {
+      if (visibleColumns.value[columnKey] !== undefined) {
+        visibleColumns.value[columnKey] = !visibleColumns.value[columnKey]
+        saveColumnVisibility()
+      }
+    }
+
+    const resetColumns = () => {
+      visibleColumns.value = { ...defaultVisibleColumns }
+      saveColumnVisibility()
+      toast.info('Column visibility reset to default')
+    }
+
     const loadAllData = async () => {
       loading.value = true
       try {
@@ -1362,6 +1507,13 @@ export default {
         toast.error('Failed to load project data')
       } finally {
         loading.value = false
+      }
+    }
+
+    // Close column menu when clicking outside
+    const handleClickOutsideColumnMenu = (event) => {
+      if (showColumnMenu.value && !event.target.closest('.column-visibility-menu')) {
+        showColumnMenu.value = false
       }
     }
 
@@ -1380,6 +1532,9 @@ export default {
         socket.on('version_event', handleVersionEvent)
         console.log('✅ Version socket listeners initialized for TestcaseManagement')
       }
+
+      // Add click outside listener for column menu
+      document.addEventListener('click', handleClickOutsideColumnMenu)
     })
 
     onUnmounted(() => {
@@ -1392,6 +1547,9 @@ export default {
       if (socket) {
         socket.off('version_event', handleVersionEvent)
       }
+
+      // Remove click outside listener
+      document.removeEventListener('click', handleClickOutsideColumnMenu)
     })
 
     // Watchers
@@ -1468,6 +1626,11 @@ export default {
       //Export
       showExportModal,
 
+      // Column visibility
+      showColumnMenu,
+      visibleColumns,
+      columnOptions,
+
       // Methods
       handleVersionSelect,
       navigateToUsecase,
@@ -1499,6 +1662,9 @@ export default {
       getRequirementName,
       getStatusIcon,
       getTestcaseIndex,
+      toggleColumn,
+      resetColumns,
+      openExportModal,
     }
   },
 }
@@ -2492,5 +2658,140 @@ td {
 .export-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Column Visibility Menu */
+.column-visibility-menu {
+  position: relative;
+}
+
+.column-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border-color);
+  min-width: 280px;
+  z-index: 1000;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.column-menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.column-menu-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.btn-close-menu {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.btn-close-menu:hover {
+  background: var(--background-color);
+  color: var(--text-primary);
+}
+
+.column-menu-content {
+  padding: 8px 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.column-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.column-menu-item:hover:not(.disabled) {
+  background: var(--background-color);
+}
+
+.column-menu-item.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.column-menu-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #1a365d;
+}
+
+.column-menu-item.disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
+.column-label {
+  flex: 1;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.required-badge {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.column-menu-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.btn-reset-columns {
+  width: 100%;
+  padding: 8px 16px;
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-reset-columns:hover {
+  background: var(--border-color);
+  border-color: #1a365d;
+  color: #1a365d;
 }
 </style>

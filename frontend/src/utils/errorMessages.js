@@ -104,3 +104,4 @@ export function formatErrorForDisplay(error, defaultMessage = 'An error occurred
   return message || defaultMessage
 }
 
+

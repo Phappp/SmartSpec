@@ -475,12 +475,12 @@ export class TestcaseGeminiService {
 
         // Số lượng test cases cho mỗi loại
         const counts = {
-        'integration': 3,
-        'api': 2,
-        'ui': 1,
-        'performance': 1,  
-        'security': 2      
-    };
+            'integration': 3,
+            'api': 2,
+            'ui': 1,
+            'performance': 1,
+            'security': 2
+        };
 
         for (const testType of testTypes) {
             try {
@@ -510,8 +510,10 @@ export class TestcaseGeminiService {
      */
     private createMixedPrompt(requirement: any, databaseSchema: any, testType: string, language: string): string {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+        // Ensure id is set correctly - use _id if id doesn't exist
+        const requirementId = requirement.id || requirement._id ? String(requirement._id || requirement.id) : '';
         const simplifiedRequirement = {
-            id: requirement.id,
+            id: requirementId,
             name: requirement.name,
             role: requirement.role,
             goal: requirement.goal,
@@ -529,8 +531,9 @@ export class TestcaseGeminiService {
      * Process a single batch of requirements
      */
     private async processBatch(requirements: any[], databaseSchema: any, language: string, testType: string): Promise<any[]> {
+        // Ensure each requirement has a valid id field (use _id if id doesn't exist)
         const simplifiedRequirements = requirements.map(req => ({
-            id: req.id,
+            id: req.id || (req._id ? String(req._id) : ''),
             name: req.name,
             role: req.role,
             goal: req.goal,
@@ -767,8 +770,62 @@ export class TestcaseGeminiService {
      */
     private validateRequirementIds(ids: string[] | undefined, requirements: any[]): string[] {
         if (!ids || !Array.isArray(ids)) return [];
-        const validIds = new Set(requirements.map(r => r._id ? String(r._id) : ''));
-        return ids.filter(id => validIds.has(id));
+
+        // Create a map of all possible ID formats for each requirement
+        const validIdsSet = new Set<string>();
+        requirements.forEach(r => {
+            if (r._id) {
+                const objectIdStr = String(r._id);
+                validIdsSet.add(objectIdStr);
+                // Also add ObjectId.toString() format
+                if (objectIdStr.length === 24) { // MongoDB ObjectId format
+                    validIdsSet.add(objectIdStr);
+                }
+            }
+            // Support requirement.id if it exists (for backward compatibility)
+            if (r.id && String(r.id) !== String(r._id || '')) {
+                validIdsSet.add(String(r.id));
+            }
+            // Support requirement_id field
+            if (r.requirement_id) {
+                validIdsSet.add(String(r.requirement_id));
+            }
+        });
+
+        // Filter and map IDs - try to match with any valid format
+        const validatedIds: string[] = [];
+        ids.forEach(id => {
+            const idStr = String(id).trim();
+            if (!idStr) return;
+
+            // Direct match
+            if (validIdsSet.has(idStr)) {
+                // Map to ObjectId string format for storage
+                const matchedReq = requirements.find(r => {
+                    const reqIdStr = String(r._id || '');
+                    const reqIdAlt = String(r.id || '');
+                    const reqIdReq = String(r.requirement_id || '');
+                    return reqIdStr === idStr || reqIdAlt === idStr || reqIdReq === idStr;
+                });
+                if (matchedReq && matchedReq._id) {
+                    validatedIds.push(String(matchedReq._id));
+                }
+            } else {
+                // Try case-insensitive match
+                const matchedReq = requirements.find(r => {
+                    const reqIdStr = String(r._id || '').toLowerCase();
+                    const reqIdAlt = String(r.id || '').toLowerCase();
+                    const reqIdReq = String(r.requirement_id || '').toLowerCase();
+                    const searchId = idStr.toLowerCase();
+                    return reqIdStr === searchId || reqIdAlt === searchId || reqIdReq === searchId;
+                });
+                if (matchedReq && matchedReq._id) {
+                    validatedIds.push(String(matchedReq._id));
+                }
+            }
+        });
+
+        return validatedIds;
     }
 
     /**

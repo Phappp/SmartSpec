@@ -11,6 +11,7 @@ export interface ExportFilters {
     priority?: string;
     database_tables?: string[];
     source_requirement_ids?: string[];
+    testCaseIds?: string[]; // Specific test case IDs to export
     date_range?: {
         start: Date;
         end: Date;
@@ -53,6 +54,68 @@ export class TestcaseExportService {
         return Buffer.from(buffer);
     }
 
+    /**
+     * Export test cases to Excel with custom sheets and fields
+     */
+    async exportTestCasesToExcelWithSheets(
+        projectId: string,
+        versionId: string | undefined,
+        sheets: Array<{ name: string; testCaseIds: string[] }>,
+        fields: string[],
+        filters: ExportFilters = {}
+    ): Promise<Buffer> {
+        console.log(`📊 Exporting test cases with custom sheets for project: ${projectId}`, {
+            sheetsCount: sheets.length,
+            fieldsCount: fields.length
+        });
+
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'Test Management System';
+        workbook.created = new Date();
+
+        // Get all test cases that are in any sheet
+        const allTestCaseIds = new Set<string>();
+        sheets.forEach(sheet => {
+            sheet.testCaseIds.forEach(id => allTestCaseIds.add(String(id)));
+        });
+
+        // Fetch all test cases
+        const query: any = {
+            project_id: projectId,
+            _id: { $in: Array.from(allTestCaseIds) }
+        };
+        if (versionId) query.version_id = versionId;
+
+        const allTestCases = await Testcase.find(query)
+            .populate('created_by', 'name email')
+            .populate('executed_by', 'name email')
+            .lean();
+
+        // Create a map for quick lookup
+        const testCaseMap = new Map<string, any>();
+        allTestCases.forEach(tc => {
+            testCaseMap.set(String(tc._id), tc);
+        });
+
+        // Create sheets
+        for (const sheetConfig of sheets) {
+            const sheetTestCases = sheetConfig.testCaseIds
+                .map(id => testCaseMap.get(String(id)))
+                .filter(tc => tc !== undefined);
+
+            if (sheetTestCases.length > 0) {
+                await this.createCustomSheet(workbook, sheetConfig.name, sheetTestCases, fields);
+            }
+        }
+
+        // Create Status Summary Sheet
+        await this.createStatusSummarySheet(workbook, allTestCases);
+
+        // Generate buffer
+        const buffer = await workbook.xlsx.writeBuffer();
+        return Buffer.from(buffer);
+    }
+
     // ==================== PRIVATE METHODS ====================
 
     private async getTestCasesWithFilters(
@@ -63,11 +126,19 @@ export class TestcaseExportService {
         const query: any = { project_id: projectId };
 
         if (versionId) query.version_id = versionId;
-        if (filters.test_type) query.test_type = filters.test_type;
-        if (filters.status) query.status = filters.status;
-        if (filters.priority) query.priority = filters.priority;
-        if (filters.database_tables) query.database_tables = { $in: filters.database_tables };
-        if (filters.source_requirement_ids) query.source_requirement_ids = { $in: filters.source_requirement_ids };
+        
+        // If specific test case IDs are provided, use them (highest priority)
+        if (filters.testCaseIds && filters.testCaseIds.length > 0) {
+            query._id = { $in: filters.testCaseIds };
+        } else {
+            // Otherwise, apply other filters
+            if (filters.test_type) query.test_type = filters.test_type;
+            if (filters.status) query.status = filters.status;
+            if (filters.priority) query.priority = filters.priority;
+            if (filters.database_tables) query.database_tables = { $in: filters.database_tables };
+            if (filters.source_requirement_ids) query.source_requirement_ids = { $in: filters.source_requirement_ids };
+        }
+        
         if (filters.date_range) {
             query.created_at = {
                 $gte: filters.date_range.start,
@@ -592,6 +663,256 @@ export class TestcaseExportService {
                 insufficient: coverageStats.filter((s: any) => s.coverage_score === "insufficient").length
             }
         };
+    }
+
+    /**
+     * Create a custom sheet with selected fields
+     */
+    private async createCustomSheet(
+        workbook: ExcelJS.Workbook,
+        sheetName: string,
+        testCases: any[],
+        fields: string[]
+    ): Promise<void> {
+        // Field mapping
+        const fieldMap: { [key: string]: { header: string; width: number; getValue: (tc: any) => any } } = {
+            'test_case_id': {
+                header: 'Test Case ID',
+                width: 15,
+                getValue: (tc) => String(tc._id || '')
+            },
+            'test_case_name': {
+                header: 'Test Case Name/Title',
+                width: 40,
+                getValue: (tc) => tc.title || ''
+            },
+            'description': {
+                header: 'Description',
+                width: 50,
+                getValue: (tc) => tc.description || ''
+            },
+            'module_feature': {
+                header: 'Module/Feature',
+                width: 30,
+                getValue: (tc) => {
+                    // Get usecase names from requirement IDs
+                    if (tc.source_requirement_ids && tc.source_requirement_ids.length > 0) {
+                        return tc.source_requirement_ids.join(', ');
+                    }
+                    return '';
+                }
+            },
+            'test_priority': {
+                header: 'Test Priority',
+                width: 15,
+                getValue: (tc) => this.formatEnumValue(tc.priority) || ''
+            },
+            'preconditions': {
+                header: 'Preconditions',
+                width: 40,
+                getValue: (tc) => {
+                    if (Array.isArray(tc.preconditions)) {
+                        return tc.preconditions.join('; ');
+                    }
+                    return '';
+                }
+            },
+            'test_data': {
+                header: 'Test Data',
+                width: 50,
+                getValue: (tc) => {
+                    if (Array.isArray(tc.test_data) && tc.test_data.length > 0) {
+                        return tc.test_data.map((td: any) => {
+                            const name = td.name || 'Unnamed';
+                            const input = JSON.stringify(td.input_payload || {});
+                            return `${name}: ${input}`;
+                        }).join(' | ');
+                    }
+                    return '';
+                }
+            },
+            'test_steps': {
+                header: 'Test Steps',
+                width: 60,
+                getValue: (tc) => {
+                    if (Array.isArray(tc.steps) && tc.steps.length > 0) {
+                        return tc.steps.map((step: any, index: number) => {
+                            const stepNum = step.step_number || (index + 1);
+                            const action = step.action || '';
+                            // Format: "1. Action text." (with period at end if not present)
+                            let formattedAction = action.trim();
+                            if (formattedAction && !formattedAction.endsWith('.') && !formattedAction.endsWith('!') && !formattedAction.endsWith('?')) {
+                                formattedAction += '.';
+                            }
+                            return `${stepNum}. ${formattedAction}`;
+                        }).join('\n');
+                    }
+                    return '';
+                }
+            },
+            'expected_result': {
+                header: 'Expected Result',
+                width: 50,
+                getValue: (tc) => {
+                    if (tc.expected_results) {
+                        const results: string[] = [];
+                        if (Array.isArray(tc.expected_results.ui_level)) {
+                            results.push(`UI: ${tc.expected_results.ui_level.join('; ')}`);
+                        }
+                        if (tc.expected_results.api_level?.status_code) {
+                            results.push(`API Status: ${tc.expected_results.api_level.status_code}`);
+                        }
+                        if (Array.isArray(tc.expected_results.database_level)) {
+                            results.push(`DB: ${tc.expected_results.database_level.join('; ')}`);
+                        }
+                        if (tc.expected_results.business_level) {
+                            results.push(`Business: ${tc.expected_results.business_level}`);
+                        }
+                        return results.join(' | ');
+                    }
+                    return '';
+                }
+            },
+            'actual_result': {
+                header: 'Actual Result',
+                width: 50,
+                getValue: (tc) => {
+                    if (tc.execution_logs && Array.isArray(tc.execution_logs) && tc.execution_logs.length > 0) {
+                        const latestLog = tc.execution_logs[tc.execution_logs.length - 1];
+                        if (latestLog.actual_result) {
+                            return latestLog.actual_result;
+                        }
+                        if (latestLog.result) {
+                            return JSON.stringify(latestLog.result);
+                        }
+                    }
+                    return '';
+                }
+            },
+            'status': {
+                header: 'Status',
+                width: 15,
+                getValue: (tc) => this.formatEnumValue(tc.status) || ''
+            }
+        };
+
+        // Build columns based on selected fields
+        const columns = fields
+            .filter(field => fieldMap[field])
+            .map(field => ({
+                header: fieldMap[field].header,
+                key: field,
+                width: fieldMap[field].width
+            }));
+
+        if (columns.length === 0) {
+            console.warn('No valid fields selected, using default fields');
+            columns.push(
+                { header: 'Test Case ID', key: 'test_case_id', width: 15 },
+                { header: 'Test Case Name/Title', key: 'test_case_name', width: 40 }
+            );
+        }
+
+        const sheet = workbook.addWorksheet(sheetName);
+        sheet.columns = columns;
+
+        // Apply header style
+        this.applyHeaderStyle(sheet, '4472C4');
+
+        // Add rows
+        testCases.forEach((testCase, index) => {
+            const rowData: any = {};
+            fields.forEach(field => {
+                if (fieldMap[field]) {
+                    rowData[field] = fieldMap[field].getValue(testCase);
+                }
+            });
+            const row = sheet.addRow(rowData);
+
+            // Enable text wrapping for test_steps column if present
+            if (fields.includes('test_steps')) {
+                const stepsCell = row.getCell('test_steps');
+                stepsCell.alignment = { 
+                    vertical: 'top', 
+                    wrapText: true 
+                };
+            }
+
+            // Apply status and priority styling if status field is present
+            if (fields.includes('status')) {
+                this.applyStatusStyle(row.getCell('status'), testCase.status);
+            }
+            if (fields.includes('test_priority')) {
+                this.applyPriorityStyle(row.getCell('test_priority'), testCase.priority);
+            }
+
+            // Alternate row coloring
+            if (index % 2 === 0) {
+                row.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'F8F9FA' }
+                };
+            }
+        });
+
+        // Auto-filter
+        sheet.autoFilter = {
+            from: { row: 1, column: 1 },
+            to: { row: sheet.rowCount, column: sheet.columnCount }
+        };
+    }
+
+    /**
+     * Create Status Summary Sheet
+     */
+    private async createStatusSummarySheet(
+        workbook: ExcelJS.Workbook,
+        testCases: any[]
+    ): Promise<void> {
+        const sheet = workbook.addWorksheet('Status Summary');
+
+        // Calculate statistics
+        const statusCounts: { [key: string]: number } = {};
+        testCases.forEach((tc) => {
+            const status = tc.status || 'not_executed';
+            statusCounts[status] = (statusCounts[status] || 0) + 1;
+        });
+
+        // Define columns
+        sheet.columns = [
+            { header: 'Status', key: 'status', width: 20 },
+            { header: 'Task(số lượng fail/pass)', key: 'count', width: 30 }
+        ];
+
+        // Apply header style
+        this.applyHeaderStyle(sheet, '4472C4');
+
+        // Add rows for each status (prioritize pass and fail)
+        const statusOrder = ['passed', 'failed', 'blocked', 'in_progress', 'not_executed'];
+        statusOrder.forEach((status) => {
+            if (statusCounts[status]) {
+                const row = sheet.addRow({
+                    status: this.formatEnumValue(status),
+                    count: statusCounts[status]
+                });
+
+                // Apply status color
+                if (status === 'passed') {
+                    row.getCell('status').fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'D1FAE5' }
+                    };
+                } else if (status === 'failed') {
+                    row.getCell('status').fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'FEE2E2' }
+                    };
+                }
+            }
+        });
     }
 
 }

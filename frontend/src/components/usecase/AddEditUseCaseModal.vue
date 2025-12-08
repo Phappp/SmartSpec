@@ -614,6 +614,7 @@ export default {
   data() {
     return {
       localForm: this.getEmptyForm(),
+      originalForm: null, // Lưu dữ liệu ban đầu để so sánh
       currentStep: 1,
       fieldErrors: {},
       showSuggestion: false,
@@ -707,9 +708,14 @@ export default {
     usecaseData: {
       handler(newData) {
         if (newData && Object.keys(newData).length > 0) {
-          this.localForm = { ...this.getEmptyForm(), ...this.normalizeFormData(newData) }
+          const normalized = this.normalizeFormData(newData)
+          this.localForm = { ...this.getEmptyForm(), ...normalized }
+          // Lưu bản gốc đã được clean để so sánh chính xác khi submit
+          // Sử dụng cleanFormData để đảm bảo format giống nhau
+          this.originalForm = this.cleanFormDataForComparison(this.localForm)
         } else {
           this.localForm = this.getEmptyForm()
+          this.originalForm = null
         }
         // Reset step when opening with new data
         this.currentStep = 1
@@ -724,6 +730,7 @@ export default {
       // Reset form state when closing
       this.currentStep = 1
       this.fieldErrors = {}
+      this.originalForm = null
     },
 
     updateRoleName(value) {
@@ -742,12 +749,6 @@ export default {
       if (this.isEditing && !this.localForm._id && !this.localForm.id) {
         console.warn('⚠️ No usecase ID provided — skipping submit.')
         return
-      }
-      
-      // Remove id field if _id exists (backend uses _id)
-      const formData = { ...this.localForm }
-      if (formData._id && formData.id) {
-        delete formData.id
       }
 
       // Final validation
@@ -781,6 +782,17 @@ export default {
       // Remove id field if _id exists (backend uses _id)
       if (cleanedForm._id && cleanedForm.id) {
         delete cleanedForm.id
+      }
+
+      // ✅ KIỂM TRA: Nếu đang edit và không có thay đổi, chỉ đóng modal
+      if (this.isEditing && this.originalForm) {
+        const originalCleaned = this.cleanFormDataForComparison(this.originalForm)
+        const hasChanges = this.hasFormChanged(originalCleaned, cleanedForm)
+        if (!hasChanges) {
+          console.log('ℹ️ No changes detected, closing modal without API call')
+          this.close()
+          return
+        }
       }
       
       console.log('📤 Data being sent to BE:', JSON.stringify(cleanedForm, null, 2))
@@ -1046,6 +1058,117 @@ export default {
       return this.localForm.related_usecases.some(
         (id, index) => index !== currentIndex && String(id) === String(usecaseId)
       )
+    },
+
+    // Clean form data để so sánh (tương tự cleanFormData nhưng không thay đổi ID)
+    cleanFormDataForComparison(form) {
+      const cleaned = { ...form }
+
+      // Clean array fields - đảm bảo luôn là array và trim
+      const arrayFields = [
+        'tasks',
+        'inputs',
+        'outputs',
+        'preconditions',
+        'postconditions',
+        'triggers',
+        'rules',
+        'constraints',
+        'exceptions',
+        'stakeholders',
+        'related_usecases',
+      ]
+
+      arrayFields.forEach((field) => {
+        if (!Array.isArray(cleaned[field])) {
+          cleaned[field] = []
+        } else {
+          cleaned[field] = cleaned[field]
+            .map((item) => (typeof item === 'string' ? item.trim() : String(item).trim()))
+            .filter((item) => item && item !== '')
+        }
+      })
+
+      // Đảm bảo tasks có ít nhất một item
+      if (cleaned.tasks.length === 0) {
+        cleaned.tasks = ['']
+      }
+
+      // Normalize string fields
+      const stringFields = ['name', 'goal', 'reason', 'context', 'feedback']
+      stringFields.forEach((field) => {
+        cleaned[field] = (cleaned[field] || '').trim()
+      })
+
+      // Normalize priority
+      if (!['low', 'medium', 'high'].includes(cleaned.priority)) {
+        cleaned.priority = 'medium'
+      }
+
+      // Normalize role
+      if (cleaned.role) {
+        cleaned.role = {
+          name: (cleaned.role.name || '').trim(),
+        }
+      }
+
+      return cleaned
+    },
+
+    // So sánh form ban đầu với form hiện tại để phát hiện thay đổi
+    hasFormChanged(original, current) {
+      // So sánh các trường cơ bản
+      const basicFields = ['name', 'goal', 'reason', 'priority', 'context', 'feedback']
+      for (const field of basicFields) {
+        const originalValue = (original[field] || '').trim()
+        const currentValue = (current[field] || '').trim()
+        if (originalValue !== currentValue) {
+          return true
+        }
+      }
+
+      // So sánh role
+      const originalRoleName = (original.role?.name || '').trim()
+      const currentRoleName = (current.role?.name || '').trim()
+      if (originalRoleName !== currentRoleName) {
+        return true
+      }
+
+      // So sánh các mảng
+      const arrayFields = [
+        'tasks',
+        'inputs',
+        'outputs',
+        'preconditions',
+        'postconditions',
+        'triggers',
+        'rules',
+        'constraints',
+        'exceptions',
+        'stakeholders',
+        'related_usecases',
+      ]
+
+      for (const field of arrayFields) {
+        const originalArray = (original[field] || []).map((item) => String(item).trim()).filter(Boolean)
+        const currentArray = (current[field] || []).map((item) => String(item).trim()).filter(Boolean)
+
+        if (originalArray.length !== currentArray.length) {
+          return true
+        }
+
+        // So sánh từng phần tử (đã được sort để so sánh chính xác)
+        const sortedOriginal = [...originalArray].sort()
+        const sortedCurrent = [...currentArray].sort()
+
+        for (let i = 0; i < sortedOriginal.length; i++) {
+          if (sortedOriginal[i] !== sortedCurrent[i]) {
+            return true
+          }
+        }
+      }
+
+      return false
     },
   },
 }

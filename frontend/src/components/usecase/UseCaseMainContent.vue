@@ -92,6 +92,7 @@
               class="search-input"
             />
           </div>
+          <div class="toolbar-right">
           <div class="filter-options">
             <select v-model="roleFilter" class="filter-select">
               <option value="">All Roles</option>
@@ -103,11 +104,47 @@
               <option value="medium">Medium</option>
               <option value="low">Low</option>
             </select>
+            </div>
+            <!-- View Mode Selector -->
+            <div class="view-mode-selector">
+              <button
+                class="view-mode-btn"
+                :class="{ active: viewMode === 'grouped' }"
+                @click="viewMode = 'grouped'"
+                title="Grouped by Role"
+              >
+                <span class="material-symbols-outlined">view_list</span>
+              </button>
+              <button
+                class="view-mode-btn"
+                :class="{ active: viewMode === 'grid' }"
+                @click="viewMode = 'grid'"
+                title="Grid View"
+              >
+                <span class="material-symbols-outlined">grid_view</span>
+              </button>
+              <button
+                class="view-mode-btn"
+                :class="{ active: viewMode === 'list' }"
+                @click="viewMode = 'list'"
+                title="List View"
+              >
+                <span class="material-symbols-outlined">view_agenda</span>
+              </button>
+              <button
+                class="view-mode-btn"
+                :class="{ active: viewMode === 'compact' }"
+                @click="viewMode = 'compact'"
+                title="Compact View"
+              >
+                <span class="material-symbols-outlined">view_compact</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Use Cases Groups -->
-        <div class="usecase-groups">
+        <!-- Use Cases Groups (Grouped View) -->
+        <div v-if="viewMode === 'grouped'" class="usecase-groups">
           <div
             v-for="(group, role) in filteredGroupedUseCases"
             :key="role"
@@ -159,8 +196,8 @@
                 </div>
 
                 <!-- Expanded Details -->
-                <div v-if="expandedUseCaseId === getUsecaseId(uc)" class="usecase-details">
-                  <div class="details-grid">
+                <div v-if="expandedUseCaseId === getUsecaseId(uc)" class="usecase-details expanded-full">
+                  <div class="details-grid expanded-content">
                     <!-- Row 1: Goal, Description, Context -->
                     <div class="detail-row">
                       <div class="detail-section">
@@ -335,6 +372,151 @@
             </div>
           </div>
         </div>
+
+        <!-- Grid View -->
+        <div v-else-if="viewMode === 'grid'" class="usecase-grid-view">
+          <div
+            v-for="(uc, index) in filteredUseCases"
+            :key="getUsecaseId(uc)"
+            class="usecase-grid-card"
+            :class="{ expanded: expandedUseCaseId === getUsecaseId(uc) }"
+            @click="toggleUseCase(getUsecaseId(uc))"
+          >
+            <div class="grid-card-header">
+              <div class="grid-card-id">{{ formatUsecaseId(uc, getUseCaseIndex(uc)) }}</div>
+              <h4 class="grid-card-name">{{ uc.name }}</h4>
+              <div class="grid-card-meta">
+                <span class="priority-badge" :class="`priority-${uc.priority}`">
+                  {{ uc.priority }}
+                </span>
+                <span class="role-badge">{{ uc.role?.name || 'Undefined' }}</span>
+              </div>
+            </div>
+            <div v-if="expandedUseCaseId === getUsecaseId(uc)" class="grid-card-details">
+              <div class="grid-details-content">
+                <div class="detail-section">
+                  <h5>Goal</h5>
+                  <p>{{ uc.goal || 'No goal specified' }}</p>
+                </div>
+                <div class="detail-section">
+                  <h5>Description</h5>
+                  <p>{{ uc.reason || 'No description available' }}</p>
+                </div>
+                <div class="detail-section">
+                  <h5>Main Flow</h5>
+                  <ol class="task-list">
+                    <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                    <li v-if="!uc.tasks || uc.tasks.length === 0">No tasks defined</li>
+                  </ol>
+                </div>
+              </div>
+              <div class="grid-card-actions" @click.stop>
+                <button class="btn-secondary" @click="showEditUsecaseModal(uc)">
+                  <span class="material-symbols-outlined">edit</span>
+                  Edit
+                </button>
+                <button class="btn-danger" @click="showDeleteConfirm(uc)">
+                  <span class="material-symbols-outlined">delete</span>
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- List View -->
+        <div v-else-if="viewMode === 'list'" class="usecase-list-view">
+          <div
+            v-for="(uc, index) in filteredUseCases"
+            :key="getUsecaseId(uc)"
+            class="usecase-list-item"
+            :class="{ expanded: expandedUseCaseId === getUsecaseId(uc) }"
+          >
+            <div class="list-item-header" @click="toggleUseCase(getUsecaseId(uc))">
+              <div class="list-item-main">
+                <div class="list-item-id">{{ formatUsecaseId(uc, getUseCaseIndex(uc)) }}</div>
+                <div class="list-item-info">
+                  <h4>{{ uc.name }}</h4>
+                  <p class="list-item-goal">{{ uc.goal || 'No goal specified' }}</p>
+                </div>
+              </div>
+              <div class="list-item-meta">
+                <span class="priority-badge" :class="`priority-${uc.priority}`">
+                  {{ uc.priority }}
+                </span>
+                <span class="role-badge">{{ uc.role?.name || 'Undefined' }}</span>
+                <div class="list-item-actions" @click.stop>
+                  <button class="btn-icon" @click="showEditUsecaseModal(uc)" title="Edit">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="btn-icon danger" @click="showDeleteConfirm(uc)" title="Delete">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div v-if="expandedUseCaseId === getUsecaseId(uc)" class="list-item-details">
+              <div class="list-details-grid">
+                <div class="detail-section">
+                  <h5>Description</h5>
+                  <p>{{ uc.reason || 'No description available' }}</p>
+                </div>
+                <div class="detail-section">
+                  <h5>Context</h5>
+                  <p>{{ uc.context || 'No context specified' }}</p>
+                </div>
+                <div class="detail-section full-width">
+                  <h5>Main Flow</h5>
+                  <ol class="task-list">
+                    <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                    <li v-if="!uc.tasks || uc.tasks.length === 0">No tasks defined</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Compact View -->
+        <div v-else-if="viewMode === 'compact'" class="usecase-compact-view">
+          <div
+            v-for="(uc, index) in filteredUseCases"
+            :key="getUsecaseId(uc)"
+            class="usecase-compact-item"
+            :class="{ expanded: expandedUseCaseId === getUsecaseId(uc) }"
+            @click="toggleUseCase(getUsecaseId(uc))"
+          >
+            <div class="compact-item-header">
+              <div class="compact-id">{{ formatUsecaseId(uc, getUseCaseIndex(uc)) }}</div>
+              <div class="compact-info">
+                <h4>{{ uc.name }}</h4>
+                <p>{{ uc.goal || 'No goal' }}</p>
+              </div>
+              <div class="compact-badges">
+                <span class="priority-badge" :class="`priority-${uc.priority}`">
+                  {{ uc.priority }}
+                </span>
+              </div>
+            </div>
+            <div v-if="expandedUseCaseId === getUsecaseId(uc)" class="compact-item-details">
+              <div class="compact-details-content">
+                <p><strong>Description:</strong> {{ uc.reason || 'N/A' }}</p>
+                <p><strong>Main Flow:</strong></p>
+                <ol class="task-list">
+                  <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                </ol>
+              </div>
+              <div class="compact-item-actions" @click.stop>
+                <button class="btn-secondary sm" @click="showEditUsecaseModal(uc)">
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <button class="btn-danger sm" @click="showDeleteConfirm(uc)">
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -433,6 +615,7 @@ export default {
       searchQuery: '',
       roleFilter: '',
       priorityFilter: '',
+      viewMode: this.loadViewMode(), // 'grouped', 'grid', 'list', 'compact'
 
       // Modal states
       showUsecaseModal: false,
@@ -534,6 +717,35 @@ export default {
       return this.useCases.filter((uc) => uc.name && uc.goal && uc.tasks && uc.tasks.length > 0)
         .length
     },
+    // Filtered use cases for non-grouped views
+    filteredUseCases() {
+      let filtered = [...this.useCases]
+
+      // Apply role filter
+      if (this.roleFilter) {
+        filtered = filtered.filter(
+          (uc) => (uc.role?.name || 'Undefined') === this.roleFilter
+        )
+      }
+
+      // Apply search filter
+      if (this.searchQuery) {
+        const query = this.searchQuery.toLowerCase()
+        filtered = filtered.filter(
+          (uc) =>
+            uc.name.toLowerCase().includes(query) ||
+            uc.goal?.toLowerCase().includes(query) ||
+            this.formatUsecaseId(uc).toLowerCase().includes(query)
+        )
+      }
+
+      // Apply priority filter
+      if (this.priorityFilter) {
+        filtered = filtered.filter((uc) => uc.priority === this.priorityFilter)
+      }
+
+      return filtered
+    },
   },
   methods: {
     // Helper: Get usecase ID (support both _id and id for backward compatibility)
@@ -545,21 +757,34 @@ export default {
     formatUsecaseId(uc, index = null) {
       if (!uc) return 'UC-???'
       const id = String(uc._id || uc.id || '')
-      // If we have an index, use it for a short readable ID
+      
+      // Always try to use index-based format if available
       if (index !== null && index !== undefined) {
         const paddedIndex = String(index + 1).padStart(3, '0')
         return `UC-${paddedIndex}`
       }
-      // Otherwise, use first 8 characters of the ID for a shorter display
-      if (id.length > 8) {
-        return `UC-${id.substring(0, 8)}...`
+      
+      // Fallback: Try to extract number from ID or use hash
+      const numericMatch = id.match(/\d+/)
+      if (numericMatch) {
+        const num = parseInt(numericMatch[0])
+        return `UC-${String(num).padStart(3, '0')}`
       }
-      return `UC-${id}`
+      
+      // Last resort: use first 8 characters
+      const shortId = id.length > 8 ? id.substring(0, 8) : id
+      return `UC-${shortId.toUpperCase()}`
     },
     // Helper: Get usecase name for display
     getUsecaseName(uc) {
       if (!uc) return 'Unknown Use Case'
       return uc.name || uc.goal || 'Unnamed Use Case'
+    },
+    // Helper: Get usecase index in all usecases for consistent ID formatting
+    getUseCaseIndex(uc) {
+      if (!uc) return null
+      const id = this.getUsecaseId(uc)
+      return this.useCases.findIndex((u) => this.getUsecaseId(u) === id)
     },
     // Use Case CRUD Operations
     async submitUsecaseForm(formData) {
@@ -700,6 +925,22 @@ export default {
         return {}
       }
     },
+    loadViewMode() {
+      try {
+        const saved = localStorage.getItem('usecaseViewMode')
+        return saved || 'grouped'
+      } catch (error) {
+        console.error('Error loading view mode:', error)
+        return 'grouped'
+      }
+    },
+    saveViewMode() {
+      try {
+        localStorage.setItem('usecaseViewMode', this.viewMode)
+      } catch (error) {
+        console.error('Error saving view mode:', error)
+      }
+    },
   },
 
   watch: {
@@ -722,6 +963,11 @@ export default {
         }
       },
       immediate: true,
+    },
+    viewMode: {
+      handler(newMode) {
+        this.saveViewMode()
+      },
     },
   },
 }
@@ -906,9 +1152,52 @@ export default {
   border-color: #1a365d;
 }
 
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .filter-options {
   display: flex;
   gap: 12px;
+}
+
+/* View Mode Selector */
+.view-mode-selector {
+  display: flex;
+  gap: 4px;
+  background: #f3f4f6;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.view-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.view-mode-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.view-mode-btn.active {
+  background: #1a365d;
+  color: white;
+}
+
+.view-mode-btn .material-symbols-outlined {
+  font-size: 20px;
 }
 
 .filter-select {
@@ -1104,6 +1393,18 @@ export default {
   border-top: 1px solid #e5e7eb;
   background: white;
   border-radius: 0 0 8px 8px;
+  max-height: none;
+  overflow: visible;
+}
+
+.usecase-details.expanded-full {
+  padding: 24px;
+  background: #f9fafb;
+}
+
+.expanded-content {
+  max-height: none;
+  overflow: visible;
 }
 
 .details-grid {
@@ -1479,6 +1780,357 @@ export default {
 
   .detail-row {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ========== GRID VIEW STYLES ========== */
+.usecase-grid-view {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.usecase-grid-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.usecase-grid-card:hover {
+  border-color: #1a365d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.usecase-grid-card.expanded {
+  border-color: #1a365d;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.grid-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.grid-card-id {
+  background: #1a365d;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  display: inline-block;
+  width: fit-content;
+}
+
+.grid-card-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.grid-card-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.role-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.grid-card-details {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.grid-details-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.grid-card-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* ========== LIST VIEW STYLES ========== */
+.usecase-list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.usecase-list-item {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.usecase-list-item:hover {
+  border-color: #1a365d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.usecase-list-item.expanded {
+  border-color: #1a365d;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.list-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  gap: 16px;
+}
+
+.list-item-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.list-item-id {
+  background: #1a365d;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  flex-shrink: 0;
+}
+
+.list-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-item-info h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 4px 0;
+}
+
+.list-item-goal {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.list-item-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.list-item-details {
+  padding: 20px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.list-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+/* ========== COMPACT VIEW STYLES ========== */
+.usecase-compact-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.usecase-compact-item {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 16px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.usecase-compact-item:hover {
+  border-color: #1a365d;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.usecase-compact-item.expanded {
+  border-color: #1a365d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.compact-item-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.compact-id {
+  background: #1a365d;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  flex-shrink: 0;
+  min-width: 60px;
+  text-align: center;
+}
+
+.compact-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.compact-info h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-info p {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-badges {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.compact-item-details {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.compact-details-content {
+  margin-bottom: 12px;
+}
+
+.compact-details-content p {
+  font-size: 0.875rem;
+  color: #4b5563;
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.compact-item-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-secondary.sm,
+.btn-danger.sm {
+  padding: 6px 10px;
+  font-size: 0.75rem;
+}
+
+.btn-secondary.sm .material-symbols-outlined,
+.btn-danger.sm .material-symbols-outlined {
+  font-size: 16px;
+}
+
+/* ========== IMPROVED EXPANDED VIEW ========== */
+.usecase-details {
+  max-height: none;
+  overflow: visible;
+}
+
+.details-grid {
+  max-height: none;
+  overflow-y: visible;
+}
+
+.detail-section {
+  max-height: none;
+  overflow: visible;
+}
+
+.detail-section.full-width {
+  min-height: auto;
+}
+
+/* Responsive adjustments for new views */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .toolbar-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .view-mode-selector {
+    order: -1;
+  }
+
+  .usecase-grid-view {
+    grid-template-columns: 1fr;
+  }
+
+  .list-item-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .list-item-meta {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 </style>
