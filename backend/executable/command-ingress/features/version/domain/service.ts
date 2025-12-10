@@ -7,7 +7,6 @@ import Preview from "../../../../../internal/model/preview";
 import Database from "../../../../../internal/model/database";
 import Testcase from "../../../../../internal/model/testcase";
 import Usecase from "../../../../../internal/model/usecase";
-import Uml from "../../../../../internal/model/uml";
 import UsecaseDiagram from "../../../../../internal/model/usecase_diagram";
 import ActivityDiagram from "../../../../../internal/model/activity_diagram";
 import SequenceDiagram from "../../../../../internal/model/sequence_diagram";

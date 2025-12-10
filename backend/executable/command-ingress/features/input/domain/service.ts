@@ -1,6 +1,5 @@
 import Project from '../../../../../internal/model/project';
 import Input from '../../../../../internal/model/input';
-import Output from '../../../../../internal/model/output';
 import Version from '../../../../../internal/model/version';
 import ProjectLog from '../../../../../internal/model/log';
 import { OrchestratorService } from "../../orchestrator/domain/service";

@@ -1,6 +1,5 @@
 import Project from '../../../../../internal/model/project';
 import Input from '../../../../../internal/model/input';
-import Output from '../../../../../internal/model/output';
 import Version from '../../../../../internal/model/version';
 import ProjectLog from '../../../../../internal/model/log';
 import { OrchestratorService } from "../../orchestrator/domain/service";
@@ -224,7 +223,6 @@ export class ProjectService {
 
     await Promise.all([
       Input.deleteMany({ project_id: project._id }),
-      Output.deleteMany({ project_id: project._id }),
       Version.deleteMany({ project_id: project._id }),
       ProjectLog.deleteMany({ project_id: project._id }),
       Project.deleteOne({ _id: project._id }),
@@ -384,13 +382,9 @@ export class ProjectService {
     const currentVersion = await Version.findById(project.current_version).lean();
 
     let inputs: any[] = [];
-    let outputs: any[] = [];
 
     if (currentVersion) {
-      [inputs, outputs] = await Promise.all([
-        Input.find({ version_id: currentVersion._id }).sort({ created_at: 1 }).lean(),
-        Output.find({ version_id: currentVersion._id }).sort({ created_at: 1 }).lean(),
-      ]);
+      inputs = await Input.find({ version_id: currentVersion._id }).sort({ created_at: 1 }).lean();
     }
 
     // Lấy logs của current version
@@ -402,13 +396,10 @@ export class ProjectService {
       .sort({ created_at: 1 })
       .lean();
 
-    // Enrich logs với input/output metadata
+    // Enrich logs với input metadata
     const chatLogs = logs.map((log: any) => {
       const input = log.input_id
         ? inputs.find((i: any) => i._id.toString() === log.input_id.toString())
-        : null;
-      const output = log.output_id
-        ? outputs.find((o: any) => o._id.toString() === log.output_id.toString())
         : null;
 
       return {
@@ -416,9 +407,7 @@ export class ProjectService {
         input_meta: input
           ? { id: input._id, name: input.name, type: input.type }
           : null,
-        output_meta: output
-          ? { id: output._id, name: output.name, type: output.type }
-          : null,
+        output_meta: null, // Output model đã bị xóa
       };
     });
 
@@ -427,7 +416,7 @@ export class ProjectService {
       current_version: currentVersion,
       versions,
       inputs,
-      outputs,
+      outputs: [], // Output model đã bị xóa
       chatLogs,
     };
 
