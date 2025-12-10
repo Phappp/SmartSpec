@@ -451,7 +451,8 @@ export class GeminiService {
             try {
                 const { GoogleGenerativeAI } = await import("@google/generative-ai");
                 const client = new GoogleGenerativeAI(k.key_value);
-                const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
+                const modelName = k.model_name || 'gemini-2.0-flash-001';
+                const model = client.getGenerativeModel({ model: modelName });
 
                 const resp: any = await model.generateContent({
                     contents: [{ role: "user", parts: [{ text: basePrompt }] }],
@@ -538,7 +539,8 @@ export class GeminiService {
                     console.log(`🔑 Trying Gemini key: ${key.slice(0, 12)}... (offset=${offset})`);
                     const { GoogleGenerativeAI } = await import("@google/generative-ai");
                     const client = new GoogleGenerativeAI(key);
-                    const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
+                    const modelName = k.model_name || 'gemini-2.0-flash-001';
+                    const model = client.getGenerativeModel({ model: modelName });
 
                     const prompt = this.buildPrompt(cleanText, language, offset, this.BATCH_SIZE);
 
@@ -553,7 +555,7 @@ export class GeminiService {
                     logApiUsage({
                         api_key_id: k._id.toString(),
                         provider: 'gemini',
-                        model_name: 'gemini-2.0-flash-001',
+                        model_name: modelName,
                         user_id: userId,
                         project_id: projectId,
                         request_type: 'text',
@@ -640,12 +642,13 @@ export class GeminiService {
                     lastError = err;
                     const msg = (err?.message || "").toLowerCase();
                     console.error(` Gemini key ${k._id} failed:`, err?.message || err);
-                    
+
                     // Log failed API usage
+                    const modelName = k.model_name || 'gemini-2.0-flash-001';
                     logApiUsage({
                         api_key_id: k._id.toString(),
                         provider: 'gemini',
-                        model_name: 'gemini-2.0-flash-001',
+                        model_name: modelName,
                         user_id: userId,
                         project_id: projectId,
                         request_type: 'text',
@@ -689,7 +692,8 @@ export class GeminiService {
             try {
                 const { GoogleGenerativeAI } = await import("@google/generative-ai");
                 const client = new GoogleGenerativeAI(k.key_value);
-                const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
+                const modelName = k.model_name || 'gemini-2.0-flash-001';
+                const model = client.getGenerativeModel({ model: modelName });
 
                 const resp: any = await model.generateContent({
                     contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -701,7 +705,7 @@ export class GeminiService {
                 logApiUsage({
                     api_key_id: k._id.toString(),
                     provider: 'gemini',
-                    model_name: 'gemini-2.0-flash-001',
+                    model_name: modelName,
                     user_id: userId,
                     project_id: projectId,
                     request_type: 'text',
@@ -732,11 +736,12 @@ export class GeminiService {
                 const responseTime = Date.now() - startTime;
                 lastError = err;
                 console.error(" Gemini checkConflictWithGemini error:", err);
-                
+
+                const modelName = k.model_name || 'gemini-2.0-flash-001';
                 logApiUsage({
                     api_key_id: k._id.toString(),
                     provider: 'gemini',
-                    model_name: 'gemini-2.0-flash-001',
+                    model_name: modelName,
                     user_id: userId,
                     project_id: projectId,
                     request_type: 'text',
@@ -746,7 +751,7 @@ export class GeminiService {
                     error_message: err.message || 'Unknown error',
                     response_time: responseTime,
                 }).catch(logErr => console.error('Failed to log API usage:', logErr));
-                
+
                 continue;
             }
         }
@@ -777,7 +782,8 @@ export class GeminiService {
             try {
                 const { GoogleGenerativeAI } = await import("@google/generative-ai");
                 const client = new GoogleGenerativeAI(k.key_value);
-                const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
+                const modelName = k.model_name || 'gemini-2.0-flash-001';
+                const model = client.getGenerativeModel({ model: modelName });
 
                 const resp: any = await model.generateContent({
                     contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -789,7 +795,7 @@ export class GeminiService {
                 logApiUsage({
                     api_key_id: k._id.toString(),
                     provider: 'gemini',
-                    model_name: 'gemini-2.0-flash-001',
+                    model_name: modelName,
                     user_id: userId,
                     project_id: projectId,
                     request_type: 'text',
@@ -814,11 +820,12 @@ export class GeminiService {
                 const responseTime = Date.now() - startTime;
                 lastError = err;
                 console.error(" Gemini findConflictGroups error:", err);
-                
+
+                const modelName = k.model_name || 'gemini-2.0-flash-001';
                 logApiUsage({
                     api_key_id: k._id.toString(),
                     provider: 'gemini',
-                    model_name: 'gemini-2.0-flash-001',
+                    model_name: modelName,
                     user_id: userId,
                     project_id: projectId,
                     request_type: 'text',
@@ -828,7 +835,7 @@ export class GeminiService {
                     error_message: err.message || 'Unknown error',
                     response_time: responseTime,
                 }).catch(logErr => console.error('Failed to log API usage:', logErr));
-                
+
                 continue;
             }
         }

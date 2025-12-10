@@ -955,7 +955,8 @@ export class TestcaseGeminiService {
                 console.log(`🔑 Trying Gemini key: ${key.key_value.slice(0, 12)}...`);
                 const { GoogleGenerativeAI } = await import("@google/generative-ai");
                 const client = new GoogleGenerativeAI(key.key_value);
-                const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
+                const modelName = key.model_name || 'gemini-2.0-flash-001';
+                const model = client.getGenerativeModel({ model: modelName });
 
                 const response = await model.generateContent({
                     contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -968,7 +969,7 @@ export class TestcaseGeminiService {
                 logApiUsage({
                     api_key_id: key._id.toString(),
                     provider: 'gemini',
-                    model_name: 'gemini-2.0-flash-001',
+                    model_name: modelName,
                     user_id: userId,
                     project_id: projectId,
                     request_type: 'text',
@@ -988,10 +989,11 @@ export class TestcaseGeminiService {
                 console.error(`❌ Gemini key failed:`, error.message);
 
                 const { logApiUsage } = await import("../../stats/domain/apiUsageLogger");
+                const modelName = key.model_name || 'gemini-2.0-flash-001';
                 logApiUsage({
                     api_key_id: key._id.toString(),
                     provider: 'gemini',
-                    model_name: 'gemini-2.0-flash-001',
+                    model_name: modelName,
                     user_id: userId,
                     project_id: projectId,
                     request_type: 'text',

@@ -3,9 +3,13 @@ import ApiKey from '../../../../internal/model/api_key';
 
 type Provider = 'gemini' | 'openai' | 'claude';
 
-async function getActiveKey(provider: Provider): Promise<string | null> {
+async function getActiveKey(provider: Provider): Promise<{ key_value: string; model_name: string } | null> {
     const keyDoc = await ApiKey.findOne({ provider, is_active: true }).sort({ updatedAt: -1 });
-    return (keyDoc && (keyDoc as any).key_value) ? (keyDoc as any).key_value : null;
+    if (!keyDoc || !(keyDoc as any).key_value) return null;
+    return {
+        key_value: (keyDoc as any).key_value,
+        model_name: (keyDoc as any).model_name || 'gemini-2.0-flash'
+    };
 }
 
 export async function refineInputById(inputId: string, provider: Provider = 'gemini') {
@@ -16,8 +20,8 @@ export async function refineInputById(inputId: string, provider: Provider = 'gem
     const shouldRefine = input.type === 'image' || input.type === 'audio' || (input.type === 'pdf' && meta.is_scanned === true);
     if (!shouldRefine) return;
 
-    const apiKey = await getActiveKey(provider);
-    if (!apiKey) {
+    const apiKeyData = await getActiveKey(provider);
+    if (!apiKeyData) {
         console.log(`[refineInputById] No active API key for provider ${provider}`);
         await Input.findByIdAndUpdate(inputId, { processing_status: 'failed', processing_error: 'No active API key' });
         return;
@@ -31,8 +35,9 @@ export async function refineInputById(inputId: string, provider: Provider = 'gem
 
         if (provider === 'gemini') {
             const { GoogleGenerativeAI } = await import('@google/generative-ai');
-            const client = new GoogleGenerativeAI(apiKey);
-            const model = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
+            const client = new GoogleGenerativeAI(apiKeyData.key_value);
+            const modelName = apiKeyData.model_name || 'gemini-2.0-flash';
+            const model = client.getGenerativeModel({ model: modelName });
 
             const systemPrompt = 'Bạn là biên tập viên. Hãy chuẩn hóa chính tả/khoảng trắng/cách dòng, giữ nguyên nội dung, không thêm bớt.';
             const userPrompt = `${meta.language ? `(Ngôn ngữ: ${meta.language}). ` : ''}Văn bản nguồn giữa dấu backticks, hãy chuẩn hóa và trả về đúng văn bản đã sửa.\n\n\`\`\`\n${raw}\n\`\`\``;

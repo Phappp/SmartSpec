@@ -1463,8 +1463,7 @@ export class DatabaseGeminiService {
         primaryKeys.forEach((pk, index) => {
           if (pk.primary_key_order == null) {
             console.warn(
-              `   ↳ Missing primary_key_order for: ${pk.name}, assigning: ${
-                index + 1
+              `   ↳ Missing primary_key_order for: ${pk.name}, assigning: ${index + 1
               }`
             );
             pk.primary_key_order = index + 1;
@@ -1679,8 +1678,9 @@ export class DatabaseGeminiService {
         );
         const { GoogleGenerativeAI } = await import("@google/generative-ai");
         const client = new GoogleGenerativeAI(k.key_value);
+        const modelName = k.model_name || 'gemini-2.0-flash-001';
         const model = client.getGenerativeModel({
-          model: "gemini-2.0-flash-001",
+          model: modelName,
         });
 
         const resp: any = await model.generateContent({
@@ -1694,7 +1694,7 @@ export class DatabaseGeminiService {
         logApiUsage({
           api_key_id: k._id.toString(),
           provider: 'gemini',
-          model_name: 'gemini-2.0-flash-001',
+          model_name: modelName,
           user_id: userId,
           project_id: projectId,
           request_type: 'text',
@@ -1719,10 +1719,11 @@ export class DatabaseGeminiService {
         );
 
         const { logApiUsage } = await import("../../stats/domain/apiUsageLogger");
+        const modelName = k.model_name || 'gemini-2.0-flash-001';
         logApiUsage({
           api_key_id: k._id.toString(),
           provider: 'gemini',
-          model_name: 'gemini-2.0-flash-001',
+          model_name: modelName,
           user_id: userId,
           project_id: projectId,
           request_type: 'text',

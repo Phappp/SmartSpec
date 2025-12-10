@@ -269,7 +269,8 @@ export class ActivityGeminiService {
       try {
         const { GoogleGenerativeAI } = await import("@google/generative-ai");
         const client = new GoogleGenerativeAI(k.key_value);
-        const model = client.getGenerativeModel({ model: "gemini-2.0-flash-001" });
+        const modelName = k.model_name || 'gemini-2.0-flash-001';
+        const model = client.getGenerativeModel({ model: modelName });
 
         const resp: any = await model.generateContent({
           contents: [{ role: "user", parts: [{ text: prompt }] }]
@@ -282,7 +283,7 @@ export class ActivityGeminiService {
         logApiUsage({
           api_key_id: k._id.toString(),
           provider: 'gemini',
-          model_name: 'gemini-2.0-flash-001',
+          model_name: modelName,
           user_id: userId,
           project_id: projectId,
           request_type: 'text',
@@ -302,10 +303,11 @@ export class ActivityGeminiService {
         const msg = (err?.message || '').toLowerCase();
 
         const { logApiUsage } = await import("../../../../features/stats/domain/apiUsageLogger");
+        const modelName = k.model_name || 'gemini-2.0-flash-001';
         logApiUsage({
           api_key_id: k._id.toString(),
           provider: 'gemini',
-          model_name: 'gemini-2.0-flash-001',
+          model_name: modelName,
           user_id: userId,
           project_id: projectId,
           request_type: 'text',
