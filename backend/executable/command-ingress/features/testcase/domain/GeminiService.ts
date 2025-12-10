@@ -985,8 +985,13 @@ export class TestcaseGeminiService {
 
             } catch (error: any) {
                 const responseTime = Date.now() - startTime;
+
+                // Phân tích lỗi API key
+                const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../shared/apiKeyErrorHandler");
+                const errorInfo = analyzeApiKeyError(error);
                 lastError = error;
-                console.error(`❌ Gemini key failed:`, error.message);
+
+                console.error(`❌ Gemini key ${key._id} failed:`, error.message, `[${errorInfo.type}]`);
 
                 const { logApiUsage } = await import("../../stats/domain/apiUsageLogger");
                 const modelName = key.model_name || 'gemini-2.0-flash-001';
@@ -999,25 +1004,38 @@ export class TestcaseGeminiService {
                     request_type: 'text',
                     endpoint: 'generateTestcase',
                     status: 'failed',
-                    status_code: error.status || 500,
+                    status_code: error.status || error.statusCode || 500,
                     error_message: error.message || 'Unknown error',
+                    error_type: errorInfo.type,
                     response_time: responseTime,
                 }).catch(logErr => console.error('Failed to log API usage:', logErr));
 
-                // Disable invalid keys
-                const message = error.message.toLowerCase();
-                if (message.includes("invalid") || message.includes("unauthorized")) {
+                // Disable key nếu cần (invalid, unauthorized)
+                if (errorInfo.shouldDisableKey) {
                     try {
                         await this.apiKeyService.disableKey(key._id);
-                        console.warn(`⚠️ Disabled invalid key: ${key._id}`);
+                        console.warn(`⚠️ Disabled ${errorInfo.type} key: ${key._id}`);
                     } catch {
                         // Ignore disable errors
                     }
                 }
+
+                // Nếu là lỗi không retryable (quota, invalid key), không thử key tiếp theo
+                if (!errorInfo.retryable && errorInfo.type !== ApiKeyErrorType.RATE_LIMIT) {
+                    // Tạo ApiKeyError để throw
+                    const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
+                    throw new ApiKeyError(error, 'vi');
+                }
             }
         }
 
-        throw lastError || new Error("All Gemini API keys failed");
+        // Nếu tất cả key đều fail, throw error với thông tin chi tiết
+        if (lastError) {
+            const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
+            throw new ApiKeyError(lastError, 'vi');
+        }
+
+        throw new Error("No active Gemini API keys found");
     }
 
     /**

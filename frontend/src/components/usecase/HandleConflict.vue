@@ -1,19 +1,7 @@
 <template>
   <div class="handle-conflict-view">
     <!-- Conflict Resolution Section -->
-    <div class="content-header">
-      <div class="header-info">
-        <h2>Conflict Resolution</h2>
-        <p>Manage duplicate use cases in your project</p>
-      </div>
-      <div class="header-actions">
-        <button class="btn-primary" @click="$emit('find-conflicts')" :disabled="isFindingConflicts">
-          <span v-if="isFindingConflicts" class="button-spinner-small"></span>
-          <span v-else class="material-symbols-outlined">rule</span>
-          {{ isFindingConflicts ? 'Scanning...' : 'Scan for Duplicates' }}
-        </button>
-      </div>
-    </div>
+    <!-- Header removed - button moved to UseCaseMainContent -->
 
     <!-- Statistics Cards -->
     <div class="stats-grid" v-if="hasConflicts">
@@ -153,18 +141,7 @@
       </div>
     </div>
 
-    <!-- Empty State -->
-    <div v-else class="empty-state">
-      <div class="empty-icon">
-        <span class="material-symbols-outlined">check_circle</span>
-      </div>
-      <h3>No Conflicts Found</h3>
-      <p>Your project use cases are clean and free of duplicates.</p>
-      <!-- <button class="btn-primary" @click="$emit('find-conflicts')">
-        <span class="material-symbols-outlined">search</span>
-        Scan for Duplicates
-      </button> -->
-    </div>
+    <!-- Empty State - Hidden when no conflicts -->
   </div>
 </template>
 

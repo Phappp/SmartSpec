@@ -27,11 +27,19 @@ export class OrchestratorService {
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
         const randomDelay = 2000;
 
-        // 🟢 Bắt đầu: clear lỗi cũ
+        // 🟢 Bắt đầu: clear lỗi cũ nhưng giữ checkpoint
         console.log(`[SERVICE] Clearing previous errors for version ${versionId} before running...`);
         // Độ trễ ngẫu nhiên từ 2000ms (2 giây) đến 3000ms (3 giây)
         let version = await Version.findById(versionId).lean();
         if (!version) throw new Error("Version not found");
+
+        // Kiểm tra checkpoint để xác định có thể resume không
+        const checkpoint = (version as any).processing_checkpoint;
+        const hasCheckpoint = checkpoint && typeof checkpoint === 'object' && Array.isArray(checkpoint.processed_chunks) && checkpoint.processed_chunks.length > 0;
+        
+        if (hasCheckpoint) {
+            console.log(`🔄 Checkpoint detected: ${checkpoint.processed_chunks.length} chunks already processed. Will resume from checkpoint.`);
+        }
 
         // ✅ Nếu version không phải temporary → bump trước
         if (version.version_temporary === false) {
@@ -40,13 +48,21 @@ export class OrchestratorService {
             version = bumpRes.data.newVersion;
             console.log("version Id after bump",version._id);
             versionId = version._id.toString();
+            
+            // Lấy lại checkpoint sau khi bump
+            const newVersion = await Version.findById(versionId).lean();
+            if (newVersion && (newVersion as any).processing_checkpoint) {
+                console.log(`🔄 Checkpoint preserved after version bump`);
+            }
         }
+        
+        // Clear errors nhưng giữ checkpoint
         await Version.findByIdAndUpdate(versionId, {
             $set: {
                 status: "processing",
                 processing_errors: [],
-                stage: "initializing",
-                progress: 15,
+                stage: hasCheckpoint ? "analyzing" : "initializing",
+                progress: hasCheckpoint ? 40 : 15,
                 is_processing: true
             }
         });
@@ -196,44 +212,136 @@ export class OrchestratorService {
             true
         );
 
-        const result = await this.requirementService.finalize(
-            versionId,
-            opts.mode || "full",
-            inputs,
-            this.gemini,
-            language
-        );
-        const newUsecase = result.newRequirements;
-        for(const usecase of newUsecase){
-            
-            const changePayload : PreviewChangeDto  = {
-                entity_type: "requirement",
-                change_type: "added",
-                entity_id: usecase._id,
-                before_snapshot: null,
-                after_snapshot: usecase,
-            };
-            const previewRes = await this.versionService.createOrUpdatePreview(
+        try {
+            const result = await this.requirementService.finalize(
+                versionId,
+                opts.mode || "full",
+                inputs,
+                this.gemini,
+                language
+            );
+
+            // Xử lý partial success
+            if (result.partialSuccess && result.warnings) {
+                console.warn(`⚠️ Partial success detected: ${result.warnings.length} warnings`);
+                // Status đã được cập nhật trong finalize, chỉ cần broadcast
+                inputSocketService.emitIncrementalProgress(
+                    projectId,
+                    versionId,
+                    userId,
+                    100,
+                    "completed",
+                    false
+                );
+                return result;
+            }
+
+            // Kiểm tra nếu có errors trong result
+            if (result.errors && result.errors.length > 0) {
+                console.error("❌ Errors detected in finalize result:", result.errors);
+                
+                // Cập nhật version status thành failed (checkpoint đã được lưu trong finalize)
+                await Version.findByIdAndUpdate(versionId, {
+                    $set: {
+                        status: "failed",
+                        stage: "failed",
+                        progress: 100,
+                        processing_errors: result.errors
+                    }
+                });
+
+                // ✅ BROADCAST: Failed status với thông tin có thể resume
+                inputSocketService.emitIncrementalProgress(
+                    projectId,
+                    versionId,
+                    userId,
+                    100,
+                    "failed",
+                    false
+                );
+
+                // Nếu có thể resume, log thông tin
+                if (result.canResume && result.checkpoint?.processed_chunks?.length > 0) {
+                    const maxChunk = Math.max(...result.checkpoint.processed_chunks);
+                    console.log(`💾 Checkpoint saved. Can resume from chunk ${maxChunk + 1}`);
+                } else if (result.canResume) {
+                    console.log(`💾 Checkpoint saved but no processed chunks found. Will start from beginning.`);
+                }
+
+                // Throw error để được catch bên ngoài
+                throw new Error(`Processing failed: ${result.errors.join('; ')}`);
+            }
+
+            // Chỉ xử lý preview nếu không có lỗi
+            const newUsecase = result.newRequirements || [];
+            for(const usecase of newUsecase){
+                const changePayload : PreviewChangeDto  = {
+                    entity_type: "requirement",
+                    change_type: "added",
+                    entity_id: usecase._id,
+                    before_snapshot: null,
+                    after_snapshot: usecase,
+                };
+                const previewRes = await this.versionService.createOrUpdatePreview(
+                    versionId,
+                    userId,
+                    changePayload
+                );
+            }
+
+            // 6️⃣ Hoàn tất - CHỈ khi không có lỗi
+            await Version.findByIdAndUpdate(versionId, {
+                $set: { 
+                    stage: "completed", 
+                    progress: 100,
+                    status: "completed"
+                }
+            });
+
+            // ✅ BROADCAST: Completed
+            inputSocketService.emitIncrementalProgress(
+                projectId,
                 versionId,
                 userId,
-                changePayload
+                100,
+                "completed",
+                false
             );
-        }
-        // 6️⃣ Hoàn tất
-        await Version.findByIdAndUpdate(versionId, {
-            $set: { stage: "completed", progress: 100 }
-        });
+            return result;
 
-        // ✅ BROADCAST: Completed
-        inputSocketService.emitIncrementalProgress(
-            projectId,
-            versionId,
-            userId,
-            100,
-            "completed",
-            false
-        );
-        return result;
+        } catch (error: any) {
+            // Xử lý lỗi từ finalize hoặc các bước khác
+            console.error("❌ Error during finalize processing:", error);
+
+            const errorMessage = error.message || "Unknown error during processing";
+            const processingErrors = Array.isArray(error.errors) 
+                ? error.errors 
+                : [errorMessage];
+
+            // Cập nhật version status thành failed
+            await Version.findByIdAndUpdate(versionId, {
+                $set: {
+                    status: "failed",
+                    stage: "failed",
+                    progress: 100,
+                    processing_errors: processingErrors,
+                    is_processing: false
+                }
+            });
+
+            // ✅ BROADCAST: Failed status
+            inputSocketService.emitIncrementalProgress(
+                projectId,
+                versionId,
+                userId,
+                100,
+                "failed",
+                false
+            );
+
+            // Re-throw để có thể log ở controller nếu cần
+            throw error;
+        }
     }
 
     /**

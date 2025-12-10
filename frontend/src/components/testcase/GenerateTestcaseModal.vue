@@ -618,15 +618,12 @@ export default {
         console.error('❌ DEBUG - Error generating test cases:', error)
         console.error('❌ DEBUG - Error response:', error.response)
         clearInterval(progressInterval)
-        const errorMessage = error.response?.data?.message || 'Failed to generate test cases'
+        
+        // Sử dụng formatErrorForDisplay để hiển thị lỗi thân thiện
+        const { formatErrorForDisplay } = await import('@/utils/errorMessages')
+        const errorMessage = formatErrorForDisplay(error, 'Không thể tạo test case. Vui lòng thử lại.')
 
-        if (errorMessage.includes('requirements') || errorMessage.includes('not found')) {
-          toast.error('No matching requirements found for the selected IDs')
-        } else if (errorMessage.includes('Gemini') || errorMessage.includes('API key')) {
-          toast.error('AI service is temporarily unavailable. Please try again later.')
-        } else {
-          toast.error(errorMessage)
-        }
+        toast.error(errorMessage)
 
         previewTestCases.value = []
         hasUnsavedChanges.value = false
@@ -766,8 +763,9 @@ export default {
         handleClose()
       } catch (error) {
         console.error('❌ DEBUG - Error in executeGeneration:', error)
-        const errorMessage = error.response?.data?.message || error.message
-        toast.error(`Failed to save test cases: ${errorMessage}`)
+        const { formatErrorForDisplay } = await import('@/utils/errorMessages')
+        const errorMessage = formatErrorForDisplay(error, 'Không thể lưu test case. Vui lòng thử lại.')
+        toast.error(errorMessage)
       } finally {
         saving.value = false
         console.log('🔍 DEBUG - Setting saving = false')

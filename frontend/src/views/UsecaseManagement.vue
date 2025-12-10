@@ -6,8 +6,6 @@
         :versions="versions"
         :selected-version-id="selectedVersionId"
         :is-retrying="effectiveProcessingState.isRetrying"
-        :processing-progress="processingProgress"
-        :current-stage="currentStage"
         :active-users="activeUsers"
         @version-selected="handleVersionSelect"
         @version-rollback-completed="handleVersionRollbackCompleted"
@@ -28,18 +26,6 @@
           Output Management
         </button>
       </div>
-
-      <!-- Incremental Analysis Component -->
-      <IncrementalAnalysis
-        :is-processing-incremental="effectiveProcessingState.isProcessingIncremental"
-        :is-processing-failed="isProcessingFailed"
-        :show-incremental-button="showIncrementalButton"
-        :unprocessed-inputs-count="unprocessedInputsCount"
-        :processing-progress="processingProgress"
-        :current-stage="currentStage"
-        @start-incremental-analysis="startIncrementalAnalysis"
-        @retry-incremental="retryIncrementalAnalysis"
-      />
 
       <!-- Conflict Resolution Section -->
       <HandleConflict
@@ -66,19 +52,29 @@
           :loading="isManagingUsecase"
           :available-use-cases="availableUseCases"
           :project-data="project"
+          :is-finding-conflicts="isFindingConflicts"
+          :new-use-case-ids="newUseCaseIds"
           @addUsecase="handleAddUsecase"
           @updateUsecase="handleUpdateUsecase"
           @deleteUsecase="handleDeleteUsecase"
+          @refresh="handleRefreshUsecases"
+          @find-conflicts="findAndHandleConflicts"
+          @remove-highlight="handleRemoveHighlight"
         />
         <!-- Trong template của UsecaseManagement.vue -->
         <InputSidebar
           :inputs="inputs"
           :is-deleting-input="isDeletingInput"
-          @add-input-click="showAddInputModal = true"
+          :is-processing-incremental="effectiveProcessingState.isProcessingIncremental"
+          :is-processing-failed="isProcessingFailed"
+          :show-incremental-button="showIncrementalButton"
+          :unprocessed-inputs-count="unprocessedInputsCount"
           @delete-input="openDeleteSpecificModal"
           @input-added="handleInputAdded"
           @input-deleted="handleInputDeleted"
           @inputs-reloaded="handleInputsReloaded"
+          @start-incremental-analysis="startIncrementalAnalysis"
+          @retry-incremental="retryIncrementalAnalysis"
         />
       </div>
 
@@ -91,13 +87,6 @@
         @confirm="handleConfirm"
       />
 
-      <!-- Add Input Modal Component -->
-      <AddInputModal
-        v-if="showAddInputModal"
-        :is-adding-input="isAddingInput"
-        @close="showAddInputModal = false"
-        @add-inputs="handleAddInputs"
-      />
 
       <!-- Conflict Detail Modal -->
       <ConflictDetailModal
@@ -140,8 +129,6 @@ import UseCaseMainContent from '@/components/usecase/UseCaseMainContent.vue'
 import InputSidebar from '@/components/usecase/InputSidebar.vue'
 import HandleConflict from '@/components/usecase/HandleConflict.vue'
 import ConflictDetailModal from '@/components/usecase/ConflictDetailModal.vue'
-import AddInputModal from '@/components/usecase/AddInputModal.vue'
-import IncrementalAnalysis from '@/components/usecase/IncrementalAnalysis.vue'
 import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
 import { socket } from '@/utils/socket'
 import eventBus from '@/utils/eventBus'
@@ -161,8 +148,6 @@ export default {
     InputSidebar,
     HandleConflict,
     ConflictDetailModal,
-    AddInputModal,
-    IncrementalAnalysis,
     ProjectSharingModal,
   },
   data() {
@@ -178,8 +163,6 @@ export default {
 
       // ========== RETRY STATE ==========
       isRetrying: false,
-      processingProgress: 0,
-      currentStage: 'Initializing...',
       pollingInterval: null,
       currentPollingVersionId: null,
 
@@ -200,7 +183,6 @@ export default {
       // ========== MODAL STATES ==========
       showConflictDetailModal: false,
       currentDetailUseCase: {},
-      showAddInputModal: false,
       showModal: false,
       modalTitle: '',
       modalMessage: '',
@@ -213,6 +195,8 @@ export default {
       // ========== USECASE =============
       isManagingUsecase: false,
       currentEditingUseCase: null,
+      previousUseCaseIds: new Set(), // Track usecase IDs để detect mới
+      newUseCaseIds: new Set(), // Track usecases mới để highlight
 
       // ========== REALTIME STATE ==========
       isSocketConnected: false,
@@ -281,7 +265,6 @@ export default {
       return (
         currentVersion &&
         currentVersion.status === 'failed' &&
-        this.processingProgress >= 95 &&
         // CHO PHÉP hiển thị ngay cả khi isRetrying là true (vì có thể cả 2 process cùng chạy)
         !this.isProcessingIncremental
         // BỎ: !this.isRetrying
@@ -396,6 +379,7 @@ export default {
 
     cleanupSocketConnection() {
       if (socket) {
+        // ✅ QUAN TRỌNG: Disconnect tất cả listeners trước khi leave room
         socket.off('connect')
         socket.off('disconnect')
         socket.off('usecase_event', this.handleUsecaseEvent)
@@ -406,9 +390,17 @@ export default {
         socket.off('user_left', this.handleUserLeft)
 
         socket.off('version_event', this.handleVersionEvent)
+        
+        // ✅ THÊM: Cleanup incremental progress listener
+        socket.off('INCREMENTAL_PROGRESS')
+        
         // Leave project room
         if (this.project._id) {
-          socket.emit('leave_project', this.project._id)
+          try {
+            socket.emit('leave_project', this.project._id)
+          } catch (error) {
+            console.warn('⚠️ Error leaving project room:', error)
+          }
         }
       }
     },
@@ -835,11 +827,59 @@ export default {
 
       try {
         const response = await usecaseApi.getUsecases(this.selectedVersionId)
-        this.useCases = response.data.data || []
+        const newUseCases = response.data.data || []
+        
+        // ✅ Load previousUseCaseIds từ localStorage
+        const storageKey = `previousUseCaseIds_${this.selectedVersionId}`
+        const savedPreviousIds = localStorage.getItem(storageKey)
+        if (savedPreviousIds) {
+          try {
+            this.previousUseCaseIds = new Set(JSON.parse(savedPreviousIds))
+          } catch (e) {
+            console.warn('Failed to parse saved previousUseCaseIds:', e)
+            this.previousUseCaseIds = new Set()
+          }
+        }
+        
+        // ✅ Detect usecases mới
+        const currentIds = new Set(newUseCases.map(uc => String(uc._id || uc.id)))
+        
+        // Nếu previousUseCaseIds rỗng (lần đầu load), set nó = currentIds mà không highlight
+        if (this.previousUseCaseIds.size === 0) {
+          this.previousUseCaseIds = new Set(currentIds)
+          // Lưu vào localStorage
+          localStorage.setItem(storageKey, JSON.stringify(Array.from(this.previousUseCaseIds)))
+        } else {
+          // Tìm usecases mới (có trong current nhưng không có trong previous)
+          const newlyAddedIds = new Set()
+          currentIds.forEach(id => {
+            if (!this.previousUseCaseIds.has(id)) {
+              newlyAddedIds.add(id)
+            }
+          })
+          
+          // Nếu có usecases mới, thêm vào newUseCaseIds để highlight
+          if (newlyAddedIds.size > 0) {
+            newlyAddedIds.forEach(id => this.newUseCaseIds.add(id))
+            console.log(`✨ Detected ${newlyAddedIds.size} new usecase(s):`, Array.from(newlyAddedIds))
+          }
+        }
+        
+        // Cập nhật previousUseCaseIds với tất cả currentIds
+        this.previousUseCaseIds = new Set(currentIds)
+        // Lưu vào localStorage
+        localStorage.setItem(storageKey, JSON.stringify(Array.from(this.previousUseCaseIds)))
+        
+        this.useCases = newUseCases
       } catch (error) {
         console.error('Error fetching use cases:', error)
         this.toast.error('Failed to load use cases')
       }
+    },
+
+    async handleRefreshUsecases() {
+      await this.fetchUseCases()
+      await this.fetchProjectData(this.project._id)
     },
 
     // ========== USECASE MANAGEMENT ==========
@@ -1108,8 +1148,6 @@ export default {
           // QUAN TRỌNG: Chỉ set incremental nếu KHÔNG có retry đang chạy
           if (!this.isRetrying) {
             this.isProcessingIncremental = true
-            this.processingProgress = version.progress || 0
-            this.currentStage = this.formatStageName(version.stage || 'initializing')
             this.startPolling(this.selectedVersionId, 'incremental')
           }
         }
@@ -1123,8 +1161,6 @@ export default {
 
       this.isProcessingIncremental = true
       this.isProcessingFailed = false
-      this.processingProgress = 0
-      this.currentStage = 'Initializing...'
       this.showIncrementalButton = false
 
       try {
@@ -1201,7 +1237,7 @@ export default {
         this.toast.error('Failed to switch version')
       }
     },
-    // ========== POLLING & PROGRESS MANAGEMENT ==========
+    // ========== POLLING & LOADING MANAGEMENT ==========
     startPolling(versionId, mode = 'retry') {
       this.cleanupPolling()
 
@@ -1210,13 +1246,8 @@ export default {
           const response = await getVersionStatus(versionId)
           const { status, version } = response.data.data
 
-          if (version) {
-            this.processingProgress = version.progress || this.processingProgress
-            this.currentStage = this.formatStageName(version.stage || 'initializing')
-
-            if (mode === 'incremental' && status === 'processing') {
-              this.isProcessingIncremental = true
-            }
+          if (version && mode === 'incremental' && status === 'processing') {
+            this.isProcessingIncremental = true
           }
 
           if (mode === 'retry') {
@@ -1240,32 +1271,6 @@ export default {
       }, 2000)
     },
 
-    updateProgressFromStage(stage) {
-      const stageProgressMap = {
-        initializing: 15,
-        input: 25,
-        analyzing: 40,
-        normalization: 70,
-        finalizing: 90,
-        completed: 100,
-      }
-
-      this.currentStage = this.formatStageName(stage)
-      this.processingProgress = stageProgressMap[stage] || 0
-    },
-
-    formatStageName(stage) {
-      const stageNames = {
-        initializing: 'Initializing',
-        input: 'Processing Inputs',
-        analyzing: 'Analyzing Requirements',
-        normalization: 'Normalizing Data',
-        finalizing: 'Finalizing',
-        completed: 'Completed',
-      }
-      return stageNames[stage] || stage.charAt(0).toUpperCase() + stage.slice(1)
-    },
-
     async checkAndRestorePolling() {
       if (this.hasProcessingVersion) {
         const processingVersion = this.processingVersion
@@ -1284,13 +1289,6 @@ export default {
 
         this.currentPollingVersionId = processingVersion._id
         this.startPolling(processingVersion._id, isIncremental ? 'incremental' : 'retry')
-
-        if (processingVersion.progress) {
-          this.processingProgress = processingVersion.progress
-        }
-        if (processingVersion.stage) {
-          this.currentStage = this.formatStageName(processingVersion.stage)
-        }
       }
     },
 
@@ -1300,8 +1298,6 @@ export default {
         versionId: this.currentPollingVersionId,
         projectName: this.project.name,
         projectDescription: this.project.description,
-        processingProgress: this.processingProgress,
-        currentStage: this.currentStage,
         timestamp: new Date().getTime(),
         type: 'retry',
       }
@@ -1317,6 +1313,10 @@ export default {
         clearInterval(this.pollingInterval)
         this.pollingInterval = null
       }
+      // ✅ Đảm bảo reset state khi cleanup để tránh lỗi khi chuyển trang
+      this.isRetrying = false
+      this.isProcessingIncremental = false
+      this.currentPollingVersionId = null
     },
 
     stopPolling() {
@@ -1327,8 +1327,6 @@ export default {
     },
 
     async handleProcessingSuccess(mode) {
-      this.processingProgress = 100
-      this.currentStage = 'Completed'
       this.stopPolling()
       this.isProcessingFailed = false // Reset failed state
 
@@ -1352,7 +1350,6 @@ export default {
       if (mode === 'incremental') {
         this.isProcessingIncremental = false
         this.isProcessingFailed = true
-        this.processingProgress = 100 // Force 100% để hiển thị error banner
       } else {
         this.isRetrying = false
         this.isProcessingFailed = false
@@ -1387,8 +1384,6 @@ export default {
 
       this.isRetrying = true
       this.isProcessingFailed = false
-      this.processingProgress = 0
-      this.currentStage = 'Initializing...'
       this.currentPollingVersionId = this.failedVersion._id
 
       try {
@@ -1438,7 +1433,6 @@ export default {
             console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
           }
           this.toast.success('Input added successfully!')
-          this.showAddInputModal = false
           await this.fetchProjectData(this.project._id)
         } else {
           const { formatErrorForDisplay } = require('@/utils/errorMessages')
@@ -1495,6 +1489,7 @@ export default {
 
     // ========== HELPER METHODS ==========
     handleClickOutside(e) {
+      if (!this.$el || !e || !e.target) return
       const dropdown = this.$el.querySelector('.dropdown')
       if (dropdown && !dropdown.contains(e.target)) {
         // Note: Dropdown logic is now handled in ProjectHeader component
@@ -1523,14 +1518,12 @@ export default {
       }
 
       // Cập nhật UI state
-      this.processingProgress = event.progress
-      this.currentStage = this.formatStageName(event.stage)
       this.isProcessingIncremental = event.isProcessing
 
-      console.log(`🔄 Updated progress from realtime: ${event.progress}% - ${event.stage}`)
+      console.log(`🔄 Updated loading state from realtime: ${event.isProcessing ? 'processing' : 'completed'}`)
 
       // Nếu hoàn thành, refresh data sau 1 giây
-      if (event.progress === 100 && !event.isProcessing) {
+      if (!event.isProcessing) {
         console.log('✅ Incremental analysis completed via realtime, refreshing data...')
         setTimeout(() => {
           this.fetchProjectData(this.project._id)
@@ -1553,8 +1546,6 @@ export default {
 
       this.isProcessingFailed = false
       this.isProcessingIncremental = true
-      this.processingProgress = 0
-      this.currentStage = 'Initializing...'
 
       try {
         const response = await startIncrementalAnalysis(
@@ -1577,6 +1568,16 @@ export default {
         this.isProcessingIncremental = false
         const { formatErrorForDisplay } = require('@/utils/errorMessages')
         this.toast.error(formatErrorForDisplay(error, 'Failed to retry incremental analysis. Please try again.'))
+      }
+    },
+    // Handle remove highlight when user hovers
+    handleRemoveHighlight(usecaseId) {
+      this.newUseCaseIds.delete(usecaseId)
+      // ✅ QUAN TRỌNG: Thêm vào previousUseCaseIds và lưu vào localStorage
+      this.previousUseCaseIds.add(usecaseId)
+      if (this.selectedVersionId) {
+        const storageKey = `previousUseCaseIds_${this.selectedVersionId}`
+        localStorage.setItem(storageKey, JSON.stringify(Array.from(this.previousUseCaseIds)))
       }
     },
   },

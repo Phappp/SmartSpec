@@ -687,11 +687,16 @@ export class SequenceDiagramGeminiService {
         return this.cleanJsonString(text);
       } catch (err: any) {
         const responseTime = Date.now() - startTime;
+        
+        // Phân tích lỗi API key
+        const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../../shared/apiKeyErrorHandler");
+        const errorInfo = analyzeApiKeyError(err);
         lastError = err;
-        const msg = (err?.message || "").toLowerCase();
+        
         console.error(
           `❌ Gemini key ${k._id} failed during diagram content generation:`,
-          err?.message || err
+          err?.message || err,
+          `[${errorInfo.type}]`
         );
 
         const { logApiUsage } = await import("../../../../features/stats/domain/apiUsageLogger");
@@ -704,27 +709,39 @@ export class SequenceDiagramGeminiService {
           request_type: 'text',
           endpoint: 'generateSequenceDiagram',
           status: 'failed',
-          status_code: err.status || 500,
+          status_code: err.status || err.statusCode || 500,
           error_message: err.message || 'Unknown error',
+          error_type: errorInfo.type,
           response_time: responseTime,
         }).catch(logErr => console.error('Failed to log API usage:', logErr));
 
-        if (msg.includes("invalid") || msg.includes("unauthorized")) {
+        // Disable key nếu cần (invalid, unauthorized)
+        if (errorInfo.shouldDisableKey) {
           try {
             await this.apiKeyService.disableKey(k._id);
-            console.warn(`⚠️ Disabled invalid Gemini key: ${k._id}`);
+            console.warn(`⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
           } catch {
             /* Bỏ qua lỗi khi disable key */
           }
         }
+
+        // Nếu là lỗi không retryable (quota, invalid key), không thử key tiếp theo
+        if (!errorInfo.retryable && errorInfo.type !== ApiKeyErrorType.RATE_LIMIT) {
+          const { ApiKeyError } = await import("../../../../shared/apiKeyErrorHandler");
+          throw new ApiKeyError(err, 'vi');
+        }
+        
         continue;
       }
     }
 
-    throw (
-      lastError ||
-      new Error("All Gemini API keys failed during diagram content generation.")
-    );
+    // Nếu tất cả các key đều thất bại
+    if (lastError) {
+      const { ApiKeyError } = await import("../../../../shared/apiKeyErrorHandler");
+      throw new ApiKeyError(lastError, 'vi');
+    }
+    
+    throw new Error("All Gemini API keys failed during diagram content generation.");
   }
 
   /**

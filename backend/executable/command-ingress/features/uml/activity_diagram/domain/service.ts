@@ -297,25 +297,50 @@ export class ActivityDiagramService {
 
     const ids = Array.isArray(id) ? id : [id];
 
-    // Lấy tất cả activity diagrams cần xóa
+    // Lấy tất cả activity diagrams cần xóa (không populate để tránh lỗi nếu project không tồn tại)
     const diagrams = await ActivityDiagramModel.find({
       _id: { $in: ids.map(i => new Types.ObjectId(i)) }
-    }).populate('project_id').lean();
+    }).lean();
 
     if (diagrams.length === 0) {
       throw new Error("Không tìm thấy activity diagram để xóa");
     }
 
-    // Lấy project IDs từ các diagrams
-    const projectIds = diagrams.map(d => d.project_id).filter((v, i, a) => a.indexOf(v) === i);
-
-    // Lấy các projects liên quan
-    const projects = await Project.find({ _id: { $in: projectIds } })
-      .lean();
-
     // Kiểm tra quyền cho từng diagram
     for (const diagram of diagrams) {
-      const project = projects.find(p => p._id.toString() === (diagram.project_id as any)?.toString());
+      // Lấy project_id từ diagram (xử lý cả trường hợp populate và không populate)
+      let projectId: Types.ObjectId | null = null;
+      
+      // Xử lý project_id từ diagram
+      if (diagram.project_id) {
+        // Nếu đã được populate (có _id property)
+        if (typeof diagram.project_id === 'object' && (diagram.project_id as any)._id) {
+          projectId = new Types.ObjectId((diagram.project_id as any)._id.toString());
+        } 
+        // Nếu là ObjectId trực tiếp
+        else if (diagram.project_id instanceof Types.ObjectId) {
+          projectId = diagram.project_id;
+        }
+        // Nếu là string hoặc có toString method
+        else if (diagram.project_id) {
+          projectId = new Types.ObjectId(String(diagram.project_id));
+        }
+      }
+      
+      // Nếu không có project_id, thử lấy từ version_id
+      if (!projectId && diagram.version_id) {
+        const version = await VersionModel.findById(diagram.version_id).select('project_id').lean();
+        if (version && version.project_id) {
+          projectId = new Types.ObjectId(version.project_id.toString());
+        }
+      }
+
+      if (!projectId) {
+        throw new Error(`Không tìm thấy project_id cho diagram ${diagram._id}`);
+      }
+
+      // Lấy project từ database
+      const project = await Project.findById(projectId).lean();
       if (!project) {
         throw new Error(`Không tìm thấy project liên quan cho diagram ${diagram._id}`);
       }

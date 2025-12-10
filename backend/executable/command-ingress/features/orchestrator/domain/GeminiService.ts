@@ -64,7 +64,9 @@ Mỗi use case PHẢI có đầy đủ các trường sau (KHÔNG bao gồm fiel
  **QUY TẮC XỬ LÝ**:
 • Mỗi lần trả về TỐI ĐA ${batchSize} use case
 • Bắt đầu từ use case số ${offset + 1}
-• Không còn use case nào → trả về []
+• QUAN TRỌNG: Nếu đã phân tích hết tất cả use case từ văn bản → TRẢ VỀ NGAY mảng rỗng []
+• KHÔNG được tạo use case mới nếu đã phân tích hết nội dung
+• KHÔNG được lặp lại các use case đã trả về ở các batch trước
 • Ưu tiên chức năng phần mềm cốt lõi
 • Quy trình phức tạp → tách thành nhiều use case
 • Không rõ vai trò → mặc định "Người dùng hệ thống"
@@ -189,7 +191,9 @@ Each use case MUST have the following fields (DO NOT include "id" field - system
  **PROCESSING RULES**:
 • Return MAXIMUM ${batchSize} use cases per batch
 • Start from use case number ${offset + 1}
-• No more use cases → return []
+• IMPORTANT: If you have already analyzed all use cases from the text → RETURN immediately an empty array []
+• DO NOT create new use cases if you have already analyzed all content
+• DO NOT repeat use cases that were already returned in previous batches
 • Prioritize core software functions
 • Complex processes → split into multiple use cases
 • Unclear role → default to "System User"
@@ -257,6 +261,7 @@ export class GeminiService {
     private readonly BATCH_SIZE = 20;
     private readonly MAX_BATCHES = 100;
     private readonly MAX_ATTEMPTS_PER_OFFSET = 3;
+    private readonly MAX_TOTAL_USE_CASES = 500; // Giới hạn tổng số use case tối đa
 
     private cleanJsonString(text: string): string {
         const pattern = /```(?:json)?\s*([\s\S]*?)\s*```/g;
@@ -523,11 +528,19 @@ export class GeminiService {
         let offset = 0;
         let batchCount = 0;
         let lastError: any = null;
+        let consecutiveEmptyBatches = 0; // Đếm số batch liên tiếp không có items mới
+        let lastOffset = 0; // Lưu offset của batch trước để phát hiện lặp lại
 
         while (batchCount < this.MAX_BATCHES) {
             batchCount++;
             let gotBatch = false;
             let attemptsForThisOffset = 0;
+
+            // Kiểm tra giới hạn tổng số use case
+            if (allResults.length >= this.MAX_TOTAL_USE_CASES) {
+                console.warn(`⚠️ Đã đạt giới hạn tối đa ${this.MAX_TOTAL_USE_CASES} use case. Dừng xử lý.`);
+                return allResults.slice(0, this.MAX_TOTAL_USE_CASES);
+            }
 
             for (const k of keys) {
                 if (attemptsForThisOffset >= this.MAX_ATTEMPTS_PER_OFFSET) break;
@@ -568,7 +581,13 @@ export class GeminiService {
 
                     let text: string = resp?.response?.text?.() || "";
                     text = this.cleanJsonString(text);
-                    console.log(`🤖 Gemini response length: ${text.length}`);
+                    console.log(`🤖 Gemini response length: ${text.length}, offset=${offset}, batch=${batchCount}`);
+
+                    // Kiểm tra sớm nếu response là mảng rỗng
+                    if (text.trim() === "[]" || text.trim().length === 0) {
+                        console.log(`✅ Gemini trả về mảng rỗng. Đã xử lý xong. Tổng: ${allResults.length} use case`);
+                        return allResults;
+                    }
 
                     const parsed = this.safeJsonParseRobust(text);
 
@@ -619,19 +638,69 @@ export class GeminiService {
                             // Xóa temp field
                             delete uc._tempOldId;
                         });
-                        allResults = allResults.concat(normalized);
-                        console.log(` Parsed ${normalized.length} items (incomplete=${parsed.incomplete}). total=${allResults.length}`);
-                        offset += normalized.length;
-                        gotBatch = true;
 
-                        if (!parsed.incomplete && normalized.length < this.BATCH_SIZE) {
+                        // Lọc lại để đảm bảo chỉ có use case hợp lệ (có name hoặc goal)
+                        const validNormalized = normalized.filter(uc =>
+                            uc && typeof uc === 'object' &&
+                            ((uc.name && typeof uc.name === 'string' && uc.name.trim() !== '') ||
+                                (uc.goal && typeof uc.goal === 'string' && uc.goal.trim() !== ''))
+                        );
+
+                        // Nếu không có items hợp lệ từ response, log warning và xử lý
+                        if (validNormalized.length === 0) {
+                            console.warn(`⚠️ Response không chứa use case hợp lệ nào sau khi filter. Parsed items: ${parsed.items.length}, Normalized: ${normalized.length}, Response length: ${text.length}`);
+                            // Không cập nhật offset nếu không có items
+                            // Nhưng vẫn break để thử batch tiếp theo hoặc dừng nếu đã hết
+                            if (!parsed.incomplete) {
+                                // Response hoàn chỉnh nhưng không có items → có thể đã hết
+                                console.log(`✅ Response hoàn chỉnh nhưng không có use case hợp lệ. Có thể đã phân tích hết.`);
+                                return allResults;
+                            }
+                            break; // Thử batch tiếp theo hoặc key tiếp theo
+                        }
+
+                        // Kiểm tra nếu offset không tăng (có thể Gemini đang lặp lại)
+                        // CHỈ kiểm tra sau batch đầu tiên (khi lastOffset đã được set từ batch trước)
+                        // Và CHỈ khi có items hợp lệ (validNormalized.length > 0)
+                        if (lastOffset !== 0 && offset === lastOffset && validNormalized.length > 0) {
+                            console.warn(`⚠️ Phát hiện offset không tăng (${offset}). Có thể Gemini đang lặp lại. Dừng xử lý.`);
+                            return allResults;
+                        }
+
+                        allResults = allResults.concat(validNormalized);
+                        console.log(`✅ Parsed ${validNormalized.length} valid items from ${parsed.items.length} parsed items (incomplete=${parsed.incomplete}). total=${allResults.length}, offset=${offset} → ${offset + validNormalized.length}`);
+
+                        lastOffset = offset;
+                        offset += validNormalized.length;
+                        gotBatch = true;
+                        consecutiveEmptyBatches = 0; // Reset counter khi có items mới
+
+                        // Kiểm tra giới hạn tổng số use case sau khi thêm
+                        if (allResults.length >= this.MAX_TOTAL_USE_CASES) {
+                            console.warn(`⚠️ Đã đạt giới hạn tối đa ${this.MAX_TOTAL_USE_CASES} use case. Dừng xử lý.`);
+                            return allResults.slice(0, this.MAX_TOTAL_USE_CASES);
+                        }
+
+                        // Dừng nếu response hoàn chỉnh và số lượng < BATCH_SIZE (đã hết use case)
+                        if (!parsed.incomplete && validNormalized.length < this.BATCH_SIZE) {
+                            console.log(`✅ Response hoàn chỉnh và số lượng (${validNormalized.length}) < BATCH_SIZE (${this.BATCH_SIZE}). Đã xử lý xong.`);
                             return allResults;
                         } else {
                             break;
                         }
                     } else {
+                        // Không có items hợp lệ từ response
+                        consecutiveEmptyBatches++;
                         console.warn(`⚠️ No parsable items from key ${key.slice(0, 12)}. Response preview: ${text.slice(0, 200)}`);
-                        if (text.trim() === "[]") {
+
+                        // Nếu có 2 batch liên tiếp không có items → dừng
+                        if (consecutiveEmptyBatches >= 2) {
+                            console.warn(`⚠️ Có ${consecutiveEmptyBatches} batch liên tiếp không có items. Dừng xử lý.`);
+                            return allResults;
+                        }
+
+                        if (text.trim() === "[]" || text.trim().length === 0) {
+                            console.log(`✅ Response rỗng. Đã xử lý xong. Tổng: ${allResults.length} use case`);
                             return allResults;
                         }
                         lastError = new Error("No parsable items");
@@ -639,9 +708,13 @@ export class GeminiService {
                     }
                 } catch (err: any) {
                     const responseTime = Date.now() - startTime;
+
+                    // Phân tích lỗi API key
+                    const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../shared/apiKeyErrorHandler");
+                    const errorInfo = analyzeApiKeyError(err);
                     lastError = err;
-                    const msg = (err?.message || "").toLowerCase();
-                    console.error(` Gemini key ${k._id} failed:`, err?.message || err);
+
+                    console.error(`❌ Gemini key ${k._id} failed:`, err?.message || err, `[${errorInfo.type}]`);
 
                     // Log failed API usage
                     const modelName = k.model_name || 'gemini-2.0-flash-001';
@@ -654,29 +727,52 @@ export class GeminiService {
                         request_type: 'text',
                         endpoint: 'analyzeRequirements',
                         status: 'failed',
-                        status_code: err.status || 500,
+                        status_code: err.status || err.statusCode || 500,
                         error_message: err.message || 'Unknown error',
+                        error_type: errorInfo.type,
                         response_time: responseTime,
                     }).catch(logErr => console.error('Failed to log API usage:', logErr));
 
-                    if (msg.includes("invalid") || msg.includes("unauthorized")) {
+                    // Disable key nếu cần (invalid, unauthorized)
+                    if (errorInfo.shouldDisableKey) {
                         try {
                             await this.apiKeyService.disableKey(k._id);
-                            console.warn(`⚠️ Disabled invalid Gemini key: ${k._id}`);
+                            console.warn(`⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
                         } catch { /* ignore */ }
                     }
+
+                    // ✅ THAY ĐỔI: Lưu lại lỗi nhưng tiếp tục thử các key khác
+                    // Chỉ throw error khi đã thử hết tất cả các key
+                    console.warn(`⚠️ Key ${k._id} failed (${errorInfo.type}), trying next key...`);
                     continue;
                 }
             } // end for keys
 
             if (!gotBatch) {
-                console.warn("⚠️ Could not fetch a valid batch for current offset. Stopping further attempts.");
-                break;
+                consecutiveEmptyBatches++;
+                console.warn(`⚠️ Could not fetch a valid batch for current offset. Consecutive empty batches: ${consecutiveEmptyBatches}`);
+
+                // Nếu có 2 batch liên tiếp không lấy được data → dừng
+                if (consecutiveEmptyBatches >= 2) {
+                    console.warn(`⚠️ Có ${consecutiveEmptyBatches} batch liên tiếp không lấy được data. Dừng xử lý.`);
+                    break;
+                }
+            } else {
+                consecutiveEmptyBatches = 0; // Reset counter khi có batch thành công
             }
         } // end while
 
+        console.log(`📊 Kết thúc vòng lặp. Tổng số use case: ${allResults.length}, batch count: ${batchCount}`);
+
         if (allResults.length > 0) return allResults;
-        throw lastError || new Error("All Gemini API keys failed or no parsable output");
+
+        // Nếu có lỗi, throw với thông tin chi tiết
+        if (lastError) {
+            const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
+            throw new ApiKeyError(lastError, 'vi');
+        }
+
+        throw new Error("All Gemini API keys failed or no parsable output");
     }
 
     async checkConflictWithGemini(textA: string, textB: string, language: string, userId?: string, projectId?: string): Promise<boolean> {
@@ -734,8 +830,13 @@ export class GeminiService {
                 }
             } catch (err: any) {
                 const responseTime = Date.now() - startTime;
+
+                // Phân tích lỗi API key
+                const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../shared/apiKeyErrorHandler");
+                const errorInfo = analyzeApiKeyError(err);
                 lastError = err;
-                console.error(" Gemini checkConflictWithGemini error:", err);
+
+                console.error("❌ Gemini checkConflictWithGemini error:", err, `[${errorInfo.type}]`);
 
                 const modelName = k.model_name || 'gemini-2.0-flash-001';
                 logApiUsage({
@@ -747,15 +848,33 @@ export class GeminiService {
                     request_type: 'text',
                     endpoint: 'checkConflict',
                     status: 'failed',
-                    status_code: err.status || 500,
+                    status_code: err.status || err.statusCode || 500,
                     error_message: err.message || 'Unknown error',
+                    error_type: errorInfo.type,
                     response_time: responseTime,
                 }).catch(logErr => console.error('Failed to log API usage:', logErr));
 
+                // Disable key nếu cần (invalid, unauthorized)
+                if (errorInfo.shouldDisableKey) {
+                    try {
+                        await this.apiKeyService.disableKey(k._id);
+                        console.warn(`⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
+                    } catch { /* ignore */ }
+                }
+
+                // ✅ THAY ĐỔI: Lưu lại lỗi nhưng tiếp tục thử các key khác
+                console.warn(`⚠️ Key ${k._id} failed (${errorInfo.type}), trying next key...`);
                 continue;
             }
         }
-        throw lastError || new Error("All Gemini API keys failed for conflict check");
+
+        // Nếu tất cả key đều fail, throw error với thông tin chi tiết
+        if (lastError) {
+            const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
+            throw new ApiKeyError(lastError, 'vi');
+        }
+
+        throw new Error("All Gemini API keys failed for conflict check");
     }
 
     // --- HÀM MỚI: Gọi Gemini để tìm các nhóm ID xung đột ---
@@ -818,8 +937,13 @@ export class GeminiService {
                 }
             } catch (err: any) {
                 const responseTime = Date.now() - startTime;
+
+                // Phân tích lỗi API key
+                const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../shared/apiKeyErrorHandler");
+                const errorInfo = analyzeApiKeyError(err);
                 lastError = err;
-                console.error(" Gemini findConflictGroups error:", err);
+
+                console.error("❌ Gemini findConflictGroups error:", err, `[${errorInfo.type}]`);
 
                 const modelName = k.model_name || 'gemini-2.0-flash-001';
                 logApiUsage({
@@ -831,14 +955,32 @@ export class GeminiService {
                     request_type: 'text',
                     endpoint: 'findConflictGroups',
                     status: 'failed',
-                    status_code: err.status || 500,
+                    status_code: err.status || err.statusCode || 500,
                     error_message: err.message || 'Unknown error',
+                    error_type: errorInfo.type,
                     response_time: responseTime,
                 }).catch(logErr => console.error('Failed to log API usage:', logErr));
 
+                // Disable key nếu cần (invalid, unauthorized)
+                if (errorInfo.shouldDisableKey) {
+                    try {
+                        await this.apiKeyService.disableKey(k._id);
+                        console.warn(`⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
+                    } catch { /* ignore */ }
+                }
+
+                // ✅ THAY ĐỔI: Lưu lại lỗi nhưng tiếp tục thử các key khác
+                console.warn(`⚠️ Key ${k._id} failed (${errorInfo.type}), trying next key...`);
                 continue;
             }
         }
-        throw lastError || new Error("All Gemini API keys failed for conflict grouping");
+
+        // Nếu tất cả key đều fail, throw error với thông tin chi tiết
+        if (lastError) {
+            const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
+            throw new ApiKeyError(lastError, 'vi');
+        }
+
+        throw new Error("All Gemini API keys failed for conflict grouping");
     }
 }

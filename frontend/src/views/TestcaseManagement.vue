@@ -30,8 +30,8 @@
       <!-- Action Header -->
       <div class="action-header">
         <div class="header-left">
-          <h2>Test Case Management</h2>
-          <p class="subtitle">Manage and execute test cases for your requirements</p>
+          <!-- <h2>Test Case Management</h2>
+          <p class="subtitle">Manage and execute test cases for your requirements</p> -->
         </div>
         <div class="header-actions">
           <button class="btn-secondary" @click="showGenerateModal = true" :disabled="loading">

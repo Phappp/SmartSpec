@@ -37,6 +37,19 @@
           </button>
         </div>
 
+        <!-- Drag Settings -->
+        <div class="toolbar-group">
+          <button 
+            class="toolbar-btn" 
+            :class="{ active: snapToGrid }"
+            @click="snapToGrid = !snapToGrid" 
+            title="Snap to Grid (Ctrl+G)"
+          >
+            <span class="material-symbols-outlined">grid_on</span>
+            Snap
+          </button>
+        </div>
+
         <!-- Export Controls -->
         <div class="toolbar-group">
           <button class="toolbar-btn" @click="exportAsSVG" title="Export as SVG">
@@ -152,15 +165,15 @@
           />
         </g>
 
-        <!-- Swimlanes -->
-        <g class="swimlanes-layer" v-if="showSwimlanes && computedLanes.length > 0">
+        <!-- Swimlanes - Tạm thời ẩn -->
+        <g class="swimlanes-layer" v-if="false && showSwimlanes && computedLanes.length > 0">
           <g v-for="(lane, index) in computedLanes" :key="`lane-${lane.id}`">
-            <!-- Lane background -->
+            <!-- Lane background với chiều cao giới hạn -->
             <rect
               :x="getLaneX(index)"
-              :y="virtualSpace.minY"
+              :y="virtualSpace.minY + laneHeaderHeight"
               :width="getLaneWidth()"
-              :height="virtualSpace.height"
+              :height="laneMaxHeight"
               :class="['swimlane-bg', index % 2 === 0 ? 'swimlane-even' : 'swimlane-odd']"
             />
 
@@ -175,13 +188,25 @@
               {{ lane.name || `Lane ${index + 1}` }}
             </text>
 
+            <!-- Lane boundary (bottom) -->
+            <line
+              :x1="getLaneX(index)"
+              :y1="virtualSpace.minY + laneHeaderHeight + laneMaxHeight"
+              :x2="getLaneX(index) + getLaneWidth()"
+              :y2="virtualSpace.minY + laneHeaderHeight + laneMaxHeight"
+              class="swimlane-boundary"
+              stroke="#d1d5db"
+              stroke-width="2"
+              stroke-dasharray="5,5"
+            />
+
             <!-- Lane separator -->
             <line
               v-if="index > 0"
               :x1="getLaneX(index)"
-              :y1="virtualSpace.minY"
+              :y1="virtualSpace.minY + laneHeaderHeight"
               :x2="getLaneX(index)"
-              :y2="virtualSpace.maxY"
+              :y2="virtualSpace.minY + laneHeaderHeight + laneMaxHeight"
               class="swimlane-separator"
             />
           </g>
@@ -280,6 +305,7 @@
               :width="getNodeLabelSize(node).width"
               :height="getNodeLabelSize(node).height"
               class="node-content"
+              style="pointer-events: none;"
             >
               <div
                 class="node-label"
@@ -447,12 +473,16 @@ export default {
       isExporting: false,
       isSaving: false,
       lastSaved: null,
+      // Drag settings
+      snapToGrid: false,
+      gridSize: 20,
+      dragSmoothness: 1, // 1 = immediate, higher = smoother but slower
 
       virtualSpace: {
-        minX: 0,
-        maxX: 1200,
-        minY: 0,
-        maxY: 800,
+        minX: -1000,
+        maxX: 2200,
+        minY: -1000,
+        maxY: 1800,
         get width() {
           return this.maxX - this.minX
         },
@@ -471,6 +501,7 @@ export default {
       nodeSpacing: 120,
       laneHeaderHeight: 60,
       horizontalSpacing: 200,
+      laneMaxHeight: 2000,
     }
   },
   computed: {
@@ -499,6 +530,18 @@ export default {
 
       return nodes.map((node, index) => {
         const { width, height } = this.getNodeSize(node.type)
+        
+        // Nếu node có position từ database, sử dụng nó
+        let x, y
+        if (node.position && typeof node.position.x === 'number' && typeof node.position.y === 'number') {
+          x = node.position.x
+          y = node.position.y
+        } else {
+          // Tính vị trí mặc định nếu không có position
+          x = this.virtualSpace.centerX + (index % 5) * 150
+          y = this.virtualSpace.centerY - 200 + Math.floor(index / 5) * 100
+        }
+
         return {
           id: node.id || `node-${index}`,
           type: node.type || 'action',
@@ -506,17 +549,16 @@ export default {
           lane_id: node.lane_id || null,
           width: width,
           height: height,
-          // ✅ Copy position từ node gốc để UI cập nhật đúng
-          position: node.position ? { ...node.position } : null,
+          x: x,
+          y: y,
+          position: node.position ? { ...node.position } : { x, y },
           _originalData: node,
         }
       })
     },
     positionedNodes() {
-      if (this.computedNodes.length === 0) return []
-      const nodes = JSON.parse(JSON.stringify(this.computedNodes))
-      this.calculateNodeLayout(nodes)
-      return nodes
+      // Trả về nodes với vị trí đã tính toán
+      return this.computedNodes
     },
     computedEdges() {
       const edges = this.safeDiagramData.edges
@@ -592,303 +634,6 @@ export default {
     this.cleanupFullscreenListener()
   },
   methods: {
-    // ============ LAYOUT METHODS ============
-    calculateNodeLayout(nodes) {
-      const graph = this.buildGraph(nodes)
-      const startNode = nodes.find((node) => node.type === 'start')
-      if (!startNode) return
-      this.calculatePositionsBFS(nodes, graph, startNode)
-      this.adjustPositionsByLanes(nodes)
-    },
-
-    buildGraph(nodes) {
-      const graph = {}
-      const edges = this.safeDiagramData.edges
-
-      nodes.forEach((node) => {
-        graph[node.id] = { node, children: [], parents: [] }
-      })
-
-      edges.forEach((edge) => {
-        if (graph[edge.from] && graph[edge.to]) {
-          graph[edge.from].children.push(graph[edge.to])
-          graph[edge.to].parents.push(graph[edge.from])
-        }
-      })
-
-      return graph
-    },
-
-    calculatePositionsBFS(nodes, graph, startNode) {
-      const visited = new Set()
-      const queue = [
-        {
-          node: graph[startNode.id],
-          depth: 0,
-          horizontalOrder: 0,
-          branch: 'main',
-          parentId: null,
-        },
-      ]
-
-      const depthMap = new Map()
-      const horizontalOrders = new Map()
-      const branchMap = new Map()
-      const parentMap = new Map()
-      let maxDepth = 0
-
-      while (queue.length > 0) {
-        const current = queue.shift()
-        const currentNode = current.node.node
-
-        if (visited.has(currentNode.id)) continue
-        visited.add(currentNode.id)
-
-        depthMap.set(currentNode.id, current.depth)
-        horizontalOrders.set(currentNode.id, current.horizontalOrder)
-        branchMap.set(currentNode.id, current.branch)
-        parentMap.set(currentNode.id, current.parentId)
-        maxDepth = Math.max(maxDepth, current.depth)
-
-        // Xử lý decision node - tạo nhánh mới
-        if (currentNode.type === 'decision') {
-          this.layoutDecisionBranches(
-            currentNode,
-            current.node.children,
-            current,
-            horizontalOrders,
-            branchMap
-          )
-        }
-
-        // Thêm children vào queue
-        current.node.children.forEach((child, index) => {
-          if (!visited.has(child.node.id)) {
-            const { horizontalOrder, branch } = this.calculateChildPosition(
-              currentNode,
-              child.node,
-              current,
-              index,
-              current.node.children.length
-            )
-
-            queue.push({
-              node: child,
-              depth: current.depth + 1,
-              horizontalOrder,
-              branch,
-              parentId: currentNode.id,
-            })
-          }
-        })
-      }
-
-      this.calculateActualPositions(nodes, depthMap, horizontalOrders, maxDepth)
-      this.adjustBranchPositions(nodes, depthMap, branchMap)
-    },
-
-    calculateChildPosition(parentNode, childNode, currentState, childIndex, totalChildren) {
-      let horizontalOrder = currentState.horizontalOrder
-      let branch = currentState.branch
-
-      // Xử lý decision branches - hỗ trợ cả Yes/No và True/False
-      if (parentNode.type === 'decision') {
-        const condition = this.getEdgeCondition(parentNode.id, childNode.id)
-        const normalizedCondition = this.normalizeCondition(condition)
-
-        if (normalizedCondition === 'yes') {
-          horizontalOrder = -2
-          branch = 'yes'
-        } else if (normalizedCondition === 'no') {
-          horizontalOrder = 2
-          branch = 'no'
-        }
-      }
-      // Xử lý merge node - trở về branch chính
-      else if (parentNode.type === 'merge') {
-        horizontalOrder = 0
-        branch = 'main'
-      }
-      // Các node khác - giữ nguyên branch, điều chỉnh horizontal order nhẹ
-      else if (branch === 'yes') {
-        horizontalOrder = currentState.horizontalOrder - 0.5
-      } else if (branch === 'no') {
-        horizontalOrder = currentState.horizontalOrder + 0.5
-      }
-      // Branch chính - phân bố đều
-      else if (totalChildren > 1) {
-        horizontalOrder =
-          currentState.horizontalOrder + (childIndex - (totalChildren - 1) / 2) * 0.8
-      }
-
-      return { horizontalOrder, branch }
-    },
-
-    // Chuẩn hóa điều kiện để hỗ trợ cả Yes/No và True/False
-    normalizeCondition(condition) {
-      if (!condition) return null
-
-      const lowerCondition = condition.toLowerCase().trim()
-      if (lowerCondition === 'yes' || lowerCondition === 'true' || lowerCondition === 'đúng') {
-        return 'yes'
-      } else if (
-        lowerCondition === 'no' ||
-        lowerCondition === 'false' ||
-        lowerCondition === 'sai'
-      ) {
-        return 'no'
-      }
-      return lowerCondition
-    },
-
-    layoutDecisionBranches(decisionNode, children, currentState, horizontalOrders, branchMap) {
-      children.forEach((child) => {
-        const condition = this.getEdgeCondition(decisionNode.id, child.node.id)
-        const normalizedCondition = this.normalizeCondition(condition)
-
-        if (normalizedCondition === 'yes') {
-          horizontalOrders.set(child.node.id, -2)
-          branchMap.set(child.node.id, 'yes')
-        } else if (normalizedCondition === 'no') {
-          horizontalOrders.set(child.node.id, 2)
-          branchMap.set(child.node.id, 'no')
-        }
-      })
-    },
-
-    calculateActualPositions(nodes, depthMap, horizontalOrders, maxDepth) {
-      let minOrder = Infinity
-      let maxOrder = -Infinity
-
-      horizontalOrders.forEach((order) => {
-        minOrder = Math.min(minOrder, order)
-        maxOrder = Math.max(maxOrder, order)
-      })
-
-      nodes.forEach((node) => {
-        // ✅ Ưu tiên sử dụng position đã lưu từ database nếu có
-        if (
-          node.position &&
-          typeof node.position.x === 'number' &&
-          typeof node.position.y === 'number'
-        ) {
-          node.x = node.position.x
-          node.y = node.position.y
-          return // Skip auto-calculation nếu đã có position
-        }
-
-        const depth = depthMap.get(node.id) || 0
-        const horizontalOrder = horizontalOrders.get(node.id) || 0
-
-        // Tính Y position (chỉ khi chưa có position)
-        if (node.type === 'start') {
-          node.y = this.laneHeaderHeight + 50
-        } else if (node.type === 'end') {
-          node.y = this.laneHeaderHeight + 50 + (maxDepth + 1) * this.nodeSpacing
-        } else {
-          node.y = this.laneHeaderHeight + 50 + depth * this.nodeSpacing
-        }
-
-        // Tính X position (chỉ khi chưa có position)
-        const orderRange = maxOrder - minOrder
-        const availableWidth = this.virtualSpace.width - 200
-
-        if (orderRange === 0) {
-          node.x = this.virtualSpace.width / 2
-        } else {
-          const normalizedOrder = (horizontalOrder - minOrder) / orderRange
-          node.x = 100 + normalizedOrder * availableWidth
-        }
-
-        // Lưu position vào node.position để đồng bộ với database
-        if (!node.position) {
-          node.position = { x: node.x, y: node.y }
-        }
-      })
-
-      // Start và End luôn ở giữa (chỉ override nếu chưa có position)
-      const startNode = nodes.find((node) => node.type === 'start')
-      const endNode = nodes.find((node) => node.type === 'end')
-      if (
-        startNode &&
-        (!startNode.position || (startNode.position.x === 0 && startNode.position.y === 0))
-      ) {
-        startNode.x = this.virtualSpace.width / 2
-        if (startNode.position) {
-          startNode.position.x = startNode.x
-        }
-      }
-      if (
-        endNode &&
-        (!endNode.position || (endNode.position.x === 0 && endNode.position.y === 0))
-      ) {
-        endNode.x = this.virtualSpace.width / 2
-        if (endNode.position) {
-          endNode.position.x = endNode.x
-        }
-      }
-    },
-
-    adjustBranchPositions(nodes, depthMap, branchMap) {
-      const branchNodes = { yes: [], no: [], main: [] }
-
-      nodes.forEach((node) => {
-        const branch = branchMap.get(node.id) || 'main'
-        branchNodes[branch].push(node)
-      })
-
-      const branchSpacing = 180
-
-      // Căn chỉnh nhánh Yes sang trái
-      if (branchNodes.yes.length > 0) {
-        const targetX = this.virtualSpace.width / 2 - branchSpacing
-        branchNodes.yes.forEach((node, index) => {
-          // Phân tán các node trong cùng nhánh theo chiều dọc
-          const spread = (index - (branchNodes.yes.length - 1) / 2) * 30
-          node.x = targetX + spread
-        })
-      }
-
-      // Căn chỉnh nhánh No sang phải
-      if (branchNodes.no.length > 0) {
-        const targetX = this.virtualSpace.width / 2 + branchSpacing
-        branchNodes.no.forEach((node, index) => {
-          const spread = (index - (branchNodes.no.length - 1) / 2) * 30
-          node.x = targetX + spread
-        })
-      }
-
-      // Nhánh chính giữ nguyên vị trí trung tâm
-      if (branchNodes.main.length > 0) {
-        branchNodes.main.forEach((node) => {
-          if (node.type !== 'start' && node.type !== 'end') {
-            node.x = this.virtualSpace.width / 2
-          }
-        })
-      }
-    },
-
-    adjustPositionsByLanes(nodes) {
-      if (this.computedLanes.length === 0) return
-
-      const laneWidth = this.virtualSpace.width / this.computedLanes.length
-
-      nodes.forEach((node) => {
-        const laneIndex = this.computedLanes.findIndex((lane) => lane.id === node.lane_id)
-        if (laneIndex !== -1) {
-          const laneCenter = laneIndex * laneWidth + laneWidth / 2
-          const laneMinX = laneIndex * laneWidth + 60
-          const laneMaxX = (laneIndex + 1) * laneWidth - 60
-
-          node.x = Math.max(laneMinX, Math.min(laneMaxX, node.x))
-
-          if (node.x === laneMinX || node.x === laneMaxX) {
-            node.x = laneCenter
-          }
-        }
-      })
-    },
-
     // ============ NODE METHODS ============
     getNodeSize(type) {
       switch (type) {
@@ -1115,6 +860,22 @@ export default {
       return edge ? edge.condition : null
     },
 
+    normalizeCondition(condition) {
+      if (!condition) return null
+
+      const lowerCondition = condition.toLowerCase().trim()
+      if (lowerCondition === 'yes' || lowerCondition === 'true' || lowerCondition === 'đúng') {
+        return 'yes'
+      } else if (
+        lowerCondition === 'no' ||
+        lowerCondition === 'false' ||
+        lowerCondition === 'sai'
+      ) {
+        return 'no'
+      }
+      return lowerCondition
+    },
+
     // ============ DRAG AND DROP METHODS ============
     startDrag(element, type, event) {
       if (!this.editable || this.previewMode) return
@@ -1160,15 +921,25 @@ export default {
       let newX = svgPoint.x - this.dragOffset.x
       let newY = svgPoint.y - this.dragOffset.y
 
+      // Giới hạn trong virtual space với padding an toàn
       const safePadding = 20
+      const nodeHalfWidth = (this.draggingElement.width || 60) / 2
+      const nodeHalfHeight = (this.draggingElement.height || 60) / 2
+
       newX = Math.max(
-        this.virtualSpace.minX + safePadding,
-        Math.min(this.virtualSpace.maxX - safePadding, newX)
+        this.virtualSpace.minX + nodeHalfWidth + safePadding,
+        Math.min(this.virtualSpace.maxX - nodeHalfWidth - safePadding, newX)
       )
       newY = Math.max(
-        this.virtualSpace.minY + safePadding,
-        Math.min(this.virtualSpace.maxY - safePadding, newY)
+        this.virtualSpace.minY + nodeHalfHeight + safePadding,
+        Math.min(this.virtualSpace.maxY - nodeHalfHeight - safePadding, newY)
       )
+
+      // Snap to grid nếu được bật
+      if (this.snapToGrid) {
+        newX = Math.round(newX / this.gridSize) * this.gridSize
+        newY = Math.round(newY / this.gridSize) * this.gridSize
+      }
 
       this.dragPosition = { x: newX, y: newY }
 
@@ -1176,15 +947,25 @@ export default {
         this.draggingElement.x = newX
         this.draggingElement.y = newY
 
-        // ✅ Cập nhật position vào node.position để đồng bộ với database
+        // Cập nhật position để đồng bộ với database
         if (!this.draggingElement.position) {
           this.draggingElement.position = { x: 0, y: 0 }
         }
         this.draggingElement.position.x = newX
         this.draggingElement.position.y = newY
 
+        // Cập nhật original data nếu có
+        if (this.draggingElement._originalData) {
+          if (!this.draggingElement._originalData.position) {
+            this.draggingElement._originalData.position = { x: 0, y: 0 }
+          }
+          this.draggingElement._originalData.position.x = newX
+          this.draggingElement._originalData.position.y = newY
+        }
+
         this.showSavingIndicator()
 
+        // Emit events để parent component biết có thay đổi
         this.$emit('position-updated', {
           element: this.draggingElement,
           type: this.draggingType,
@@ -1331,10 +1112,10 @@ export default {
     updateVirtualSpace() {
       const allElements = [...this.positionedNodes]
       if (allElements.length === 0) {
-        this.virtualSpace.minX = 0
-        this.virtualSpace.maxX = this.containerWidth
-        this.virtualSpace.minY = 0
-        this.virtualSpace.maxY = this.containerHeight
+        this.virtualSpace.minX = -1000
+        this.virtualSpace.maxX = 2200
+        this.virtualSpace.minY = -1000
+        this.virtualSpace.maxY = 1800
         return
       }
 
@@ -1348,7 +1129,7 @@ export default {
         { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
       )
 
-      const padding = 100
+      const padding = 200
       this.virtualSpace.minX = Math.min(this.virtualSpace.minX, bounds.minX - padding)
       this.virtualSpace.maxX = Math.max(this.virtualSpace.maxX, bounds.maxX + padding)
       this.virtualSpace.minY = Math.min(this.virtualSpace.minY, bounds.minY - padding)
@@ -1430,8 +1211,12 @@ export default {
       return new Promise((resolve) => {
         setTimeout(async () => {
           try {
+            console.log('🖼️ ActivityDiagramRenderer: Starting preview generation...')
             const allElements = [...this.positionedNodes]
+            console.log('🖼️ ActivityDiagramRenderer: Elements count:', allElements.length)
+            
             if (allElements.length === 0) {
+              console.log('🖼️ ActivityDiagramRenderer: No elements, returning null')
               resolve(null)
               return
             }
@@ -1446,9 +1231,13 @@ export default {
               { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
             )
 
+            console.log('🖼️ ActivityDiagramRenderer: Bounds:', bounds)
+
             const padding = 80
             const contentWidth = Math.max(bounds.maxX - bounds.minX + padding * 2, 400)
             const contentHeight = Math.max(bounds.maxY - bounds.minY + padding * 2, 300)
+
+            console.log('🖼️ ActivityDiagramRenderer: Content size:', contentWidth, 'x', contentHeight)
 
             const svgString = this.generateExportSVG(bounds, padding, contentWidth, contentHeight)
             const svgData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`
@@ -1469,12 +1258,16 @@ export default {
               ctx.drawImage(img, 0, 0, contentWidth, contentHeight)
 
               const base64 = canvas.toDataURL('image/png', 0.8)
+              console.log('🖼️ ActivityDiagramRenderer: Preview generation completed successfully')
               resolve(base64)
             }
-            img.onerror = () => resolve(null)
+            img.onerror = (error) => {
+              console.error('🖼️ ActivityDiagramRenderer: Image load error:', error)
+              resolve(null)
+            }
             img.src = svgData
           } catch (error) {
-            console.error('Error generating preview image:', error)
+            console.error('🖼️ ActivityDiagramRenderer: Error generating preview image:', error)
             resolve(null)
           }
         }, 100)
@@ -1497,34 +1290,6 @@ export default {
   <!-- Background trắng -->
   <rect x="${bounds.minX - padding}" y="${bounds.minY - padding}" 
         width="${contentWidth}" height="${contentHeight}" fill="white" />
-
-  <!-- Render Swimlanes -->
-  ${this.computedLanes
-    .map((lane, index) => {
-      const laneX = this.getLaneX(index) - bounds.minX + padding
-      const laneWidth = this.getLaneWidth()
-      const laneName = lane.name || `Lane ${index + 1}`
-
-      return `
-      <rect x="${laneX}" y="${padding}" 
-            width="${laneWidth}" height="${contentHeight - padding * 2}"
-            fill="${index % 2 === 0 ? '#f8fafc' : '#ffffff'}" 
-            stroke="#e5e7eb" stroke-width="1" />
-      <text x="${laneX + laneWidth / 2}" y="${padding + 30}" 
-            font-size="14" font-weight="600" fill="#6b7280" 
-            text-anchor="middle" dominant-baseline="middle">
-        ${laneName}
-      </text>
-      ${
-        index > 0
-          ? `<line x1="${laneX}" y1="${padding}" x2="${laneX}" y2="${
-              contentHeight - padding
-            }" stroke="#e5e7eb" stroke-width="1" />`
-          : ''
-      }
-    `
-    })
-    .join('')}
 
   <!-- Render Edges -->
   ${this.computedEdges
@@ -1605,10 +1370,25 @@ export default {
     },
 
     adjustPathForExport(path, bounds, padding) {
-      return path.replace(/(M|L) (\d+) (\d+)/g, (match, command, x, y) => {
-        const adjustedX = parseInt(x) - bounds.minX + padding
-        const adjustedY = parseInt(y) - bounds.minY + padding
-        return `${command} ${adjustedX} ${adjustedY}`
+      if (!path) return ''
+      // Xử lý tất cả các lệnh SVG path: M, L, C, Q, S, T, Z
+      return path.replace(/([MmLlCcQqSsTtZz])\s*([-\d.]+(?:\s+[-\d.]+)*)/g, (match, command, coords) => {
+        if (command.toLowerCase() === 'z') {
+          return command // Z không có tọa độ
+        }
+        
+        const numbers = coords.trim().split(/\s+/).map(Number)
+        const adjusted = numbers.map((num, index) => {
+          if (index % 2 === 0) {
+            // X coordinate
+            return num - bounds.minX + padding
+          } else {
+            // Y coordinate
+            return num - bounds.minY + padding
+          }
+        })
+        
+        return `${command} ${adjusted.join(' ')}`
       })
     },
 
@@ -1805,6 +1585,10 @@ export default {
               event.preventDefault()
               this.fitToViewport()
               break
+            case 'g':
+              event.preventDefault()
+              this.snapToGrid = !this.snapToGrid
+              break
           }
         }
         if (event.key === 'F11') {
@@ -1822,6 +1606,7 @@ export default {
   },
 }
 </script>
+
 <style scoped>
 .activity-diagram-renderer {
   display: flex;
@@ -1913,6 +1698,15 @@ export default {
   color: white;
 }
 
+.toolbar-btn.active {
+  background: #1a365d;
+  color: white;
+}
+
+.toolbar-btn.active:hover {
+  background: #2d4a8a;
+}
+
 .toolbar-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1985,6 +1779,8 @@ export default {
   cursor: grabbing;
 }
 
+/* .activity-node - Removed pointer-events: none to allow drag events */
+
 .node-start {
   fill: #10b981;
   stroke: #047857;
@@ -2023,6 +1819,10 @@ export default {
   stroke-width: 2;
 }
 
+.node-content {
+  pointer-events: none;
+}
+
 .node-label {
   font-size: 12px;
   font-weight: 500;
@@ -2046,15 +1846,21 @@ export default {
 }
 
 /* Edge Styles */
+.edge-group {
+  pointer-events: none;
+}
+
 .activity-edge {
   stroke: #374151;
   stroke-width: 2;
   fill: none;
+  pointer-events: none;
 }
 
 .edge-label {
   font-size: 10px;
   fill: #6b7280;
+  pointer-events: none;
 }
 
 /* Swimlane Styles */
@@ -2085,6 +1891,10 @@ export default {
 .swimlane-separator {
   stroke: #d1d5db;
   stroke-width: 2;
+}
+
+.swimlane-boundary {
+  pointer-events: none;
 }
 
 /* Canvas Boundary */

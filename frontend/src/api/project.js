@@ -35,7 +35,12 @@ export const usecaseApi = {
   updateUsecase: (versionId, usecaseId, data) =>
     axiosClient.put(`/api/usecaseManagement/versions/${versionId}/usecases/${usecaseId}`, data),
   deleteUsecase: (versionId, usecaseId) =>
-    axiosClient.delete(`/api/usecaseManagement/versions/${versionId}/usecases/${usecaseId}`)
+    axiosClient.delete(`/api/usecaseManagement/versions/${versionId}/usecases/${usecaseId}`),
+  // Bulk operations
+  bulkUpdateUsecases: (versionId, data) =>
+    axiosClient.put(`/api/usecaseManagement/versions/${versionId}/usecases/bulk-update`, data),
+  bulkDeleteUsecases: (versionId, data) =>
+    axiosClient.delete(`/api/usecaseManagement/versions/${versionId}/usecases/bulk-delete`, { data })
 };
 
 // DATABASE

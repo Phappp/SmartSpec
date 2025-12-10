@@ -46,15 +46,23 @@ export class OrchestratorController {
         // const userId = req.getSubject();
         try {
             // Không `await` ở đây để nó chạy nền và trả về response ngay lập tức
+            // Nhưng cần catch lỗi để log và đảm bảo version status được cập nhật
             this.service.run(project_id, version_id, {
                 files,
                 rawText,
                 mode
-            }, language, userId);
+            }, language, userId).catch((error: any) => {
+                // Log lỗi để debug
+                console.error("❌ Error in background processing:", error);
+                // Version status đã được cập nhật thành "failed" trong service.run()
+                // Frontend sẽ nhận được thông báo lỗi qua polling status
+            });
 
             // Trả về response ngay lập tức để không bắt người dùng chờ
             return res.status(202).json({ success: true, message: 'Processing started. Check status for results.' });
         } catch (e: any) {
+            // Lỗi xảy ra trước khi service.run() được gọi (validation, etc.)
+            console.error("❌ Error before processing:", e);
             return res.status(500).json({ success: false, error: e?.message || 'Internal error' });
         }
     }
@@ -96,7 +104,12 @@ export class OrchestratorController {
                 { files: [], rawText: '', mode: 'full' },
                 language,
                 userId 
-            );
+            ).catch((error: any) => {
+                // Log lỗi để debug
+                console.error("❌ Error in retry background processing:", error);
+                // Version status đã được cập nhật thành "failed" trong service.run()
+                // Frontend sẽ nhận được thông báo lỗi qua polling status
+            });
 
             return res.status(202).json({ success: true, message: 'Retry process started.' });
 

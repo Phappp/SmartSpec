@@ -14,6 +14,7 @@ interface LogApiUsageParams {
   status: 'success' | 'failed' | 'timeout';
   status_code?: number;
   error_message?: string;
+  error_type?: string;
   response_time?: number;
   ip_address?: string;
   user_agent?: string;
@@ -39,6 +40,7 @@ export async function logApiUsage(params: LogApiUsageParams): Promise<void> {
       status: params.status,
       status_code: params.status_code || null,
       error_message: params.error_message || null,
+      error_type: params.error_type || null,
       response_time: params.response_time || 0,
       ip_address: params.ip_address || null,
       user_agent: params.user_agent || null,

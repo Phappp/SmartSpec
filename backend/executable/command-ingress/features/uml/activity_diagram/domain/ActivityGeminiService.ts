@@ -299,8 +299,11 @@ export class ActivityGeminiService {
 
       } catch (err: any) {
         const responseTime = Date.now() - startTime;
+
+        // Phân tích lỗi API key
+        const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../../shared/apiKeyErrorHandler");
+        const errorInfo = analyzeApiKeyError(err);
         lastError = err;
-        const msg = (err?.message || '').toLowerCase();
 
         const { logApiUsage } = await import("../../../../features/stats/domain/apiUsageLogger");
         const modelName = k.model_name || 'gemini-2.0-flash-001';
@@ -313,20 +316,37 @@ export class ActivityGeminiService {
           request_type: 'text',
           endpoint: 'generateActivityDiagram',
           status: 'failed',
-          status_code: err.status || 500,
+          status_code: err.status || err.statusCode || 500,
           error_message: err.message || 'Unknown error',
+          error_type: errorInfo.type,
           response_time: responseTime,
         }).catch(logErr => console.error('Failed to log API usage:', logErr));
 
-        if (msg.includes('invalid') || msg.includes('unauthorized')) {
+        // Disable key nếu cần (invalid, unauthorized)
+        if (errorInfo.shouldDisableKey) {
           try {
             await this.apiKeyService.disableKey(k._id);
+            console.warn(`⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
           } catch { }
         }
+
+        // Nếu là lỗi không retryable (quota, invalid key), không thử key tiếp theo
+        if (!errorInfo.retryable && errorInfo.type !== ApiKeyErrorType.RATE_LIMIT) {
+          const { ApiKeyError } = await import("../../../../shared/apiKeyErrorHandler");
+          throw new ApiKeyError(err, 'vi');
+        }
+
         continue;
       }
     }
-    throw lastError || new Error("All Gemini keys failed for activity generation.");
+
+    // Nếu tất cả các key đều thất bại
+    if (lastError) {
+      const { ApiKeyError } = await import("../../../../shared/apiKeyErrorHandler");
+      throw new ApiKeyError(lastError, 'vi');
+    }
+
+    throw new Error("All Gemini keys failed for activity generation.");
   }
 
   private cleanJson(text: string): string {

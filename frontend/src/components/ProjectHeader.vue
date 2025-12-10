@@ -211,14 +211,6 @@ export default {
       type: Boolean,
       default: false,
     },
-    processingProgress: {
-      type: Number,
-      default: 0,
-    },
-    currentStage: {
-      type: String,
-      default: 'Initializing...',
-    },
     activeUsers: {
       type: Array,
       default: () => [],

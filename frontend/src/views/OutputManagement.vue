@@ -5,8 +5,6 @@
       :versions="versions"
       :selected-version-id="selectedVersionId"
       :is-retrying="isRetrying"
-      :processing-progress="processingProgress"
-      :current-stage="currentStage"
       :active-users="activeUsers"
       @version-selected="handleVersionSelect"
       @retry-analysis="handleRetry"
@@ -390,8 +388,6 @@ export default {
 
       toast: useToast(),
       isRetrying: false,
-      processingProgress: 0,
-      currentStage: '',
     }
   },
   computed: {

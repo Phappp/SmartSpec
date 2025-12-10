@@ -16,19 +16,16 @@
         </button>
       </div>
     </div>
-    <!-- Incremental Analysis Progress -->
+    <!-- Incremental Analysis Loading -->
     <div v-if="isProcessingIncremental" class="processing-banner">
-      <div class="progress-content">
-        <span class="material-symbols-outlined progress-icon">update</span>
-        <div class="progress-text">
+      <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">
           <h4>Incremental Analysis in Progress</h4>
-          <p>{{ currentStage }} - {{ processingProgress }}%</p>
+          <p>Please wait while we analyze your inputs...</p>
           <small v-if="isRemoteProgress" class="remote-indicator">
             🔄 Updated from team member
           </small>
-        </div>
-        <div class="progress-bar-small">
-          <div class="progress-fill" :style="{ width: processingProgress + '%' }"></div>
         </div>
       </div>
     </div>
@@ -81,14 +78,6 @@ export default {
     unprocessedInputsCount: {
       type: Number,
       default: 0,
-    },
-    processingProgress: {
-      type: Number,
-      default: 0,
-    },
-    currentStage: {
-      type: String,
-      default: 'Initializing...',
     },
     isRemoteProgress: {
       type: Boolean,
@@ -184,45 +173,35 @@ export default {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.progress-content {
+.loading-content {
   display: flex;
   align-items: center;
   gap: 16px;
 }
 
-.progress-icon {
-  font-size: 28px;
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top: 3px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
-.progress-text {
+.loading-text {
   flex: 1;
 }
 
-.progress-text h4 {
+.loading-text h4 {
   margin: 0 0 4px 0;
   font-size: 16px;
   font-weight: 600;
 }
 
-.progress-text p {
+.loading-text p {
   margin: 0;
   opacity: 0.9;
   font-size: 14px;
-}
-
-.progress-bar-small {
-  width: 120px;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.progress-bar-small .progress-fill {
-  height: 100%;
-  background: white;
-  border-radius: 3px;
-  transition: width 0.3s ease;
 }
 
 .button-spinner-small {

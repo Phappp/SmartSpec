@@ -58,8 +58,8 @@
       <div v-else-if="database" class="database-main-content">
         <div class="content-header">
           <div class="header-left">
-            <h2>Database Management</h2>
-            <p class="description">{{ database.description }}</p>
+            <!-- <h2>Database Management</h2>
+            <p class="description">{{ database.description }}</p> -->
             <div class="database-meta">
               <span class="meta-item">
                 <span class="material-symbols-outlined">table</span>
@@ -615,18 +615,20 @@ export default {
 
     async generateDatabaseSchema() {
       if (!this.selectedVersionId) {
-        this.toast.error('Please select a version first')
+        this.toast.error('Vui lòng chọn version trước')
         return
       }
 
       this.generatingSchema = true
       try {
         const { data } = await generateDatabaseSchema(this.selectedVersionId)
-        this.toast.success('Database schema generated successfully!')
+        this.toast.success('Tạo database schema thành công!')
         await this.loadDatabaseData()
       } catch (err) {
         console.error('Error generating database schema:', err)
-        this.toast.error(err.response?.data?.message || 'Failed to generate database schema')
+        const { formatErrorForDisplay } = await import('@/utils/errorMessages')
+        const errorMessage = formatErrorForDisplay(err, 'Không thể tạo database schema. Vui lòng thử lại.')
+        this.toast.error(errorMessage)
       } finally {
         this.generatingSchema = false
       }

@@ -30,8 +30,8 @@
       <!-- Header với Actions -->
       <div class="content-header">
         <div class="header-left">
-          <h2>UML Diagram Management</h2>
-          <p class="subtitle">Manage and visualize your system diagrams</p>
+          <!-- <h2>UML Diagram Management</h2>
+          <p class="subtitle">Manage and visualize your system diagrams</p> -->
         </div>
         <div class="header-actions">
           <button class="btn-secondary" @click="refreshDiagrams">
@@ -1871,6 +1871,7 @@ export default {
   flex: 1;
   max-width: 1400px;
   margin: 0 auto;
+  margin-top: 24px;
   width: 100%;
 }
 

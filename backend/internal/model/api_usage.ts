@@ -62,6 +62,10 @@ const apiUsageSchema = new Schema({
         type: String,
         default: null,
     },
+    error_type: {
+        type: String,
+        default: null,
+    },
     // Thời gian xử lý (ms)
     response_time: {
         type: Number,

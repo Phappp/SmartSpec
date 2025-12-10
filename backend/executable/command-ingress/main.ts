@@ -8,7 +8,7 @@ import mongoose from "mongoose";
 import env from "./utils/env";
 
 async function start() {
-  await mongoose.connect(env.MONGO_URI);
+  await mongoose.connect(env.MONGO_URI); 
   const redisClient = undefined;
   const server = createHttpServer(redisClient);
 

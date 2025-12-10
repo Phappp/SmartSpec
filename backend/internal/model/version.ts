@@ -42,6 +42,11 @@ const versionSchema = new Schema({
         type: String,
         enum: ["editing", "locked", "none"],
         default: "none"
+    },
+    // ===== TRƯỜNG MỚI: CHECKPOINT CHO RESUME =====
+    processing_checkpoint: {
+        type: Schema.Types.Mixed,
+        default: null
     }
 }, {
     timestamps: true
