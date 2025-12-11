@@ -8,9 +8,9 @@ export const getUsecaseDiagrams = (versionId) =>
 export const getUsecaseDiagramById = (ucId) =>
     axiosClient.get(`/api/usecase-diagram/${ucId}`);
 
-export const generateUsecaseDiagram = (versionId, lang) =>
+export const generateUsecaseDiagram = (versionId, language) =>
     axiosClient.post(`/api/usecase-diagram/versions/${versionId}/generate-usecase-diagram`, {
-        lang
+        language
     });
 
 export const updateActor = (ucId, actorId, data) =>

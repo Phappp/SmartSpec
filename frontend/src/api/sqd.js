@@ -10,10 +10,10 @@ export const getSequenceDiagramById = (ucId) =>
     axiosClient.get(`/api/sequence-diagram/sequence-diagrams/${ucId}`); // Đổi endpoint
 
 // Giữ nguyên generate
-export const generateSequenceDiagram = (versionId, usecaseId, lang) =>
+export const generateSequenceDiagram = (versionId, usecaseId, language) =>
     axiosClient.post(`/api/sequence-diagram/versions/${versionId}/generate-sequence-diagram`, {
         usecaseId,
-        lang
+        language
     });
 
 // ==================== LIFELINE MANAGEMENT API ====================

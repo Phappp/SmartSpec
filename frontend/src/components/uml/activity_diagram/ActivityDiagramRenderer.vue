@@ -398,6 +398,26 @@
       </svg>
     </div>
 
+    <!-- Auto-fix Suggestion Banner -->
+    <div
+      v-if="showAutoFixSuggestion && !previewMode && editable"
+      class="auto-fix-banner"
+    >
+      <div class="auto-fix-content">
+        <span class="material-symbols-outlined">info</span>
+        <span class="auto-fix-text">
+          Có {{ nodesOutsideLaneCount }} node đang nằm ngoài lane. Nhấp để tự động sắp xếp lại.
+        </span>
+        <button class="auto-fix-btn" @click="autoFixNodesInLanes">
+          <span class="material-symbols-outlined">auto_fix_high</span>
+          Sắp xếp tự động
+        </button>
+        <button class="auto-fix-close" @click="dismissAutoFixSuggestion">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Status Bar - Ẩn trong preview mode và optimize mode -->
     <div v-if="!previewMode && !optimizeForPreview" class="status-bar">
       <div class="status-item">
@@ -521,6 +541,8 @@ export default {
       horizontalSpacing: 200,
       laneMaxHeight: 2000,
       fixedLaneWidth: 400, // Kích thước cố định cho mỗi lane
+      showAutoFixSuggestion: false,
+      autoFixDismissed: false,
     }
   },
   computed: {
@@ -660,6 +682,36 @@ export default {
       // Trả về nodes với vị trí đã tính toán
       return this.computedNodes
     },
+    nodesOutsideLaneCount() {
+      if (!this.computedLanes.length || this.autoFixDismissed) return 0
+      
+      let count = 0
+      this.computedNodes.forEach((node) => {
+        if (node.lane_id) {
+          const laneIndex = this.getLaneIndex(node.lane_id)
+          if (laneIndex !== -1) {
+            const laneX = this.getLaneX(laneIndex)
+            const laneWidth = this.getLaneWidth()
+            const nodeHalfWidth = node.width / 2
+            const nodeHalfHeight = node.height / 2
+            const safePadding = 20
+            
+            const laneMinX = laneX + safePadding + nodeHalfWidth
+            const laneMaxX = laneX + laneWidth - safePadding - nodeHalfWidth
+            const laneMinY = this.virtualSpace.minY + this.laneHeaderHeight + nodeHalfHeight + safePadding
+            const laneMaxY = this.virtualSpace.minY + this.laneHeaderHeight + this.laneMaxHeight - nodeHalfHeight - safePadding
+            
+            const isXInLane = node.x >= laneMinX && node.x <= laneMaxX
+            const isYInLane = node.y >= laneMinY && node.y <= laneMaxY
+            
+            if (!isXInLane || !isYInLane) {
+              count++
+            }
+          }
+        }
+      })
+      return count
+    },
     computedEdges() {
       const edges = this.safeDiagramData.edges
       if (!edges || edges.length === 0) return []
@@ -686,6 +738,10 @@ export default {
     diagramData: {
       handler(newData, oldData) {
         this.updateVirtualSpace()
+        // Kiểm tra nodes nằm ngoài lane để hiển thị gợi ý
+        this.$nextTick(() => {
+          this.checkNodesOutsideLanes()
+        })
         if (this.autoGeneratePreview && !this.previewGenerated) {
           this.$nextTick(() => {
             setTimeout(() => {
@@ -700,6 +756,16 @@ export default {
         }
       },
       deep: true,
+      immediate: true,
+    },
+    nodesOutsideLaneCount: {
+      handler(count) {
+        if (count > 0 && !this.autoFixDismissed) {
+          this.showAutoFixSuggestion = true
+        } else {
+          this.showAutoFixSuggestion = false
+        }
+      },
       immediate: true,
     },
     zoomLevel: {
@@ -1783,6 +1849,102 @@ export default {
       )
     },
 
+    // ============ AUTO-FIX METHODS ============
+    checkNodesOutsideLanes() {
+      // Logic này được xử lý trong computed nodesOutsideLaneCount
+      // Chỉ cần trigger để computed được tính lại
+      this.$forceUpdate()
+    },
+    
+    autoFixNodesInLanes() {
+      if (!this.editable || this.previewMode) return
+      
+      const nodesToFix = []
+      const safePadding = 20
+      
+      this.computedNodes.forEach((node) => {
+        if (node.lane_id) {
+          const laneIndex = this.getLaneIndex(node.lane_id)
+          if (laneIndex !== -1) {
+            const laneX = this.getLaneX(laneIndex)
+            const laneWidth = this.getLaneWidth()
+            const nodeHalfWidth = node.width / 2
+            const nodeHalfHeight = node.height / 2
+            
+            const laneMinX = laneX + safePadding + nodeHalfWidth
+            const laneMaxX = laneX + laneWidth - safePadding - nodeHalfWidth
+            const laneMinY = this.virtualSpace.minY + this.laneHeaderHeight + nodeHalfHeight + safePadding
+            const laneMaxY = this.virtualSpace.minY + this.laneHeaderHeight + this.laneMaxHeight - nodeHalfHeight - safePadding
+            
+            const isXInLane = node.x >= laneMinX && node.x <= laneMaxX
+            const isYInLane = node.y >= laneMinY && node.y <= laneMaxY
+            
+            if (!isXInLane || !isYInLane) {
+              // Tính vị trí mới trong lane
+              const newX = laneX + laneWidth / 2
+              
+              // Tìm Y phù hợp - đặt ở đầu lane hoặc giữa các node khác
+              let newY = laneMinY
+              
+              // Tìm node gần nhất trong cùng lane để đặt phía dưới
+              const nodesInSameLane = this.computedNodes.filter(n => 
+                n.lane_id === node.lane_id && n.id !== node.id
+              )
+              
+              if (nodesInSameLane.length > 0) {
+                const maxY = Math.max(...nodesInSameLane.map(n => n.y))
+                newY = Math.min(maxY + 120, laneMaxY)
+              }
+              
+              nodesToFix.push({
+                node,
+                newPosition: { x: newX, y: newY }
+              })
+            }
+          }
+        }
+      })
+      
+      if (nodesToFix.length === 0) {
+        this.showAutoFixSuggestion = false
+        return
+      }
+      
+      // Cập nhật vị trí cho tất cả nodes
+      nodesToFix.forEach(({ node, newPosition }) => {
+        node.x = newPosition.x
+        node.y = newPosition.y
+        
+        // Cập nhật position trong original data
+        if (node._originalData) {
+          if (!node._originalData.position) {
+            node._originalData.position = { x: 0, y: 0 }
+          }
+          node._originalData.position.x = newPosition.x
+          node._originalData.position.y = newPosition.y
+        }
+        
+        // Emit event để parent component lưu
+        this.$emit('position-updated', {
+          element: node,
+          type: 'node',
+          position: newPosition,
+        })
+      })
+      
+      // Ẩn gợi ý sau khi fix
+      this.showAutoFixSuggestion = false
+      this.autoFixDismissed = true
+      
+      // Force update để render lại
+      this.$forceUpdate()
+    },
+    
+    dismissAutoFixSuggestion() {
+      this.showAutoFixSuggestion = false
+      this.autoFixDismissed = true
+    },
+
     // ============ UTILITY METHODS ============
     setupEventListeners() {
       document.addEventListener('mousemove', this.handleMouseMove)
@@ -2234,6 +2396,99 @@ export default {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
+/* Auto-fix Banner Styles */
+.auto-fix-banner {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 2px solid #f59e0b;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+  padding: 12px 20px;
+  min-width: 500px;
+  max-width: 90%;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.auto-fix-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auto-fix-content .material-symbols-outlined {
+  font-size: 24px;
+  color: #f59e0b;
+}
+
+.auto-fix-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #92400e;
+}
+
+.auto-fix-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #f59e0b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.auto-fix-btn:hover {
+  background: #d97706;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+}
+
+.auto-fix-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.auto-fix-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #92400e;
+  transition: all 0.2s ease;
+}
+
+.auto-fix-close:hover {
+  background: rgba(146, 64, 14, 0.1);
+}
+
+.auto-fix-close .material-symbols-outlined {
+  font-size: 20px;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .toolbar {
@@ -2259,6 +2514,30 @@ export default {
 
   .auto-save-status {
     display: none;
+  }
+  
+  .auto-fix-banner {
+    min-width: auto;
+    width: calc(100% - 32px);
+    left: 16px;
+    transform: none;
+    padding: 10px 16px;
+  }
+  
+  .auto-fix-content {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .auto-fix-text {
+    width: 100%;
+    font-size: 12px;
+  }
+  
+  .auto-fix-btn {
+    flex: 1;
+    padding: 6px 12px;
+    font-size: 12px;
   }
 }
 

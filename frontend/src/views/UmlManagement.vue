@@ -565,14 +565,14 @@
                 />
               </div>
 
-              <div class="form-group">
+              <!-- <div class="form-group">
                 <label>Description</label>
                 <textarea
                   v-model="generateForm.description"
                   rows="3"
                   placeholder="Enter diagram description"
                 ></textarea>
-              </div>
+              </div> -->
 
               <div class="modal-actions">
                 <button type="button" class="btn-secondary" @click="closeGenerateModal">
@@ -611,6 +611,7 @@
                   :editable="true"
                   :show-labels="showElementLabels"
                   :zoom-level="zoomLevel"
+                  :project-language="project?.language || 'vi-VN'"
                   @element-selected="handleElementSelect"
                   @position-updated="handlePositionUpdate"
                   @element-dragged="handleElementDrag"
@@ -1137,14 +1138,14 @@ export default {
               const { data } = await generateFromUsecase(
                 this.selectedVersionId,
                 this.generateForm.requirementId,
-                this.generateForm.lang
+                this.project?.language || this.generateForm.lang || 'vi-VN'
               )
               newDiagram = data?.data || data
             } else {
               const { data } = await generateFromActor(
                 this.selectedVersionId,
                 this.generateForm.actor,
-                this.generateForm.lang
+                this.project?.language || this.generateForm.lang || 'vi-VN'
               )
               newDiagram = data?.data || data
             }
@@ -1153,7 +1154,7 @@ export default {
             const { data: sequenceData } = await generateSequenceDiagram(
               this.selectedVersionId,
               this.generateForm.usecaseId,
-              this.generateForm.lang
+              this.project?.language || this.generateForm.lang || 'vi-VN'
             )
             newDiagram = sequenceData?.data || sequenceData
             break
@@ -1161,7 +1162,7 @@ export default {
           default:
             const { data: usecaseData } = await generateUsecaseDiagram(
               this.selectedVersionId,
-              this.generateForm.lang
+              this.project?.language || this.generateForm.lang || 'vi-VN'
             )
             newDiagram = usecaseData?.data || usecaseData
             break
