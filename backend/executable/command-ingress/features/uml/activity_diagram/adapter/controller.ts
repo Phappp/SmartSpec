@@ -61,12 +61,12 @@ export class ActivityDiagramController {
         handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
         return;
       }
-      const { project_id, version_id, lang, name, description } = req.body;
-      if (!project_id || !version_id || !lang || !name) {
-        res.status(400).json({ message: 'project_id, version_id, lang, và name là bắt buộc.' });
+      const { project_id, version_id, name, description } = req.body;
+      if (!project_id || !version_id || !name) {
+        res.status(400).json({ message: 'project_id, version_id, và name là bắt buộc.' });
         return;
       }
-      const result = await this.service.create(project_id, version_id, lang, name, description, userId);
+      const result = await this.service.create(project_id, version_id, name, description, userId);
       res.status(201).json({ message: 'Tạo activity diagram thành công!', data: result });
     } catch (err) {
       next(err);

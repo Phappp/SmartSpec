@@ -19,7 +19,6 @@ interface SequenceDiagramResponse {
 
   // Metadata khác
   related_requirements: string[];
-  linked_testcases: string[]; // Mảng các ID testcase
   created_by: string; // ID người tạo
   created_at: string; // ISO Date string
   updated_at: string; // ISO Date string
@@ -31,7 +30,7 @@ interface GenerateSequenceDiagramPayload {
   projectId: string;
   usecaseId: string; // BẮT BUỘC: ID của Usecase cần vẽ Sequence
   useCaseContext: any; // Danh sách requirements (hoặc các bước của Usecase)
-  lang: string; // Ngôn ngữ ('vi-VN' hoặc 'en-US')
+  language: string; // Ngôn ngữ ('vi-VN' hoặc 'en-US') - chỉ dùng cho prompt, không lưu vào DB
 }
 
 // Interface định nghĩa các phương thức của Service

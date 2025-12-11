@@ -67,18 +67,15 @@ export class ActivityDiagramService {
     const lanes = generated.lanes;
     const nodes = generated?.nodes || [{ id: 'n_start', type: 'start', label: 'Start' }, { id: 'n_end', type: 'end', label: 'End' }];
     const edges = generated?.edges || [{ from: 'n_start', to: 'n_end' }];
-    const diagram_svg = this.core.renderSvg({ name, nodes: nodes as any, edges: edges as any });
 
     const newDiagram = await ActivityDiagramModel.create({
       project_id: version.project_id,
       version_id: versionId,
-      lang: language,
       name,
       description: generated?.description || 'Generated from requirement',
       lanes,
       nodes,
       edges,
-      diagram_svg,
       created_by: userId ? new Types.ObjectId(userId) : undefined,
     } as any);
 
@@ -116,18 +113,15 @@ export class ActivityDiagramService {
     const lanes = generated.lanes;
     const nodes = generated?.nodes || [{ id: 'n_start', type: 'start', label: 'Start' }, { id: 'n_end', type: 'end', label: 'End' }];
     const edges = generated?.edges || [{ from: 'n_start', to: 'n_end' }];
-    const diagram_svg = this.core.renderSvg({ name, nodes: nodes as any, edges: edges as any });
 
     const newDiagram = await ActivityDiagramModel.create({
       project_id: version.project_id,
       version_id: versionId,
-      lang: language,
       name,
       description: generated?.description || 'Generated from actor requirements',
       lanes,
       nodes,
       edges,
-      diagram_svg,
       created_by: userId ? new Types.ObjectId(userId) : undefined,
     } as any);
 
@@ -178,7 +172,6 @@ export class ActivityDiagramService {
   public async create(
     projectId: string,
     versionId: string,
-    lang: string,
     name: string,
     description?: string,
     userId?: string
@@ -189,13 +182,11 @@ export class ActivityDiagramService {
     const newDiagram = await ActivityDiagramModel.create({
       project_id: projectId,
       version_id: versionId,
-      lang: lang,
       name,
       description: description || '',
       lanes: [],
       nodes: [{ id: 'n_start', type: 'start', label: 'Start' }, { id: 'n_end', type: 'end', label: 'End' }],
       edges: [{ from: 'n_start', to: 'n_end' }],
-      diagram_svg: '',
       created_by: userId ? new Types.ObjectId(userId) : undefined,
     } as any);
 
@@ -266,16 +257,11 @@ export class ActivityDiagramService {
     const diagram = await ActivityDiagramModel.findById(id).lean();
     if (!diagram) return null;
 
-    let svg: string;
-    if (diagram.diagram_svg) {
-      svg = diagram.diagram_svg as unknown as string;
-    } else {
-      svg = this.core.renderSvg({
-        name: diagram.name,
-        nodes: diagram.nodes as any,
-        edges: diagram.edges as any
-      });
-    }
+    const svg = this.core.renderSvg({
+      name: diagram.name,
+      nodes: diagram.nodes as any,
+      edges: diagram.edges as any
+    });
 
     // Convert SVG to PNG
     try {

@@ -27,7 +27,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     payload: GenerateUsecaseDiagrambasePayload,
     userId: string
   ): Promise<UseCaseDiagramResponse> {
-    const { versionId, projectId, requirements, lang } = payload;
+    const { versionId, projectId, requirements, language } = payload;
 
     const user = await new UserServiceImpl().getUserById(userId);
     if (!user) {
@@ -45,7 +45,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
 
     const geminiDiagramData = await this.geminiService.generateUsecaseDiagram(
       requirements,
-      lang //"en-US, vi-VN"
+      language //"en-US, vi-VN"
     );
 
     if (
@@ -63,7 +63,6 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     const newUsecaseDiagram = new UsecaseDiagramSchema({
       project_id: projectId,
       version_id: versionId,
-      lang: lang,
       name: geminiDiagramData.name,
       actors: geminiDiagramData.actors,
       usecases: geminiDiagramData.usecases,
@@ -134,7 +133,6 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       relationships: ucd.relationships,
       diagram_svg: ucd.diagram_svg,
       related_requirements: ucd.related_requirements,
-      linked_testcases: ucd.linked_testcases,
       created_by: ucd.created_by,
     }));
   }
@@ -155,7 +153,6 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       relationships: ucd.relationships,
       diagram_svg: ucd.diagram_svg,
       related_requirements: ucd.related_requirements,
-      linked_testcases: ucd.linked_testcases,
       created_by: ucd.created_by,
     };
   }

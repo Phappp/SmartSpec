@@ -47,13 +47,11 @@ export interface ActivityLane {
 export interface ActivityDiagramDTO {
   project_id?: string;
   version_id?: string;
-  lang?: string;
   name: string;
   description?: string;
   lanes?: ActivityLane[]; 
   nodes: ActivityNode[];
   edges: ActivityEdge[];
 
-  diagram_svg?: string;
   created_by?: string;
 }

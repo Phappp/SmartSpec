@@ -33,8 +33,8 @@ export class UsecaseDiagramController extends BaseController {
           });
           return;
         }
-        const { lang } = req.body;
-        if (!lang) {
+        const { language } = req.body;
+        if (!language) {
           res.status(400).json({ message: "Language is required." });
           return;
         }
@@ -58,7 +58,7 @@ export class UsecaseDiagramController extends BaseController {
           versionId: version._id.toString(),
           projectId: version.project_id.toString(),
           requirements: requirements,
-          lang: lang,
+          language: language,
         };
 
         const newDatabase =

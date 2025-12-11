@@ -37,8 +37,8 @@ export class SequenceDiagramController extends BaseController {
         }
 
         // 2. Xác thực Payload (Body và Params)
-        const { lang, usecaseId } = req.body;
-        if (!lang) {
+        const { language, usecaseId } = req.body;
+        if (!language) {
           res
             .status(StatusCodes.BAD_REQUEST)
             .json({ message: "Language is required." });
@@ -121,7 +121,7 @@ export class SequenceDiagramController extends BaseController {
           projectId: version.project_id.toString(),
           usecaseId: usecaseId,
           useCaseContext: useCaseContext, // <-- FIX: Giờ là 1 object, không phải mảng
-          lang: lang,
+          language: language,
         };
 
         // 6. Gọi Service

@@ -165,8 +165,8 @@
           />
         </g>
 
-        <!-- Swimlanes - Tạm thời ẩn -->
-        <g class="swimlanes-layer" v-if="false && showSwimlanes && computedLanes.length > 0">
+        <!-- Swimlanes -->
+        <g class="swimlanes-layer" v-if="showSwimlanes && computedLanes.length > 0">
           <g v-for="(lane, index) in computedLanes" :key="`lane-${lane.id}`">
             <!-- Lane background với chiều cao giới hạn -->
             <rect
@@ -267,10 +267,18 @@
               filter="url(#activity-drop-shadow)"
             />
 
-            <!-- Decision/Merge Nodes -->
+            <!-- Decision Nodes -->
             <polygon
-              v-else-if="node.type === 'decision' || node.type === 'merge'"
+              v-else-if="node.type === 'decision'"
               :points="getDecisionPoints(node)"
+              :class="`activity-node node-${node.type}`"
+              filter="url(#activity-drop-shadow)"
+            />
+
+            <!-- Merge Nodes -->
+            <polygon
+              v-else-if="node.type === 'merge'"
+              :points="getMergePoints(node)"
               :class="`activity-node node-${node.type}`"
               filter="url(#activity-drop-shadow)"
             />
@@ -358,10 +366,20 @@
           <polygon
             v-else-if="
               draggingType === 'node' &&
-              (draggingElement.type === 'decision' || draggingElement.type === 'merge')
+              draggingElement.type === 'decision'
             "
             :points="
               getDecisionPoints({ ...draggingElement, x: dragPosition.x, y: dragPosition.y })
+            "
+            :class="`activity-node node-${draggingElement.type} drag-preview-element`"
+          />
+          <polygon
+            v-else-if="
+              draggingType === 'node' &&
+              draggingElement.type === 'merge'
+            "
+            :points="
+              getMergePoints({ ...draggingElement, x: dragPosition.x, y: dragPosition.y })
             "
             :class="`activity-node node-${draggingElement.type} drag-preview-element`"
           />
@@ -502,6 +520,7 @@ export default {
       laneHeaderHeight: 60,
       horizontalSpacing: 200,
       laneMaxHeight: 2000,
+      fixedLaneWidth: 400, // Kích thước cố định cho mỗi lane
     }
   },
   computed: {
@@ -528,18 +547,99 @@ export default {
       const nodes = this.safeDiagramData.nodes
       if (!nodes || nodes.length === 0) return []
 
+      // Nhóm nodes theo lane để phân bố vị trí
+      const nodesByLane = {}
+      const nodesWithoutLane = []
+      
+      nodes.forEach((node) => {
+        const laneId = node.lane_id || null
+        if (laneId) {
+          if (!nodesByLane[laneId]) {
+            nodesByLane[laneId] = []
+          }
+          nodesByLane[laneId].push(node)
+        } else {
+          nodesWithoutLane.push(node)
+        }
+      })
+
+      // Đếm số node trong mỗi lane để tính Y position
+      const laneNodeCounts = {}
+      Object.keys(nodesByLane).forEach(laneId => {
+        laneNodeCounts[laneId] = 0
+      })
+
+      let globalIndex = 0
       return nodes.map((node, index) => {
         const { width, height } = this.getNodeSize(node.type)
+        const nodeHalfWidth = width / 2
+        const nodeHalfHeight = height / 2
+        const safePadding = 20
         
-        // Nếu node có position từ database, sử dụng nó
+        const laneId = node.lane_id || null
+        const laneIndex = this.getLaneIndex(laneId)
+        
+        // Nếu node có position từ database, validate và điều chỉnh nếu cần
         let x, y
         if (node.position && typeof node.position.x === 'number' && typeof node.position.y === 'number') {
           x = node.position.x
           y = node.position.y
+          
+          // ✅ MỚI: Nếu node có lane_id, validate position có nằm trong lane không
+          if (laneId && laneIndex !== -1 && this.computedLanes.length > 0) {
+            const laneX = this.getLaneX(laneIndex)
+            const laneWidth = this.getLaneWidth()
+            const laneMinX = laneX + safePadding + nodeHalfWidth
+            const laneMaxX = laneX + laneWidth - safePadding - nodeHalfWidth
+            const laneMinY = this.virtualSpace.minY + this.laneHeaderHeight + nodeHalfHeight + safePadding
+            const laneMaxY = this.virtualSpace.minY + this.laneHeaderHeight + this.laneMaxHeight - nodeHalfHeight - safePadding
+            
+            // Kiểm tra xem position có nằm trong lane không
+            const isXInLane = x >= laneMinX && x <= laneMaxX
+            const isYInLane = y >= laneMinY && y <= laneMaxY
+            
+            // Nếu position nằm ngoài lane, điều chỉnh lại
+            if (!isXInLane || !isYInLane) {
+              // Điều chỉnh X về giữa lane
+              x = laneX + laneWidth / 2
+              
+              // Điều chỉnh Y: nếu Y quá nhỏ, đặt ở đầu lane; nếu quá lớn, đặt ở cuối lane
+              if (y < laneMinY) {
+                y = laneMinY
+              } else if (y > laneMaxY) {
+                y = laneMaxY
+              }
+              
+              // Nếu Y vẫn nằm ngoài, tính lại dựa trên thứ tự node trong lane
+              if (y < laneMinY || y > laneMaxY) {
+                const nodeIndexInLane = laneNodeCounts[laneId] || 0
+                laneNodeCounts[laneId] = nodeIndexInLane + 1
+                const yOffset = this.laneHeaderHeight + 100 + nodeIndexInLane * 120
+                y = this.virtualSpace.minY + yOffset
+              }
+            }
+          }
         } else {
-          // Tính vị trí mặc định nếu không có position
-          x = this.virtualSpace.centerX + (index % 5) * 150
-          y = this.virtualSpace.centerY - 200 + Math.floor(index / 5) * 100
+          // Tính vị trí mặc định dựa trên lane
+          if (laneIndex !== -1 && this.computedLanes.length > 0) {
+            // Node có lane - đặt vào giữa lane
+            const laneX = this.getLaneX(laneIndex)
+            const laneWidth = this.getLaneWidth()
+            const laneCenterX = laneX + laneWidth / 2
+            
+            // Tính Y trong lane (bắt đầu từ sau header, phân bố theo thứ tự)
+            const nodeIndexInLane = laneNodeCounts[laneId] || 0
+            laneNodeCounts[laneId] = nodeIndexInLane + 1
+            const yOffset = this.laneHeaderHeight + 100 + nodeIndexInLane * 120
+            
+            x = laneCenterX
+            y = this.virtualSpace.minY + yOffset
+          } else {
+            // Node không có lane - phân bố tự do
+            x = this.virtualSpace.centerX + (globalIndex % 5) * 150
+            y = this.virtualSpace.centerY - 200 + Math.floor(globalIndex / 5) * 100
+            globalIndex++
+          }
         }
 
         return {
@@ -657,12 +757,18 @@ export default {
     },
 
     getLaneX(index) {
-      const laneCount = Math.max(this.computedLanes.length, 1)
-      return this.virtualSpace.minX + index * (this.virtualSpace.width / laneCount)
+      // Sử dụng kích thước cố định cho lanes
+      return this.virtualSpace.minX + index * this.fixedLaneWidth
     },
 
     getLaneWidth() {
-      return this.virtualSpace.width / Math.max(this.computedLanes.length, 1)
+      // Trả về kích thước cố định
+      return this.fixedLaneWidth
+    },
+
+    getLaneIndex(laneId) {
+      if (!laneId || this.computedLanes.length === 0) return -1
+      return this.computedLanes.findIndex(lane => lane.id === laneId || lane._id === laneId)
     },
 
     getDecisionPoints(node) {
@@ -672,6 +778,21 @@ export default {
         ${node.x + size},${node.y}
         ${node.x},${node.y + size}
         ${node.x - size},${node.y}
+      `
+    },
+
+    getMergePoints(node) {
+      // Hình thang ngược (inverted trapezoid) cho merge node
+      const width = node.width || 80
+      const height = node.height || 80
+      const topWidth = width * 0.6 // Đỉnh nhỏ hơn
+      const bottomWidth = width // Đáy rộng hơn
+      
+      return `
+        ${node.x - topWidth / 2},${node.y - height / 2}
+        ${node.x + topWidth / 2},${node.y - height / 2}
+        ${node.x + bottomWidth / 2},${node.y + height / 2}
+        ${node.x - bottomWidth / 2},${node.y + height / 2}
       `
     },
 
@@ -801,9 +922,27 @@ export default {
     getNodeOffset(node, nx, ny) {
       if (node.type === 'start' || node.type === 'end') {
         return 20
-      } else if (node.type === 'decision' || node.type === 'merge') {
+      } else if (node.type === 'decision') {
         const size = 40
         return Math.abs(nx * size) + Math.abs(ny * size)
+      } else if (node.type === 'merge') {
+        // Tính offset cho hình thang ngược
+        const width = node.width || 80
+        const height = node.height || 80
+        const topWidth = width * 0.6
+        const bottomWidth = width
+        
+        // Tính offset dựa trên hướng
+        if (ny < 0) {
+          // Phía trên (đỉnh nhỏ)
+          return topWidth / 2
+        } else if (ny > 0) {
+          // Phía dưới (đáy rộng)
+          return bottomWidth / 2
+        } else {
+          // Bên trái/phải
+          return height / 2
+        }
       } else if (['action', 'object', 'fork', 'join'].includes(node.type)) {
         const rx = node.width / 2
         const ry = node.height / 2
@@ -921,19 +1060,39 @@ export default {
       let newX = svgPoint.x - this.dragOffset.x
       let newY = svgPoint.y - this.dragOffset.y
 
-      // Giới hạn trong virtual space với padding an toàn
-      const safePadding = 20
+      // Giới hạn node trong lane nếu node có lane_id
       const nodeHalfWidth = (this.draggingElement.width || 60) / 2
       const nodeHalfHeight = (this.draggingElement.height || 60) / 2
+      const safePadding = 20
 
-      newX = Math.max(
-        this.virtualSpace.minX + nodeHalfWidth + safePadding,
-        Math.min(this.virtualSpace.maxX - nodeHalfWidth - safePadding, newX)
-      )
-      newY = Math.max(
-        this.virtualSpace.minY + nodeHalfHeight + safePadding,
-        Math.min(this.virtualSpace.maxY - nodeHalfHeight - safePadding, newY)
-      )
+      if (this.draggingElement.lane_id && this.computedLanes.length > 0) {
+        // Node thuộc lane - giới hạn trong lane
+        const laneIndex = this.getLaneIndex(this.draggingElement.lane_id)
+        if (laneIndex !== -1) {
+          const laneX = this.getLaneX(laneIndex)
+          const laneWidth = this.getLaneWidth()
+          const laneMinX = laneX + safePadding + nodeHalfWidth
+          const laneMaxX = laneX + laneWidth - safePadding - nodeHalfWidth
+          
+          // Giới hạn X trong lane
+          newX = Math.max(laneMinX, Math.min(laneMaxX, newX))
+          
+          // Giới hạn Y trong phạm vi lane (từ header đến maxHeight)
+          const laneMinY = this.virtualSpace.minY + this.laneHeaderHeight + nodeHalfHeight + safePadding
+          const laneMaxY = this.virtualSpace.minY + this.laneHeaderHeight + this.laneMaxHeight - nodeHalfHeight - safePadding
+          newY = Math.max(laneMinY, Math.min(laneMaxY, newY))
+        }
+      } else {
+        // Node không có lane - giới hạn trong virtual space
+        newX = Math.max(
+          this.virtualSpace.minX + nodeHalfWidth + safePadding,
+          Math.min(this.virtualSpace.maxX - nodeHalfWidth - safePadding, newX)
+        )
+        newY = Math.max(
+          this.virtualSpace.minY + nodeHalfHeight + safePadding,
+          Math.min(this.virtualSpace.maxY - nodeHalfHeight - safePadding, newY)
+        )
+      }
 
       // Snap to grid nếu được bật
       if (this.snapToGrid) {
@@ -1110,6 +1269,21 @@ export default {
     },
 
     updateVirtualSpace() {
+      // Nếu có lanes, tính toán virtualSpace dựa trên lanes với kích thước cố định
+      if (this.computedLanes.length > 0) {
+        const totalLanesWidth = this.computedLanes.length * this.fixedLaneWidth
+        const lanesHeight = this.laneHeaderHeight + this.laneMaxHeight
+        
+        // Cố định virtualSpace để chứa toàn bộ lanes
+        this.virtualSpace.minX = -1000
+        this.virtualSpace.maxX = -1000 + totalLanesWidth
+        this.virtualSpace.minY = -1000
+        this.virtualSpace.maxY = -1000 + lanesHeight
+        
+        return
+      }
+
+      // Nếu không có lanes, tính toán như cũ
       const allElements = [...this.positionedNodes]
       if (allElements.length === 0) {
         this.virtualSpace.minX = -1000
@@ -1231,6 +1405,22 @@ export default {
               { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
             )
 
+            // Bao gồm lanes trong bounds nếu có lanes
+            if (this.computedLanes.length > 0) {
+              const firstLaneX = this.getLaneX(0)
+              const lastLaneIndex = this.computedLanes.length - 1
+              const lastLaneX = this.getLaneX(lastLaneIndex)
+              const laneWidth = this.getLaneWidth()
+              const lanesMaxX = lastLaneX + laneWidth
+              const lanesMinY = this.virtualSpace.minY
+              const lanesMaxY = this.virtualSpace.minY + this.laneHeaderHeight + this.laneMaxHeight
+
+              bounds.minX = Math.min(bounds.minX, firstLaneX)
+              bounds.maxX = Math.max(bounds.maxX, lanesMaxX)
+              bounds.minY = Math.min(bounds.minY, lanesMinY)
+              bounds.maxY = Math.max(bounds.maxY, lanesMaxY)
+            }
+
             console.log('🖼️ ActivityDiagramRenderer: Bounds:', bounds)
 
             const padding = 80
@@ -1291,6 +1481,39 @@ export default {
   <rect x="${bounds.minX - padding}" y="${bounds.minY - padding}" 
         width="${contentWidth}" height="${contentHeight}" fill="white" />
 
+  <!-- Render Swimlanes -->
+  ${this.computedLanes.length > 0 ? this.computedLanes
+    .map((lane, index) => {
+      const laneX = this.getLaneX(index) - bounds.minX + padding
+      const laneWidth = this.getLaneWidth()
+      const laneY = this.virtualSpace.minY - bounds.minY + padding
+      const laneHeight = this.laneHeaderHeight + this.laneMaxHeight
+      const laneName = lane.name || `Lane ${index + 1}`
+
+      return `
+      <rect x="${laneX}" y="${laneY}" 
+            width="${laneWidth}" height="${laneHeight}"
+            fill="${index % 2 === 0 ? 'rgba(229, 231, 235, 0.8)' : 'rgba(243, 244, 246, 0.8)'}" 
+            stroke="#e5e7eb" stroke-width="1" />
+      <text x="${laneX + laneWidth / 2}" y="${laneY + 30}" 
+            font-size="14" font-weight="600" fill="#6b7280" 
+            text-anchor="middle" dominant-baseline="middle">
+        ${laneName}
+      </text>
+      ${
+        index > 0
+          ? `<line x1="${laneX}" y1="${laneY}" x2="${laneX}" y2="${
+              laneY + laneHeight
+            }" stroke="#d1d5db" stroke-width="2" />`
+          : ''
+      }
+      <line x1="${laneX}" y1="${laneY + laneHeight}" x2="${laneX + laneWidth}" y2="${
+        laneY + laneHeight
+      }" stroke="#d1d5db" stroke-width="2" stroke-dasharray="5,5" />
+    `
+    })
+    .join('') : ''}
+
   <!-- Render Edges -->
   ${this.computedEdges
     .map((edge) => {
@@ -1337,8 +1560,15 @@ export default {
           <text x="${x}" y="${y}" font-size="12" fill="#1e40af" 
                 text-anchor="middle" dominant-baseline="middle">${node.label}</text>
         `
-      } else if (node.type === 'decision' || node.type === 'merge') {
+      } else if (node.type === 'decision') {
         const points = this.getDecisionPoints({ ...node, x, y })
+        return `
+          <polygon points="${points}" fill="white" stroke="#8b5cf6" stroke-width="2" />
+          <text x="${x}" y="${y}" font-size="12" fill="#6b21a8" 
+                text-anchor="middle" dominant-baseline="middle">${node.label}</text>
+        `
+      } else if (node.type === 'merge') {
+        const points = this.getMergePoints({ ...node, x, y })
         return `
           <polygon points="${points}" fill="white" stroke="#8b5cf6" stroke-width="2" />
           <text x="${x}" y="${y}" font-size="12" fill="#6b21a8" 
@@ -1873,11 +2103,11 @@ export default {
 }
 
 .swimlane-even {
-  fill: rgba(243, 244, 246, 0.5);
+  fill: rgba(229, 231, 235, 0.8);
 }
 
 .swimlane-odd {
-  fill: rgba(249, 250, 251, 0.5);
+  fill: rgba(243, 244, 246, 0.8);
 }
 
 .swimlane-label {

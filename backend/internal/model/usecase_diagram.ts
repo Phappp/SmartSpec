@@ -59,7 +59,6 @@ const usecaseDiagramSchema = new Schema(
       ref: "versions",
       required: true,
     },
-    lang: { type: String, required: true },
     name: { type: String, required: true },
     description: String,
 
@@ -71,7 +70,6 @@ const usecaseDiagramSchema = new Schema(
 
     diagram_svg: String,
     related_requirements: [String],
-    linked_testcases: [{ type: Schema.Types.ObjectId, ref: "testcases" }],
     created_by: { type: Schema.Types.ObjectId, ref: "users" },
   },
   { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } }

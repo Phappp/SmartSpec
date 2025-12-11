@@ -2027,6 +2027,8 @@ export default {
   display: flex;
   gap: 24px;
   flex: 1;
+  min-width: 0; /* Cho phép flex container co lại */
+  overflow-x: hidden; /* Ẩn thanh cuộn ngang */
 }
 /* Navigation Tabs */
 .navigation-tabs {

@@ -48,7 +48,6 @@ const activityDiagramSchema = new Schema({
         ref: "versions",
         required: true,
     },
-    lang: { type: String, required: true },
     name: { type: String, required: true },
     description: String,
     lanes: [
@@ -59,8 +58,6 @@ const activityDiagramSchema = new Schema({
     ],
     nodes: [nodeSchema],
     edges: [edgeSchema],
-
-    diagram_svg: String,
 
     created_by: { type: Schema.Types.ObjectId, ref: "users" }
 }, { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } });

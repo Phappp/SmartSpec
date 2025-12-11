@@ -107,20 +107,21 @@
                     @load="onPreviewImageLoad"
                     @error="onPreviewImageError(diagram, $event)"
                   />
-                  <div v-else class="preview-generator">
+                  <div v-else class="generating-preview">
+                    <div class="loading-spinner-small"></div>
+                    <span>Generating preview...</span>
+                  </div>
+                  <!-- Luôn render renderer để có thể export, ẩn khi đã có previewImage -->
+                  <div class="preview-generator" :class="{ 'hidden-renderer': diagram.previewImage }">
                     <UCDRenderer
                       :ref="`previewGenerator_${diagram.id || diagram._id}`"
                       :diagram-data="diagram"
                       :preview-mode="true"
-                      :auto-generate-preview="true"
+                      :auto-generate-preview="!diagram.previewImage"
                       :optimize-for-preview="true"
                       @preview-generated="handlePreviewGenerated(diagram, $event)"
                       class="hidden-renderer"
                     />
-                    <div class="generating-preview">
-                      <div class="loading-spinner-small"></div>
-                      <span>Generating preview...</span>
-                    </div>
                   </div>
 
                   <div class="diagram-overlay">
@@ -249,20 +250,21 @@
                     @load="onPreviewImageLoad"
                     @error="onPreviewImageError(diagram, $event)"
                   />
-                  <div v-else class="preview-generator">
+                  <div v-else class="generating-preview">
+                    <div class="loading-spinner-small"></div>
+                    <span>Generating preview...</span>
+                  </div>
+                  <!-- Luôn render renderer để có thể export, ẩn khi đã có previewImage -->
+                  <div class="preview-generator" :class="{ 'hidden-renderer': diagram.previewImage }">
                     <ActivityDiagramRenderer
                       :ref="`previewGenerator_${diagram.id || diagram._id}`"
                       :diagram-data="diagram"
                       :preview-mode="true"
-                      :auto-generate-preview="true"
+                      :auto-generate-preview="!diagram.previewImage"
                       :optimize-for-preview="true"
                       @preview-generated="handlePreviewGenerated(diagram, $event)"
                       class="hidden-renderer"
                     />
-                    <div class="generating-preview">
-                      <div class="loading-spinner-small"></div>
-                      <span>Generating preview...</span>
-                    </div>
                   </div>
 
                   <div class="diagram-overlay">
@@ -387,20 +389,21 @@
                     @load="onPreviewImageLoad"
                     @error="onPreviewImageError(diagram, $event)"
                   />
-                  <div v-else class="preview-generator">
+                  <div v-else class="generating-preview">
+                    <div class="loading-spinner-small"></div>
+                    <span>Generating preview...</span>
+                  </div>
+                  <!-- Luôn render renderer để có thể export, ẩn khi đã có previewImage -->
+                  <div class="preview-generator" :class="{ 'hidden-renderer': diagram.previewImage }">
                     <SequenceDiagramRenderer
                       :ref="`previewGenerator_${diagram.id || diagram._id}`"
                       :diagram-data="diagram"
                       :preview-mode="true"
-                      :auto-generate-preview="true"
+                      :auto-generate-preview="!diagram.previewImage"
                       :optimize-for-preview="true"
                       @preview-generated="handlePreviewGenerated(diagram, $event)"
                       class="hidden-renderer"
                     />
-                    <div class="generating-preview">
-                      <div class="loading-spinner-small"></div>
-                      <span>Generating preview...</span>
-                    </div>
                   </div>
 
                   <div class="diagram-overlay">
@@ -1371,34 +1374,70 @@ export default {
       try {
         const diagramId = diagram.id || diagram._id
         const rendererRef = `previewGenerator_${diagramId}`
-        if (this.$refs[rendererRef] && this.$refs[rendererRef][0]) {
-          const renderer = this.$refs[rendererRef][0]
-          if (renderer.exportAsPNG) {
-            await renderer.exportAsPNG()
-            this.toast.success('Diagram exported as PNG successfully!')
+        
+        // Đợi renderer được mount nếu chưa có
+        await this.$nextTick()
+        
+        // Tìm renderer trong $refs (có thể là array hoặc object)
+        let renderer = null
+        if (this.$refs[rendererRef]) {
+          if (Array.isArray(this.$refs[rendererRef])) {
+            renderer = this.$refs[rendererRef][0]
+          } else {
+            renderer = this.$refs[rendererRef]
           }
+        }
+        
+        if (renderer && typeof renderer.exportAsPNG === 'function') {
+          await renderer.exportAsPNG()
+          this.toast.success('Diagram exported as PNG successfully!')
+        } else {
+          console.error('Renderer not found or exportAsPNG method not available', {
+            rendererRef,
+            hasRef: !!this.$refs[rendererRef],
+            renderer,
+          })
+          this.toast.error('Export function not available. Please try again.')
         }
         this.closeExportDropdown()
       } catch (err) {
         console.error('Error exporting PNG:', err)
-        this.toast.error('Failed to export PNG')
+        this.toast.error('Failed to export PNG: ' + (err.message || 'Unknown error'))
       }
     },
     async exportDiagramAsSVG(diagram) {
       try {
         const diagramId = diagram.id || diagram._id
         const rendererRef = `previewGenerator_${diagramId}`
-        if (this.$refs[rendererRef] && this.$refs[rendererRef][0]) {
-          const renderer = this.$refs[rendererRef][0]
-          if (renderer.exportAsSVG) {
-            renderer.exportAsSVG()
-            this.toast.success('Diagram exported as SVG successfully!')
+        
+        // Đợi renderer được mount nếu chưa có
+        await this.$nextTick()
+        
+        // Tìm renderer trong $refs (có thể là array hoặc object)
+        let renderer = null
+        if (this.$refs[rendererRef]) {
+          if (Array.isArray(this.$refs[rendererRef])) {
+            renderer = this.$refs[rendererRef][0]
+          } else {
+            renderer = this.$refs[rendererRef]
           }
+        }
+        
+        if (renderer && typeof renderer.exportAsSVG === 'function') {
+          renderer.exportAsSVG()
+          this.toast.success('Diagram exported as SVG successfully!')
+        } else {
+          console.error('Renderer not found or exportAsSVG method not available', {
+            rendererRef,
+            hasRef: !!this.$refs[rendererRef],
+            renderer,
+          })
+          this.toast.error('Export function not available. Please try again.')
         }
         this.closeExportDropdown()
       } catch (err) {
         console.error('Error exporting SVG:', err)
-        this.toast.error('Failed to export SVG')
+        this.toast.error('Failed to export SVG: ' + (err.message || 'Unknown error'))
       }
     },
     // Helper methods

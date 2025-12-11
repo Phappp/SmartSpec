@@ -28,7 +28,7 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
     userId: string
   ): Promise<SequenceDiagramResponse> {
     // <-- THAY ĐỔI: Phải dùng tên mới "useCaseContext" từ payload
-    const { versionId, projectId, usecaseId, useCaseContext, lang } = payload;
+    const { versionId, projectId, usecaseId, useCaseContext, language } = payload;
 
     // --- Phần xác thực (Validation) ---
     const user = await new UserServiceImpl().getUserById(userId);
@@ -71,9 +71,9 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
         projectId,
         usecaseId,
         useCaseContext: useCaseContext, // <-- Đã đúng
-        lang,
+        language,
       },
-      lang
+      language
     );
 
     // 2. Validate kết quả (Giữ nguyên)
@@ -93,7 +93,6 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
     const newSequenceDiagram = new SequenceDiagramSchema({
       project_id: projectId,
       version_id: versionId,
-      lang: lang,
       usecase_ref_id: usecaseId,
       name: geminiDiagramData.name,
       description: geminiDiagramData.description || "",
@@ -103,7 +102,6 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
       layout_data: geminiDiagramData.layout_data || { nodes: [], edges: [] },
       created_by: user.id,
       related_requirements: [],
-      linked_testcases: [],
     });
 
     const savedDocument = await newSequenceDiagram.save();
@@ -166,7 +164,6 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
     try {
       const diagram = await SequenceDiagramSchema.findById(ucId)
         .populate('created_by', 'name email')
-        .populate('linked_testcases')
         .lean();
 
       if (!diagram) {
@@ -201,7 +198,6 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
       id: doc._id?.toString() || doc.id,
       project_id: doc.project_id?.toString(),
       version_id: doc.version_id?.toString(),
-      lang: doc.lang,
       name: doc.name,
       description: doc.description,
       usecase_ref_id: doc.usecase_ref_id,
@@ -210,7 +206,6 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
       fragments: doc.fragments || [],
       layout_data: doc.layout_data || { nodes: [], edges: [] },
       related_requirements: doc.related_requirements || [],
-      linked_testcases: doc.linked_testcases || [],
       created_by: doc.created_by,
       created_at: doc.created_at || doc.createdAt,
       updated_at: doc.updated_at || doc.updatedAt

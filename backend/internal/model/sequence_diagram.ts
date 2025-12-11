@@ -77,7 +77,6 @@ const sequenceDiagramSchema = new Schema(
       ref: "versions",
       required: true,
     },
-    lang: { type: String, required: true },
     // Thông tin biểu đồ
     name: { type: String, required: true }, // Ví dụ: "Kịch bản Thanh toán Thành công"
     description: String,
@@ -101,7 +100,6 @@ const sequenceDiagramSchema = new Schema(
 
     // Metadata (Giống Usecase model)
     related_requirements: [String],
-    linked_testcases: [{ type: Schema.Types.ObjectId, ref: "testcases" }],
     created_by: { type: Schema.Types.ObjectId, ref: "users" },
   },
   { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } }

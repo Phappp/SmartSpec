@@ -2056,15 +2056,19 @@ export default {
 <style scoped>
 .main-content {
   flex: 3;
+  min-width: 0; /* Cho phép flex item co lại dưới min-content */
   background: #f9fafb;
   padding: 0;
   overflow-y: auto;
+  overflow-x: hidden; /* Ẩn thanh cuộn ngang */
 }
 
 .usecase-area {
   max-width: 1400px;
+  width: 100%; /* Đảm bảo không vượt quá container */
   margin: 0 auto;
   padding: 24px;
+  box-sizing: border-box; /* Bao gồm padding trong width */
 }
 
 /* Header Styles */
@@ -3220,6 +3224,9 @@ export default {
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   overflow: hidden;
+  width: 100%;
+  min-width: 0; /* Cho phép co lại */
+  max-width: 100%; /* Không vượt quá container */
 }
 
 .sorting-section {
@@ -3279,11 +3286,15 @@ export default {
 .table-container {
   max-height: 600px;
   overflow-y: auto;
+  overflow-x: auto; /* Cho phép cuộn ngang nếu table quá rộng */
+  width: 100%;
 }
 
 table {
   width: 100%;
+  min-width: 0; /* Cho phép table co lại */
   border-collapse: collapse;
+  table-layout: auto; /* Tự động điều chỉnh cột */
 }
 
 thead {
@@ -3321,11 +3332,13 @@ td {
 }
 
 .name-column {
-  min-width: 250px;
+  min-width: 150px; /* Giảm min-width để tránh overflow */
+  max-width: 300px; /* Thêm max-width */
 }
 
 .goal-column {
-  min-width: 200px;
+  min-width: 150px; /* Giảm min-width để tránh overflow */
+  max-width: 250px; /* Thêm max-width */
 }
 
 .role-column,

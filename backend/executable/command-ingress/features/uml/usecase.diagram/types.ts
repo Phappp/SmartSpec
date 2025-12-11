@@ -8,14 +8,13 @@ interface UseCaseDiagramResponse {
   relationships: any[];
   diagram_svg?: string;
   related_requirements: string[];
-  linked_testcases: string[];
   created_by: string;
 }
 interface GenerateUsecaseDiagrambasePayload {
   versionId: string;
   projectId: string;
   requirements: any[];
-  lang: string;
+  language: string; // Ngôn ngữ ('vi-VN' hoặc 'en-US') - chỉ dùng cho prompt, không lưu vào DB
 }
 interface UseCaseDiagramService {
   generateSchemaFromRequirements(
