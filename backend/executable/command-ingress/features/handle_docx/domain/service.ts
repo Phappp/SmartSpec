@@ -69,7 +69,7 @@ export class ReadDocxService {
         confidenceScore: number;
     }) {
         // ✅ Clean text ngay khi extract để đảm bảo chất lượng
-        const { cleanTextForLLM, validateTextForLLM } = require("../../../../shared/textPreprocessor");
+        const { cleanTextForLLM, validateTextForLLM } = require("../../../shared/textPreprocessor");
         const cleanedText = cleanTextForLLM(data.rawText);
         const validation = validateTextForLLM(data.rawText);
         

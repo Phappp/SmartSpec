@@ -262,10 +262,12 @@ export class OrchestratorService {
             const result = await this.requirementService.finalize(
                 versionId,
                 opts.mode || "full",
-                inputs,
+                inputs, // ✅ Sửa: dùng biến inputs thay vì inputsToProcess
                 this.gemini,
                 language,
-                modelName // ✅ MỚI: Truyền model name để tính toán token limits
+                modelName, // modelName
+                userId, // ✅ MỚI: userId để broadcast realtime
+                projectId // ✅ MỚI: projectId để broadcast realtime
             );
 
             // Xử lý partial success

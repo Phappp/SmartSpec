@@ -32,7 +32,7 @@ export class TextService {
         // Việc kiểm tra trùng lặp nên được thực hiện ở tầng cao hơn (InputService)
         // giống như cách nó làm với file.
         // ✅ Clean text ngay khi save
-        const { cleanTextForLLM, validateTextForLLM } = require("../../../../shared/textPreprocessor");
+        const { cleanTextForLLM, validateTextForLLM } = require("../../../shared/textPreprocessor");
         const cleanedText = cleanTextForLLM(rawText || '');
         const validation = validateTextForLLM(rawText || '');
         

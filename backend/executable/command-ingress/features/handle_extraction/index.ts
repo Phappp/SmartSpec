@@ -52,12 +52,12 @@ export async function refineInputById(inputId: string, provider: Provider = 'gem
         }
 
         // ✅ Validate và clean lại text sau khi refine để đảm bảo chất lượng
-        const { cleanTextForLLM, validateTextForLLM } = require("../../../../shared/textPreprocessor");
+        const { cleanTextForLLM, validateTextForLLM } = require("../../shared/textPreprocessor");
         const finalCleaned = cleanTextForLLM(cleaned);
         const validation = validateTextForLLM(cleaned);
         
         // Kiểm tra xem LLM có cắt bớt text không
-        const truncationCheck = require("../../../../shared/textPreprocessor").detectTruncation(raw, finalCleaned);
+        const truncationCheck = require("../../shared/textPreprocessor").detectTruncation(raw, finalCleaned);
         if (truncationCheck.isTruncated && truncationCheck.lossPercentage > 5) {
             console.warn(`⚠️ [refineInputById] LLM có thể đã cắt bớt text: mất ${truncationCheck.missingChars} ký tự (${truncationCheck.lossPercentage.toFixed(1)}%)`);
         }

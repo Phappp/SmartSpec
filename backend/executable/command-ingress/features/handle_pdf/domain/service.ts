@@ -100,7 +100,7 @@ export class PdfService {
     
     if (!isScanned) {
       // Chỉ clean text cho non-scanned PDF
-      const { cleanTextForLLM, validateTextForLLM } = require("../../../../shared/textPreprocessor");
+      const { cleanTextForLLM, validateTextForLLM } = require("../../../shared/textPreprocessor");
       cleanedText = cleanTextForLLM(data.rawText);
       textValidation = validateTextForLLM(data.rawText);
       

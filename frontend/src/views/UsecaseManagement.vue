@@ -176,6 +176,7 @@ export default {
       showIncrementalButton: false,
       unprocessedInputsCount: 0,
       currentVersionDetails: null,
+      incrementalFetchTimeout: null, // ✅ MỚI: Timeout để debounce incremental fetch
 
       // ========== CONFLICT RESOLUTION STATE ==========
       hasConflicts: false,
@@ -305,6 +306,12 @@ export default {
 
     // Remove event listener
     eventBus.off('version-approved', this.handleVersionApproved)
+    
+    // ✅ MỚI: Clear incremental fetch timeout khi unmount
+    if (this.incrementalFetchTimeout) {
+      clearTimeout(this.incrementalFetchTimeout)
+      this.incrementalFetchTimeout = null
+    }
   },
   watch: {
     activeUsers: {
@@ -1593,6 +1600,11 @@ export default {
       this.isRetrying = false
       this.isProcessingIncremental = false
       this.currentPollingVersionId = null
+      // ✅ MỚI: Clear incremental fetch timeout
+      if (this.incrementalFetchTimeout) {
+        clearTimeout(this.incrementalFetchTimeout)
+        this.incrementalFetchTimeout = null
+      }
     },
 
     stopPolling() {
@@ -1687,33 +1699,44 @@ export default {
     },
 
     // ========== INPUT MANAGEMENT ==========
-    async handleAddInputs({ formData, tempInputData }) {
+    async handleAddInputs(payload) {
       this.isAddingInput = true
+
+      // Xử lý cả trường hợp payload là object { formData, tempInputData } hoặc chỉ là formData (backward compatibility)
+      let formData, tempInputData
+      if (payload && payload.formData && payload.tempInputData) {
+        formData = payload.formData
+        tempInputData = payload.tempInputData
+      } else {
+        // Backward compatibility: nếu chỉ truyền formData
+        formData = payload
+        tempInputData = null
+      }
 
       // Tạo input tạm thời với loading state
       const tempInputs = []
-      if (tempInputData.files && tempInputData.files.length > 0) {
+      if (tempInputData && tempInputData.files && tempInputData.files.length > 0) {
         tempInputData.files.forEach((file) => {
           const tempInput = {
             _id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             _isLoading: true,
             _isTemp: true,
-            type: this.getFileType(file.type),
-            cleaned_text: file.name,
-            clean_text: file.name,
-            raw_text: file.name,
+            type: this.getFileType(file.type || ''),
+            cleaned_text: file.name || 'Unknown file',
+            clean_text: file.name || 'Unknown file',
+            raw_text: file.name || 'Unknown file',
             is_processed: false,
             created_at: new Date().toISOString(),
             createdAt: new Date().toISOString(),
             metadata: {
-              filename: file.name,
-              size: file.size
+              filename: file.name || 'Unknown file',
+              size: file.size || 0
             }
           }
           tempInputs.push(tempInput)
         })
       }
-      if (tempInputData.rawText) {
+      if (tempInputData && tempInputData.rawText) {
         const tempInput = {
           _id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           _isLoading: true,
@@ -1729,8 +1752,10 @@ export default {
         tempInputs.push(tempInput)
       }
 
-      // Thêm inputs tạm thời vào đầu danh sách
-      this.inputs = [...tempInputs, ...this.inputs]
+      // Thêm inputs tạm thời vào đầu danh sách (chỉ nếu có tempInputs)
+      if (tempInputs.length > 0) {
+        this.inputs = [...tempInputs, ...this.inputs]
+      }
 
       try {
         const versionId = this.selectedVersionId
@@ -1794,10 +1819,12 @@ export default {
     },
     
     getFileType(mimeType) {
-      if (mimeType.includes('pdf')) return 'pdf'
-      if (mimeType.includes('word') || mimeType.includes('document')) return 'docx'
-      if (mimeType.includes('image')) return 'image'
-      if (mimeType.includes('audio')) return 'audio'
+      if (!mimeType || typeof mimeType !== 'string') return 'text'
+      const lowerMimeType = mimeType.toLowerCase()
+      if (lowerMimeType.includes('pdf')) return 'pdf'
+      if (lowerMimeType.includes('word') || lowerMimeType.includes('document') || lowerMimeType.includes('msword') || lowerMimeType.includes('officedocument')) return 'docx'
+      if (lowerMimeType.includes('image')) return 'image'
+      if (lowerMimeType.includes('audio')) return 'audio'
       return 'text'
     },
 
@@ -1866,23 +1893,70 @@ export default {
         return
       }
 
-      // Bỏ qua events từ chính mình (đã có polling)
-      if (event.userId === this.currentUserId) {
-        console.log('🔕 Skipping own progress event')
-        return
-      }
+      // ✅ FIX: KHÔNG bỏ qua events từ chính mình cho INCREMENTAL_PROGRESS
+      // Vì đây là events từ backend broadcast, cần để fetch usecases ngay
+      // Polling chỉ check status, không fetch usecases realtime
 
       // Cập nhật UI state
       this.isProcessingIncremental = event.isProcessing
 
       console.log(`🔄 Updated loading state from realtime: ${event.isProcessing ? 'processing' : 'completed'}`)
 
-      // Nếu hoàn thành, refresh data sau 1 giây
+      // ✅ MỚI: Refresh usecases ngay khi nhận progress update (trong lúc processing)
+      // Để user thấy usecases mới xuất hiện từng batch một
+      if (event.isProcessing) {
+        console.log('🔄 Processing in progress, fetching new usecases...')
+        // ✅ FIX: Giảm debounce từ 500ms xuống 200ms để fetch nhanh hơn
+        if (this.incrementalFetchTimeout) {
+          clearTimeout(this.incrementalFetchTimeout)
+        }
+        this.incrementalFetchTimeout = setTimeout(() => {
+          this.fetchUseCasesIncremental(event.versionId)
+        }, 200) // Delay 200ms để batch các events lại (giảm từ 500ms)
+      }
+
+      // Nếu hoàn thành, refresh toàn bộ data sau 1 giây
       if (!event.isProcessing) {
         console.log('✅ Incremental analysis completed via realtime, refreshing data...')
+        if (this.incrementalFetchTimeout) {
+          clearTimeout(this.incrementalFetchTimeout)
+        }
         setTimeout(() => {
           this.fetchProjectData(this.project._id)
         }, 1000)
+      }
+    },
+
+    // ✅ MỚI: Fetch usecases mới trong lúc processing (incremental)
+    async fetchUseCasesIncremental(versionId) {
+      if (!versionId || versionId !== this.selectedVersionId) return
+
+      try {
+        const response = await usecaseApi.getUsecases(versionId)
+        if (response.data && response.data.data) {
+          const newUseCases = response.data.data || []
+          
+          // Merge usecases mới vào list hiện tại (tránh duplicate)
+          const existingIds = new Set(this.useCases.map(uc => String(uc.id || uc._id)))
+          
+          let addedCount = 0
+          newUseCases.forEach(uc => {
+            const id = String(uc.id || uc._id)
+            if (!existingIds.has(id)) {
+              this.useCases.push(uc)
+              existingIds.add(id)
+              addedCount++
+            }
+          })
+          
+          if (addedCount > 0) {
+            console.log(`✅ Added ${addedCount} new usecases incrementally (total: ${this.useCases.length})`)
+            this.$forceUpdate()
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error fetching incremental usecases:', error)
+        // Không hiển thị error toast để tránh spam
       }
     },
     stopPolling() {

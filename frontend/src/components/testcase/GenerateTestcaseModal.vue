@@ -623,7 +623,7 @@ export default {
         const { formatErrorForDisplay } = await import('@/utils/errorMessages')
         const errorMessage = formatErrorForDisplay(error, 'Không thể tạo test case. Vui lòng thử lại.')
 
-        toast.error(errorMessage)
+          toast.error(errorMessage)
 
         previewTestCases.value = []
         hasUnsavedChanges.value = false
