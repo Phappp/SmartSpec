@@ -6,6 +6,19 @@
         <h2>Use Case Details</h2>
         <div class="header-actions">
           <button
+            v-if="showSelectButton"
+            class="select-usecase-btn"
+            :class="{ selected: isSelected }"
+            @click="$emit('select-usecase')"
+            :disabled="isSelecting"
+          >
+            <span v-if="isSelecting" class="button-spinner-small"></span>
+            <span v-else class="material-symbols-outlined">
+              {{ isSelected ? 'check_circle' : 'radio_button_unchecked' }}
+            </span>
+            {{ isSelecting ? 'Selecting...' : isSelected ? 'Selected' : 'Select This Use Case' }}
+          </button>
+          <button
             v-if="showSkipButton"
             class="skip-conflict-btn"
             @click="$emit('skip-conflict')"
@@ -221,8 +234,20 @@ export default {
       type: Boolean,
       default: false,
     },
+    showSelectButton: {
+      type: Boolean,
+      default: false,
+    },
+    isSelected: {
+      type: Boolean,
+      default: false,
+    },
+    isSelecting: {
+      type: Boolean,
+      default: false,
+    },
   },
-  emits: ['close', 'skip-conflict'],
+  emits: ['close', 'skip-conflict', 'select-usecase'],
 }
 </script>
 
@@ -273,6 +298,42 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.select-usecase-btn {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.select-usecase-btn:hover:not(:disabled) {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.select-usecase-btn.selected {
+  background: #1a365d;
+  border-color: #1a365d;
+  color: white;
+}
+
+.select-usecase-btn.selected:hover:not(:disabled) {
+  background: #2d5aa0;
+  border-color: #2d5aa0;
+}
+
+.select-usecase-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .skip-conflict-btn {

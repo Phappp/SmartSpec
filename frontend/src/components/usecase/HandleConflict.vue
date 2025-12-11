@@ -60,8 +60,19 @@
         >
           <div class="conflict-header">
             <div class="conflict-title">
-              <h4>Conflict Group {{ index + 1 }}</h4>
-              <span class="conflict-id">Reference: {{ formatConflictId(conflict.conflict_id) }}</span>
+              <button
+                class="collapse-toggle"
+                @click.stop="toggleConflict(conflict.conflict_id)"
+                :title="isCollapsed(conflict.conflict_id) ? 'Expand' : 'Collapse'"
+              >
+                <span class="material-symbols-outlined">
+                  {{ isCollapsed(conflict.conflict_id) ? 'expand_more' : 'expand_less' }}
+                </span>
+              </button>
+              <div class="title-content">
+                <h4>Conflict Group {{ index + 1 }}</h4>
+                <span class="conflict-id">Reference: {{ formatConflictId(conflict.conflict_id) }}</span>
+              </div>
             </div>
             <div class="conflict-actions">
               <button
@@ -76,19 +87,20 @@
             </div>
           </div>
 
-          <div class="conflict-options-grid">
+          <div v-show="!isCollapsed(conflict.conflict_id)" class="conflict-options-grid">
             <div
               v-for="useCase in conflict.items"
               :key="getUsecaseId(useCase)"
               class="conflict-option"
               :class="{ selected: selectedResolutions[conflict.conflict_id] === getUsecaseId(useCase) }"
-              @click="$emit('select-resolution', conflict.conflict_id, getUsecaseId(useCase))"
+              @click="handleSelectResolution(conflict.conflict_id, getUsecaseId(useCase))"
             >
               <div class="option-header">
                 <span class="option-badge">{{ formatUsecaseId(useCase) }}</span>
                 <button
                   class="select-btn"
                   :class="{ selected: selectedResolutions[conflict.conflict_id] === getUsecaseId(useCase) }"
+                  @click.stop="handleSelectResolution(conflict.conflict_id, getUsecaseId(useCase))"
                 >
                   <span
                     v-if="selectedResolutions[conflict.conflict_id] === getUsecaseId(useCase)"
@@ -97,14 +109,14 @@
                   >
                   <span v-else class="material-symbols-outlined">radio_button_unchecked</span>
                   {{
-                    selectedResolutions[conflict.conflict_id] === getUsecaseId(useCase) ? 'Selected' : 'Select'
+                    selectedResolutions[conflict.conflict_id] === getUsecaseId(useCase) ? 'Deselect' : 'Select'
                   }}
                 </button>
               </div>
               <div class="use-case-preview">
-                <h5>{{ useCase.name || useCase.goal }}</h5>
+                <h5>{{ getUsecaseDisplayName(useCase) }}</h5>
                 <p class="use-case-description">
-                  {{ useCase.reason || 'No description provided.' }}
+                  {{ getUsecaseDescription(useCase) }}
                 </p>
                 <div class="use-case-actions">
                   <button class="btn-outline" @click.stop="$emit('show-detail', useCase)">
@@ -183,6 +195,11 @@ export default {
     },
   },
   emits: ['find-conflicts', 'select-resolution', 'resolve-all', 'show-detail', 'skip-conflict'],
+  data() {
+    return {
+      collapsedConflicts: new Set(), // Track which conflicts are collapsed
+    }
+  },
   computed: {
     completionStatus() {
       const percentage = Math.round(
@@ -194,6 +211,28 @@ export default {
     },
   },
   methods: {
+    // Toggle collapse/expand for a conflict
+    toggleConflict(conflictId) {
+      if (this.collapsedConflicts.has(conflictId)) {
+        this.collapsedConflicts.delete(conflictId)
+      } else {
+        this.collapsedConflicts.add(conflictId)
+      }
+    },
+    // Check if a conflict is collapsed
+    isCollapsed(conflictId) {
+      return this.collapsedConflicts.has(conflictId)
+    },
+    // Handle select/deselect resolution
+    handleSelectResolution(conflictId, useCaseId) {
+      const currentSelection = this.selectedResolutions[conflictId]
+      // If clicking on already selected item, deselect it
+      if (currentSelection === useCaseId) {
+        this.$emit('select-resolution', conflictId, null)
+      } else {
+        this.$emit('select-resolution', conflictId, useCaseId)
+      }
+    },
     // Helper: Get usecase ID (support both _id and id for backward compatibility)
     getUsecaseId(uc) {
       if (!uc) return ''
@@ -214,8 +253,53 @@ export default {
     },
     // Helper: Get usecase display name
     getUsecaseDisplayName(uc) {
-      if (!uc) return 'Unknown Use Case'
+      if (!uc) {
+        console.warn('⚠️ getUsecaseDisplayName: uc is null/undefined')
+        return 'Unknown Use Case'
+      }
+      
+      // Check if uc is a populated usecase object
+      const hasName = uc && (uc.name || uc.goal)
+      const isString = typeof uc === 'string'
+      const isObjectId = uc && typeof uc === 'object' && !hasName
+      
+      if (isString || isObjectId) {
+        console.warn('⚠️ getUsecaseDisplayName: uc is not populated:', {
+          uc,
+          type: typeof uc,
+          isString,
+          isObjectId,
+          hasName
+        })
+        return `Use Case ID: ${this.getUsecaseId(uc)}`
+      }
+      
       return uc.name || uc.goal || 'Unnamed Use Case'
+    },
+    // Helper: Get usecase description
+    getUsecaseDescription(uc) {
+      if (!uc) {
+        console.warn('⚠️ getUsecaseDescription: uc is null/undefined')
+        return 'No description provided.'
+      }
+      
+      // Check if uc is a populated usecase object
+      const hasDescription = uc && (uc.reason || uc.description)
+      const isString = typeof uc === 'string'
+      const isObjectId = uc && typeof uc === 'object' && !hasDescription
+      
+      if (isString || isObjectId) {
+        console.warn('⚠️ getUsecaseDescription: uc is not populated:', {
+          uc,
+          type: typeof uc,
+          isString,
+          isObjectId,
+          hasDescription
+        })
+        return 'Use case details are being loaded...'
+      }
+      
+      return uc.reason || uc.description || 'No description provided.'
     },
     // Helper: Format conflict ID to short readable format
     formatConflictId(conflictId) {
@@ -410,8 +494,54 @@ export default {
   border-bottom: 1px solid #e5e7eb;
 }
 
+.conflict-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.collapse-toggle:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.collapse-toggle:active {
+  transform: scale(0.95);
+}
+
+.collapse-toggle .material-symbols-outlined {
+  font-size: 24px;
+  transition: transform 0.2s ease;
+  user-select: none;
+}
+
+.title-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .conflict-title h4 {
-  margin: 0 0 4px 0;
+  margin: 0;
   color: #374151;
   font-size: 1.125rem;
   font-weight: 600;

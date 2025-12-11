@@ -2,6 +2,7 @@ import Project from '../../../../../internal/model/project';
 import Input from '../../../../../internal/model/input';
 import Version from '../../../../../internal/model/version';
 import ProjectLog from '../../../../../internal/model/log';
+import Usecase from '../../../../../internal/model/usecase';
 import { OrchestratorService } from "../../orchestrator/domain/service";
 import { UploadedFile } from "express-fileupload";
 import { ServiceResponse, ResponseStatus } from '../../../services/serviceResponse';
@@ -372,11 +373,72 @@ export class ProjectService {
       });
     }
 
-    // Lấy danh sách versions (metadata)
+    // Lấy danh sách versions (metadata) - bao gồm pending_conflicts để frontend có thể check
     const versions = await Version.find({ project_id: project._id })
-      .select("_id version_number status created_at updated_at")
+      .select("_id version_number status created_at updated_at pending_conflicts")
       .sort({ version_number: -1 })
       .lean();
+    
+    // Populate usecases trong conflicts cho tất cả versions
+    if (versions && versions.length > 0) {
+      // Collect tất cả usecase IDs từ tất cả conflicts trong tất cả versions
+      const allUsecaseIds: Types.ObjectId[] = [];
+      versions.forEach((version: any) => {
+        if (version.pending_conflicts && Array.isArray(version.pending_conflicts)) {
+          version.pending_conflicts.forEach((conflict: any) => {
+            if (conflict.items && Array.isArray(conflict.items)) {
+              conflict.items.forEach((item: any) => {
+                const itemId = item?._id || item?.id || item;
+                if (itemId && Types.ObjectId.isValid(itemId)) {
+                  const objId = new Types.ObjectId(itemId);
+                  // Avoid duplicates
+                  if (!allUsecaseIds.some(id => id.toString() === objId.toString())) {
+                    allUsecaseIds.push(objId);
+                  }
+                }
+              });
+            }
+          });
+        }
+      });
+
+      // Fetch tất cả usecases một lần
+      if (allUsecaseIds.length > 0) {
+        const usecases = await Usecase.find({
+          _id: { $in: allUsecaseIds }
+        }).lean();
+
+        // Tạo map để lookup nhanh
+        const usecaseMap = new Map();
+        usecases.forEach((uc: any) => {
+          usecaseMap.set(uc._id.toString(), uc);
+        });
+
+        // Populate conflicts cho tất cả versions
+        versions.forEach((version: any) => {
+          if (version.pending_conflicts && Array.isArray(version.pending_conflicts)) {
+            version.pending_conflicts = version.pending_conflicts.map((conflict: any) => {
+              const populatedItems = (conflict.items || []).map((item: any) => {
+                const itemId = item?._id || item?.id || item;
+                const itemIdStr = itemId ? (itemId.toString ? itemId.toString() : String(itemId)) : null;
+                
+                if (itemIdStr && usecaseMap.has(itemIdStr)) {
+                  return usecaseMap.get(itemIdStr);
+                }
+                
+                // Fallback: return original item if not found
+                return item;
+              });
+
+              return {
+                ...conflict,
+                items: populatedItems
+              };
+            });
+          }
+        });
+      }
+    }
 
     // Lấy current version (đầy đủ tất cả field)
     const currentVersion = await Version.findById(project.current_version).lean();
@@ -385,6 +447,55 @@ export class ProjectService {
 
     if (currentVersion) {
       inputs = await Input.find({ version_id: currentVersion._id }).sort({ created_at: 1 }).lean();
+      
+      // Populate usecases trong conflicts nếu có
+      if (currentVersion.pending_conflicts && currentVersion.pending_conflicts.length > 0) {
+        // Collect tất cả usecase IDs từ conflicts
+        const usecaseIds: Types.ObjectId[] = [];
+        currentVersion.pending_conflicts.forEach((conflict: any) => {
+          if (conflict.items && Array.isArray(conflict.items)) {
+            conflict.items.forEach((item: any) => {
+              const itemId = item?._id || item?.id || item;
+              if (itemId && Types.ObjectId.isValid(itemId)) {
+                usecaseIds.push(new Types.ObjectId(itemId));
+              }
+            });
+          }
+        });
+
+        // Fetch tất cả usecases một lần
+        if (usecaseIds.length > 0) {
+          const usecases = await Usecase.find({
+            _id: { $in: usecaseIds }
+          }).lean();
+
+          // Tạo map để lookup nhanh
+          const usecaseMap = new Map();
+          usecases.forEach((uc: any) => {
+            usecaseMap.set(uc._id.toString(), uc);
+          });
+
+          // Populate conflicts với usecase objects
+          currentVersion.pending_conflicts = (currentVersion.pending_conflicts || []).map((conflict: any) => {
+            const populatedItems = (conflict.items || []).map((item: any) => {
+              const itemId = item?._id || item?.id || item;
+              const itemIdStr = itemId ? (itemId.toString ? itemId.toString() : String(itemId)) : null;
+              
+              if (itemIdStr && usecaseMap.has(itemIdStr)) {
+                return usecaseMap.get(itemIdStr);
+              }
+              
+              // Fallback: return original item if not found
+              return item;
+            });
+
+            return {
+              ...conflict,
+              items: populatedItems
+            };
+          }) as any;
+        }
+      }
     }
 
     // Lấy logs của current version

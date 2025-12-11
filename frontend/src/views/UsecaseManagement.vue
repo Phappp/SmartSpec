@@ -96,8 +96,11 @@
         :use-case="currentDetailUseCase"
         :show-skip-button="true"
         :is-skipping="isSkippingConflict"
+        :show-select-button="!!currentDetailUseCase.conflict_id"
+        :is-selected="isUsecaseSelected"
         @close="showConflictDetailModal = false"
         @skip-conflict="skipCurrentConflict"
+        @select-usecase="selectUsecaseFromModal"
       />
 
       <!-- Sharing Modal -->
@@ -320,6 +323,23 @@ export default {
         this.isProcessingFailed = newVal
       },
       immediate: true,
+    },
+    // Watch useCases to re-populate conflicts when usecases are loaded/updated
+    useCases: {
+      handler(newVal, oldVal) {
+        // Only re-populate if we have conflicts and usecases changed
+        if (this.hasConflicts && this.pendingConflicts.length > 0 && newVal && newVal.length > 0) {
+          console.log('🔄 Usecases changed, re-populating conflicts...')
+          const currentVersion = this.versions.find((v) => v._id === this.selectedVersionId)
+          const rawConflicts = currentVersion?.pending_conflicts || 
+                              this.currentVersionDetails?.pending_conflicts || 
+                              []
+          if (rawConflicts.length > 0) {
+            this.pendingConflicts = this.populateConflictsWithUsecases(rawConflicts)
+          }
+        }
+      },
+      deep: true,
     },
   },
   methods: {
@@ -812,6 +832,7 @@ export default {
           this.useCases = []
         }
 
+        // Check conflicts AFTER usecases are fetched so we can populate them
         this.checkConflictsOnLoad()
         this.checkUnprocessedInputs()
         this.checkConflicts()
@@ -873,6 +894,18 @@ export default {
         localStorage.setItem(storageKey, JSON.stringify(Array.from(this.previousUseCaseIds)))
         
         this.useCases = newUseCases
+        
+        // Re-populate conflicts with usecase objects after fetching usecases
+        // Get raw conflicts from source and re-populate
+        if (this.hasConflicts) {
+          const currentVersion = this.versions.find((v) => v._id === this.selectedVersionId)
+          const rawConflicts = currentVersion?.pending_conflicts || 
+                              this.currentVersionDetails?.pending_conflicts || 
+                              []
+          if (rawConflicts.length > 0) {
+            this.pendingConflicts = this.populateConflictsWithUsecases(rawConflicts)
+          }
+        }
       } catch (error) {
         console.error('Error fetching use cases:', error)
         this.toast.error('Failed to load use cases')
@@ -1041,11 +1074,182 @@ export default {
       }
     },
 
+    // Helper: Normalize ID to string for comparison (handles ObjectId, string, object with _id/id)
+    normalizeId(id) {
+      if (!id) return ''
+      // If it's already a string, return as is
+      if (typeof id === 'string') return id
+      // If it's an object with _id or id property
+      if (typeof id === 'object' && id !== null) {
+        return String(id._id || id.id || id.toString() || '')
+      }
+      // Otherwise convert to string
+      return String(id)
+    },
+
+    // Helper: Populate conflict items with actual usecase objects
+    populateConflictsWithUsecases(conflicts) {
+      if (!conflicts || !Array.isArray(conflicts) || !this.useCases || this.useCases.length === 0) {
+        console.warn('⚠️ Cannot populate conflicts:', {
+          hasConflicts: !!conflicts,
+          conflictsIsArray: Array.isArray(conflicts),
+          hasUseCases: !!this.useCases,
+          useCasesLength: this.useCases?.length || 0
+        })
+        return conflicts || []
+      }
+
+      console.log('🔄 Populating conflicts with usecases:', {
+        conflictsCount: conflicts.length,
+        usecasesCount: this.useCases.length,
+        sampleConflict: conflicts[0],
+        sampleUsecase: this.useCases[0]
+      })
+
+      // Create a map of usecases by normalized ID for quick lookup
+      // Try multiple ID formats to ensure we can match
+      const usecaseMap = new Map()
+      this.useCases.forEach((uc) => {
+        // Get all possible ID representations
+        const _id = uc._id
+        const id = uc.id
+        const _idStr = _id ? String(_id) : ''
+        const idStr = id ? String(id) : ''
+        const normalizedId = this.normalizeId(_id || id)
+        
+        // Store with all possible formats
+        if (normalizedId) {
+          usecaseMap.set(normalizedId, uc)
+        }
+        if (_idStr && _idStr !== normalizedId) {
+          usecaseMap.set(_idStr, uc)
+        }
+        if (idStr && idStr !== normalizedId && idStr !== _idStr) {
+          usecaseMap.set(idStr, uc)
+        }
+        
+        // Also try with object _id if it exists
+        if (_id && typeof _id === 'object') {
+          const objIdStr = _id.toString ? _id.toString() : String(_id)
+          if (objIdStr && objIdStr !== normalizedId && objIdStr !== _idStr) {
+            usecaseMap.set(objIdStr, uc)
+          }
+        }
+      })
+
+      console.log('📋 Usecase map created with', usecaseMap.size, 'entries')
+      console.log('🔑 Sample map keys:', Array.from(usecaseMap.keys()).slice(0, 3))
+
+      // Populate each conflict's items with usecase objects
+      return conflicts.map((conflict, conflictIndex) => {
+        const populatedItems = (conflict.items || []).map((item, itemIndex) => {
+          console.log(`🔍 Processing conflict ${conflictIndex}, item ${itemIndex}:`, {
+            item,
+            itemType: typeof item,
+            itemIsObject: typeof item === 'object' && item !== null,
+            itemKeys: typeof item === 'object' && item !== null ? Object.keys(item) : []
+          })
+          
+          // Try multiple ways to extract the ID
+          let itemId = this.normalizeId(item?._id || item?.id || item)
+          
+          // If item is an object, try to get ID from various properties
+          if (typeof item === 'object' && item !== null) {
+            // Try $oid format (MongoDB extended JSON)
+            if (item.$oid) {
+              itemId = String(item.$oid)
+            }
+            // Try toString if it's an ObjectId-like object
+            else if (item.toString && typeof item.toString === 'function') {
+              const toStringResult = item.toString()
+              if (toStringResult && toStringResult !== '[object Object]') {
+                itemId = String(toStringResult)
+              }
+            }
+          }
+          
+          console.log(`🔑 Normalized item ID:`, itemId)
+          
+          // Try to find usecase by normalized ID
+          let usecase = usecaseMap.get(itemId)
+          
+          // If not found, try multiple string representations
+          if (!usecase && item) {
+            const attempts = [
+              String(item),
+              item.toString ? item.toString() : String(item),
+              item._id ? String(item._id) : null,
+              item.id ? String(item.id) : null,
+              item.$oid ? String(item.$oid) : null
+            ].filter(Boolean)
+            
+            for (const attempt of attempts) {
+              usecase = usecaseMap.get(attempt)
+              if (usecase) {
+                console.log(`✅ Found usecase with attempt:`, attempt)
+                break
+              }
+            }
+          }
+          
+          // Debug log if usecase not found
+          if (!usecase) {
+            console.error('❌ Could not find usecase for conflict item:', {
+              conflictIndex,
+              itemIndex,
+              itemId,
+              item,
+              itemType: typeof item,
+              availableUsecaseIds: Array.from(usecaseMap.keys()).slice(0, 10),
+              totalUsecases: this.useCases.length,
+              sampleUsecaseId: this.useCases[0]?._id,
+              sampleUsecaseIdType: typeof this.useCases[0]?._id
+            })
+          } else {
+            console.log(`✅ Successfully matched usecase:`, {
+              itemId,
+              usecaseName: usecase.name || usecase.goal,
+              usecaseId: usecase._id || usecase.id
+            })
+          }
+          
+          // If we found the usecase, return it; otherwise return the original item
+          return usecase || item
+        })
+
+        const populatedConflict = {
+          ...conflict,
+          items: populatedItems,
+        }
+        
+        console.log(`✅ Populated conflict ${conflictIndex}:`, {
+          conflictId: conflict.conflict_id,
+          itemsCount: populatedItems.length,
+          populatedItems: populatedItems.map(item => ({
+            isUsecase: !!(item && item.name),
+            name: item?.name || item?.goal || 'N/A',
+            id: item?._id || item?.id || item
+          }))
+        })
+
+        return populatedConflict
+      })
+    },
+
     checkConflictsOnLoad() {
       const currentVersion = this.versions.find((v) => v._id === this.selectedVersionId)
       if (currentVersion && currentVersion.pending_conflicts?.length > 0) {
+        console.log('🔍 Found conflicts on load:', {
+          conflictsCount: currentVersion.pending_conflicts.length,
+          usecasesCount: this.useCases.length,
+          rawConflicts: currentVersion.pending_conflicts
+        })
         this.hasConflicts = true
-        this.pendingConflicts = currentVersion.pending_conflicts
+        this.pendingConflicts = this.populateConflictsWithUsecases(currentVersion.pending_conflicts)
+        console.log('✅ Populated conflicts:', {
+          populatedCount: this.pendingConflicts.length,
+          sampleConflict: this.pendingConflicts[0]
+        })
         this.selectedResolutions = {}
       } else {
         this.hasConflicts = false
@@ -1055,8 +1259,17 @@ export default {
 
     checkConflicts() {
       if (this.currentVersionDetails && this.currentVersionDetails.pending_conflicts?.length > 0) {
+        console.log('🔍 Found conflicts in currentVersionDetails:', {
+          conflictsCount: this.currentVersionDetails.pending_conflicts.length,
+          usecasesCount: this.useCases.length
+        })
         this.hasConflicts = true
-        this.pendingConflicts = this.currentVersionDetails.pending_conflicts
+        this.pendingConflicts = this.populateConflictsWithUsecases(
+          this.currentVersionDetails.pending_conflicts
+        )
+        console.log('✅ Populated conflicts from currentVersionDetails:', {
+          populatedCount: this.pendingConflicts.length
+        })
         this.selectedResolutions = {}
       } else {
         this.hasConflicts = false
@@ -1065,15 +1278,61 @@ export default {
     },
 
     selectResolution(conflictId, useCaseId) {
-      this.selectedResolutions = {
-        ...this.selectedResolutions,
-        [conflictId]: useCaseId,
+      // If useCaseId is null, deselect (remove from selectedResolutions)
+      if (useCaseId === null || useCaseId === undefined) {
+        const newResolutions = { ...this.selectedResolutions }
+        delete newResolutions[conflictId]
+        this.selectedResolutions = newResolutions
+      } else {
+        // Select the usecase
+        this.selectedResolutions = {
+          ...this.selectedResolutions,
+          [conflictId]: useCaseId,
+        }
       }
     },
 
     showConflictDetail(useCase) {
-      this.currentDetailUseCase = useCase
+      // Find the conflict this usecase belongs to
+      const useCaseId = String(useCase._id || useCase.id || '')
+      let conflictId = null
+      
+      // Search through pendingConflicts to find which conflict contains this usecase
+      for (const conflict of this.pendingConflicts) {
+        const hasUsecase = conflict.items?.some(item => {
+          const itemId = String(item?._id || item?.id || item || '')
+          return itemId === useCaseId
+        })
+        if (hasUsecase) {
+          conflictId = conflict.conflict_id
+          break
+        }
+      }
+      
+      // Add conflict_id to usecase object for modal
+      this.currentDetailUseCase = {
+        ...useCase,
+        conflict_id: conflictId
+      }
       this.showConflictDetailModal = true
+    },
+
+    selectUsecaseFromModal() {
+      if (!this.currentDetailUseCase || !this.currentDetailUseCase.conflict_id) {
+        return
+      }
+      const useCaseId = String(this.currentDetailUseCase._id || this.currentDetailUseCase.id || '')
+      const conflictId = this.currentDetailUseCase.conflict_id
+      
+      // Toggle selection: if already selected, deselect; otherwise select
+      const currentSelection = this.selectedResolutions[conflictId]
+      if (currentSelection === useCaseId) {
+        // Deselect
+        this.selectResolution(conflictId, null)
+      } else {
+        // Select
+        this.selectResolution(conflictId, useCaseId)
+      }
     },
 
     async resolveAllConflicts() {
@@ -1115,10 +1374,25 @@ export default {
 
       this.isSkippingConflict = true
       try {
+        // Save current selectedResolutions before skipping (excluding the skipped conflict)
+        const savedResolutions = { ...this.selectedResolutions }
+        delete savedResolutions[conflictId]
+        
         await skipConflict(this.selectedVersionId, conflictId)
         this.toast.success('Conflict skipped successfully')
 
         await this.fetchProjectData(this.project._id)
+        
+        // Restore selectedResolutions after fetching (excluding the skipped conflict)
+        // Only keep resolutions for conflicts that still exist
+        const existingConflictIds = new Set(this.pendingConflicts.map(c => c.conflict_id))
+        const restoredResolutions = {}
+        Object.keys(savedResolutions).forEach(id => {
+          if (existingConflictIds.has(id)) {
+            restoredResolutions[id] = savedResolutions[id]
+          }
+        })
+        this.selectedResolutions = restoredResolutions
       } catch (error) {
         console.error('Error skipping conflict:', error)
         const { formatErrorForDisplay } = require('@/utils/errorMessages')
