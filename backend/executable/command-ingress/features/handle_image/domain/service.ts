@@ -39,7 +39,7 @@ export class OcrService {
             original_filename: data.originalFilename,
             mime_type: data.mimeType,
             raw_text: data.rawText,
-            cleaned_text: data.rawText,
+            cleaned_text: data.rawText, // Sẽ được refine bằng LLM sau
             metadata: data.metadata,
             confidence_score: data.confidenceScore,
             quality_score: data.confidenceScore,

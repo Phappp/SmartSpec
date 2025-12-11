@@ -92,6 +92,29 @@ export class PdfService {
     confidenceScore: number;
   }) {
     const isScanned = data.type === 'pdf' && (data.metadata?.is_scanned === true);
+    
+    // ✅ Clean text ngay khi extract (trừ scanned PDF - sẽ được refine sau)
+    // Scanned PDF sẽ được refine bằng LLM nên không clean ở đây
+    let cleanedText = data.rawText;
+    let textValidation: any = null;
+    
+    if (!isScanned) {
+      // Chỉ clean text cho non-scanned PDF
+      const { cleanTextForLLM, validateTextForLLM } = require("../../../../shared/textPreprocessor");
+      cleanedText = cleanTextForLLM(data.rawText);
+      textValidation = validateTextForLLM(data.rawText);
+      
+      // Log warnings nếu có
+      if (textValidation.warnings.length > 0) {
+        console.warn(`⚠️ PDF extraction warnings for ${data.originalFilename}:`, textValidation.warnings.slice(0, 3));
+      }
+      
+      // Cảnh báo nếu text bị mất nhiều sau khi clean
+      if (textValidation.cleanedLength < textValidation.originalLength * 0.9) {
+        console.warn(`⚠️ PDF text bị giảm ${((1 - textValidation.cleanedLength / textValidation.originalLength) * 100).toFixed(1)}% sau khi clean: ${data.originalFilename}`);
+      }
+    }
+    
     const input = new Input({
       project_id: data.projectId,
       version_id: data.versionId,
@@ -100,8 +123,16 @@ export class PdfService {
       original_filename: data.originalFilename,
       mime_type: data.mimeType,
       raw_text: data.rawText,
-      cleaned_text: data.rawText,
-      metadata: data.metadata,
+      cleaned_text: cleanedText, // Sử dụng cleaned text (hoặc raw nếu scanned)
+      metadata: {
+        ...data.metadata,
+        ...(textValidation ? {
+          text_validation_warnings: textValidation.warnings.length > 0 ? textValidation.warnings : undefined,
+          original_text_length: textValidation.originalLength,
+          cleaned_text_length: textValidation.cleanedLength,
+          estimated_tokens: textValidation.estimatedTokens
+        } : {})
+      },
       confidence_score: data.confidenceScore,
       quality_score: data.confidenceScore,
       // mark extracted nếu sẽ refine; completed nếu không

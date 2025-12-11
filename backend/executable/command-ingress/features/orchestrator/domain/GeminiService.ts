@@ -429,10 +429,83 @@ export class GeminiService {
             .filter(Boolean);
     }
 
+    /**
+     * ✅ MỚI: Build prompt đơn giản cho single call - yêu cầu trả về TẤT CẢ usecases
+     */
+    private buildPromptSimple(cleanText: string, language: string): string {
+        const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+        const schemaDescription = prompts[lang].schemaDescription(500, 0); // Large batch size, offset 0
+
+        // Thêm instruction rõ ràng: trả về TẤT CẢ usecases
+        const instruction = lang === 'vi-VN'
+            ? `\n\n**QUAN TRỌNG**: Phân tích TOÀN BỘ văn bản và trả về TẤT CẢ use cases bạn tìm thấy. Không bỏ sót bất kỳ use case nào.`
+            : `\n\n**IMPORTANT**: Analyze the ENTIRE text and return ALL use cases you find. Do not miss any use cases.`;
+
+        return `${schemaDescription}${instruction}\n\nVăn bản nguồn (Source text):\n${cleanText}`;
+    }
+
     private buildPrompt(cleanText: string, language: string, offset = 0, batchSize = 20): string {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const schemaDescription = prompts[lang].schemaDescription(batchSize, offset);
-        return `${schemaDescription}\n\nVăn bản nguồn (Source text):\n${cleanText}`;
+
+        // ✅ Validate và clean text trước khi build prompt (sync để không làm chậm)
+        // Sử dụng require để tránh async trong sync function
+        const textPreprocessor = require("../../../shared/textPreprocessor");
+        const validation = textPreprocessor.validateTextForLLM(cleanText);
+
+        if (!validation.isValid) {
+            console.warn(`⚠️ Invalid text in buildPrompt (offset=${offset}):`, validation.warnings);
+        }
+
+        if (validation.warnings.length > 0 && offset % 10 === 0) {
+            // Chỉ log warnings mỗi 10 batches để tránh spam log
+            console.warn(`⚠️ Text warnings in buildPrompt (offset=${offset}):`, validation.warnings.slice(0, 2));
+        }
+
+        // Sử dụng cleaned text
+        const safeText = validation.cleanedText;
+
+        // Kiểm tra token limit (ước tính) - chỉ cảnh báo nếu quá lớn
+        if (validation.estimatedTokens > 100000) {
+            console.warn(`⚠️ Chunk quá lớn (${validation.estimatedTokens} tokens, offset=${offset}). Có thể LLM không đọc hết.`);
+        }
+
+        return `${schemaDescription}\n\nVăn bản nguồn (Source text):\n${safeText}`;
+    }
+
+    /**
+     * ✅ MỚI: Normalize use cases từ parsed items
+     */
+    private normalizeUseCases(items: any[]): any[] {
+        return items.map((it: any) => {
+            if (typeof it === "string") return { name: it };
+
+            // Normalize role
+            if (it.role && typeof it.role === 'string') {
+                it.role = {
+                    id: `role_${it.role.toLowerCase().replace(/\s+/g, '_')}`,
+                    name: it.role
+                };
+            } else if (it.role && typeof it.role === 'object' && !it.role.id) {
+                it.role.id = `role_${it.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`;
+            }
+
+            // Remove id field (system will generate)
+            if (it.id) {
+                delete it.id;
+            }
+
+            // Generate _id if not exists
+            if (!it._id) {
+                it._id = new Types.ObjectId();
+            }
+
+            return it;
+        }).filter(uc =>
+            uc && typeof uc === 'object' &&
+            ((uc.name && typeof uc.name === 'string' && uc.name.trim() !== '') ||
+                (uc.goal && typeof uc.goal === 'string' && uc.goal.trim() !== ''))
+        );
     }
 
     async addRelatedUseCases(
@@ -518,27 +591,169 @@ export class GeminiService {
         return useCases;
     }
 
-    async analyzeRequirements(cleanText: string, language: string, userId?: string, projectId?: string): Promise<any[]> {
-        console.log(` Analyzing text with Gemini (lang: ${language}). Text length: ${cleanText?.length ?? 0}`);
+    /**
+     * ✅ REFACTORED: Phân tích requirements với logic đơn giản hơn
+     * - Text nhỏ (< 80% context window): Single call, trả về TẤT CẢ usecases
+     * - Text lớn: Đã được chunk ở RequirementService, mỗi chunk gọi 1 lần
+     */
+    async analyzeRequirements(
+        cleanText: string,
+        language: string,
+        userId?: string,
+        projectId?: string,
+        chunkIndex?: number,
+        totalChunks?: number
+    ): Promise<any[]> {
+        const chunkLabel = chunkIndex ? `[Chunk ${chunkIndex}${totalChunks ? `/${totalChunks}` : ''}]` : '';
+        console.log(`${chunkLabel} Analyzing text with Gemini (lang: ${language}). Text length: ${cleanText?.length ?? 0}`);
 
         const keys = await this.apiKeyService.getAllActiveKeys("gemini");
         if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
 
+        // ✅ Lấy model config để quyết định strategy
+        const { getModelConfig, estimateTokens, determineStrategy } = await import("../../../shared/tokenManager");
+        const firstKey = keys[0];
+        const modelConfig = getModelConfig(firstKey.model_name || 'gemini-2.0-flash', 'gemini');
+        const estimatedTokens = estimateTokens(cleanText, modelConfig);
+        const strategy = determineStrategy(cleanText, modelConfig);
+
+        console.log(`${chunkLabel} 📊 Token Analysis: ${estimatedTokens.toLocaleString()} tokens, Context Window: ${modelConfig.contextWindow.toLocaleString()}, Strategy: ${strategy.strategy}`);
+
+        // ✅ QUAN TRỌNG: Nếu text vừa với context window (< 80%) → single call, không batch
+        const contextThreshold = modelConfig.contextWindow * 0.8; // 80% để reserve cho prompt và output
+        const useSimpleStrategy = estimatedTokens < contextThreshold && !strategy.needsChunking;
+
+        if (useSimpleStrategy) {
+            console.log(`${chunkLabel} ✅ Text nhỏ (${estimatedTokens.toLocaleString()} < ${Math.floor(contextThreshold).toLocaleString()} tokens). Sử dụng single call strategy.`);
+            return await this.analyzeRequirementsSingleCall(cleanText, language, keys, modelConfig, userId, projectId, chunkLabel);
+        } else {
+            // Text lớn hoặc đã được chunk → sử dụng batch strategy (giữ logic cũ nhưng tối ưu)
+            console.log(`${chunkLabel} 📦 Text lớn hoặc đã chunk. Sử dụng batch strategy.`);
+            return await this.analyzeRequirementsBatch(cleanText, language, keys, modelConfig, userId, projectId, chunkLabel);
+        }
+    }
+
+    /**
+     * ✅ MỚI: Single call strategy - gọi 1 lần, trả về TẤT CẢ usecases
+     * Dùng cho text nhỏ vừa với context window
+     */
+    private async analyzeRequirementsSingleCall(
+        cleanText: string,
+        language: string,
+        keys: { _id: string; key_value: string; model_name: string }[],
+        modelConfig: any,
+        userId?: string,
+        projectId?: string,
+        chunkLabel?: string
+    ): Promise<any[]> {
+        const prompt = this.buildPromptSimple(cleanText, language);
+
+        // Thử từng key cho đến khi thành công
+        for (const k of keys) {
+            try {
+                console.log(`${chunkLabel} 🔑 Trying Gemini key: ${k.key_value.slice(0, 12)}... (single call)`);
+                const { GoogleGenerativeAI } = await import("@google/generative-ai");
+                const client = new GoogleGenerativeAI(k.key_value);
+                const modelName = k.model_name || 'gemini-2.0-flash-001';
+                const model = client.getGenerativeModel({ model: modelName });
+
+                const startTime = Date.now();
+                const resp: any = await model.generateContent({
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                });
+
+                const responseTime = Date.now() - startTime;
+                const tokens = extractGeminiTokens(resp);
+
+                // Log API usage
+                logApiUsage({
+                    api_key_id: k._id.toString(),
+                    provider: 'gemini',
+                    model_name: modelName,
+                    user_id: userId,
+                    project_id: projectId,
+                    request_type: 'text',
+                    endpoint: 'analyzeRequirements',
+                    ...tokens,
+                    status: 'success',
+                    status_code: 200,
+                    response_time: responseTime,
+                }).catch(err => console.error('Failed to log API usage:', err));
+
+                let text: string = resp?.response?.text?.() || "";
+                text = this.cleanJsonString(text);
+                console.log(`${chunkLabel} 🤖 Gemini response length: ${text.length} (single call)`);
+
+                // Parse và normalize
+                const parsed = this.safeJsonParseRobust(text);
+                if (parsed.items.length === 0) {
+                    console.log(`${chunkLabel} ✅ No use cases found in response.`);
+                    return [];
+                }
+
+                const normalizeStartTime = Date.now();
+                const normalized = this.normalizeUseCases(parsed.items);
+                const normalizeTime = Date.now() - normalizeStartTime;
+                console.log(`${chunkLabel} ✅ Parsed ${normalized.length} use cases from single call (normalize took ${normalizeTime}ms).`);
+
+                // ✅ QUAN TRỌNG: Return ngay sau khi parse xong để tránh timeout
+                return normalized;
+
+            } catch (err: any) {
+                const { analyzeApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
+                const errorInfo = analyzeApiKeyError(err);
+
+                console.error(`${chunkLabel} ❌ Gemini key ${k._id} failed:`, err?.message || err, `[${errorInfo.type}]`);
+
+                // Disable key nếu cần
+                if (errorInfo.shouldDisableKey) {
+                    try {
+                        await this.apiKeyService.disableKey(k._id);
+                        console.warn(`${chunkLabel} ⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
+                    } catch { /* ignore */ }
+                }
+
+                // Nếu không retryable, throw ngay
+                if (!errorInfo.retryable) {
+                    const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
+                    throw new ApiKeyError(err, 'vi');
+                }
+
+                // Tiếp tục thử key tiếp theo
+                continue;
+            }
+        }
+
+        throw new Error("All Gemini API keys failed");
+    }
+
+    /**
+     * Batch strategy - giữ logic cũ nhưng tối ưu
+     * Dùng cho text lớn hoặc đã được chunk
+     */
+    private async analyzeRequirementsBatch(
+        cleanText: string,
+        language: string,
+        keys: { _id: string; key_value: string; model_name: string }[],
+        modelConfig: any,
+        userId?: string,
+        projectId?: string,
+        chunkLabel?: string
+    ): Promise<any[]> {
         let allResults: any[] = [];
         let offset = 0;
         let batchCount = 0;
         let lastError: any = null;
-        let consecutiveEmptyBatches = 0; // Đếm số batch liên tiếp không có items mới
-        let lastOffset = 0; // Lưu offset của batch trước để phát hiện lặp lại
+        let consecutiveEmptyBatches = 0;
+        let lastOffset = 0;
 
         while (batchCount < this.MAX_BATCHES) {
             batchCount++;
             let gotBatch = false;
             let attemptsForThisOffset = 0;
 
-            // Kiểm tra giới hạn tổng số use case
             if (allResults.length >= this.MAX_TOTAL_USE_CASES) {
-                console.warn(`⚠️ Đã đạt giới hạn tối đa ${this.MAX_TOTAL_USE_CASES} use case. Dừng xử lý.`);
+                console.warn(`${chunkLabel} ⚠️ Đã đạt giới hạn tối đa ${this.MAX_TOTAL_USE_CASES} use case. Dừng xử lý.`);
                 return allResults.slice(0, this.MAX_TOTAL_USE_CASES);
             }
 
@@ -549,7 +764,7 @@ export class GeminiService {
                 const key = k.key_value;
                 const startTime = Date.now();
                 try {
-                    console.log(`🔑 Trying Gemini key: ${key.slice(0, 12)}... (offset=${offset})`);
+                    console.log(`${chunkLabel} 🔑 Trying Gemini key: ${key.slice(0, 12)}... (offset=${offset}, batch=${batchCount})`);
                     const { GoogleGenerativeAI } = await import("@google/generative-ai");
                     const client = new GoogleGenerativeAI(key);
                     const modelName = k.model_name || 'gemini-2.0-flash-001';
@@ -581,7 +796,7 @@ export class GeminiService {
 
                     let text: string = resp?.response?.text?.() || "";
                     text = this.cleanJsonString(text);
-                    console.log(`🤖 Gemini response length: ${text.length}, offset=${offset}, batch=${batchCount}`);
+                    console.log(`${chunkLabel} 🤖 Gemini response length: ${text.length}, offset=${offset}, batch=${batchCount}`);
 
                     // Kiểm tra sớm nếu response là mảng rỗng
                     if (text.trim() === "[]" || text.trim().length === 0) {
@@ -668,7 +883,7 @@ export class GeminiService {
                         }
 
                         allResults = allResults.concat(validNormalized);
-                        console.log(`✅ Parsed ${validNormalized.length} valid items from ${parsed.items.length} parsed items (incomplete=${parsed.incomplete}). total=${allResults.length}, offset=${offset} → ${offset + validNormalized.length}`);
+                        console.log(`${chunkLabel} ✅ Parsed ${validNormalized.length} valid items from ${parsed.items.length} parsed items (incomplete=${parsed.incomplete}). total=${allResults.length}, offset=${offset} → ${offset + validNormalized.length}`);
 
                         lastOffset = offset;
                         offset += validNormalized.length;
@@ -743,18 +958,18 @@ export class GeminiService {
 
                     // ✅ THAY ĐỔI: Lưu lại lỗi nhưng tiếp tục thử các key khác
                     // Chỉ throw error khi đã thử hết tất cả các key
-                    console.warn(`⚠️ Key ${k._id} failed (${errorInfo.type}), trying next key...`);
+                    console.warn(`${chunkLabel} ⚠️ Key ${k._id} failed (${errorInfo.type}), trying next key...`);
                     continue;
                 }
             } // end for keys
 
             if (!gotBatch) {
                 consecutiveEmptyBatches++;
-                console.warn(`⚠️ Could not fetch a valid batch for current offset. Consecutive empty batches: ${consecutiveEmptyBatches}`);
+                console.warn(`${chunkLabel} ⚠️ Could not fetch a valid batch for current offset. Consecutive empty batches: ${consecutiveEmptyBatches}`);
 
                 // Nếu có 2 batch liên tiếp không lấy được data → dừng
                 if (consecutiveEmptyBatches >= 2) {
-                    console.warn(`⚠️ Có ${consecutiveEmptyBatches} batch liên tiếp không lấy được data. Dừng xử lý.`);
+                    console.warn(`${chunkLabel} ⚠️ Có ${consecutiveEmptyBatches} batch liên tiếp không lấy được data. Dừng xử lý.`);
                     break;
                 }
             } else {
@@ -762,11 +977,21 @@ export class GeminiService {
             }
         } // end while
 
-        console.log(`📊 Kết thúc vòng lặp. Tổng số use case: ${allResults.length}, batch count: ${batchCount}`);
+        console.log(`${chunkLabel} 📊 Kết thúc vòng lặp. Tổng số use case: ${allResults.length}, batch count: ${batchCount}`);
 
-        if (allResults.length > 0) return allResults;
+        // ✅ QUAN TRỌNG: Nếu có partial results, luôn return chúng thay vì throw error
+        // Điều này đảm bảo dữ liệu đã generate được không bị mất
+        if (allResults.length > 0) {
+            if (lastError) {
+                // Có lỗi nhưng đã có partial results → log warning nhưng vẫn return
+                const { analyzeApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
+                const errorInfo = analyzeApiKeyError(lastError);
+                console.warn(`${chunkLabel} ⚠️ Có lỗi trong quá trình generate (${errorInfo.type}), nhưng đã có ${allResults.length} use cases. Trả về partial results.`);
+            }
+            return allResults;
+        }
 
-        // Nếu có lỗi, throw với thông tin chi tiết
+        // Chỉ throw error khi KHÔNG có partial results nào
         if (lastError) {
             const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
             throw new ApiKeyError(lastError, 'vi');

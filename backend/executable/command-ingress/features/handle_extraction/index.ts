@@ -51,12 +51,34 @@ export async function refineInputById(inputId: string, provider: Provider = 'gem
             console.log(`[refineInputById] Basic cleaning applied, length: ${cleaned.length}`);
         }
 
+        // ✅ Validate và clean lại text sau khi refine để đảm bảo chất lượng
+        const { cleanTextForLLM, validateTextForLLM } = require("../../../../shared/textPreprocessor");
+        const finalCleaned = cleanTextForLLM(cleaned);
+        const validation = validateTextForLLM(cleaned);
+        
+        // Kiểm tra xem LLM có cắt bớt text không
+        const truncationCheck = require("../../../../shared/textPreprocessor").detectTruncation(raw, finalCleaned);
+        if (truncationCheck.isTruncated && truncationCheck.lossPercentage > 5) {
+            console.warn(`⚠️ [refineInputById] LLM có thể đã cắt bớt text: mất ${truncationCheck.missingChars} ký tự (${truncationCheck.lossPercentage.toFixed(1)}%)`);
+        }
+        
+        if (validation.warnings.length > 0) {
+            console.warn(`⚠️ [refineInputById] Text validation warnings:`, validation.warnings.slice(0, 2));
+        }
+
         await Input.findByIdAndUpdate(inputId, {
-            cleaned_text: cleaned,
+            cleaned_text: finalCleaned, // Sử dụng cleaned text
             language: meta.language || null,
-            quality_score: Math.min(1, cleaned && raw ? 0.9 : 0.3),
+            quality_score: Math.min(1, finalCleaned && raw ? 0.9 : 0.3),
             processing_status: 'completed',
             pipeline_steps: { ...(input as any).pipeline_steps, refine: { ok: true, provider, at: new Date() } },
+            metadata: {
+                ...meta,
+                text_validation_warnings: validation.warnings.length > 0 ? validation.warnings : undefined,
+                original_text_length: validation.originalLength,
+                cleaned_text_length: validation.cleanedLength,
+                estimated_tokens: validation.estimatedTokens
+            }
         });
 
         console.log(`[refineInputById] Refinement completed for inputId ${inputId}`);

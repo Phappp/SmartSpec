@@ -161,7 +161,12 @@
             class="input-card"
             :class="[
               input.type,
-              { expanded: expandedInputId === input._id, processed: input.is_processed },
+              { 
+                expanded: expandedInputId === input._id, 
+                processed: input.is_processed,
+                loading: input._isLoading,
+                error: input._isError
+              },
             ]"
             @click="toggleInput(input._id)"
           >
@@ -171,9 +176,23 @@
               </div>
 
               <div class="input-main-info" v-if="!isCollapsed">
-                <h4 class="input-title">{{ getCleanText(input) }}</h4>
+                <h4 class="input-title">
+                  <span v-if="input._isLoading" class="loading-indicator-inline">
+                    <!-- <span class="button-spinner-small"></span> -->
+                    {{ getCleanText(input) }}
+                  </span>
+                  <span v-else>{{ getCleanText(input) }}</span>
+                </h4>
                 <div class="input-meta">
-                  <span class="quality-badge" :class="getQualityClass(input)">
+                  <span v-if="input._isLoading" class="status-badge loading-badge">
+                    <span class="button-spinner-small"></span>
+                    Uploading...
+                  </span>
+                  <span v-else-if="input._isError" class="status-badge error-badge">
+                    <span class="material-symbols-outlined">error</span>
+                    Failed
+                  </span>
+                  <span v-else class="quality-badge" :class="getQualityClass(input)">
                     {{ Math.round(getQualityScore(input) * 100) }}%
                   </span>
                 </div>
@@ -588,16 +607,27 @@ export default {
       if (!this.canSubmit) return
 
       const formData = new FormData()
+      const tempInputData = {
+        files: [],
+        rawText: null
+      }
+      
       if (this.selectedFiles.length > 0) {
         this.selectedFiles.forEach((file) => {
           formData.append('files', file)
+          tempInputData.files.push({
+            name: file.name,
+            size: file.size,
+            type: file.type
+          })
         })
       }
       if (this.rawText.trim()) {
         formData.append('rawText', this.rawText.trim())
+        tempInputData.rawText = this.rawText.trim()
       }
 
-      this.$emit('add-inputs', formData)
+      this.$emit('add-inputs', { formData, tempInputData })
       this.resetForm()
       this.showAddForm = false
     },
@@ -935,8 +965,62 @@ export default {
   border-left: 3px solid #10b981;
 }
 
-.input-card:not(.processed) {
+.input-card:not(.processed):not(.loading):not(.error) {
   border-left: 3px solid #ef4444;
+}
+
+.input-card.loading {
+  border-left: 3px solid #3b82f6;
+  background: #f0f9ff;
+  animation: pulseLoading 2s ease-in-out infinite;
+}
+
+.input-card.error {
+  border-left: 3px solid #dc2626;
+  background: #fef2f2;
+}
+
+@keyframes pulseLoading {
+  0%, 100% {
+    background: #f0f9ff;
+  }
+  50% {
+    background: #e0f2fe;
+  }
+}
+
+.loading-indicator-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.error-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.error-badge .material-symbols-outlined {
+  font-size: 14px;
 }
 
 .input-header {

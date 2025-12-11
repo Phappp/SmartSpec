@@ -31,6 +31,16 @@ export class TextService {
         // THAY ĐỔI LOGIC: Luôn tạo input mới, không tìm và ghi đè nữa.
         // Việc kiểm tra trùng lặp nên được thực hiện ở tầng cao hơn (InputService)
         // giống như cách nó làm với file.
+        // ✅ Clean text ngay khi save
+        const { cleanTextForLLM, validateTextForLLM } = require("../../../../shared/textPreprocessor");
+        const cleanedText = cleanTextForLLM(rawText || '');
+        const validation = validateTextForLLM(rawText || '');
+        
+        // Log warnings nếu có
+        if (validation.warnings.length > 0) {
+            console.warn(`⚠️ Text input warnings:`, validation.warnings.slice(0, 3));
+        }
+        
         const input = new Input({
             project_id: projectId,
             version_id: versionId,
@@ -50,12 +60,16 @@ export class TextService {
                 paragraphs_count: 0,
                 tables_count: 0,
                 headers: [],
-                footers: []
+                footers: [],
+                text_validation_warnings: validation.warnings.length > 0 ? validation.warnings : undefined,
+                original_text_length: validation.originalLength,
+                cleaned_text_length: validation.cleanedLength,
+                estimated_tokens: validation.estimatedTokens
             },
             confidence_score: 1.0,
             quality_score: 1.0,
             processing_status: 'completed',
-            cleaned_text: rawText || '',
+            cleaned_text: cleanedText, // Sử dụng cleaned text
             language: detected || null,
             pipeline_steps: { extraction: true, lang_detect: { ok: true, value: detected || null } },
             is_processed: false, // Luôn là false khi tạo mới

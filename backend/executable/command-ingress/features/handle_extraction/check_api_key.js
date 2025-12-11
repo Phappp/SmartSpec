@@ -45,7 +45,7 @@ function testGeminiKey(apiKey) {
                     _c.trys.push([0, 2, , 3]);
                     console.log('🔑 Testing Gemini API key:', apiKey.slice(0, 10) + '...');
                     client = new GoogleGenerativeAI(apiKey);
-                    model = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
+                    model = client.getGenerativeModel({ model: 'gemini-2.5-flash' });
                     return [4 /*yield*/, model.generateContent({
                             contents: [{ role: 'user', parts: [{ text: 'Hello, kiểm tra API key!' }] }]
                         })];
@@ -71,7 +71,7 @@ function testGeminiKey(apiKey) {
     });
 }
 // Dùng hàm
-testGeminiKey('AIzaSyDfEAUmJMmtFzk8ZNpG0aftY9kjMT1qB3M')
+testGeminiKey('AIzaSyDEAkAIIwTHW5NcgYofaC0ZVzGanJYmjOA')
     .then(function (success) {
     console.log('Test result:', success ? 'SUCCESS' : 'FAILED');
     process.exit(success ? 0 : 1);

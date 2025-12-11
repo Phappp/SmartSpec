@@ -69,10 +69,12 @@
           :is-processing-failed="isProcessingFailed"
           :show-incremental-button="showIncrementalButton"
           :unprocessed-inputs-count="unprocessedInputsCount"
+          :is-adding-input="isAddingInput"
           @delete-input="openDeleteSpecificModal"
           @input-added="handleInputAdded"
           @input-deleted="handleInputDeleted"
           @inputs-reloaded="handleInputsReloaded"
+          @add-inputs="handleAddInputs"
           @start-incremental-analysis="startIncrementalAnalysis"
           @retry-incremental="retryIncrementalAnalysis"
         />
@@ -397,7 +399,7 @@ export default {
         // Leave project room
         if (this.project._id) {
           try {
-            socket.emit('leave_project', this.project._id)
+          socket.emit('leave_project', this.project._id)
           } catch (error) {
             console.warn('⚠️ Error leaving project room:', error)
           }
@@ -1247,7 +1249,7 @@ export default {
           const { status, version } = response.data.data
 
           if (version && mode === 'incremental' && status === 'processing') {
-            this.isProcessingIncremental = true
+              this.isProcessingIncremental = true
           }
 
           if (mode === 'retry') {
@@ -1411,8 +1413,50 @@ export default {
     },
 
     // ========== INPUT MANAGEMENT ==========
-    async handleAddInputs(formData) {
+    async handleAddInputs({ formData, tempInputData }) {
       this.isAddingInput = true
+
+      // Tạo input tạm thời với loading state
+      const tempInputs = []
+      if (tempInputData.files && tempInputData.files.length > 0) {
+        tempInputData.files.forEach((file) => {
+          const tempInput = {
+            _id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            _isLoading: true,
+            _isTemp: true,
+            type: this.getFileType(file.type),
+            cleaned_text: file.name,
+            clean_text: file.name,
+            raw_text: file.name,
+            is_processed: false,
+            created_at: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            metadata: {
+              filename: file.name,
+              size: file.size
+            }
+          }
+          tempInputs.push(tempInput)
+        })
+      }
+      if (tempInputData.rawText) {
+        const tempInput = {
+          _id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          _isLoading: true,
+          _isTemp: true,
+          type: 'text',
+          cleaned_text: tempInputData.rawText.substring(0, 100) + (tempInputData.rawText.length > 100 ? '...' : ''),
+          clean_text: tempInputData.rawText.substring(0, 100) + (tempInputData.rawText.length > 100 ? '...' : ''),
+          raw_text: tempInputData.rawText,
+          is_processed: false,
+          created_at: new Date().toISOString(),
+          createdAt: new Date().toISOString()
+        }
+        tempInputs.push(tempInput)
+      }
+
+      // Thêm inputs tạm thời vào đầu danh sách
+      this.inputs = [...tempInputs, ...this.inputs]
 
       try {
         const versionId = this.selectedVersionId
@@ -1432,18 +1476,55 @@ export default {
             saveSelectedVersion(this.project._id, this.selectedVersionId)
             console.log('🔄 Updated selectedVersionId to new version:', this.selectedVersionId)
           }
-          this.toast.success('Input added successfully!')
+          
+          // Xóa inputs tạm thời và fetch data mới
+          this.inputs = this.inputs.filter(input => !input._isTemp)
           await this.fetchProjectData(this.project._id)
+          this.toast.success('Input added successfully!')
         } else {
+          // Đánh dấu inputs tạm thời là lỗi
+          tempInputs.forEach(tempInput => {
+            const index = this.inputs.findIndex(i => i._id === tempInput._id)
+            if (index !== -1) {
+              this.inputs[index]._isLoading = false
+              this.inputs[index]._isError = true
+            }
+          })
           const { formatErrorForDisplay } = require('@/utils/errorMessages')
           this.toast.error(formatErrorForDisplay({ response: { data: response.data } }, 'Failed to add input. Please try again.'))
+          
+          // Xóa inputs lỗi sau 5 giây
+          setTimeout(() => {
+            this.inputs = this.inputs.filter(input => !input._isTemp || !input._isError)
+          }, 5000)
         }
       } catch (error) {
         console.error('Error adding inputs:', error)
+        // Đánh dấu inputs tạm thời là lỗi
+        tempInputs.forEach(tempInput => {
+          const index = this.inputs.findIndex(i => i._id === tempInput._id)
+          if (index !== -1) {
+            this.inputs[index]._isLoading = false
+            this.inputs[index]._isError = true
+          }
+        })
         this.toast.error('Error adding input')
+        
+        // Xóa inputs lỗi sau 5 giây
+        setTimeout(() => {
+          this.inputs = this.inputs.filter(input => !input._isTemp || !input._isError)
+        }, 5000)
       } finally {
         this.isAddingInput = false
       }
+    },
+    
+    getFileType(mimeType) {
+      if (mimeType.includes('pdf')) return 'pdf'
+      if (mimeType.includes('word') || mimeType.includes('document')) return 'docx'
+      if (mimeType.includes('image')) return 'image'
+      if (mimeType.includes('audio')) return 'audio'
+      return 'text'
     },
 
     openDeleteSpecificModal(inputId) {

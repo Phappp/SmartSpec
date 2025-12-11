@@ -68,6 +68,21 @@ export class ReadDocxService {
         metadata: any;
         confidenceScore: number;
     }) {
+        // ✅ Clean text ngay khi extract để đảm bảo chất lượng
+        const { cleanTextForLLM, validateTextForLLM } = require("../../../../shared/textPreprocessor");
+        const cleanedText = cleanTextForLLM(data.rawText);
+        const validation = validateTextForLLM(data.rawText);
+        
+        // Log warnings nếu có
+        if (validation.warnings.length > 0) {
+            console.warn(`⚠️ DOCX extraction warnings for ${data.originalFilename}:`, validation.warnings.slice(0, 3));
+        }
+        
+        // Cảnh báo nếu text bị mất nhiều sau khi clean
+        if (validation.cleanedLength < validation.originalLength * 0.9) {
+            console.warn(`⚠️ DOCX text bị giảm ${((1 - validation.cleanedLength / validation.originalLength) * 100).toFixed(1)}% sau khi clean: ${data.originalFilename}`);
+        }
+        
         const input = new Input({
             project_id: data.projectId,
             version_id: data.versionId,
@@ -75,10 +90,16 @@ export class ReadDocxService {
             original_filename: data.originalFilename,
             mime_type: data.mimeType,
             raw_text: data.rawText,
-            cleaned_text: data.rawText,
+            cleaned_text: cleanedText, // Sử dụng cleaned text
             paragraphs: data.paragraphs,
             tables: data.tables,
-            metadata: data.metadata,
+            metadata: {
+                ...data.metadata,
+                text_validation_warnings: validation.warnings.length > 0 ? validation.warnings : undefined,
+                original_text_length: validation.originalLength,
+                cleaned_text_length: validation.cleanedLength,
+                estimated_tokens: validation.estimatedTokens
+            },
             confidence_score: data.confidenceScore,
             quality_score: data.confidenceScore,
             // docx/text không refine → completed ngay

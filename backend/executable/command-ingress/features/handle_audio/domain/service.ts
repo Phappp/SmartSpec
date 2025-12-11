@@ -143,7 +143,7 @@ export class SpeechToTextService {
             original_filename: data.originalFilename,
             mime_type: data.mimeType,
             raw_text: data.rawText,
-            cleaned_text: data.rawText,
+            cleaned_text: data.rawText, // Sẽ được refine bằng LLM sau
             segments: data.segments || [],
             metadata: data.metadata,
             confidence_score: data.confidenceScore,

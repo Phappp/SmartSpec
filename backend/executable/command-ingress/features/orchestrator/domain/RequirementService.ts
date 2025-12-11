@@ -363,46 +363,70 @@ export class RequirementService {
         context: string,
         gemini: GeminiService,
         language: string,
-        retryCount = 2
+        retryCount = 2,
+        chunkIndex?: number,
+        totalChunks?: number
     ): Promise<ChunkProcessingResult> {
         let lastError: Error | null = null;
         let hasNonRetryableError = false;
-        const LLM_TIMEOUT = 120000; // 2 phút timeout cho mỗi LLM call
+        // ✅ TĂNG TIMEOUT: 2 phút → 5 phút để đủ cho response lớn (48 usecases có thể mất thời gian parse)
+        const LLM_TIMEOUT = 300000; // 5 phút timeout cho mỗi LLM call
+        const chunkLabel = chunkIndex ? `[Chunk ${chunkIndex}${totalChunks ? `/${totalChunks}` : ''}]` : '[Chunk]';
 
         for (let attempt = 0; attempt <= retryCount; attempt++) {
             try {
-                console.log(`🔄 Processing chunk (attempt ${attempt + 1}/${retryCount + 1})`);
+                console.log(`🔄 ${chunkLabel} Processing attempt ${attempt + 1}/${retryCount + 1} (chunk size: ${chunk.length} chars)`);
 
                 // Giảm kích thước chunk nếu retry
                 let processedChunk = chunk;
                 if (attempt > 0 && chunk.length > 4000) {
                     processedChunk = chunk.slice(0, 4000);
-                    console.log(`📉 Reduced chunk size to ${processedChunk.length} for retry`);
+                    console.log(`📉 ${chunkLabel} Reduced chunk size to ${processedChunk.length} chars for retry`);
                 }
+
+                // ✅ CẢI THIỆN: Tăng timeout cho single call (response có thể lớn)
+                // Nếu text nhỏ, dùng timeout dài hơn (5 phút)
+                // Nếu text lớn, dùng timeout ngắn hơn (3 phút)
+                const estimatedTokens = Math.ceil(processedChunk.length / 3);
+                const dynamicTimeout = estimatedTokens < 1000 ? 300000 : 180000; // 5 phút cho text nhỏ, 3 phút cho text lớn
+                
+                console.log(`${chunkLabel} ⏱️ Using timeout: ${Math.floor(dynamicTimeout / 1000)}s for ${estimatedTokens} tokens`);
 
                 // Thêm timeout cho LLM call
                 const useCases = await Promise.race([
                     gemini.analyzeRequirements(
                         `CONTEXT CHO PHẦN NÀY:\n${context}\n\nNỘI DUNG CẦN PHÂN TÍCH:\n${processedChunk}`,
-                        language
+                        language,
+                        undefined, // userId
+                        undefined, // projectId
+                        chunkIndex, // chunkIndex for logging
+                        totalChunks // totalChunks for logging
                     ),
                     new Promise<any[]>((_, reject) =>
-                        setTimeout(() => reject(new Error("LLM call timeout after 2 minutes")), LLM_TIMEOUT)
+                        setTimeout(() => reject(new Error(`LLM call timeout after ${Math.floor(dynamicTimeout / 1000)} seconds`)), dynamicTimeout)
                     )
                 ]);
 
-                const keyContext = this.extractKeyContext(useCases, processedChunk);
+                // ✅ QUAN TRỌNG: Nếu có partial results, luôn return chúng thay vì throw error
+                // analyzeRequirements() đã xử lý việc return partial results khi có lỗi
+                if (useCases && useCases.length > 0) {
+                    const keyContext = this.extractKeyContext(useCases, processedChunk);
+                    console.log(`✅ ${chunkLabel} Received ${useCases.length} use cases from analyzeRequirements (attempt ${attempt + 1})`);
+                    
+                    return {
+                        useCases: useCases || [],
+                        keyContext,
+                        chunkIndex: 0, // sẽ được cập nhật sau
+                        processedLength: processedChunk.length
+                    };
+                }
 
-                return {
-                    useCases: useCases || [],
-                    keyContext,
-                    chunkIndex: 0, // sẽ được cập nhật sau
-                    processedLength: processedChunk.length
-                };
+                // Nếu không có use cases nào, throw error
+                throw new Error("No use cases returned from analyzeRequirements");
 
             } catch (error: any) {
                 lastError = error;
-                console.error(`❌ Chunk processing attempt ${attempt + 1} failed:`, error.message);
+                console.error(`❌ ${chunkLabel} Processing attempt ${attempt + 1}/${retryCount + 1} failed:`, error.message);
 
                 // Kiểm tra nếu là lỗi không retryable (API key sai, quota hết, etc.)
                 const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../shared/apiKeyErrorHandler");
@@ -450,7 +474,8 @@ export class RequirementService {
         mode: "full" | "incremental",
         inputs: any[],
         gemini: GeminiService,
-        language: string
+        language: string,
+        modelName?: string // ✅ MỚI: Model name để tính toán token limits
     ) {
         // 1. Lấy dữ liệu ban đầu
         const version = await Version.findById(versionId).lean();
@@ -460,8 +485,17 @@ export class RequirementService {
         const previousRequirements = await Usecase.find({ version_id: versionId }).lean();
         const markAsProcessed = inputs.map((i: any) => String(i._id));
 
-        // 2. Chuẩn bị text đầu vào
-        const mergedText = inputs
+        // 2. Chuẩn bị text đầu vào và validate
+        const inputInfo = inputs.map((i: any) => ({
+            id: i._id?.toString() || i.id,
+            type: i.type,
+            filename: i.original_filename || 'text',
+            length: (i.cleaned_text || i.raw_text || "").length
+        }));
+        
+        console.log(`📥 Processing ${inputs.length} input(s):`, inputInfo.map(i => `${i.type}:${i.filename}(${i.length} chars)`).join(', '));
+        
+        let mergedText = inputs
             .map((i: any) => (i.cleaned_text || i.raw_text || ""))
             .filter(Boolean)
             .join("\n\n");
@@ -471,11 +505,70 @@ export class RequirementService {
             return { version_id: versionId, usecases: previousRequirements };
         }
 
-        console.log(`📝 Processing text: ${mergedText.length} characters`);
+        // ✅ Validate và clean text trước khi xử lý
+        const { validateTextForLLM, cleanTextForLLM, splitTextIntoSafeChunks, detectTruncation } = await import("../../../shared/textPreprocessor");
+        const validation = validateTextForLLM(mergedText);
+        
+        if (validation.warnings.length > 0) {
+            console.warn(`⚠️ Text validation warnings:`, validation.warnings);
+        }
 
-        // 3. Chunking thông minh
-        const chunks = this.splitIntelligentChunks(mergedText);
-        console.log(`📊 Split into ${chunks.length} chunks`);
+        // Sử dụng cleaned text
+        mergedText = validation.cleanedText;
+        console.log(`📝 Processing text: ${validation.originalLength} -> ${validation.cleanedLength} characters (estimated ${validation.estimatedTokens} tokens)`);
+        
+        // Cảnh báo nếu text quá dài
+        if (validation.estimatedTokens > 100000) {
+            console.warn(`⚠️ Text rất dài (${validation.estimatedTokens} tokens). Có thể mất nhiều thời gian xử lý.`);
+        }
+        
+        // Kiểm tra xem có bị truncate không (so với original inputs)
+        const originalText = inputs.map((i: any) => (i.cleaned_text || i.raw_text || "")).join("\n\n");
+        const truncationCheck = detectTruncation(originalText, mergedText);
+        if (truncationCheck.isTruncated) {
+            console.warn(`⚠️ Phát hiện text có thể bị truncate: mất ${truncationCheck.missingChars} ký tự (${truncationCheck.lossPercentage.toFixed(1)}%)`);
+        }
+
+        // 3. Chunking thông minh với validation dựa trên model capabilities
+        // ✅ MỚI: Lấy model config để tính toán chunk size phù hợp
+        const { getModelConfig, determineStrategy, logTokenInfo } = await import("../../../shared/tokenManager");
+        
+        // Lấy model name từ parameter hoặc dùng default
+        const effectiveModelName = modelName || 'gemini-2.0-flash';
+        const modelConfig = getModelConfig(effectiveModelName, 'gemini');
+        const strategy = determineStrategy(mergedText, modelConfig);
+        
+        // Log token analysis
+        logTokenInfo(mergedText, modelConfig, 'RequirementService');
+        
+        // Tính toán chunk size dựa trên model config
+        let chunkSize = this.MAX_CHUNK_SIZE;
+        if (strategy.needsChunking && strategy.recommendedChunkSize > 0) {
+            // Sử dụng recommended chunk size từ model config
+            // Nhưng không vượt quá MAX_CHUNK_SIZE để đảm bảo chất lượng
+            chunkSize = Math.min(strategy.recommendedChunkSize, this.MAX_CHUNK_SIZE);
+            console.log(`📊 Using model-aware chunk size: ${chunkSize.toLocaleString()} chars (model: ${modelConfig.modelName}, strategy: ${strategy.strategy})`);
+        } else if (!strategy.needsChunking) {
+            // Text vừa với context window → có thể dùng chunk lớn hơn
+            const safeSize = Math.min(strategy.recommendedChunkSize, modelConfig.contextWindow * modelConfig.tokenEstimationRatio * 0.8);
+            if (safeSize > chunkSize) {
+                chunkSize = safeSize;
+                console.log(`📊 Text fits context window. Using larger chunk size: ${chunkSize.toLocaleString()} chars`);
+            }
+        }
+        
+        // Sử dụng utility mới để đảm bảo không mất dữ liệu
+        const chunks = splitTextIntoSafeChunks(mergedText, chunkSize, this.OVERLAP_SIZE);
+        console.log(`📊 Split into ${chunks.length} safe chunks (max ${chunkSize.toLocaleString()} chars, overlap ${this.OVERLAP_SIZE} chars)`);
+        console.log(`📊 Chunk sizes:`, chunks.map((c, idx) => `Chunk ${idx + 1}: ${c.length.toLocaleString()} chars`).join(', '));
+        
+        // Validate từng chunk (chỉ log warnings, không block)
+        for (let i = 0; i < chunks.length; i++) {
+            const chunkValidation = validateTextForLLM(chunks[i]);
+            if (chunkValidation.warnings.length > 0) {
+                console.warn(`⚠️ Chunk ${i + 1}/${chunks.length} warnings:`, chunkValidation.warnings.slice(0, 2)); // Chỉ log 2 warnings đầu
+            }
+        }
 
         // Kiểm tra giới hạn số chunks
         if (chunks.length > this.MAX_CHUNKS) {
@@ -500,7 +593,11 @@ export class RequirementService {
                 processedChunkIndices = new Set(checkpointChunks);
                 const maxChunk = Math.max(...checkpointChunks);
                 startChunkIndex = maxChunk >= 0 ? maxChunk + 1 : 0; // Đảm bảo không bị -Infinity
-                console.log(`🔄 Resuming from checkpoint: ${checkpointChunks.length} chunks already processed, starting from chunk ${startChunkIndex + 1}`);
+                const totalUseCasesFromCheckpoint = checkpoint.total_use_cases || 0;
+                console.log(`🔄 [RESUME] Resuming from checkpoint:`);
+                console.log(`   📍 Processed chunks: ${checkpointChunks.length}/${chunks.length} (indices: ${checkpointChunks.map(c => c + 1).join(', ')})`);
+                console.log(`   📍 Starting from chunk: ${startChunkIndex + 1}/${chunks.length}`);
+                console.log(`   📍 Use cases already saved: ${totalUseCasesFromCheckpoint}`);
             } else {
                 // Text đã thay đổi, clear checkpoint
                 console.log(`🔄 Checkpoint found but text hash mismatch. Clearing checkpoint and starting fresh.`);
@@ -531,7 +628,15 @@ export class RequirementService {
             }
 
             try {
-                console.log(`🔍 Processing chunk ${i + 1}/${chunks.length}${isResuming ? ' (resuming)' : ''}`);
+                const chunkSize = chunks[i].length;
+                const chunkStartPos = chunks.slice(0, i).reduce((sum, c) => sum + c.length, 0);
+                const chunkEndPos = chunkStartPos + chunkSize;
+                const totalTextLength = mergedText.length;
+                const chunkProgressPercent = Math.round((chunkEndPos / totalTextLength) * 100);
+                
+                console.log(`🔍 [Chunk ${i + 1}/${chunks.length}] Processing chunk ${i + 1}${isResuming ? ' (resuming)' : ''}`);
+                console.log(`   📏 Chunk size: ${chunkSize} chars | Position: ${chunkStartPos}-${chunkEndPos}/${totalTextLength} (${chunkProgressPercent}% of text)`);
+                console.log(`   📝 Chunk preview: ${chunks[i].substring(0, 100).replace(/\n/g, ' ')}...`);
 
                 // Cập nhật progress chi tiết
                 const chunkProgress = 40 + Math.floor((i / chunks.length) * 50); // 40-90%
@@ -548,7 +653,10 @@ export class RequirementService {
                     chunks[i],
                     chunkContext,
                     gemini,
-                    language
+                    language,
+                    2, // retryCount
+                    i + 1, // chunkIndex for logging
+                    chunks.length // totalChunks for logging
                 );
 
                 result.chunkIndex = i;
@@ -557,7 +665,8 @@ export class RequirementService {
                 // Cập nhật global context
                 this.updateGlobalContext(globalContext, result);
 
-                console.log(`✅ Chunk ${i + 1} processed: ${result.useCases.length} use cases found`);
+                console.log(`✅ [Chunk ${i + 1}/${chunks.length}] Processed successfully: ${result.useCases.length} use cases found`);
+                console.log(`   📊 Progress: ${i + 1}/${chunks.length} chunks (${Math.round(((i + 1) / chunks.length) * 100)}%) | Total use cases so far: ${totalUseCasesCreated + result.useCases.length}`);
 
                 // Lưu partial results sau mỗi chunk thành công (batch insert)
                 if (result.useCases.length > 0) {
@@ -568,9 +677,9 @@ export class RequirementService {
                             mode === 'full' && i === 0 // Chỉ xóa use cases cũ ở chunk đầu tiên nếu full mode
                         );
                         totalUseCasesCreated += partialUseCases;
-                        console.log(`💾 Saved ${partialUseCases} use cases from chunk ${i + 1} to database`);
+                        console.log(`💾 [Chunk ${i + 1}/${chunks.length}] Saved ${partialUseCases} use cases to database (total: ${totalUseCasesCreated})`);
                     } catch (saveError: any) {
-                        console.error(`⚠️ Failed to save partial use cases from chunk ${i + 1}:`, saveError.message);
+                        console.error(`⚠️ [Chunk ${i + 1}/${chunks.length}] Failed to save partial use cases:`, saveError.message);
                         processingErrors.push(`Chunk ${i + 1} save failed: ${saveError.message}`);
                         // Không throw, tiếp tục xử lý chunk tiếp theo
                     }
@@ -581,6 +690,7 @@ export class RequirementService {
 
                 // Lưu checkpoint sau mỗi chunk thành công
                 await this.saveCheckpoint(versionId, mergedText, Array.from(processedChunkIndices), totalUseCasesCreated);
+                console.log(`💾 [Chunk ${i + 1}/${chunks.length}] Checkpoint saved: ${processedChunkIndices.size}/${chunks.length} chunks processed`);
 
                 // Cleanup memory: xóa chunk đã xử lý khỏi memory
                 chunks[i] = null as any;
@@ -596,28 +706,42 @@ export class RequirementService {
                 processingErrors.push(errorMsg);
 
                 // Kiểm tra nếu là lỗi không retryable (API key sai, quota hết, etc.)
-                // → throw ngay để dừng toàn bộ quá trình
                 const { analyzeApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
                 const errorInfo = analyzeApiKeyError(error);
 
-                if (!errorInfo.retryable) {
-                    console.error(`💥 Critical non-retryable error detected: ${errorInfo.type}. Stopping all processing.`);
-                    // Đảm bảo processingErrors được truyền qua error object
-                    const enhancedError = error;
-                    if (!enhancedError.errors) {
-                        enhancedError.errors = processingErrors;
-                    }
-                    // Throw error để được catch ở try-catch bên ngoài
-                    throw enhancedError;
-                }
+                // ✅ QUAN TRỌNG: Nếu đã có partial results được lưu (totalUseCasesCreated > 0),
+                // không throw error ngay mà tiếp tục xử lý để return partial success
+                const hasPartialResults = totalUseCasesCreated > 0;
 
-                // Nếu là lỗi retryable, thêm kết quả rỗng và tiếp tục xử lý chunk tiếp theo
-                chunkResults.push({
-                    useCases: [],
-                    keyContext: `ERROR: ${error.message}`,
-                    chunkIndex: i,
-                    processedLength: chunks[i].length
-                });
+                if (!errorInfo.retryable) {
+                    if (hasPartialResults) {
+                        // Có partial results → không throw error, tiếp tục để return partial success
+                        console.warn(`⚠️ Non-retryable error (${errorInfo.type}) detected, but ${totalUseCasesCreated} use cases already saved. Continuing to return partial success.`);
+                        chunkResults.push({
+                            useCases: [],
+                            keyContext: `ERROR: ${error.message}`,
+                            chunkIndex: i,
+                            processedLength: chunks[i].length
+                        });
+                        // Không throw, tiếp tục xử lý để return partial success ở cuối
+                    } else {
+                        // Không có partial results → throw error để dừng ngay
+                        console.error(`💥 Critical non-retryable error detected: ${errorInfo.type}. No partial results. Stopping all processing.`);
+                        const enhancedError = error;
+                        if (!enhancedError.errors) {
+                            enhancedError.errors = processingErrors;
+                        }
+                        throw enhancedError;
+                    }
+                } else {
+                    // Lỗi retryable → thêm kết quả rỗng và tiếp tục
+                    chunkResults.push({
+                        useCases: [],
+                        keyContext: `ERROR: ${error.message}`,
+                        chunkIndex: i,
+                        processedLength: chunks[i].length
+                    });
+                }
             }
         }
 
@@ -637,7 +761,8 @@ export class RequirementService {
                         stage: "completed",
                         progress: 100,
                         processing_errors: processingErrors,
-                        affects_requirement: true
+                        affects_requirement: true,
+                        is_processing: false // ✅ QUAN TRỌNG: Reset flag để UI dừng loading
                     }
                 });
 
@@ -732,6 +857,7 @@ export class RequirementService {
                         affects_requirement: true,
                         status: "completed",
                         stage: "completed",
+                        is_processing: false // ✅ QUAN TRỌNG: Reset flag để UI dừng loading
                     }
                 });
 
@@ -836,6 +962,7 @@ export class RequirementService {
                     affects_requirement: true,
                     status: "completed",
                     stage: "completed",
+                    is_processing: false // ✅ QUAN TRỌNG: Reset flag để UI dừng loading
                 },
                 $unset: { processing_checkpoint: "" }
             });

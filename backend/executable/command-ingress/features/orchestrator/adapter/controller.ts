@@ -43,6 +43,17 @@ export class OrchestratorController {
         if (!['full', 'incremental'].includes(mode)) {
             return res.status(400).json({ success: false, error: 'Mode phải là full hoặc incremental' });
         }
+        
+        // ✅ QUAN TRỌNG: Kiểm tra xem version đang processing không để tránh chạy đồng thời
+        const currentVersion = await Version.findById(version_id).lean();
+        if (currentVersion && (currentVersion as any).is_processing === true) {
+            console.warn(`⚠️ Version ${version_id} is already processing. Rejecting concurrent request.`);
+            return res.status(409).json({ 
+                success: false, 
+                error: 'Version is already being processed. Please wait for the current process to complete.' 
+            });
+        }
+        
         // const userId = req.getSubject();
         try {
             // Không `await` ở đây để nó chạy nền và trả về response ngay lập tức
@@ -83,21 +94,21 @@ export class OrchestratorController {
                 return res.status(404).json({ success: false, error: 'Project not found' });
             }
 
+            // ✅ QUAN TRỌNG: Kiểm tra xem version đang processing không
+            const currentVersion = await Version.findById(version_id).lean();
+            if (currentVersion && (currentVersion as any).is_processing === true) {
+                console.warn(`⚠️ Version ${version_id} is already processing. Rejecting retry request.`);
+                return res.status(409).json({ 
+                    success: false, 
+                    error: 'Version is already being processed. Please wait for the current process to complete.' 
+                });
+            }
+
             const language = project.language;
             // const userId = req.getSubject();
-            await Version.findByIdAndUpdate(version_id, {
-                $set: {
-                    status: "processing",
-                    stage: "initializing",
-                    progress: 15,
-                    processing_errors: [],
-                    pending_conflicts: [],
-                    updated_at: new Date()
-                }
-            });
-
+            
             // Chạy nền với mode 'full' và không có dữ liệu mới
-            // Service sẽ tự động dọn dẹp kết quả cũ
+            // Service sẽ tự động dọn dẹp kết quả cũ và set is_processing
             this.service.run(
                 project_id,
                 version_id,
