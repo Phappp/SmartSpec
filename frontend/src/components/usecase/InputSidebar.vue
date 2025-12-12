@@ -661,7 +661,6 @@ export default {
   max-width: 380px;
   width: 100%;
   height: 100%;
-  max-height: calc(100vh - 200px);
   overflow: hidden;
   background: white;
 }

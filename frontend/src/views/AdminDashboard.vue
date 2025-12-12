@@ -143,7 +143,7 @@
                   </select>
                   <select
                     v-model="userAnalyticsFilters.viewMode"
-                    @change="loadUserTimelineChart"
+                    @change="() => { loadUserTimelineChart(); }"
                     class="filter-select-modern small"
                   >
                     <option value="day">Theo ngày</option>
@@ -245,7 +245,7 @@
                   <div>
                     <h4 class="chart-title-modern">
                       <span class="material-symbols-outlined">timeline</span>
-                      Đăng ký mới {{ userAnalytics.rangeDays || 7 }}
+                      Đăng ký mới {{ userAnalyticsFilters.rangeDays || userAnalytics.rangeDays || 7 }}
                       {{
                         userAnalyticsFilters.viewMode === 'day'
                           ? 'ngày gần đây'
@@ -1327,18 +1327,32 @@ const loadUserAnalytics = async () => {
       rangeDays: userAnalyticsFilters.value.rangeDays,
     }
     const res = await axiosClient.get('/api/stats/users/analytics', { params })
-    if (res.data) {
+    
+    // Xử lý response format: có thể là res.data hoặc res.data.data
+    const data = res.data?.data || res.data
+    
+    if (data) {
       userAnalytics.value = {
-        counters: res.data.counters || userAnalytics.value.counters,
-        registrationTimeline: res.data.registrationTimeline || [],
-        rangeDays: res.data.rangeDays || userAnalytics.value.rangeDays,
+        counters: data.counters || userAnalytics.value.counters,
+        registrationTimeline: data.registrationTimeline || [],
+        rangeDays: data.rangeDays || userAnalyticsFilters.value.rangeDays,
       }
 
-      // Load user timeline chart
+      console.log('✅ User analytics loaded:', {
+        counters: userAnalytics.value.counters,
+        timelineCount: userAnalytics.value.registrationTimeline.length,
+        rangeDays: userAnalytics.value.rangeDays
+      })
+
+      // Đợi một chút để đảm bảo canvas đã sẵn sàng, sau đó load chart
+      await new Promise(resolve => setTimeout(resolve, 100))
       await loadUserTimelineChart()
+    } else {
+      console.warn('⚠️ Không nhận được dữ liệu từ user analytics API:', res.data)
     }
   } catch (error) {
     console.error('❌ Lỗi khi tải user analytics:', error)
+    toast.error('Không thể tải dữ liệu đăng ký người dùng')
   }
 }
 
@@ -1656,20 +1670,42 @@ const loadChartData = async () => {
 
 const loadUserTimelineChart = async () => {
   try {
+    // Kiểm tra canvas ref có sẵn sàng không
+    if (!userTimelineChart.value) {
+      console.warn('⚠️ Canvas ref chưa sẵn sàng, đợi thêm...')
+      setTimeout(() => loadUserTimelineChart(), 200)
+      return
+    }
+
     const Chart = (await import('chart.js/auto')).default
     const ctx = userTimelineChart.value?.getContext('2d')
 
+    if (!ctx) {
+      console.warn('⚠️ Không thể lấy context từ canvas')
+      return
+    }
+
     // Chuẩn hóa dữ liệu: luôn hiển thị đủ rangeDays ngày, nếu không có dữ liệu thì = 0
-    const range = userAnalytics.value.rangeDays || 7
+    const range = userAnalytics.value.rangeDays || userAnalyticsFilters.value.rangeDays || 7
     const raw = userAnalytics.value.registrationTimeline || []
+    
+    console.log('📊 Loading timeline chart with:', {
+      range,
+      rawDataCount: raw.length,
+      rawData: raw
+    })
+    
     const countsByDate = raw.reduce((acc, item) => {
-      acc[item.date] = item.count
+      if (item && item.date) {
+        acc[item.date] = item.count || 0
+      }
       return acc
     }, {})
 
     const labels = []
     const data = []
     const today = new Date()
+    today.setHours(0, 0, 0, 0) // Đảm bảo bắt đầu từ 00:00:00
 
     for (let i = range - 1; i >= 0; i--) {
       const d = new Date(today)
@@ -1678,6 +1714,8 @@ const loadUserTimelineChart = async () => {
       labels.push(label)
       data.push(countsByDate[label] || 0)
     }
+    
+    console.log('📈 Chart data prepared:', { labels, data })
 
     // Gộp dữ liệu theo tháng/năm nếu cần
     const mode = userAnalyticsFilters.value.viewMode || 'day'
@@ -1727,10 +1765,14 @@ const loadUserTimelineChart = async () => {
       aggData.forEach((v) => data.push(v))
     }
 
-    if (ctx) {
-      if (userTimelineChartInstance) userTimelineChartInstance.destroy()
+    // Destroy existing chart instance if exists
+    if (userTimelineChartInstance) {
+      userTimelineChartInstance.destroy()
+      userTimelineChartInstance = null
+    }
 
-      userTimelineChartInstance = new Chart(ctx, {
+    // Tạo chart mới
+    userTimelineChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
           labels,
@@ -1826,9 +1868,11 @@ const loadUserTimelineChart = async () => {
           },
         ],
       })
-    }
+      
+      console.log('✅ User timeline chart rendered successfully')
   } catch (error) {
     console.error('❌ Lỗi khi vẽ user timeline chart:', error)
+    toast.error('Không thể vẽ biểu đồ đăng ký người dùng')
   }
 }
 
@@ -2084,6 +2128,15 @@ watch(logFilter, () => {
   refreshLogs()
 }, { deep: true })
 
+// Watch user analytics filters để tự động reload
+watch(() => userAnalyticsFilters.value.rangeDays, () => {
+  loadUserAnalytics()
+})
+
+watch(() => userAnalyticsFilters.value.viewMode, () => {
+  loadUserTimelineChart()
+}, { immediate: false })
+
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   initSocketConnection()
@@ -2135,6 +2188,10 @@ onMounted(() => {
   setTimeout(() => {
     loadChartData()
     loadUserDistributionChart()
+    // Đảm bảo user timeline chart được render sau khi dữ liệu đã load
+    if (userAnalytics.value.registrationTimeline && userAnalytics.value.registrationTimeline.length > 0) {
+      loadUserTimelineChart()
+    }
   }, 500)
   
   console.log('Admin dashboard mounted')

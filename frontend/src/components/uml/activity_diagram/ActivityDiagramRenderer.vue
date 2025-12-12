@@ -664,10 +664,43 @@ export default {
           }
         }
 
+        // Tạo label mặc định dựa trên type nếu không có label
+        let defaultLabel = 'Unnamed'
+        if (!node.label || node.label.trim() === '') {
+          switch (node.type) {
+            case 'start':
+              defaultLabel = 'Start'
+              break
+            case 'end':
+              defaultLabel = 'End'
+              break
+            case 'decision':
+              defaultLabel = 'Decision'
+              break
+            case 'merge':
+              defaultLabel = 'Merge'
+              break
+            case 'fork':
+              defaultLabel = 'Fork'
+              break
+            case 'join':
+              defaultLabel = 'Join'
+              break
+            case 'action':
+              defaultLabel = 'Action'
+              break
+            case 'object':
+              defaultLabel = 'Object'
+              break
+            default:
+              defaultLabel = `Node ${index + 1}`
+          }
+        }
+
         return {
           id: node.id || `node-${index}`,
           type: node.type || 'action',
-          label: node.label || 'Unnamed',
+          label: node.label && node.label.trim() !== '' ? node.label : defaultLabel,
           lane_id: node.lane_id || null,
           width: width,
           height: height,
@@ -926,20 +959,7 @@ export default {
       const endX = target.x
       const endY = target.y - endOffset
 
-      if (normalizedCondition === 'yes') {
-        const controlX1 = source.x - 80
-        const controlY1 = startY + (endY - startY) * 0.4
-        const controlX2 = target.x - 60
-        const controlY2 = endY - (endY - startY) * 0.3
-        return `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
-      } else if (normalizedCondition === 'no') {
-        const controlX1 = source.x + 80
-        const controlY1 = startY + (endY - startY) * 0.4
-        const controlX2 = target.x + 60
-        const controlY2 = endY - (endY - startY) * 0.3
-        return `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
-      }
-
+      // Làm thẳng thay vì cong - chỉ dùng đường thẳng L
       return `M ${startX} ${startY} L ${endX} ${endY}`
     },
 

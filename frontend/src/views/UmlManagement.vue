@@ -75,9 +75,10 @@
                 />
               </div>
               <div class="filter-controls">
-                <select v-model="sortFilters.usecase" class="sort-select">
+                <select v-model="globalSortFilter" class="sort-select">
                   <option value="name">Sort by Name</option>
                   <option value="date">Sort by Date</option>
+                  <option value="created">Sort by Created Date</option>
                   <option value="actors">Sort by Actors</option>
                   <option value="usecases">Sort by Use Cases</option>
                 </select>
@@ -90,114 +91,145 @@
             </div>
           </div>
 
-          <div class="diagrams-scroll-container">
-            <div class="diagrams-scroll-content">
-              <div
-                v-for="diagram in filteredUsecaseDiagrams"
-                :key="diagram.id || diagram._id"
-                class="diagram-card"
-                @click="editDiagram(diagram)"
-              >
-                <div class="diagram-preview">
-                  <img
-                    v-if="diagram.previewImage"
-                    :src="diagram.previewImage"
-                    :alt="diagram.name || 'Use Case Diagram'"
-                    class="preview-image"
-                    @load="onPreviewImageLoad"
-                    @error="onPreviewImageError(diagram, $event)"
-                  />
-                  <div v-else class="generating-preview">
-                    <div class="loading-spinner-small"></div>
-                    <span>Generating preview...</span>
-                  </div>
-                  <!-- Luôn render renderer để có thể export, ẩn khi đã có previewImage -->
-                  <div class="preview-generator" :class="{ 'hidden-renderer': diagram.previewImage }">
-                    <UCDRenderer
-                      :ref="`previewGenerator_${diagram.id || diagram._id}`"
-                      :diagram-data="diagram"
-                      :preview-mode="true"
-                      :auto-generate-preview="!diagram.previewImage"
-                      :optimize-for-preview="true"
-                      @preview-generated="handlePreviewGenerated(diagram, $event)"
-                      class="hidden-renderer"
-                    />
-                  </div>
-
-                  <div class="diagram-overlay">
-                    <div class="export-dropdown">
-                      <button
-                        class="btn-icon export-toggle"
-                        @click.stop="toggleExportDropdown(diagram)"
-                        title="Export"
-                      >
-                        <span class="material-symbols-outlined">download</span>
-                      </button>
-                      <div
-                        v-if="activeExportDropdown === (diagram.id || diagram._id)"
-                        class="export-options"
-                      >
-                        <button class="export-option" @click.stop="exportDiagramAsPNG(diagram)">
-                          <span class="material-symbols-outlined">image</span>
-                          Export PNG
-                        </button>
-                        <button class="export-option" @click.stop="exportDiagramAsSVG(diagram)">
-                          <span class="material-symbols-outlined">code</span>
-                          Export SVG
-                        </button>
-                      </div>
+          <div class="diagrams-scroll-container-wrapper">
+            <!-- Scroll Arrow Left -->
+            <button 
+              v-if="scrollStates.usecase.canScrollLeft"
+              class="scroll-arrow scroll-arrow-left" 
+              @click="scrollDiagrams('usecase', 'left')"
+            >
+              <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            
+            <div class="diagrams-scroll-container" ref="usecaseScrollContainer">
+              <div class="diagrams-scroll-content" ref="usecaseScrollContent">
+                <!-- Loading State for Use Case Diagrams - Giản dị -->
+                <div v-if="generatingDiagramType === 'usecase'" class="diagram-generating-overlay">
+                  <div class="generating-content">
+                    <div class="generating-spinner-wrapper">
+                      <div class="generating-spinner"></div>
                     </div>
-                    <button
-                      class="btn-icon danger"
-                      @click.stop="deleteDiagram(diagram.id || diagram._id, $event)"
-                      title="Delete"
-                    >
-                      <span class="material-symbols-outlined">delete</span>
-                    </button>
+                    <h3>Đang tạo Use Case Diagram...</h3>
                   </div>
                 </div>
-                <div class="diagram-info">
-                  <h4>{{ getSafeValue(diagram.name, 'Unnamed Diagram') }}</h4>
-                  <p class="diagram-description">
-                    {{ getSafeValue(diagram.description, 'No description') }}
-                  </p>
-                  <div class="diagram-meta">
-                    <span class="meta-item">
-                      <span class="material-symbols-outlined">language</span>
-                      {{ getLanguageCode(diagram.lang) }}
-                    </span>
-                    <span class="meta-item diagram-type-badge type-usecase"> Use Case </span>
-                  </div>
-                  <div class="diagram-stats">
-                    <span class="stat-badge">
-                      <span class="material-symbols-outlined">person</span>
-                      {{ getSafeArrayLength(diagram.actors) }}
-                    </span>
-                    <span class="stat-badge">
-                      <span class="material-symbols-outlined">task</span>
-                      {{ getSafeArrayLength(diagram.usecases) }}
-                    </span>
-                    <span class="stat-badge">
-                      <span class="material-symbols-outlined">link</span>
-                      {{ getRelationshipCount(diagram) }}
-                    </span>
-                  </div>
-                </div>
-              </div>
 
-              <!-- Empty State for Use Case Diagrams -->
-              <div v-if="filteredUsecaseDiagrams.length === 0" class="empty-section">
-                <div class="empty-icon">
-                  <span class="material-symbols-outlined">account_tree</span>
+                <div
+                  v-for="diagram in filteredUsecaseDiagrams"
+                  :key="diagram.id || diagram._id"
+                  class="diagram-card"
+                  :class="{ 'blurred': generatingDiagramType === 'usecase' }"
+                  @click="editDiagram(diagram)"
+                >
+                  <div class="diagram-preview">
+                    <img
+                      v-if="diagram.previewImage"
+                      :src="diagram.previewImage"
+                      :alt="diagram.name || 'Use Case Diagram'"
+                      class="preview-image"
+                      @load="onPreviewImageLoad"
+                      @error="onPreviewImageError(diagram, $event)"
+                    />
+                    <div v-else class="generating-preview">
+                      <div class="loading-spinner-small"></div>
+                      <span>Generating preview...</span>
+                    </div>
+                    <!-- Luôn render renderer để có thể export, ẩn khi đã có previewImage -->
+                    <div class="preview-generator" :class="{ 'hidden-renderer': diagram.previewImage }">
+                      <UCDRenderer
+                        :ref="`previewGenerator_${diagram.id || diagram._id}`"
+                        :diagram-data="diagram"
+                        :preview-mode="true"
+                        :auto-generate-preview="!diagram.previewImage"
+                        :optimize-for-preview="true"
+                        @preview-generated="handlePreviewGenerated(diagram, $event)"
+                        class="hidden-renderer"
+                      />
+                    </div>
+
+                    <div class="diagram-overlay">
+                      <div class="export-dropdown">
+                        <button
+                          class="btn-icon export-toggle"
+                          @click.stop="toggleExportDropdown(diagram)"
+                          title="Export"
+                        >
+                          <span class="material-symbols-outlined">download</span>
+                        </button>
+                        <div
+                          v-if="activeExportDropdown === (diagram.id || diagram._id)"
+                          class="export-options"
+                        >
+                          <button class="export-option" @click.stop="exportDiagramAsPNG(diagram)">
+                            <span class="material-symbols-outlined">image</span>
+                            Export PNG
+                          </button>
+                          <button class="export-option" @click.stop="exportDiagramAsSVG(diagram)">
+                            <span class="material-symbols-outlined">code</span>
+                            Export SVG
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        class="btn-icon danger"
+                        @click.stop="deleteDiagram(diagram.id || diagram._id, $event)"
+                        title="Delete"
+                      >
+                        <span class="material-symbols-outlined">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="diagram-info">
+                    <h4>{{ getSafeValue(diagram.name, 'Unnamed Diagram') }}</h4>
+                    <p class="diagram-description">
+                      {{ getSafeValue(diagram.description, 'No description') }}
+                    </p>
+                    <div class="diagram-meta">
+                      <span class="meta-item">
+                        <span class="material-symbols-outlined">language</span>
+                        {{ getLanguageCode(diagram.lang) }}
+                      </span>
+                      <span class="meta-item diagram-type-badge type-usecase"> Use Case </span>
+                    </div>
+                    <div class="diagram-stats">
+                      <span class="stat-badge">
+                        <span class="material-symbols-outlined">person</span>
+                        {{ getSafeArrayLength(diagram.actors) }}
+                      </span>
+                      <span class="stat-badge">
+                        <span class="material-symbols-outlined">task</span>
+                        {{ getSafeArrayLength(diagram.usecases) }}
+                      </span>
+                      <span class="stat-badge">
+                        <span class="material-symbols-outlined">link</span>
+                        {{ getRelationshipCount(diagram) }}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <h4>No Use Case Diagrams</h4>
-                <p>Generate your first use case diagram to visualize system requirements.</p>
-                <button class="btn-primary small" @click="generateSpecificDiagram('usecase')">
-                  <span class="material-symbols-outlined">auto_awesome</span>
-                  Generate Use Case
-                </button>
+
+                <!-- Empty State for Use Case Diagrams -->
+                <div v-if="filteredUsecaseDiagrams.length === 0" class="empty-section">
+                  <div class="empty-icon">
+                    <span class="material-symbols-outlined">account_tree</span>
+                  </div>
+                  <h4>No Use Case Diagrams</h4>
+                  <p>Generate your first use case diagram to visualize system requirements.</p>
+                  <button class="btn-primary small" @click="generateSpecificDiagram('usecase')">
+                    <span class="material-symbols-outlined">auto_awesome</span>
+                    Generate Use Case
+                  </button>
+                </div>
               </div>
             </div>
+            
+            <!-- Scroll Arrow Right -->
+            <button 
+              v-if="scrollStates.usecase.canScrollRight"
+              class="scroll-arrow scroll-arrow-right" 
+              @click="scrollDiagrams('usecase', 'right')"
+            >
+              <span class="material-symbols-outlined">chevron_right</span>
+            </button>
           </div>
         </div>
 
@@ -219,9 +251,10 @@
                 />
               </div>
               <div class="filter-controls">
-                <select v-model="sortFilters.activity" class="sort-select">
+                <select v-model="globalSortFilter" class="sort-select">
                   <option value="name">Sort by Name</option>
                   <option value="date">Sort by Date</option>
+                  <option value="created">Sort by Created Date</option>
                   <option value="nodes">Sort by Nodes</option>
                 </select>
                 <select v-model="languageFilters.activity" class="lang-select">
@@ -233,110 +266,141 @@
             </div>
           </div>
 
-          <div class="diagrams-scroll-container">
-            <div class="diagrams-scroll-content">
-              <div
-                v-for="diagram in filteredActivityDiagrams"
-                :key="diagram.id || diagram._id"
-                class="diagram-card"
-                @click="editDiagram(diagram)"
-              >
-                <div class="diagram-preview">
-                  <img
-                    v-if="diagram.previewImage"
-                    :src="diagram.previewImage"
-                    :alt="diagram.name || 'Activity Diagram'"
-                    class="preview-image"
-                    @load="onPreviewImageLoad"
-                    @error="onPreviewImageError(diagram, $event)"
-                  />
-                  <div v-else class="generating-preview">
-                    <div class="loading-spinner-small"></div>
-                    <span>Generating preview...</span>
-                  </div>
-                  <!-- Luôn render renderer để có thể export, ẩn khi đã có previewImage -->
-                  <div class="preview-generator" :class="{ 'hidden-renderer': diagram.previewImage }">
-                    <ActivityDiagramRenderer
-                      :ref="`previewGenerator_${diagram.id || diagram._id}`"
-                      :diagram-data="diagram"
-                      :preview-mode="true"
-                      :auto-generate-preview="!diagram.previewImage"
-                      :optimize-for-preview="true"
-                      @preview-generated="handlePreviewGenerated(diagram, $event)"
-                      class="hidden-renderer"
-                    />
-                  </div>
-
-                  <div class="diagram-overlay">
-                    <div class="export-dropdown">
-                      <button
-                        class="btn-icon export-toggle"
-                        @click.stop="toggleExportDropdown(diagram)"
-                        title="Export"
-                      >
-                        <span class="material-symbols-outlined">download</span>
-                      </button>
-                      <div
-                        v-if="activeExportDropdown === (diagram.id || diagram._id)"
-                        class="export-options"
-                      >
-                        <button class="export-option" @click.stop="exportDiagramAsPNG(diagram)">
-                          <span class="material-symbols-outlined">image</span>
-                          Export PNG
-                        </button>
-                        <button class="export-option" @click.stop="exportDiagramAsSVG(diagram)">
-                          <span class="material-symbols-outlined">code</span>
-                          Export SVG
-                        </button>
-                      </div>
+          <div class="diagrams-scroll-container-wrapper">
+            <!-- Scroll Arrow Left -->
+            <button 
+              v-if="scrollStates.activity.canScrollLeft"
+              class="scroll-arrow scroll-arrow-left" 
+              @click="scrollDiagrams('activity', 'left')"
+            >
+              <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            
+            <div class="diagrams-scroll-container" ref="activityScrollContainer">
+              <div class="diagrams-scroll-content" ref="activityScrollContent">
+                <!-- Loading State for Activity Diagrams - Giản dị -->
+                <div v-if="generatingDiagramType === 'activity'" class="diagram-generating-overlay">
+                  <div class="generating-content">
+                    <div class="generating-spinner-wrapper">
+                      <div class="generating-spinner"></div>
                     </div>
-                    <button
-                      class="btn-icon danger"
-                      @click.stop="deleteDiagram(diagram.id || diagram._id, $event)"
-                      title="Delete"
-                    >
-                      <span class="material-symbols-outlined">delete</span>
-                    </button>
+                    <h3>Đang tạo Activity Diagram...</h3>
                   </div>
                 </div>
-                <div class="diagram-info">
-                  <h4>{{ getSafeValue(diagram.name, 'Unnamed Diagram') }}</h4>
-                  <p class="diagram-description">
-                    {{ getSafeValue(diagram.description, 'No description') }}
-                  </p>
-                  <div class="diagram-meta">
-                    <span class="meta-item">
-                      <span class="material-symbols-outlined">language</span>
-                      {{ getLanguageCode(diagram.lang) }}
-                    </span>
-                    <span class="meta-item diagram-type-badge type-activity"> Activity </span>
-                  </div>
-                  <div class="diagram-stats">
-                    <span class="stat-badge">
-                      <span class="material-symbols-outlined">play_arrow</span>
-                      {{ getSafeArrayLength(diagram.nodes) }}
-                    </span>
-                    <span class="stat-badge">
-                      <span class="material-symbols-outlined">link</span>
-                      {{ getRelationshipCount(diagram) }}
-                    </span>
-                  </div>
-                </div>
-              </div>
 
-              <!-- Empty State for Activity Diagrams -->
-              <div v-if="filteredActivityDiagrams.length === 0" class="empty-section">
-                <div class="empty-icon">
-                  <span class="material-symbols-outlined">play_arrow</span>
+                <div
+                  v-for="diagram in filteredActivityDiagrams"
+                  :key="diagram.id || diagram._id"
+                  class="diagram-card"
+                  :class="{ 'blurred': generatingDiagramType === 'activity' }"
+                  @click="editDiagram(diagram)"
+                >
+                  <div class="diagram-preview">
+                    <img
+                      v-if="diagram.previewImage"
+                      :src="diagram.previewImage"
+                      :alt="diagram.name || 'Activity Diagram'"
+                      class="preview-image"
+                      @load="onPreviewImageLoad"
+                      @error="onPreviewImageError(diagram, $event)"
+                    />
+                    <div v-else class="generating-preview">
+                      <div class="loading-spinner-small"></div>
+                      <span>Generating preview...</span>
+                    </div>
+                    <!-- Luôn render renderer để có thể export, ẩn khi đã có previewImage -->
+                    <div class="preview-generator" :class="{ 'hidden-renderer': diagram.previewImage }">
+                      <ActivityDiagramRenderer
+                        :ref="`previewGenerator_${diagram.id || diagram._id}`"
+                        :diagram-data="diagram"
+                        :preview-mode="true"
+                        :auto-generate-preview="!diagram.previewImage"
+                        :optimize-for-preview="true"
+                        @preview-generated="handlePreviewGenerated(diagram, $event)"
+                        class="hidden-renderer"
+                      />
+                    </div>
+
+                    <div class="diagram-overlay">
+                      <div class="export-dropdown">
+                        <button
+                          class="btn-icon export-toggle"
+                          @click.stop="toggleExportDropdown(diagram)"
+                          title="Export"
+                        >
+                          <span class="material-symbols-outlined">download</span>
+                        </button>
+                        <div
+                          v-if="activeExportDropdown === (diagram.id || diagram._id)"
+                          class="export-options"
+                        >
+                          <button class="export-option" @click.stop="exportDiagramAsPNG(diagram)">
+                            <span class="material-symbols-outlined">image</span>
+                            Export PNG
+                          </button>
+                          <button class="export-option" @click.stop="exportDiagramAsSVG(diagram)">
+                            <span class="material-symbols-outlined">code</span>
+                            Export SVG
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        class="btn-icon danger"
+                        @click.stop="deleteDiagram(diagram.id || diagram._id, $event)"
+                        title="Delete"
+                      >
+                        <span class="material-symbols-outlined">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="diagram-info">
+                    <h4>{{ getSafeValue(diagram.name, 'Unnamed Diagram') }}</h4>
+                    <p class="diagram-description">
+                      {{ getSafeValue(diagram.description, 'No description') }}
+                    </p>
+                    <div class="diagram-meta">
+                      <span class="meta-item">
+                        <span class="material-symbols-outlined">language</span>
+                        {{ getLanguageCode(diagram.lang) }}
+                      </span>
+                      <span class="meta-item diagram-type-badge type-activity"> Activity </span>
+                    </div>
+                    <div class="diagram-stats">
+                      <span class="stat-badge">
+                        <span class="material-symbols-outlined">play_arrow</span>
+                        {{ getSafeArrayLength(diagram.nodes) }}
+                      </span>
+                      <span class="stat-badge">
+                        <span class="material-symbols-outlined">link</span>
+                        {{ getRelationshipCount(diagram) }}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <h4>No Activity Diagrams</h4>
-                <p>Generate activity diagrams to visualize workflow processes.</p>
-                <button class="btn-primary small" @click="generateSpecificDiagram('activity')">
-                  <span class="material-symbols-outlined">auto_awesome</span>
-                  Generate Activity
-                </button>
+
+                <!-- Empty State for Activity Diagrams -->
+                <div v-if="filteredActivityDiagrams.length === 0" class="empty-section">
+                  <div class="empty-icon">
+                    <span class="material-symbols-outlined">play_arrow</span>
+                  </div>
+                  <h4>No Activity Diagrams</h4>
+                  <p>Generate activity diagrams to visualize workflow processes.</p>
+                  <button class="btn-primary small" @click="generateSpecificDiagram('activity')">
+                    <span class="material-symbols-outlined">auto_awesome</span>
+                    Generate Activity
+                  </button>
+                </div>
               </div>
             </div>
+            
+            <!-- Scroll Arrow Right -->
+            <button 
+              v-if="scrollStates.activity.canScrollRight"
+              class="scroll-arrow scroll-arrow-right" 
+              @click="scrollDiagrams('activity', 'right')"
+            >
+              <span class="material-symbols-outlined">chevron_right</span>
+            </button>
           </div>
         </div>
 
@@ -358,9 +422,10 @@
                 />
               </div>
               <div class="filter-controls">
-                <select v-model="sortFilters.sequence" class="sort-select">
+                <select v-model="globalSortFilter" class="sort-select">
                   <option value="name">Sort by Name</option>
                   <option value="date">Sort by Date</option>
+                  <option value="created">Sort by Created Date</option>
                   <option value="lifelines">Sort by Lifelines</option>
                 </select>
                 <select v-model="languageFilters.sequence" class="lang-select">
@@ -372,110 +437,141 @@
             </div>
           </div>
 
-          <div class="diagrams-scroll-container">
-            <div class="diagrams-scroll-content">
-              <div
-                v-for="diagram in filteredSequenceDiagrams"
-                :key="diagram.id || diagram._id"
-                class="diagram-card"
-                @click="editDiagram(diagram)"
-              >
-                <div class="diagram-preview">
-                  <img
-                    v-if="diagram.previewImage"
-                    :src="diagram.previewImage"
-                    :alt="diagram.name || 'Sequence Diagram'"
-                    class="preview-image"
-                    @load="onPreviewImageLoad"
-                    @error="onPreviewImageError(diagram, $event)"
-                  />
-                  <div v-else class="generating-preview">
-                    <div class="loading-spinner-small"></div>
-                    <span>Generating preview...</span>
-                  </div>
-                  <!-- Luôn render renderer để có thể export, ẩn khi đã có previewImage -->
-                  <div class="preview-generator" :class="{ 'hidden-renderer': diagram.previewImage }">
-                    <SequenceDiagramRenderer
-                      :ref="`previewGenerator_${diagram.id || diagram._id}`"
-                      :diagram-data="diagram"
-                      :preview-mode="true"
-                      :auto-generate-preview="!diagram.previewImage"
-                      :optimize-for-preview="true"
-                      @preview-generated="handlePreviewGenerated(diagram, $event)"
-                      class="hidden-renderer"
-                    />
-                  </div>
-
-                  <div class="diagram-overlay">
-                    <div class="export-dropdown">
-                      <button
-                        class="btn-icon export-toggle"
-                        @click.stop="toggleExportDropdown(diagram)"
-                        title="Export"
-                      >
-                        <span class="material-symbols-outlined">download</span>
-                      </button>
-                      <div
-                        v-if="activeExportDropdown === (diagram.id || diagram._id)"
-                        class="export-options"
-                      >
-                        <button class="export-option" @click.stop="exportDiagramAsPNG(diagram)">
-                          <span class="material-symbols-outlined">image</span>
-                          Export PNG
-                        </button>
-                        <button class="export-option" @click.stop="exportDiagramAsSVG(diagram)">
-                          <span class="material-symbols-outlined">code</span>
-                          Export SVG
-                        </button>
-                      </div>
+          <div class="diagrams-scroll-container-wrapper">
+            <!-- Scroll Arrow Left -->
+            <button 
+              v-if="scrollStates.sequence.canScrollLeft"
+              class="scroll-arrow scroll-arrow-left" 
+              @click="scrollDiagrams('sequence', 'left')"
+            >
+              <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            
+            <div class="diagrams-scroll-container" ref="sequenceScrollContainer">
+              <div class="diagrams-scroll-content" ref="sequenceScrollContent">
+                <!-- Loading State for Sequence Diagrams - Giản dị -->
+                <div v-if="generatingDiagramType === 'sequence'" class="diagram-generating-overlay">
+                  <div class="generating-content">
+                    <div class="generating-spinner-wrapper">
+                      <div class="generating-spinner"></div>
                     </div>
-                    <button
-                      class="btn-icon danger"
-                      @click.stop="deleteDiagram(diagram.id || diagram._id, $event)"
-                      title="Delete"
-                    >
-                      <span class="material-symbols-outlined">delete</span>
-                    </button>
+                    <h3>Đang tạo Sequence Diagram...</h3>
                   </div>
                 </div>
-                <div class="diagram-info">
-                  <h4>{{ getSafeValue(diagram.name, 'Unnamed Diagram') }}</h4>
-                  <p class="diagram-description">
-                    {{ getSafeValue(diagram.description, 'No description') }}
-                  </p>
-                  <div class="diagram-meta">
-                    <span class="meta-item">
-                      <span class="material-symbols-outlined">language</span>
-                      {{ getLanguageCode(diagram.lang) }}
-                    </span>
-                    <span class="meta-item diagram-type-badge type-sequence"> Sequence </span>
-                  </div>
-                  <div class="diagram-stats">
-                    <span class="stat-badge">
-                      <span class="material-symbols-outlined">timeline</span>
-                      {{ getSafeArrayLength(diagram.lifelines) }}
-                    </span>
-                    <span class="stat-badge">
-                      <span class="material-symbols-outlined">link</span>
-                      {{ getRelationshipCount(diagram) }}
-                    </span>
-                  </div>
-                </div>
-              </div>
 
-              <!-- Empty State for Sequence Diagrams -->
-              <div v-if="filteredSequenceDiagrams.length === 0" class="empty-section">
-                <div class="empty-icon">
-                  <span class="material-symbols-outlined">timeline</span>
+                <div
+                  v-for="diagram in filteredSequenceDiagrams"
+                  :key="diagram.id || diagram._id"
+                  class="diagram-card"
+                  :class="{ 'blurred': generatingDiagramType === 'sequence' }"
+                  @click="editDiagram(diagram)"
+                >
+                  <div class="diagram-preview">
+                    <img
+                      v-if="diagram.previewImage"
+                      :src="diagram.previewImage"
+                      :alt="diagram.name || 'Sequence Diagram'"
+                      class="preview-image"
+                      @load="onPreviewImageLoad"
+                      @error="onPreviewImageError(diagram, $event)"
+                    />
+                    <div v-else class="generating-preview">
+                      <div class="loading-spinner-small"></div>
+                      <span>Generating preview...</span>
+                    </div>
+                    <!-- Luôn render renderer để có thể export, ẩn khi đã có previewImage -->
+                    <div class="preview-generator" :class="{ 'hidden-renderer': diagram.previewImage }">
+                      <SequenceDiagramRenderer
+                        :ref="`previewGenerator_${diagram.id || diagram._id}`"
+                        :diagram-data="diagram"
+                        :preview-mode="true"
+                        :auto-generate-preview="!diagram.previewImage"
+                        :optimize-for-preview="true"
+                        @preview-generated="handlePreviewGenerated(diagram, $event)"
+                        class="hidden-renderer"
+                      />
+                    </div>
+
+                    <div class="diagram-overlay">
+                      <div class="export-dropdown">
+                        <button
+                          class="btn-icon export-toggle"
+                          @click.stop="toggleExportDropdown(diagram)"
+                          title="Export"
+                        >
+                          <span class="material-symbols-outlined">download</span>
+                        </button>
+                        <div
+                          v-if="activeExportDropdown === (diagram.id || diagram._id)"
+                          class="export-options"
+                        >
+                          <button class="export-option" @click.stop="exportDiagramAsPNG(diagram)">
+                            <span class="material-symbols-outlined">image</span>
+                            Export PNG
+                          </button>
+                          <button class="export-option" @click.stop="exportDiagramAsSVG(diagram)">
+                            <span class="material-symbols-outlined">code</span>
+                            Export SVG
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        class="btn-icon danger"
+                        @click.stop="deleteDiagram(diagram.id || diagram._id, $event)"
+                        title="Delete"
+                      >
+                        <span class="material-symbols-outlined">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="diagram-info">
+                    <h4>{{ getSafeValue(diagram.name, 'Unnamed Diagram') }}</h4>
+                    <p class="diagram-description">
+                      {{ getSafeValue(diagram.description, 'No description') }}
+                    </p>
+                    <div class="diagram-meta">
+                      <span class="meta-item">
+                        <span class="material-symbols-outlined">language</span>
+                        {{ getLanguageCode(diagram.lang) }}
+                      </span>
+                      <span class="meta-item diagram-type-badge type-sequence"> Sequence </span>
+                    </div>
+                    <div class="diagram-stats">
+                      <span class="stat-badge">
+                        <span class="material-symbols-outlined">timeline</span>
+                        {{ getSafeArrayLength(diagram.lifelines) }}
+                      </span>
+                      <span class="stat-badge">
+                        <span class="material-symbols-outlined">link</span>
+                        {{ getRelationshipCount(diagram) }}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <h4>No Sequence Diagrams</h4>
-                <p>Generate sequence diagrams to visualize object interactions.</p>
-                <button class="btn-primary small" @click="generateSpecificDiagram('sequence')">
-                  <span class="material-symbols-outlined">auto_awesome</span>
-                  Generate Sequence
-                </button>
+
+                <!-- Empty State for Sequence Diagrams -->
+                <div v-if="filteredSequenceDiagrams.length === 0 && generatingDiagramType !== 'sequence'" class="empty-section">
+                  <div class="empty-icon">
+                    <span class="material-symbols-outlined">timeline</span>
+                  </div>
+                  <h4>No Sequence Diagrams</h4>
+                  <p>Generate sequence diagrams to visualize object interactions.</p>
+                  <button class="btn-primary small" @click="generateSpecificDiagram('sequence')">
+                    <span class="material-symbols-outlined">auto_awesome</span>
+                    Generate Sequence
+                  </button>
+                </div>
               </div>
             </div>
+            
+            <!-- Scroll Arrow Right -->
+            <button 
+              v-if="scrollStates.sequence.canScrollRight"
+              class="scroll-arrow scroll-arrow-right" 
+              @click="scrollDiagrams('sequence', 'right')"
+            >
+              <span class="material-symbols-outlined">chevron_right</span>
+            </button>
           </div>
         </div>
       </div>
@@ -698,6 +794,7 @@ export default {
       showSharingModal: false,
       editingDiagram: null,
       generating: false,
+      generatingDiagramType: null, // Track which diagram type is being generated
       generateForm: {
         type: 'usecase',
         lang: 'en-US',
@@ -738,6 +835,14 @@ export default {
       saveTimeout: null,
       // Track changed nodes for activity diagram (debounce save)
       activityChangedNodes: null,
+      // Scroll handlers để cleanup
+      scrollHandlers: null,
+      // Scroll button states - track để reactive
+      scrollStates: {
+        usecase: { canScrollLeft: false, canScrollRight: false },
+        activity: { canScrollLeft: false, canScrollRight: false },
+        sequence: { canScrollLeft: false, canScrollRight: false },
+      },
     }
   },
   computed: {
@@ -760,13 +865,18 @@ export default {
       }
 
       // Sort
-      switch (this.sortFilters.usecase) {
+      switch (this.globalSortFilter) {
         case 'name':
           filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
           break
         case 'date':
           filtered = filtered.sort(
             (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
+          )
+          break
+        case 'created':
+          filtered = filtered.sort(
+            (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
           )
           break
         case 'actors':
@@ -798,13 +908,18 @@ export default {
       }
 
       // Sort
-      switch (this.sortFilters.activity) {
+      switch (this.globalSortFilter) {
         case 'name':
           filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
           break
         case 'date':
           filtered = filtered.sort(
             (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
+          )
+          break
+        case 'created':
+          filtered = filtered.sort(
+            (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
           )
           break
         case 'nodes':
@@ -833,13 +948,18 @@ export default {
       }
 
       // Sort
-      switch (this.sortFilters.sequence) {
+      switch (this.globalSortFilter) {
         case 'name':
           filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
           break
         case 'date':
           filtered = filtered.sort(
             (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
+          )
+          break
+        case 'created':
+          filtered = filtered.sort(
+            (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
           )
           break
         case 'lifelines':
@@ -871,6 +991,11 @@ export default {
     filteredUsecaseDiagrams: {
       handler(newDiagrams) {
         this.triggerPreviewGenerationForDiagrams(newDiagrams, 'usecase')
+        this.$nextTick(() => {
+          setTimeout(() => {
+            this.updateScrollButtons('usecase')
+          }, 150)
+        })
       },
       deep: true,
       immediate: false,
@@ -878,6 +1003,11 @@ export default {
     filteredActivityDiagrams: {
       handler(newDiagrams) {
         this.triggerPreviewGenerationForDiagrams(newDiagrams, 'activity')
+        this.$nextTick(() => {
+          setTimeout(() => {
+            this.updateScrollButtons('activity')
+          }, 150)
+        })
       },
       deep: true,
       immediate: false,
@@ -885,6 +1015,11 @@ export default {
     filteredSequenceDiagrams: {
       handler(newDiagrams) {
         this.triggerPreviewGenerationForDiagrams(newDiagrams, 'sequence')
+        this.$nextTick(() => {
+          setTimeout(() => {
+            this.updateScrollButtons('sequence')
+          }, 150)
+        })
       },
       deep: true,
       immediate: false,
@@ -908,6 +1043,14 @@ export default {
     if (this.project._id) {
       this.cleanupSocketConnection(this.project._id)
       this.cleanupVersionSocketListeners()
+    }
+
+    // Cleanup scroll event listeners
+    if (this.scrollHandlers) {
+      this.scrollHandlers.forEach(({ container, handler }) => {
+        container.removeEventListener('scroll', handler)
+      })
+      this.scrollHandlers.clear()
     }
 
     // Remove event listener
@@ -1128,24 +1271,36 @@ export default {
         return
       }
 
+      // Lưu type và các giá trị cần thiết trước khi reset form
+      const diagramType = this.generateForm.type
+      const usecaseId = this.generateForm.usecaseId
+      const requirementId = this.generateForm.requirementId
+      const actor = this.generateForm.actor
+      const sourceType = this.generateForm.sourceType
+      const language = this.project?.language || this.generateForm.lang || 'vi-VN'
+
+      // Set generating type and close modal
+      this.generatingDiagramType = diagramType
       this.generating = true
+      this.showGenerateModal = false // Chỉ đóng modal, không reset form
+      
       try {
         let newDiagram
 
-        switch (this.generateForm.type) {
+        switch (diagramType) {
           case 'activity':
-            if (this.generateForm.sourceType === 'usecase') {
+            if (sourceType === 'usecase') {
               const { data } = await generateFromUsecase(
                 this.selectedVersionId,
-                this.generateForm.requirementId,
-                this.project?.language || this.generateForm.lang || 'vi-VN'
+                requirementId,
+                language
               )
               newDiagram = data?.data || data
             } else {
               const { data } = await generateFromActor(
                 this.selectedVersionId,
-                this.generateForm.actor,
-                this.project?.language || this.generateForm.lang || 'vi-VN'
+                actor,
+                language
               )
               newDiagram = data?.data || data
             }
@@ -1153,8 +1308,8 @@ export default {
           case 'sequence':
             const { data: sequenceData } = await generateSequenceDiagram(
               this.selectedVersionId,
-              this.generateForm.usecaseId,
-              this.project?.language || this.generateForm.lang || 'vi-VN'
+              usecaseId,
+              language
             )
             newDiagram = sequenceData?.data || sequenceData
             break
@@ -1162,22 +1317,33 @@ export default {
           default:
             const { data: usecaseData } = await generateUsecaseDiagram(
               this.selectedVersionId,
-              this.project?.language || this.generateForm.lang || 'vi-VN'
+              language
             )
             newDiagram = usecaseData?.data || usecaseData
             break
         }
 
         if (newDiagram) {
-          this.closeGenerateModal()
-          this.toast.success(`${this.getDiagramTypeName()} generated successfully!`)
+          // Lấy tên diagram type trước khi reset form
+          const diagramTypeNames = {
+            usecase: 'Use Case Diagram',
+            activity: 'Activity Diagram',
+            sequence: 'Sequence Diagram',
+          }
+          const diagramTypeName = diagramTypeNames[diagramType] || 'Diagram'
+          
+          // Không gọi closeGenerateModal() ở đây vì sẽ reset form
+          // Chỉ đóng modal
+          this.showGenerateModal = false
+          
+          this.toast.success(`${diagramTypeName} generated successfully!`)
 
           // Refresh diagrams from server to ensure data consistency
           await this.loadDiagrams()
 
           // Find the newly created diagram and open editor
           const diagramId = newDiagram._id || newDiagram.id
-          const diagrams = this.getDiagramsByType(this.generateForm.type)
+          const diagrams = this.getDiagramsByType(diagramType)
           const createdDiagram = diagrams.find((d) => (d._id || d.id) === diagramId)
 
           if (createdDiagram) {
@@ -1194,13 +1360,25 @@ export default {
         }
       } catch (err) {
         console.error('Error generating diagram:', err)
+        
+        // Lấy tên diagram type trước khi reset form
+        const diagramTypeNames = {
+          usecase: 'Use Case Diagram',
+          activity: 'Activity Diagram',
+          sequence: 'Sequence Diagram',
+        }
+        const diagramTypeName = diagramTypeNames[diagramType] || 'Diagram'
+        
         this.toast.error(
-          `Failed to generate ${this.getDiagramTypeName()}: ${
+          `Failed to generate ${diagramTypeName}: ${
             err.response?.data?.message || err.message
           }`
         )
       } finally {
         this.generating = false
+        this.generatingDiagramType = null
+        // Reset form sau khi hoàn thành (thành công hoặc lỗi)
+        this.resetGenerateForm()
       }
     },
     openManualEditor() {
@@ -1238,12 +1416,11 @@ export default {
           console.log('🔄 Regenerating preview for edited diagram:', editedDiagramId)
           this.regeneratePreview(diagram)
           this.previewCache.delete(editedDiagramId)
+          
+          // Chỉ refresh diagram đã chỉnh sửa thay vì refresh tất cả
+          this.refreshSingleDiagram(diagramType, editedDiagramId)
         }
       }
-
-      this.loadDiagrams().then(() => {
-        console.log('🔄 Diagrams reloaded after closing editor')
-      })
     },
     getDiagramsByType(type) {
       switch (type) {
@@ -1894,6 +2071,176 @@ export default {
         this.saveDiagramPositions()
       }, 1500)
     },
+    async refreshSingleDiagram(diagramType, diagramId) {
+      if (!this.selectedVersionId || !diagramId) return
+      
+      try {
+        let updatedDiagram = null
+        switch (diagramType) {
+          case 'usecase':
+            const { data: usecaseData } = await getUsecaseDiagrams(this.selectedVersionId)
+            const usecaseDiagrams = usecaseData?.data || []
+            updatedDiagram = usecaseDiagrams.find((d) => (d.id || d._id) === diagramId)
+            if (updatedDiagram) {
+              const index = this.usecaseDiagrams.findIndex((d) => (d.id || d._id) === diagramId)
+              if (index !== -1) {
+                this.$set(this.usecaseDiagrams, index, {
+                  ...this.processDiagrams([updatedDiagram], 'usecase')[0],
+                  previewImage: this.usecaseDiagrams[index].previewImage, // Giữ preview image cũ
+                })
+              }
+            }
+            break
+          case 'activity':
+            const { data: activityData } = await getActivityDiagrams(this.selectedVersionId)
+            const activityDiagrams = activityData?.data || []
+            updatedDiagram = activityDiagrams.find((d) => (d.id || d._id) === diagramId)
+            if (updatedDiagram) {
+              const index = this.activityDiagrams.findIndex((d) => (d.id || d._id) === diagramId)
+              if (index !== -1) {
+                this.$set(this.activityDiagrams, index, {
+                  ...this.processDiagrams([updatedDiagram], 'activity')[0],
+                  previewImage: this.activityDiagrams[index].previewImage, // Giữ preview image cũ
+                })
+              }
+            }
+            break
+          case 'sequence':
+            const { data: sequenceData } = await getSequenceDiagrams(this.selectedVersionId)
+            const sequenceDiagrams = sequenceData?.data || []
+            updatedDiagram = sequenceDiagrams.find((d) => (d.id || d._id) === diagramId)
+            if (updatedDiagram) {
+              const index = this.sequenceDiagrams.findIndex((d) => (d.id || d._id) === diagramId)
+              if (index !== -1) {
+                this.$set(this.sequenceDiagrams, index, {
+                  ...this.processDiagrams([updatedDiagram], 'sequence')[0],
+                  previewImage: this.sequenceDiagrams[index].previewImage, // Giữ preview image cũ
+                })
+              }
+            }
+            break
+        }
+      } catch (err) {
+        console.error('Error refreshing single diagram:', err)
+        // Fallback: reload all diagrams nếu refresh single diagram fail
+        await this.loadDiagrams()
+      }
+    },
+    // Scroll methods - FIXED VERSION
+    scrollDiagrams(type, direction) {
+      const container = this.getScrollContainer(type)
+      if (!container) return
+      
+      const scrollAmount = 400 // Scroll 400px mỗi lần
+      const currentScroll = container.scrollLeft
+      
+      if (direction === 'left') {
+        container.scrollTo({
+          left: Math.max(0, currentScroll - scrollAmount),
+          behavior: 'smooth'
+        })
+      } else {
+        const maxScroll = container.scrollWidth - container.clientWidth
+        container.scrollTo({
+          left: Math.min(maxScroll, currentScroll + scrollAmount),
+          behavior: 'smooth'
+        })
+      }
+      
+      // Update button states sau khi scroll - đợi scroll animation hoàn thành
+      setTimeout(() => {
+        this.updateScrollButtons(type)
+      }, 100)
+    },
+    
+    getScrollContainer(type) {
+      const refName = `${type}ScrollContainer`
+      const containerRef = this.$refs[refName]
+      if (!containerRef) return null
+      
+      // Handle both array and single ref
+      return Array.isArray(containerRef) ? containerRef[0] : containerRef
+    },
+    
+    updateScrollButtons(type) {
+      const container = this.getScrollContainer(type)
+      if (!container) {
+        // Nếu chưa có ref, set về false
+        this.scrollStates[type] = { canScrollLeft: false, canScrollRight: false }
+        return
+      }
+      
+      // Kiểm tra xem có thể scroll không (scrollWidth > clientWidth)
+      const scrollWidth = container.scrollWidth
+      const clientWidth = container.clientWidth
+      const canScroll = scrollWidth > clientWidth
+      
+      if (!canScroll) {
+        // Không thể scroll
+        this.scrollStates[type] = { canScrollLeft: false, canScrollRight: false }
+        return
+      }
+      
+      // Có thể scroll - kiểm tra vị trí hiện tại
+      const scrollLeft = container.scrollLeft
+      const maxScroll = scrollWidth - clientWidth
+      
+      // canScrollLeft: có thể scroll về trái nếu scrollLeft > threshold
+      const canScrollLeft = scrollLeft > 5
+      
+      // canScrollRight: có thể scroll về phải nếu chưa đến cuối
+      const canScrollRight = scrollLeft < (maxScroll - 5)
+      
+      // Update state
+      this.scrollStates[type] = {
+        canScrollLeft,
+        canScrollRight,
+      }
+    },
+  },
+  mounted() {
+    // Initialize scroll handlers map
+    this.scrollHandlers = new Map()
+    
+    // Update scroll buttons khi component mounted - đợi DOM render xong
+    this.$nextTick(() => {
+      // Đợi thêm một chút để đảm bảo refs đã được mount và có kích thước
+      setTimeout(() => {
+        ['usecase', 'activity', 'sequence'].forEach(type => {
+          this.updateScrollButtons(type)
+        })
+      }, 200)
+    })
+    
+    // Listen scroll events để update button states
+    this.$nextTick(() => {
+      setTimeout(() => {
+        ['usecase', 'activity', 'sequence'].forEach(type => {
+          const container = this.getScrollContainer(type)
+          if (container) {
+            const handleScroll = () => {
+              this.updateScrollButtons(type)
+            }
+            container.addEventListener('scroll', handleScroll)
+            // Store handler để có thể remove sau
+            this.scrollHandlers.set(`${type}ScrollContainer`, { container, handler: handleScroll })
+            
+            // Update buttons ngay sau khi add listener
+            this.updateScrollButtons(type)
+          }
+        })
+      }, 200)
+    })
+  },
+  updated() {
+    // Update scroll buttons khi component updated (có thể có thêm diagrams)
+    this.$nextTick(() => {
+      setTimeout(() => {
+        ['usecase', 'activity', 'sequence'].forEach(type => {
+          this.updateScrollButtons(type)
+        })
+      }, 100)
+    })
   },
 }
 </script>
@@ -2135,16 +2482,43 @@ export default {
   min-width: 120px;
 }
 
-/* Diagrams Scroll Container */
+/* Diagrams Scroll Container - FIXED */
+.diagrams-scroll-container-wrapper {
+  position: relative;
+  width: 100%;
+}
+
 .diagrams-scroll-container {
+  position: relative;
   overflow-x: auto;
   padding-bottom: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.diagrams-scroll-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.diagrams-scroll-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.diagrams-scroll-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.diagrams-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .diagrams-scroll-content {
   display: flex;
   gap: 20px;
   min-width: min-content;
+  padding: 2px 0; /* Add padding để không bị cắt border */
 }
 
 /* Diagram Cards */
@@ -2351,6 +2725,33 @@ export default {
 .empty-section p {
   margin: 0 0 16px 0;
   font-size: 0.875rem;
+}
+
+.empty-section.loading-section {
+  background: rgba(59, 130, 246, 0.05);
+  border: 2px dashed #3b82f6;
+  border-radius: 12px;
+  margin: 20px;
+  min-height: 300px;
+}
+
+.empty-section.loading-section .loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.empty-section.loading-section h4 {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.empty-section.loading-section p {
+  color: #6b7280;
 }
 
 /* Modal Styles */
@@ -2591,6 +2992,120 @@ export default {
   margin-right: 12px;
 }
 
+/* Scroll Arrows - FIXED POSITION */
+.scroll-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 100;
+  width: 40px;
+  height: 40px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.scroll-arrow:hover:not(:disabled) {
+  background: #f3f4f6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.scroll-arrow:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.scroll-arrow-left {
+  left: -20px;
+}
+
+.scroll-arrow-right {
+  right: -20px;
+}
+
+.scroll-arrow .material-symbols-outlined {
+  font-size: 24px;
+  color: #374151;
+}
+
+/* Diagram Generating Overlay - Giản dị */
+.diagram-generating-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  animation: fadeInOverlay 0.3s ease-in;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border: 2px solid rgba(59, 130, 246, 0.3);
+}
+
+.generating-content {
+  text-align: center;
+  padding: 40px 30px;
+  max-width: 350px;
+}
+
+.generating-spinner-wrapper {
+  margin: 0 0 20px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.generating-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spinLarge 1s linear infinite;
+}
+
+.generating-content h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e40af;
+  margin: 0;
+}
+
+.diagram-card.blurred {
+  filter: blur(3px);
+  opacity: 0.4;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+@keyframes fadeInOverlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes spinLarge {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .uml-management-view {
@@ -2669,6 +3184,20 @@ export default {
   .diagram-preview {
     height: 160px;
   }
+  
+  /* Adjust scroll arrows for mobile */
+  .scroll-arrow-left {
+    left: -15px;
+  }
+  
+  .scroll-arrow-right {
+    right: -15px;
+  }
+  
+  .scroll-arrow {
+    width: 36px;
+    height: 36px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -2690,6 +3219,23 @@ export default {
 
   .diagram-card {
     min-width: 260px;
+  }
+  
+  .scroll-arrow-left {
+    left: -10px;
+  }
+  
+  .scroll-arrow-right {
+    right: -10px;
+  }
+  
+  .scroll-arrow {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .scroll-arrow .material-symbols-outlined {
+    font-size: 20px;
   }
 }
 </style>
