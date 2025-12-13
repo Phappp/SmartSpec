@@ -104,8 +104,9 @@ export class RequirementService {
         if (!version) throw new Error("Version not found");
 
         const previousRequirements = await Usecase.find({ version_id: versionId }).lean();
-        const BATCH_SIZE = 50;
+        const DEFAULT_BATCH_SIZE = 50;
         const allGeneratedUseCases: any[] = [];
+        const invalidUsecasesToRegenerate: Array<{ name: string; errors: string[]; originalData?: any }> = [];
         const { inputSocketService } = await import("../../input/domain/input.socket.service");
 
         // Xóa usecases cũ nếu full mode
@@ -114,9 +115,24 @@ export class RequirementService {
             await Usecase.deleteMany({ version_id: versionId });
         }
 
+        // ✅ FIX: Tính toán batch size động dựa trên estimate
+        // Nếu estimate nhỏ, không nên generate quá nhiều
+        const remainingToGenerate = estimatedCount - allGeneratedUseCases.length;
+        console.log(`📊 [GENERATE PHASE] Estimated ${estimatedCount} use cases, ${estimatedBatches} batches, remaining: ${remainingToGenerate}`);
+
         // Generate từng batch
         for (let batchNumber = 1; batchNumber <= estimatedBatches; batchNumber++) {
-            const offset = (batchNumber - 1) * BATCH_SIZE;
+            const offset = allGeneratedUseCases.length;
+            const remaining = estimatedCount - allGeneratedUseCases.length;
+
+            // ✅ FIX: Tính batch size động - không generate quá số lượng estimate
+            const batchSize = Math.min(DEFAULT_BATCH_SIZE, remaining);
+
+            if (batchSize <= 0) {
+                console.log(`⏩ [BATCH ${batchNumber}/${estimatedBatches}] Already generated ${allGeneratedUseCases.length} use cases (estimated: ${estimatedCount}). Stopping.`);
+                break;
+            }
+
             const progress = 20 + Math.floor((batchNumber / estimatedBatches) * 70); // 20-90%
 
             try {
@@ -137,19 +153,20 @@ export class RequirementService {
                     );
                 }
 
-                console.log(`📦 [BATCH ${batchNumber}/${estimatedBatches}] Generating use cases ${offset + 1} to ${offset + BATCH_SIZE}...`);
+                console.log(`📦 [BATCH ${batchNumber}/${estimatedBatches}] Generating use cases ${offset + 1} to ${offset + batchSize} (estimated total: ${estimatedCount})...`);
 
-                // Generate batch
+                // Generate batch với batchSize động và thông tin estimate
                 const batchUseCases = await gemini.generateUseCasesBatch(
                     mergedText,
                     batchNumber,
                     estimatedBatches,
                     offset,
-                    BATCH_SIZE,
+                    batchSize,
                     language,
                     modelName,
                     userId,
-                    projectId
+                    projectId,
+                    estimatedCount // ✅ THÊM: Truyền estimatedCount để LLM biết giới hạn
                 );
 
                 if (batchUseCases.length === 0) {
@@ -157,8 +174,21 @@ export class RequirementService {
                     break;
                 }
 
-                // Normalize role structure
-                const normalized = this.normalizeRoleStructure(batchUseCases);
+                // ✅ FIX: Giới hạn số lượng use cases dựa trên estimate
+                const remaining = estimatedCount - allGeneratedUseCases.length;
+                if (remaining <= 0) {
+                    console.log(`⏩ [BATCH ${batchNumber}/${estimatedBatches}] Already reached estimated count (${estimatedCount}). Stopping.`);
+                    break;
+                }
+
+                // Chỉ lấy số lượng use cases còn lại cần generate
+                const useCasesToProcess = batchUseCases.slice(0, remaining);
+                if (useCasesToProcess.length < batchUseCases.length) {
+                    console.warn(`⚠️ [BATCH ${batchNumber}/${estimatedBatches}] Generated ${batchUseCases.length} use cases, but only ${remaining} remaining to reach estimate (${estimatedCount}). Limiting to ${useCasesToProcess.length}.`);
+                }
+
+                // Normalize role structure (sử dụng useCasesToProcess thay vì batchUseCases)
+                const normalized = this.normalizeRoleStructure(useCasesToProcess);
 
                 // Add related use cases
                 let withRelations = normalized;
@@ -186,50 +216,37 @@ export class RequirementService {
                 // ✅ FIX: Normalize lại role structure sau khi addRelatedUseCases (có thể LLM đã thay đổi format)
                 withRelations = this.normalizeRoleStructure(withRelations);
 
-                // Map to database format
-                const usecasesToCreate = withRelations.map((uc: any) => {
+                // Map to database format (không throw error, sẽ validate sau)
+                const usecasesToCreate = withRelations.map((uc: any, index: number) => {
                     const relatedIds = (uc.related_usecases || [])
                         .filter((id: any) => id && Types.ObjectId.isValid(String(id)))
                         .map((id: any) => new Types.ObjectId(String(id)));
 
-                    // ✅ VALIDATE: Đảm bảo các field required có giá trị
-                    if (!uc.name || typeof uc.name !== 'string' || uc.name.trim() === '') {
-                        throw new Error(`Invalid usecase name: ${JSON.stringify(uc.name)}`);
-                    }
-                    if (!uc.role || typeof uc.role !== 'object' || !uc.role.id || !uc.role.name) {
-                        throw new Error(`Invalid usecase role: ${JSON.stringify(uc.role)}`);
-                    }
-                    if (!uc.goal || typeof uc.goal !== 'string' || uc.goal.trim() === '') {
-                        throw new Error(`Invalid usecase goal: ${JSON.stringify(uc.goal)}`);
-                    }
-                    if (!uc.tasks || !Array.isArray(uc.tasks) || uc.tasks.length === 0) {
-                        console.warn(`⚠️ Usecase "${uc.name}" has no tasks, adding default task`);
-                        uc.tasks = ['Complete the use case'];
-                    }
-                    if (!uc.reason || typeof uc.reason !== 'string' || uc.reason.trim() === '') {
-                        console.warn(`⚠️ Usecase "${uc.name}" has no reason, using goal as reason`);
-                        uc.reason = uc.goal || 'No reason provided';
-                    }
-                    if (!uc.priority || !['low', 'medium', 'high'].includes(uc.priority)) {
-                        uc.priority = 'medium';
-                    }
+                    // ✅ FIX: Không throw error trong map, chỉ normalize và return
+                    // Validation sẽ được thực hiện sau để có thể skip những usecases không hợp lệ
+
+                    // Normalize các field với default values
+                    const normalizedTasks = Array.isArray(uc.tasks) && uc.tasks.length > 0 ? uc.tasks : ['Complete the use case'];
+                    const normalizedReason = (uc.reason || uc.goal || 'No reason provided').trim();
+                    const normalizedPriority = (uc.priority && ['low', 'medium', 'high'].includes(uc.priority)) ? uc.priority : 'medium';
 
                     return {
+                        _originalIndex: index, // Lưu index gốc để map lại với withRelations
                         project_id: version.project_id,
                         version_id: new Types.ObjectId(versionId),
-                        name: uc.name.trim(),
-                        role: {
+                        name: uc.name ? uc.name.trim() : '',
+                        role: uc.role ? {
                             id: uc.role.id || `role_${uc.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`,
                             name: uc.role.name || 'Unknown',
                             description: uc.role.description || ''
-                        },
-                        goal: uc.goal.trim(),
-                        reason: (uc.reason || uc.goal || 'No reason provided').trim(),
-                        tasks: Array.isArray(uc.tasks) && uc.tasks.length > 0 ? uc.tasks : ['Complete the use case'],
+                        } : null,
+                        goal: uc.goal ? uc.goal.trim() : '',
+                        reason: normalizedReason,
+                        tasks: normalizedTasks,
                         inputs: Array.isArray(uc.inputs) ? uc.inputs : [],
                         outputs: Array.isArray(uc.outputs) ? uc.outputs : [],
                         context: (uc.context || '').trim(),
-                        priority: uc.priority || 'medium',
+                        priority: normalizedPriority,
                         feedback: uc.feedback || null,
                         rules: Array.isArray(uc.rules) ? uc.rules : [],
                         triggers: Array.isArray(uc.triggers) ? uc.triggers : [],
@@ -249,27 +266,66 @@ export class RequirementService {
                         console.log(`💾 [BATCH ${batchNumber}/${estimatedBatches}] Attempting to save ${usecasesToCreate.length} use cases...`);
                         console.log(`💾 [BATCH ${batchNumber}/${estimatedBatches}] Sample usecase:`, JSON.stringify(usecasesToCreate[0], null, 2).substring(0, 500));
 
-                        // ✅ VALIDATE: Kiểm tra tất cả usecases trước khi save
-                        const validationErrors: string[] = [];
+                        // ✅ VALIDATE: Filter ra những usecases hợp lệ, skip những usecases không hợp lệ
+                        const validUsecases: any[] = [];
+                        const invalidUsecases: Array<{ index: number; name: string; errors: string[] }> = [];
+
                         usecasesToCreate.forEach((uc, index) => {
+                            const errors: string[] = [];
+
                             if (!uc.name || uc.name.trim() === '') {
-                                validationErrors.push(`Usecase ${index}: missing name`);
+                                errors.push('missing name');
                             }
                             if (!uc.role || !uc.role.id || !uc.role.name) {
-                                validationErrors.push(`Usecase ${index} (${uc.name}): invalid role`);
+                                errors.push('invalid role');
                             }
                             if (!uc.goal || uc.goal.trim() === '') {
-                                validationErrors.push(`Usecase ${index} (${uc.name}): missing goal`);
+                                errors.push('missing goal');
                             }
                             if (!uc.tasks || !Array.isArray(uc.tasks) || uc.tasks.length === 0) {
-                                validationErrors.push(`Usecase ${index} (${uc.name}): missing tasks`);
+                                errors.push('missing tasks');
+                            }
+
+                            if (errors.length > 0) {
+                                invalidUsecases.push({ index, name: uc.name || `Usecase ${index}`, errors });
+                                console.warn(`⚠️ [BATCH ${batchNumber}/${estimatedBatches}] Skipping invalid usecase ${index + 1} ("${uc.name || 'unnamed'}"): ${errors.join(', ')}`);
+                            } else {
+                                validUsecases.push(uc);
                             }
                         });
 
-                        if (validationErrors.length > 0) {
-                            console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Validation errors before save:`, validationErrors);
-                            throw new Error(`Validation failed: ${validationErrors.join('; ')}`);
+                        // ✅ FIX: Nếu tất cả usecases đều fail, lưu thông tin để regenerate sau
+                        if (validUsecases.length === 0) {
+                            console.warn(`⚠️ [BATCH ${batchNumber}/${estimatedBatches}] All ${usecasesToCreate.length} usecases failed validation. Will attempt to regenerate.`);
+                            // Lưu thông tin invalid usecases để regenerate sau
+                            invalidUsecasesToRegenerate.push(...invalidUsecases.map(uc => ({
+                                name: uc.name,
+                                errors: uc.errors,
+                                originalData: usecasesToCreate[uc.index]
+                            })));
+                            // Skip batch này và tiếp tục với batch tiếp theo
+                            continue;
                         }
+
+                        // Log số lượng usecases đã skip
+                        if (invalidUsecases.length > 0) {
+                            console.warn(`⚠️ [BATCH ${batchNumber}/${estimatedBatches}] Skipped ${invalidUsecases.length} invalid usecase(s), proceeding with ${validUsecases.length} valid usecase(s)`);
+                        }
+
+                        // Cập nhật withRelations để match với validUsecases dựa trên _originalIndex
+                        const validOriginalIndices = new Set(validUsecases.map(uc => uc._originalIndex));
+                        const validRelations = withRelations.filter((_, idx) => validOriginalIndices.has(idx));
+
+                        // Remove _originalIndex trước khi save
+                        validUsecases.forEach(uc => delete uc._originalIndex);
+
+                        // Sử dụng chỉ những usecases hợp lệ
+                        usecasesToCreate.length = 0;
+                        usecasesToCreate.push(...validUsecases);
+
+                        // Cập nhật withRelations
+                        withRelations.length = 0;
+                        withRelations.push(...validRelations);
 
                         let result: any[];
                         let insertedCount = 0;
@@ -336,6 +392,14 @@ export class RequirementService {
                                 insertedCount = individualResults.length;
                                 result = individualResults;
                                 console.log(`✅ [BATCH ${batchNumber}/${estimatedBatches}] Successfully inserted ${insertedCount} usecases individually (${individualErrors.length} failed)`);
+
+                                // Log những usecases đã skip
+                                if (individualErrors.length > 0) {
+                                    console.warn(`⚠️ [BATCH ${batchNumber}/${estimatedBatches}] Skipped ${individualErrors.length} usecase(s) due to validation errors:`);
+                                    individualErrors.forEach(err => {
+                                        console.warn(`  - "${err.name}": ${err.error}`);
+                                    });
+                                }
                             } else {
                                 throw new Error(`All ${usecasesToCreate.length} usecases failed validation. Errors: ${individualErrors.map(e => `${e.name}: ${e.error}`).join('; ')}`);
                             }
@@ -414,6 +478,35 @@ export class RequirementService {
             }
         }
 
+        // ✅ FIX: Regenerate các usecases bị lỗi validation
+        if (invalidUsecasesToRegenerate.length > 0) {
+            console.log(`🔄 [REGENERATE] Attempting to regenerate ${invalidUsecasesToRegenerate.length} invalid usecases...`);
+
+            try {
+                const regeneratedUsecases = await this.regenerateInvalidUsecases(
+                    mergedText,
+                    invalidUsecasesToRegenerate,
+                    gemini,
+                    language,
+                    versionId,
+                    version,
+                    modelName,
+                    userId,
+                    projectId
+                );
+
+                if (regeneratedUsecases.length > 0) {
+                    console.log(`✅ [REGENERATE] Successfully regenerated and saved ${regeneratedUsecases.length} usecases`);
+                    allGeneratedUseCases.push(...regeneratedUsecases);
+                } else {
+                    console.warn(`⚠️ [REGENERATE] Failed to regenerate any usecases. ${invalidUsecasesToRegenerate.length} usecases were skipped.`);
+                }
+            } catch (regenerateError: any) {
+                console.error(`❌ [REGENERATE] Error regenerating usecases:`, regenerateError.message);
+                // Không throw error, chỉ log warning vì đã có một số usecases hợp lệ được lưu
+            }
+        }
+
         // Get final usecases
         const finalUsecases = await Usecase.find({ version_id: versionId }).lean();
         console.log(`✅ [GENERATE PHASE] Completed: ${finalUsecases.length} total use cases (${allGeneratedUseCases.length} new)`);
@@ -423,6 +516,148 @@ export class RequirementService {
             usecases: finalUsecases,
             totalGenerated: allGeneratedUseCases.length
         };
+    }
+
+    /**
+     * ✅ MỚI: Regenerate các usecases bị lỗi validation
+     */
+    private async regenerateInvalidUsecases(
+        mergedText: string,
+        invalidUsecases: Array<{ name: string; errors: string[]; originalData?: any }>,
+        gemini: GeminiService,
+        language: string,
+        versionId: string,
+        version: any,
+        modelName?: string,
+        userId?: string,
+        projectId?: string
+    ): Promise<any[]> {
+        const { Types } = await import("mongoose");
+        const Usecase = (await import("../../../../../internal/model/usecase")).default;
+        const regenerated: any[] = [];
+
+        // Tạo prompt đặc biệt để regenerate các usecases bị lỗi
+        const usecaseInfo = invalidUsecases.map((uc, idx) =>
+            `${idx + 1}. "${uc.name}" - Lỗi: ${uc.errors.join(', ')}`
+        ).join('\n');
+
+        const regeneratePrompt = language === 'en-US'
+            ? `**REGENERATE INVALID USE CASES**
+
+The following ${invalidUsecases.length} use case(s) failed validation and need to be regenerated:
+
+${usecaseInfo}
+
+**ORIGINAL TEXT**:
+${mergedText.substring(0, 3000)}
+
+**REQUIREMENTS**:
+- Regenerate exactly ${invalidUsecases.length} use case(s) with COMPLETE and VALID information
+- Each use case MUST have:
+  * name: A clear, descriptive name (REQUIRED, cannot be empty)
+  * role: An object with "id", "name", and optional "description" (REQUIRED)
+  * goal: A clear goal statement (REQUIRED, cannot be empty)
+  * tasks: An array with at least one task (REQUIRED, cannot be empty)
+  * reason: A reason for the use case (can use goal if not provided)
+  * priority: "low", "medium", or "high" (default: "medium")
+- Fix all validation errors mentioned above
+- Ensure all required fields are present and valid
+
+**OUTPUT FORMAT**: Return a JSON array with ${invalidUsecases.length} use case object(s), following the same structure as the generateBatchUseCases prompt.`
+            : `**REGENERATE CÁC USE CASE BỊ LỖI**
+
+Các use case sau đây (${invalidUsecases.length} use case) bị lỗi validation và cần được regenerate:
+
+${usecaseInfo}
+
+**VĂN BẢN GỐC**:
+${mergedText.substring(0, 3000)}
+
+**YÊU CẦU**:
+- Regenerate chính xác ${invalidUsecases.length} use case với thông tin ĐẦY ĐỦ và HỢP LỆ
+- Mỗi use case PHẢI có:
+  * name: Tên rõ ràng, mô tả (BẮT BUỘC, không được để trống)
+  * role: Một object có "id", "name", và tùy chọn "description" (BẮT BUỘC)
+  * goal: Mục tiêu rõ ràng (BẮT BUỘC, không được để trống)
+  * tasks: Một mảng có ít nhất một task (BẮT BUỘC, không được để trống)
+  * reason: Lý do cho use case (có thể dùng goal nếu không có)
+  * priority: "low", "medium", hoặc "high" (mặc định: "medium")
+- Sửa tất cả các lỗi validation đã nêu ở trên
+- Đảm bảo tất cả các field bắt buộc đều có và hợp lệ
+
+**ĐỊNH DẠNG ĐẦU RA**: Trả về một mảng JSON với ${invalidUsecases.length} object use case, theo cấu trúc giống như generateBatchUseCases prompt.`;
+
+        try {
+            // Generate lại các usecases bị lỗi với prompt đặc biệt
+            // Sử dụng generateUseCasesBatch nhưng với mergedText kèm regeneratePrompt
+            const textWithRegenerateInfo = `${regeneratePrompt}\n\n**VĂN BẢN GỐC ĐẦY ĐỦ**:\n${mergedText}`;
+
+            const regeneratedBatch = await gemini.generateUseCasesBatch(
+                textWithRegenerateInfo,
+                999, // Batch number đặc biệt cho regenerate
+                1,
+                0,
+                invalidUsecases.length,
+                language,
+                modelName,
+                userId,
+                projectId
+            );
+
+            // Validate và lưu các usecases đã regenerate
+            for (const uc of regeneratedBatch) {
+                try {
+                    // Normalize role structure
+                    const normalized = this.normalizeRoleStructure([uc])[0];
+
+                    // Map to database format
+                    const relatedIds = (normalized.related_usecases || [])
+                        .filter((id: any) => id && Types.ObjectId.isValid(String(id)))
+                        .map((id: any) => new Types.ObjectId(String(id)));
+
+                    const usecaseToCreate = {
+                        project_id: version.project_id,
+                        version_id: new Types.ObjectId(versionId),
+                        name: normalized.name?.trim() || 'Unnamed Use Case',
+                        role: normalized.role ? {
+                            id: normalized.role.id || `role_${normalized.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`,
+                            name: normalized.role.name || 'Unknown',
+                            description: normalized.role.description || ''
+                        } : { id: 'role_unknown', name: 'Unknown', description: '' },
+                        goal: normalized.goal?.trim() || 'No goal specified',
+                        reason: (normalized.reason || normalized.goal || 'No reason provided').trim(),
+                        tasks: Array.isArray(normalized.tasks) && normalized.tasks.length > 0 ? normalized.tasks : ['Complete the use case'],
+                        inputs: Array.isArray(normalized.inputs) ? normalized.inputs : [],
+                        outputs: Array.isArray(normalized.outputs) ? normalized.outputs : [],
+                        context: (normalized.context || '').trim(),
+                        priority: (normalized.priority && ['low', 'medium', 'high'].includes(normalized.priority)) ? normalized.priority : 'medium',
+                        feedback: normalized.feedback || null,
+                        rules: Array.isArray(normalized.rules) ? normalized.rules : [],
+                        triggers: Array.isArray(normalized.triggers) ? normalized.triggers : [],
+                        preconditions: Array.isArray(normalized.preconditions) ? normalized.preconditions : [],
+                        postconditions: Array.isArray(normalized.postconditions) ? normalized.postconditions : [],
+                        exceptions: Array.isArray(normalized.exceptions) ? normalized.exceptions : [],
+                        stakeholders: Array.isArray(normalized.stakeholders) ? normalized.stakeholders : [],
+                        constraints: Array.isArray(normalized.constraints) ? normalized.constraints : [],
+                        related_usecases: relatedIds,
+                        created_by: version.created_by
+                    };
+
+                    // Validate
+                    const doc = new Usecase(usecaseToCreate);
+                    await doc.validate();
+                    const saved = await doc.save();
+                    regenerated.push(saved);
+                    console.log(`✅ [REGENERATE] Successfully regenerated and saved usecase: "${usecaseToCreate.name}"`);
+                } catch (regenerateError: any) {
+                    console.error(`❌ [REGENERATE] Failed to regenerate usecase "${uc.name}":`, regenerateError.message);
+                }
+            }
+        } catch (error: any) {
+            console.error(`❌ [REGENERATE] Error during regeneration:`, error.message);
+        }
+
+        return regenerated;
     }
 
     /**

@@ -70,6 +70,8 @@
           :show-incremental-button="showIncrementalButton"
           :unprocessed-inputs-count="unprocessedInputsCount"
           :is-adding-input="isAddingInput"
+          :estimate-info="estimateInfo"
+          :batch-progress="batchProgress"
           @delete-input="openDeleteSpecificModal"
           @input-added="handleInputAdded"
           @input-deleted="handleInputDeleted"
@@ -1912,17 +1914,21 @@ export default {
         return
       }
 
-      // Bỏ qua events từ chính mình
-      if (event.userId === this.currentUserId) {
-        return
-      }
-
-      // Cập nhật estimate info
+      // Cập nhật estimate info (không bỏ qua events từ chính mình vì cần hiển thị)
       this.estimateInfo = {
         estimated_count: event.estimate.estimated_count,
         summary: event.estimate.summary,
         estimated_batches: event.estimate.estimated_batches,
         isEstimating: false
+      }
+
+      // Reset batch progress khi nhận estimate
+      this.batchProgress = {
+        currentBatch: 0,
+        totalBatches: event.estimate.estimated_batches,
+        usecasesInBatch: 0,
+        savedCount: 0,
+        totalCount: event.estimate.estimated_count
       }
 
       // Hiển thị toast với estimate
@@ -1944,12 +1950,21 @@ export default {
       // Cập nhật UI state
       this.isProcessingIncremental = event.isProcessing
 
+      // Cập nhật estimate info nếu đang estimating
+      if (event.stage === 'estimating') {
+        this.estimateInfo.isEstimating = true
+      } else if (event.stage !== 'estimating') {
+        this.estimateInfo.isEstimating = false
+      }
+
       // Cập nhật batch progress nếu có
       if (event.batchInfo) {
         this.batchProgress = {
-          currentBatch: event.batchInfo.currentBatch,
-          totalBatches: event.batchInfo.totalBatches,
-          usecasesInBatch: event.batchInfo.usecasesInBatch
+          currentBatch: event.batchInfo.currentBatch || this.batchProgress.currentBatch,
+          totalBatches: event.batchInfo.totalBatches || this.batchProgress.totalBatches || this.estimateInfo.estimated_batches,
+          usecasesInBatch: event.batchInfo.usecasesInBatch || 0,
+          savedCount: event.batchInfo.savedCount || this.batchProgress.savedCount || 0,
+          totalCount: this.estimateInfo.estimated_count || this.batchProgress.totalCount
         }
       }
 

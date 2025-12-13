@@ -129,34 +129,53 @@ Ví dụ output (sử dụng ID thực tế từ danh sách):
   ["507f1f77bcf86cd799439014", "507f1f77bcf86cd799439015"]
 ]
 `,
-        estimateUseCasesCount: (text: string) => `
+        estimateUseCasesCount: (text: string) => {
+            const textLength = text?.length || 0;
+            const isShortText = textLength < 100;
+
+            return `
 Bạn là một chuyên gia phân tích yêu cầu phần mềm.
 
 NHIỆM VỤ: Đọc toàn bộ văn bản dưới đây và ước tính số lượng use case sẽ được tạo ra.
 
-VĂN BẢN CẦN PHÂN TÍCH:
+VĂN BẢN CẦN PHÂN TÍCH (${textLength} ký tự):
 ${text}
 
+${isShortText ? `
+⚠️ LƯU Ý QUAN TRỌNG: Văn bản này rất ngắn (chỉ ${textLength} ký tự). 
+- Nếu chỉ là một từ khóa hoặc câu ngắn, chỉ nên estimate các use cases liên quan TRỰC TIẾP và VỪA PHẢI
+- Ví dụ: Nếu text là "login", chỉ estimate các use cases liên quan như: Login, Register, Forgot Password, Reset Password, Logout (khoảng 3-10 use cases)
+- KHÔNG nên suy luận quá xa hoặc estimate quá nhiều use cases không liên quan
+- Chỉ estimate dựa trên những gì được đề cập TRỰC TIẾP trong text
+` : `
 YÊU CẦU:
 - Phân tích toàn bộ văn bản một cách kỹ lưỡng
 - Đếm số lượng chức năng/phân hệ/module có thể tạo use case
-- Ước tính số lượng use case sẽ được generate dựa trên độ phức tạp và số lượng chức năng
+- Ước tính số lượng use case sẽ được generate dựa trên độ phức tạp và số lượng chức năng được mô tả trong text
+- Nếu text mô tả chi tiết nhiều module/chức năng, có thể estimate nhiều hơn
+- Nếu text chỉ mô tả một vài chức năng cơ bản, estimate vừa phải
+`}
 
 TRẢ VỀ JSON:
 {
-  "estimated_count": 94,
-  "summary": "Hệ thống quản lý với 5 module chính: User Management, Order Processing, Product Catalog, Payment Gateway, Report Generation",
-  "estimated_batches": 2,
-  "reasoning": "Dựa trên số lượng chức năng và độ phức tạp, ước tính sẽ có khoảng 94 usecases được tạo ra, chia thành 2 batch (50 usecases/batch)"
+  "estimated_count": ${isShortText ? '5' : '94'},
+  "summary": "${isShortText ? 'Hệ thống với các chức năng cơ bản được đề cập trong text' : 'Hệ thống quản lý với 5 module chính: User Management, Order Processing, Product Catalog, Payment Gateway, Report Generation'}",
+  "estimated_batches": ${isShortText ? '1' : '2'},
+  "reasoning": "${isShortText ? 'Text ngắn, chỉ estimate các use cases liên quan trực tiếp' : 'Dựa trên số lượng chức năng và độ phức tạp, ước tính sẽ có khoảng 94 usecases được tạo ra, chia thành 2 batch (50 usecases/batch)'}"
 }
 
 QUAN TRỌNG:
 - Chỉ trả về JSON, không có markdown, không có code fence
-- estimated_count phải là số nguyên dương
+- estimated_count phải là số nguyên dương và PHÙ HỢP với độ dài và nội dung của text
+- Nếu text ngắn (< 100 ký tự): estimated_count nên từ 3-15 use cases
+- Nếu text vừa (100-500 ký tự): estimated_count nên từ 10-50 use cases
+- Nếu text dài (> 500 ký tự): có thể estimate nhiều hơn dựa trên nội dung
 - estimated_batches = Math.ceil(estimated_count / 50)
-- summary phải ngắn gọn, mô tả tổng quan hệ thống
-`,
-        generateBatchUseCases: (text: string, batchNumber: number, totalBatches: number, offset: number, batchSize: number) => ` **MỤC TIÊU**: Generate use cases từ văn bản theo batch
+- summary phải ngắn gọn, mô tả tổng quan hệ thống DỰA TRÊN NỘI DUNG THỰC TẾ của text
+- KHÔNG suy luận quá xa, chỉ estimate những gì được đề cập hoặc liên quan TRỰC TIẾP trong text
+`;
+        },
+        generateBatchUseCases: (text: string, batchNumber: number, totalBatches: number, offset: number, batchSize: number, estimatedTotal?: number) => ` **MỤC TIÊU**: Generate use cases từ văn bản theo batch
 
 **VĂN BẢN GỐC**:
 ${text}
@@ -165,12 +184,15 @@ ${text}
 - Batch số: ${batchNumber}/${totalBatches}
 - Bắt đầu từ use case số: ${offset + 1}
 - Số lượng use case cần generate trong batch này: ${batchSize}
+${estimatedTotal ? `- **TỔNG SỐ USE CASES ĐÃ ESTIMATE: ${estimatedTotal}** - KHÔNG được generate quá số này!` : ''}
 
 **YÊU CẦU**:
 - Generate chính xác ${batchSize} use cases (hoặc ít hơn nếu đã hết nội dung)
+${estimatedTotal ? `- **QUAN TRỌNG**: Tổng số use cases đã estimate là ${estimatedTotal}. Hiện tại đã generate ${offset} use cases. Chỉ được generate tối đa ${estimatedTotal - offset} use cases trong batch này.` : ''}
 - Bắt đầu từ use case số ${offset + 1}
 - KHÔNG lặp lại các use case đã generate ở batch trước
 - Mỗi use case phải đầy đủ thông tin (~400-500 tokens)
+${estimatedTotal ? `- **KHÔNG được suy luận quá xa hoặc generate nhiều hơn estimate (${estimatedTotal} use cases)**` : ''}
 
 **CẤU TRÚC USE CASE** (giống như schema cũ):
 [
@@ -323,34 +345,53 @@ Example output (using actual IDs from the list):
   ["507f1f77bcf86cd799439014", "507f1f77bcf86cd799439015"]
 ]
 `,
-        estimateUseCasesCount: (text: string) => `
+        estimateUseCasesCount: (text: string) => {
+            const textLength = text?.length || 0;
+            const isShortText = textLength < 100;
+
+            return `
 You are a software requirements analysis expert.
 
 TASK: Read the entire text below and estimate the number of use cases that will be generated.
 
-TEXT TO ANALYZE:
+TEXT TO ANALYZE (${textLength} characters):
 ${text}
 
+${isShortText ? `
+⚠️ IMPORTANT NOTE: This text is very short (only ${textLength} characters).
+- If it's just a keyword or short phrase, only estimate DIRECTLY RELATED and MODERATE use cases
+- Example: If text is "login", only estimate related use cases like: Login, Register, Forgot Password, Reset Password, Logout (approximately 3-10 use cases)
+- DO NOT over-infer or estimate too many unrelated use cases
+- Only estimate based on what is DIRECTLY mentioned in the text
+` : `
 REQUIREMENTS:
 - Analyze the entire text thoroughly
 - Count the number of functions/modules/subsystems that can create use cases
-- Estimate the number of use cases to be generated based on complexity and number of functions
+- Estimate the number of use cases to be generated based on complexity and number of functions described in the text
+- If text describes many detailed modules/functions, you can estimate more
+- If text only describes a few basic functions, estimate moderately
+`}
 
 RETURN JSON:
 {
-  "estimated_count": 94,
-  "summary": "Management system with 5 main modules: User Management, Order Processing, Product Catalog, Payment Gateway, Report Generation",
-  "estimated_batches": 2,
-  "reasoning": "Based on the number of functions and complexity, estimated to generate approximately 94 usecases, divided into 2 batches (50 usecases/batch)"
+  "estimated_count": ${isShortText ? '5' : '94'},
+  "summary": "${isShortText ? 'System with basic functions mentioned in the text' : 'Management system with 5 main modules: User Management, Order Processing, Product Catalog, Payment Gateway, Report Generation'}",
+  "estimated_batches": ${isShortText ? '1' : '2'},
+  "reasoning": "${isShortText ? 'Short text, only estimating directly related use cases' : 'Based on the number of functions and complexity, estimated to generate approximately 94 usecases, divided into 2 batches (50 usecases/batch)'}"
 }
 
 IMPORTANT:
 - Return ONLY JSON, no markdown, no code fence
-- estimated_count must be a positive integer
+- estimated_count must be a positive integer and APPROPRIATE for the length and content of the text
+- If text is short (< 100 characters): estimated_count should be 3-15 use cases
+- If text is medium (100-500 characters): estimated_count should be 10-50 use cases
+- If text is long (> 500 characters): can estimate more based on content
 - estimated_batches = Math.ceil(estimated_count / 50)
-- summary must be concise, describing the system overview
-`,
-        generateBatchUseCases: (text: string, batchNumber: number, totalBatches: number, offset: number, batchSize: number) => ` **OBJECTIVE**: Generate use cases from text in batches
+- summary must be concise, describing the system overview BASED ON ACTUAL CONTENT of the text
+- DO NOT over-infer, only estimate what is mentioned or DIRECTLY related in the text
+`;
+        },
+        generateBatchUseCases: (text: string, batchNumber: number, totalBatches: number, offset: number, batchSize: number, estimatedTotal?: number) => ` **OBJECTIVE**: Generate use cases from text in batches
 
 **ORIGINAL TEXT**:
 ${text}
@@ -359,9 +400,11 @@ ${text}
 - Batch number: ${batchNumber}/${totalBatches}
 - Start from use case number: ${offset + 1}
 - Number of use cases to generate in this batch: ${batchSize}
+${estimatedTotal ? `- **TOTAL ESTIMATED USE CASES: ${estimatedTotal}** - DO NOT generate more than this!` : ''}
 
 **REQUIREMENTS**:
 - Generate exactly ${batchSize} use cases (or fewer if content is exhausted)
+${estimatedTotal ? `- **IMPORTANT**: Total estimated use cases is ${estimatedTotal}. Currently generated ${offset} use cases. Only generate maximum ${estimatedTotal - offset} use cases in this batch.` : ''}
 - Start from use case number ${offset + 1}
 - DO NOT repeat use cases already generated in previous batches
 - Each use case must have complete information (~400-500 tokens)
@@ -852,7 +895,21 @@ export class GeminiService {
         estimated_batches: number;
         reasoning?: string;
     }> {
-        console.log(`📊 [ESTIMATE] Estimating use cases count. Text length: ${text?.length ?? 0} chars`);
+        const textLength = text?.length ?? 0;
+        console.log(`📊 [ESTIMATE] Estimating use cases count. Text length: ${textLength} chars`);
+
+        // ✅ FIX: Tính toán max allowed dựa trên text length để validate sau
+        let maxAllowed = 100; // Default max
+        if (textLength < 50) {
+            maxAllowed = 10;
+        } else if (textLength < 100) {
+            maxAllowed = 20;
+        } else if (textLength < 500) {
+            maxAllowed = 50;
+        } else if (textLength < 2000) {
+            maxAllowed = 100;
+        }
+        // Text rất dài (> 2000 chars): không giới hạn (maxAllowed = 100, nhưng có thể cao hơn)
 
         const keys = await this.apiKeyService.getAllActiveKeys("gemini");
         if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
@@ -930,10 +987,18 @@ export class GeminiService {
                         throw new Error(`Invalid estimated_count: must be a positive number, got ${estimate.estimated_count}`);
                     }
 
-                    const estimated_count = Math.max(1, Math.floor(estimate.estimated_count || 1));
+                    let estimated_count = Math.max(1, Math.floor(estimate.estimated_count || 1));
+
+                    // ✅ FIX: Giới hạn estimate dựa trên độ dài text input
+                    // maxAllowed đã được tính ở trên dựa trên textLength
+                    if (estimated_count > maxAllowed) {
+                        console.warn(`⚠️ [ESTIMATE] LLM estimated ${estimated_count} use cases, but text length (${textLength} chars) suggests max ${maxAllowed}. Adjusting to ${maxAllowed}.`);
+                        estimated_count = maxAllowed;
+                    }
+
                     const estimated_batches = Math.ceil(estimated_count / 50);
 
-                    console.log(`✅ [ESTIMATE] Estimated ${estimated_count} use cases, ${estimated_batches} batches`);
+                    console.log(`✅ [ESTIMATE] Estimated ${estimated_count} use cases (from ${textLength} chars text), ${estimated_batches} batches`);
 
                     return {
                         estimated_count,
@@ -973,15 +1038,16 @@ export class GeminiService {
         language: string = 'vi-VN',
         modelName?: string,
         userId?: string,
-        projectId?: string
+        projectId?: string,
+        estimatedTotal?: number
     ): Promise<any[]> {
-        console.log(`📦 [BATCH ${batchNumber}/${totalBatches}] Generating use cases ${offset + 1} to ${offset + batchSize}`);
+        console.log(`📦 [BATCH ${batchNumber}/${totalBatches}] Generating use cases ${offset + 1} to ${offset + batchSize}${estimatedTotal ? ` (estimated total: ${estimatedTotal})` : ''}`);
 
         const keys = await this.apiKeyService.getAllActiveKeys("gemini");
         if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
 
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
-        const prompt = prompts[lang].generateBatchUseCases(text, batchNumber, totalBatches, offset, batchSize);
+        const prompt = prompts[lang].generateBatchUseCases(text, batchNumber, totalBatches, offset, batchSize, estimatedTotal);
 
         // Thử từng key cho đến khi thành công
         for (const k of keys) {
@@ -1018,15 +1084,24 @@ export class GeminiService {
                 responseText = this.cleanJsonString(responseText);
 
                 const parsed = this.safeJsonParseRobust(responseText);
-                const useCases = parsed.items || [];
+                let useCases = parsed.items || [];
 
                 if (useCases.length === 0) {
                     console.log(`⏩ [BATCH ${batchNumber}/${totalBatches}] No more use cases to generate`);
                     return [];
                 }
 
+                // ✅ FIX: Giới hạn số lượng use cases dựa trên estimate
+                if (estimatedTotal && estimatedTotal > 0) {
+                    const maxAllowed = estimatedTotal - offset;
+                    if (useCases.length > maxAllowed) {
+                        console.warn(`⚠️ [BATCH ${batchNumber}/${totalBatches}] LLM generated ${useCases.length} use cases, but estimate (${estimatedTotal}) allows only ${maxAllowed} (offset: ${offset}). Limiting to ${maxAllowed}.`);
+                        useCases = useCases.slice(0, maxAllowed);
+                    }
+                }
+
                 const normalized = this.normalizeUseCases(useCases);
-                console.log(`✅ [BATCH ${batchNumber}/${totalBatches}] Generated ${normalized.length} use cases`);
+                console.log(`✅ [BATCH ${batchNumber}/${totalBatches}] Generated ${normalized.length} use cases${estimatedTotal ? ` (estimated total: ${estimatedTotal}, remaining: ${estimatedTotal - offset - normalized.length})` : ''}`);
 
                 return normalized;
             } catch (err: any) {

@@ -117,13 +117,84 @@
             </div>
           </div>
 
-          <!-- Processing Banner -->
+          <!-- Processing Banner with Detailed Progress -->
           <div v-if="isProcessingIncremental" class="processing-banner">
             <div class="loading-content">
               <div class="loading-spinner"></div>
               <div class="loading-text">
-                <h4>Analyzing...</h4>
-                <p>Processing your inputs...</p>
+                <!-- Estimate Phase -->
+                <div v-if="estimateInfo.isEstimating" class="progress-stage">
+                  <h4>
+                    <span class="material-symbols-outlined stage-icon">calculate</span>
+                    Estimating Use Cases...
+                  </h4>
+                  <p class="progress-info">Analyzing your inputs to determine the number of use cases...</p>
+                </div>
+                
+                <!-- Estimate Received -->
+                <div v-else-if="estimateInfo.estimated_count > 0 && batchProgress.currentBatch === 0" class="progress-stage">
+                  <h4>
+                    <span class="material-symbols-outlined stage-icon success">check_circle</span>
+                    Estimated {{ estimateInfo.estimated_count }} Use Cases
+                  </h4>
+                  <p v-if="estimateInfo.summary" class="progress-info">{{ estimateInfo.summary }}</p>
+                  <p class="progress-detail">Preparing to generate {{ estimateInfo.estimated_batches }} batch(es)...</p>
+                </div>
+
+                <!-- Generating Phase -->
+                <div v-else-if="batchProgress.currentBatch > 0 && batchProgress.currentBatch <= batchProgress.totalBatches" class="progress-stage">
+                  <h4>
+                    <span class="material-symbols-outlined stage-icon">auto_awesome</span>
+                    <span v-if="batchProgress.usecasesInBatch === 0">
+                      Generating Batch {{ batchProgress.currentBatch }}/{{ batchProgress.totalBatches }}
+                    </span>
+                    <span v-else>
+                      Generated {{ batchProgress.usecasesInBatch }} Use Cases
+                    </span>
+                  </h4>
+                  <p class="progress-info">
+                    <span v-if="batchProgress.usecasesInBatch === 0">
+                      Generating use cases for batch {{ batchProgress.currentBatch }}...
+                    </span>
+                    <span v-else>
+                      Batch {{ batchProgress.currentBatch }}/{{ batchProgress.totalBatches }} completed
+                    </span>
+                  </p>
+                  <div class="progress-bar-container">
+                    <div class="progress-bar" :style="{ width: `${(batchProgress.currentBatch / (batchProgress.totalBatches || 1)) * 100}%` }"></div>
+                  </div>
+                  <p class="progress-detail">
+                    {{ batchProgress.currentBatch }} of {{ batchProgress.totalBatches }} batches 
+                    ({{ estimateInfo.estimated_count || batchProgress.totalCount }} total use cases)
+                  </p>
+                </div>
+
+                <!-- Saving Phase -->
+                <div v-else-if="batchProgress.savedCount > 0 && batchProgress.savedCount < batchProgress.totalCount" class="progress-stage">
+                  <h4>
+                    <span class="material-symbols-outlined stage-icon">save</span>
+                    Saving {{ batchProgress.savedCount }}/{{ batchProgress.totalCount }} Use Cases
+                  </h4>
+                  <p class="progress-info">Saving generated use cases to database...</p>
+                  <div class="progress-bar-container">
+                    <div class="progress-bar" :style="{ width: `${(batchProgress.savedCount / batchProgress.totalCount) * 100}%` }"></div>
+                  </div>
+                </div>
+
+                <!-- Completed Phase -->
+                <div v-else-if="!isProcessingIncremental && estimateInfo.estimated_count > 0" class="progress-stage completed">
+                  <h4>
+                    <span class="material-symbols-outlined stage-icon success">check_circle</span>
+                    Analysis Completed!
+                  </h4>
+                  <p class="progress-info">Successfully generated and saved {{ estimateInfo.estimated_count }} use cases.</p>
+                </div>
+
+                <!-- Default Loading -->
+                <div v-else class="progress-stage">
+                  <h4>Analyzing...</h4>
+                  <p class="progress-info">Processing your inputs...</p>
+                </div>
               </div>
             </div>
           </div>
@@ -365,6 +436,25 @@ export default {
     isAddingInput: {
       type: Boolean,
       default: false,
+    },
+    estimateInfo: {
+      type: Object,
+      default: () => ({
+        estimated_count: 0,
+        summary: '',
+        estimated_batches: 0,
+        isEstimating: false
+      }),
+    },
+    batchProgress: {
+      type: Object,
+      default: () => ({
+        currentBatch: 0,
+        totalBatches: 0,
+        usecasesInBatch: 0,
+        savedCount: 0,
+        totalCount: 0
+      }),
     },
   },
   data() {
@@ -1516,6 +1606,62 @@ export default {
   margin: 0;
   opacity: 0.9;
   font-size: 0.75rem;
+}
+
+/* Progress Stage Styles */
+.progress-stage {
+  width: 100%;
+}
+
+.progress-stage h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.stage-icon {
+  font-size: 18px;
+  opacity: 0.9;
+}
+
+.stage-icon.success {
+  color: #34d399;
+}
+
+.progress-info {
+  margin: 4px 0;
+  opacity: 0.9;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.progress-detail {
+  margin: 6px 0 0 0;
+  opacity: 0.8;
+  font-size: 0.7rem;
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.progress-stage.completed h4 {
+  color: #34d399;
 }
 
 .error-banner {
