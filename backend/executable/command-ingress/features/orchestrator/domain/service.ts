@@ -8,7 +8,7 @@ import { RequirementService } from "./RequirementService";
 import { UtilService } from "./UtilService";
 import { inputSocketService } from '../../input/domain/input.socket.service';
 import { VersionService } from "../../../features/version/domain/service";
-import {PreviewChangeDto} from "../../../features/version/adapter/preview.dto";
+import { PreviewChangeDto } from "../../../features/version/adapter/preview.dto";
 
 export class OrchestratorService {
     private inputService = new InputService();
@@ -30,25 +30,25 @@ export class OrchestratorService {
 
         // 🟢 Bắt đầu: clear lỗi cũ nhưng giữ checkpoint
         console.log(`[SERVICE] Clearing previous errors for version ${versionId} before running...`);
-        
+
         // ✅ QUAN TRỌNG: Atomic check và set is_processing để tránh race condition
         // Sử dụng findOneAndUpdate với condition để đảm bảo chỉ một process có thể chạy
         const versionUpdate = await Version.findOneAndUpdate(
-            { 
-                _id: versionId, 
+            {
+                _id: versionId,
                 $or: [
                     { is_processing: { $ne: true } }, // Chưa processing
                     { is_processing: { $exists: false } } // Hoặc field không tồn tại
                 ]
             },
-            { 
-                $set: { 
+            {
+                $set: {
                     is_processing: true,
                     status: "processing",
                     processing_errors: [],
                     stage: "initializing",
                     progress: 15
-                } 
+                }
             },
             { new: true, lean: true }
         );
@@ -67,7 +67,7 @@ export class OrchestratorService {
         // Kiểm tra checkpoint để xác định có thể resume không
         const checkpoint = (version as any).processing_checkpoint;
         const hasCheckpoint = checkpoint && typeof checkpoint === 'object' && Array.isArray(checkpoint.processed_chunks) && checkpoint.processed_chunks.length > 0;
-        
+
         if (hasCheckpoint) {
             console.log(`🔄 Checkpoint detected: ${checkpoint.processed_chunks.length} chunks already processed. Will resume from checkpoint.`);
             // Cập nhật stage và progress dựa trên checkpoint
@@ -88,9 +88,9 @@ export class OrchestratorService {
                 throw new Error("Auto bump failed");
             }
             version = bumpRes.data.newVersion;
-            console.log("version Id after bump",version._id);
+            console.log("version Id after bump", version._id);
             versionId = version._id.toString();
-            
+
             // ✅ QUAN TRỌNG: Set is_processing cho version mới sau khi bump
             await Version.findByIdAndUpdate(versionId, {
                 $set: {
@@ -101,7 +101,7 @@ export class OrchestratorService {
                     progress: hasCheckpoint ? 40 : 15
                 }
             });
-            
+
             // Lấy lại checkpoint sau khi bump
             const newVersion = await Version.findById(versionId).lean();
             if (newVersion && (newVersion as any).processing_checkpoint) {
@@ -205,7 +205,7 @@ export class OrchestratorService {
             // Lấy usecases từ collection
             const Usecase = (await import("../../../../../internal/model/usecase")).default;
             const usecases = await Usecase.find({ version_id: versionId }).lean();
-            
+
             return {
                 version_id: versionId,
                 inputs_count: 0,
@@ -258,7 +258,7 @@ export class OrchestratorService {
             // ✅ MỚI: Lấy model name từ API keys để truyền vào finalize
             const keys = await this.gemini['apiKeyService'].getAllActiveKeys("gemini");
             const modelName = keys && keys.length > 0 ? (keys[0].model_name || 'gemini-2.0-flash') : 'gemini-2.0-flash';
-            
+
             const result = await this.requirementService.finalize(
                 versionId,
                 opts.mode || "full",
@@ -270,37 +270,22 @@ export class OrchestratorService {
                 projectId // ✅ MỚI: projectId để broadcast realtime
             );
 
-            // Xử lý partial success
-            if (result.partialSuccess && result.warnings) {
-                console.warn(`⚠️ Partial success detected: ${result.warnings.length} warnings`);
-                // Status đã được cập nhật trong finalize, chỉ cần broadcast
-                inputSocketService.emitIncrementalProgress(
-                    projectId,
-                    versionId,
-                    userId,
-                    100,
-                    "completed",
-                    false
-                );
-                return result;
-            }
-
             // Kiểm tra nếu có errors trong result
             if (result.errors && result.errors.length > 0) {
                 console.error("❌ Errors detected in finalize result:", result.errors);
-                
-                // Cập nhật version status thành failed (checkpoint đã được lưu trong finalize)
+
+                // Cập nhật version status thành failed
                 await Version.findByIdAndUpdate(versionId, {
                     $set: {
                         status: "failed",
                         stage: "failed",
                         progress: 100,
                         processing_errors: result.errors,
-                        is_processing: false // ✅ QUAN TRỌNG: Reset flag khi failed
+                        is_processing: false
                     }
                 });
 
-                // ✅ BROADCAST: Failed status với thông tin có thể resume
+                // ✅ BROADCAST: Failed status
                 inputSocketService.emitIncrementalProgress(
                     projectId,
                     versionId,
@@ -310,22 +295,14 @@ export class OrchestratorService {
                     false
                 );
 
-                // Nếu có thể resume, log thông tin
-                if (result.canResume && result.checkpoint?.processed_chunks?.length > 0) {
-                    const maxChunk = Math.max(...result.checkpoint.processed_chunks);
-                    console.log(`💾 Checkpoint saved. Can resume from chunk ${maxChunk + 1}`);
-                } else if (result.canResume) {
-                    console.log(`💾 Checkpoint saved but no processed chunks found. Will start from beginning.`);
-                }
-
                 // Throw error để được catch bên ngoài
                 throw new Error(`Processing failed: ${result.errors.join('; ')}`);
             }
 
             // Chỉ xử lý preview nếu không có lỗi
             const newUsecase = result.newRequirements || [];
-            for(const usecase of newUsecase){
-                const changePayload : PreviewChangeDto  = {
+            for (const usecase of newUsecase) {
+                const changePayload: PreviewChangeDto = {
                     entity_type: "requirement",
                     change_type: "added",
                     entity_id: usecase._id,
@@ -341,8 +318,8 @@ export class OrchestratorService {
 
             // 6️⃣ Hoàn tất - CHỈ khi không có lỗi
             await Version.findByIdAndUpdate(versionId, {
-                $set: { 
-                    stage: "completed", 
+                $set: {
+                    stage: "completed",
                     progress: 100,
                     status: "completed",
                     is_processing: false // ✅ QUAN TRỌNG: Reset flag khi hoàn thành
@@ -365,17 +342,17 @@ export class OrchestratorService {
             console.error("❌ Error during finalize processing:", error);
 
             const errorMessage = error.message || "Unknown error during processing";
-            const processingErrors = Array.isArray(error.errors) 
-                ? error.errors 
+            const processingErrors = Array.isArray(error.errors)
+                ? error.errors
                 : [errorMessage];
 
             // ✅ QUAN TRỌNG: Kiểm tra xem có use cases đã được lưu không (partial results)
             const existingUseCases = await Usecase.find({ version_id: versionId }).countDocuments();
-            
+
             if (existingUseCases > 0) {
                 // Có partial results → đánh dấu completed với warnings
                 console.warn(`⚠️ Processing failed but ${existingUseCases} use cases were saved. Marking as completed with warnings.`);
-                
+
                 await Version.findByIdAndUpdate(versionId, {
                     $set: {
                         status: "completed",

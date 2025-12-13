@@ -123,7 +123,7 @@ import {
   startIncrementalAnalysis,
   findProjectConflicts,
   resolveProjectConflict,
-  skipConflict,
+  skipConflict as skipConflictApi,
   usecaseApi,
   switchCurrentVersion,
 } from '@/api/project'
@@ -177,6 +177,17 @@ export default {
       unprocessedInputsCount: 0,
       currentVersionDetails: null,
       incrementalFetchTimeout: null, // ✅ MỚI: Timeout để debounce incremental fetch
+      estimateInfo: {
+        estimated_count: 0,
+        summary: '',
+        estimated_batches: 0,
+        isEstimating: false
+      },
+      batchProgress: {
+        currentBatch: 0,
+        totalBatches: 0,
+        usecasesInBatch: 0
+      },
 
       // ========== CONFLICT RESOLUTION STATE ==========
       hasConflicts: false,
@@ -377,6 +388,8 @@ export default {
 
         if (event.type === 'INCREMENTAL_PROGRESS') {
           this.handleIncrementalProgress(event)
+        } else if (event.type === 'ESTIMATE_RECEIVED') {
+          this.handleEstimateReceived(event)
         } else {
           this.handleInputEvent(event) // Tất cả input events khác qua đây
         }
@@ -413,6 +426,7 @@ export default {
         socket.off('disconnect')
         socket.off('usecase_event', this.handleUsecaseEvent)
         socket.off('input_event', this.handleInputEvent)
+        socket.off('ESTIMATE_RECEIVED')
 
         // ✅ THÊM: Presence cleanup
         socket.off('user_joined', this.handleUserJoined)
@@ -853,11 +867,16 @@ export default {
     },
 
     async fetchUseCases() {
-      if (!this.selectedVersionId) return
+      if (!this.selectedVersionId) {
+        console.warn('⚠️ fetchUseCases: No selectedVersionId')
+        return
+      }
 
       try {
+        console.log(`📥 Fetching usecases for version: ${this.selectedVersionId}`)
         const response = await usecaseApi.getUsecases(this.selectedVersionId)
         const newUseCases = response.data.data || []
+        console.log(`📥 Fetched ${newUseCases.length} usecases from API`)
         
         // ✅ Load previousUseCaseIds từ localStorage
         const storageKey = `previousUseCaseIds_${this.selectedVersionId}`
@@ -1385,7 +1404,7 @@ export default {
         const savedResolutions = { ...this.selectedResolutions }
         delete savedResolutions[conflictId]
         
-        await skipConflict(this.selectedVersionId, conflictId)
+        await skipConflictApi(this.selectedVersionId, conflictId)
         this.toast.success('Conflict skipped successfully')
 
         await this.fetchProjectData(this.project._id)
@@ -1885,6 +1904,31 @@ export default {
       console.log('🔄 Active users updated in parent:', activeUsers)
       this.activeUsers = activeUsers
     },
+    handleEstimateReceived(event) {
+      console.log('📊 Received estimate event:', event)
+
+      // Chỉ xử lý nếu cùng versionId
+      if (event.versionId !== this.selectedVersionId) {
+        return
+      }
+
+      // Bỏ qua events từ chính mình
+      if (event.userId === this.currentUserId) {
+        return
+      }
+
+      // Cập nhật estimate info
+      this.estimateInfo = {
+        estimated_count: event.estimate.estimated_count,
+        summary: event.estimate.summary,
+        estimated_batches: event.estimate.estimated_batches,
+        isEstimating: false
+      }
+
+      // Hiển thị toast với estimate
+      this.toast.info(`Estimated ${event.estimate.estimated_count} use cases will be generated (${event.estimate.estimated_batches} batches)`)
+    },
+
     handleIncrementalProgress(event) {
       console.log('📊 Received incremental progress event:', event)
 
@@ -1899,6 +1943,15 @@ export default {
 
       // Cập nhật UI state
       this.isProcessingIncremental = event.isProcessing
+
+      // Cập nhật batch progress nếu có
+      if (event.batchInfo) {
+        this.batchProgress = {
+          currentBatch: event.batchInfo.currentBatch,
+          totalBatches: event.batchInfo.totalBatches,
+          usecasesInBatch: event.batchInfo.usecasesInBatch
+        }
+      }
 
       console.log(`🔄 Updated loading state from realtime: ${event.isProcessing ? 'processing' : 'completed'}`)
 
@@ -1915,15 +1968,28 @@ export default {
         }, 200) // Delay 200ms để batch các events lại (giảm từ 500ms)
       }
 
-      // Nếu hoàn thành, refresh toàn bộ data sau 1 giây
+      // Nếu hoàn thành, refresh toàn bộ data ngay lập tức
       if (!event.isProcessing) {
         console.log('✅ Incremental analysis completed via realtime, refreshing data...')
+        console.log(`📊 Current usecases count before refresh: ${this.useCases.length}`)
         if (this.incrementalFetchTimeout) {
           clearTimeout(this.incrementalFetchTimeout)
         }
-        setTimeout(() => {
-          this.fetchProjectData(this.project._id)
-        }, 1000)
+        // ✅ FIX: Gọi fetchUseCases trực tiếp để đảm bảo usecases được refresh ngay
+        // Sau đó mới fetch toàn bộ project data
+        this.fetchUseCases().then(() => {
+          console.log(`✅ Usecases refreshed after completion: ${this.useCases.length} usecases`)
+          // Fetch toàn bộ project data sau khi usecases đã được refresh
+          setTimeout(() => {
+            this.fetchProjectData(this.project._id)
+          }, 500)
+        }).catch(err => {
+          console.error('❌ Error fetching usecases after completion:', err)
+          // Fallback: vẫn fetch project data
+          setTimeout(() => {
+            this.fetchProjectData(this.project._id)
+          }, 500)
+        })
       }
     },
 
@@ -1936,7 +2002,8 @@ export default {
         if (response.data && response.data.data) {
           const newUseCases = response.data.data || []
           
-          // Merge usecases mới vào list hiện tại (tránh duplicate)
+          // ✅ FIX: Khi đang processing, merge usecases mới vào list hiện tại (tránh duplicate)
+          // Khi completed, sẽ replace toàn bộ qua fetchUseCases()
           const existingIds = new Set(this.useCases.map(uc => String(uc.id || uc._id)))
           
           let addedCount = 0
@@ -1951,6 +2018,12 @@ export default {
           
           if (addedCount > 0) {
             console.log(`✅ Added ${addedCount} new usecases incrementally (total: ${this.useCases.length})`)
+            this.$forceUpdate()
+          } else if (newUseCases.length > 0 && newUseCases.length !== this.useCases.length) {
+            // ✅ FIX: Nếu số lượng khác nhau nhưng không có usecase mới, có thể có vấn đề với merge
+            // Replace toàn bộ để đảm bảo đồng bộ
+            console.log(`🔄 Usecases count mismatch (API: ${newUseCases.length}, Local: ${this.useCases.length}), replacing all...`)
+            this.useCases = newUseCases
             this.$forceUpdate()
           }
         }

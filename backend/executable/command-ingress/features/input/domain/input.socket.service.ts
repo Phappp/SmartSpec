@@ -7,7 +7,8 @@ import {
     InputsUpdatedEvent,
     InputsReloadEvent,
     IncrementalProgressEvent,
-    InputsAddedSummaryEvent
+    InputsAddedSummaryEvent,
+    EstimateReceivedEvent
 } from '../events/input.events';
 
 export class InputSocketService {
@@ -17,7 +18,7 @@ export class InputSocketService {
      */
     broadcastToProject(
         projectId: string,
-        event: InputCreatedEvent | InputDeletedEvent | InputsUpdatedEvent | InputsReloadEvent | IncrementalProgressEvent | InputsAddedSummaryEvent
+        event: InputCreatedEvent | InputDeletedEvent | InputsUpdatedEvent | InputsReloadEvent | IncrementalProgressEvent | InputsAddedSummaryEvent | EstimateReceivedEvent
     ): void {
         io.to(`project_${projectId}`).emit('input_event', event);
         console.log(`📢 Broadcast input event to project ${projectId}:`, event.type);
@@ -116,7 +117,12 @@ export class InputSocketService {
         userId: string,
         progress: number,
         stage: string,
-        isProcessing: boolean
+        isProcessing: boolean,
+        batchInfo?: {
+            currentBatch: number;
+            totalBatches: number;
+            usecasesInBatch: number;
+        }
     ): void {
         const event: IncrementalProgressEvent = {
             type: 'INCREMENTAL_PROGRESS',
@@ -126,10 +132,34 @@ export class InputSocketService {
             progress,
             stage,
             isProcessing,
+            batchInfo,
             timestamp: new Date()
         };
         this.broadcastToProject(projectId, event);
-        console.log(`📊 Broadcast incremental progress: ${progress}% - ${stage}`);
+        console.log(`📊 Broadcast incremental progress: ${progress}% - ${stage}${batchInfo ? ` (Batch ${batchInfo.currentBatch}/${batchInfo.totalBatches})` : ''}`);
+    }
+
+    emitEstimateReceived(
+        projectId: string,
+        versionId: string,
+        userId: string,
+        estimate: {
+            estimated_count: number;
+            summary: string;
+            estimated_batches: number;
+            reasoning?: string;
+        }
+    ): void {
+        const event: EstimateReceivedEvent = {
+            type: 'ESTIMATE_RECEIVED',
+            projectId,
+            versionId,
+            userId,
+            estimate,
+            timestamp: new Date()
+        };
+        this.broadcastToProject(projectId, event);
+        console.log(`📊 Broadcast estimate received: ${estimate.estimated_count} use cases, ${estimate.estimated_batches} batches`);
     }
 }
 

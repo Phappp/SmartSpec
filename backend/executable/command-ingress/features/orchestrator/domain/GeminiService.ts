@@ -128,8 +128,79 @@ Ví dụ output (sử dụng ID thực tế từ danh sách):
   ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"],
   ["507f1f77bcf86cd799439014", "507f1f77bcf86cd799439015"]
 ]
-`
+`,
+        estimateUseCasesCount: (text: string) => `
+Bạn là một chuyên gia phân tích yêu cầu phần mềm.
 
+NHIỆM VỤ: Đọc toàn bộ văn bản dưới đây và ước tính số lượng use case sẽ được tạo ra.
+
+VĂN BẢN CẦN PHÂN TÍCH:
+${text}
+
+YÊU CẦU:
+- Phân tích toàn bộ văn bản một cách kỹ lưỡng
+- Đếm số lượng chức năng/phân hệ/module có thể tạo use case
+- Ước tính số lượng use case sẽ được generate dựa trên độ phức tạp và số lượng chức năng
+
+TRẢ VỀ JSON:
+{
+  "estimated_count": 94,
+  "summary": "Hệ thống quản lý với 5 module chính: User Management, Order Processing, Product Catalog, Payment Gateway, Report Generation",
+  "estimated_batches": 2,
+  "reasoning": "Dựa trên số lượng chức năng và độ phức tạp, ước tính sẽ có khoảng 94 usecases được tạo ra, chia thành 2 batch (50 usecases/batch)"
+}
+
+QUAN TRỌNG:
+- Chỉ trả về JSON, không có markdown, không có code fence
+- estimated_count phải là số nguyên dương
+- estimated_batches = Math.ceil(estimated_count / 50)
+- summary phải ngắn gọn, mô tả tổng quan hệ thống
+`,
+        generateBatchUseCases: (text: string, batchNumber: number, totalBatches: number, offset: number, batchSize: number) => ` **MỤC TIÊU**: Generate use cases từ văn bản theo batch
+
+**VĂN BẢN GỐC**:
+${text}
+
+**BATCH THÔNG TIN**:
+- Batch số: ${batchNumber}/${totalBatches}
+- Bắt đầu từ use case số: ${offset + 1}
+- Số lượng use case cần generate trong batch này: ${batchSize}
+
+**YÊU CẦU**:
+- Generate chính xác ${batchSize} use cases (hoặc ít hơn nếu đã hết nội dung)
+- Bắt đầu từ use case số ${offset + 1}
+- KHÔNG lặp lại các use case đã generate ở batch trước
+- Mỗi use case phải đầy đủ thông tin (~400-500 tokens)
+
+**CẤU TRÚC USE CASE** (giống như schema cũ):
+[
+  {
+    "name": "Tên use case",
+    "role": { "id": "...", "name": "...", "description": "..." },
+    "goal": "...",
+    "reason": "...",
+    "tasks": [...],
+    "inputs": [...],
+    "outputs": [...],
+    "context": "...",
+    "priority": "high|medium|low",
+    "feedback": "...",
+    "rules": [...],
+    "triggers": [...],
+    "preconditions": [...],
+    "postconditions": [...],
+    "exceptions": [...],
+    "stakeholders": [...],
+    "constraints": [...],
+    "related_usecases": []
+  }
+]
+
+**QUAN TRỌNG**:
+- Chỉ trả về JSON array, không có markdown
+- Nếu đã hết nội dung để generate → trả về mảng rỗng []
+- KHÔNG thêm field "id" vào response
+`
     },
     'en-US': {
         schemaDescription: (batchSize: number, offset: number) => ` **OBJECTIVE**: Convert text into software use cases in JSON format
@@ -251,6 +322,78 @@ Example output (using actual IDs from the list):
   ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"],
   ["507f1f77bcf86cd799439014", "507f1f77bcf86cd799439015"]
 ]
+`,
+        estimateUseCasesCount: (text: string) => `
+You are a software requirements analysis expert.
+
+TASK: Read the entire text below and estimate the number of use cases that will be generated.
+
+TEXT TO ANALYZE:
+${text}
+
+REQUIREMENTS:
+- Analyze the entire text thoroughly
+- Count the number of functions/modules/subsystems that can create use cases
+- Estimate the number of use cases to be generated based on complexity and number of functions
+
+RETURN JSON:
+{
+  "estimated_count": 94,
+  "summary": "Management system with 5 main modules: User Management, Order Processing, Product Catalog, Payment Gateway, Report Generation",
+  "estimated_batches": 2,
+  "reasoning": "Based on the number of functions and complexity, estimated to generate approximately 94 usecases, divided into 2 batches (50 usecases/batch)"
+}
+
+IMPORTANT:
+- Return ONLY JSON, no markdown, no code fence
+- estimated_count must be a positive integer
+- estimated_batches = Math.ceil(estimated_count / 50)
+- summary must be concise, describing the system overview
+`,
+        generateBatchUseCases: (text: string, batchNumber: number, totalBatches: number, offset: number, batchSize: number) => ` **OBJECTIVE**: Generate use cases from text in batches
+
+**ORIGINAL TEXT**:
+${text}
+
+**BATCH INFORMATION**:
+- Batch number: ${batchNumber}/${totalBatches}
+- Start from use case number: ${offset + 1}
+- Number of use cases to generate in this batch: ${batchSize}
+
+**REQUIREMENTS**:
+- Generate exactly ${batchSize} use cases (or fewer if content is exhausted)
+- Start from use case number ${offset + 1}
+- DO NOT repeat use cases already generated in previous batches
+- Each use case must have complete information (~400-500 tokens)
+
+**USE CASE STRUCTURE** (same as previous schema):
+[
+  {
+    "name": "Use case name",
+    "role": { "id": "...", "name": "...", "description": "..." },
+    "goal": "...",
+    "reason": "...",
+    "tasks": [...],
+    "inputs": [...],
+    "outputs": [...],
+    "context": "...",
+    "priority": "high|medium|low",
+    "feedback": "...",
+    "rules": [...],
+    "triggers": [...],
+    "preconditions": [...],
+    "postconditions": [...],
+    "exceptions": [...],
+    "stakeholders": [...],
+    "constraints": [...],
+    "related_usecases": []
+  }
+]
+
+**IMPORTANT**:
+- Return ONLY JSON array, no markdown
+- If content is exhausted → return empty array []
+- DO NOT add "id" field to response
 `
     }
 };
@@ -264,10 +407,19 @@ export class GeminiService {
     private readonly MAX_TOTAL_USE_CASES = 500; // Giới hạn tổng số use case tối đa
 
     private cleanJsonString(text: string): string {
-        const pattern = /```(?:json)?\s*([\s\S]*?)\s*```/g;
-        const match = pattern.exec(text.trim());
-        // Nếu tìm thấy khối mã, trả về nội dung bên trong, nếu không, trả về chuỗi gốc
-        return match ? match[1].trim() : text.trim();
+        if (!text || typeof text !== 'string') return '{}';
+
+        const trimmed = text.trim();
+
+        // Remove markdown code fences (```json ... ``` or ``` ... ```)
+        const codeFencePattern = /```(?:json)?\s*([\s\S]*?)\s*```/g;
+        const codeFenceMatch = codeFencePattern.exec(trimmed);
+        if (codeFenceMatch) {
+            return codeFenceMatch[1].trim();
+        }
+
+        // If no code fence, return trimmed text
+        return trimmed;
     }
 
     private tryParseWhole(text: string): any[] | null {
@@ -316,9 +468,15 @@ export class GeminiService {
         return success ? out : null;
     }
 
-    private safeJsonParseRobust(txt: string): { items: any[]; incomplete: boolean } {
+    /**
+     * ✅ CẢI THIỆN: Parse JSON robust với xử lý tốt hơn cho response bị cắt
+     * - Phát hiện response bị truncate
+     * - Parse từng object riêng lẻ khi array bị cắt
+     * - Repair JSON bị cắt
+     */
+    private safeJsonParseRobust(txt: string): { items: any[]; incomplete: boolean; isTruncated?: boolean } {
         if (!txt || txt.trim().length === 0) {
-            return { items: [], incomplete: false };
+            return { items: [], incomplete: false, isTruncated: false };
         }
 
         // Chiến lược 1: Thử phân tích toàn bộ chuỗi dưới dạng JSON array/object
@@ -327,7 +485,7 @@ export class GeminiService {
             const filtered = this.filterValidUseCases(whole);
             // Chỉ trả về nếu lọc ra có kết quả, hoặc nếu chuỗi gốc là một mảng rỗng '[]'
             if (filtered.length > 0 || txt.trim() === '[]') {
-                return { items: filtered, incomplete: false };
+                return { items: filtered, incomplete: false, isTruncated: false };
             }
         }
 
@@ -338,7 +496,11 @@ export class GeminiService {
                 const parsed = JSON.parse(extracted.jsonText);
                 const items = Array.isArray(parsed) ? parsed : [parsed];
                 const filtered = this.filterValidUseCases(items);
-                return { items: filtered, incomplete: !extracted.complete };
+                const isTruncated = !extracted.complete;
+                if (isTruncated) {
+                    console.warn(`⚠️ [safeJsonParseRobust] Phát hiện response bị cắt (incomplete array). Parse được ${filtered.length} items.`);
+                }
+                return { items: filtered, incomplete: !extracted.complete, isTruncated };
             } catch {
                 // Nếu thất bại và chuỗi không hoàn chỉnh, thử thêm ký tự đóng mảng ']'
                 if (!extracted.complete) {
@@ -346,9 +508,15 @@ export class GeminiService {
                         const attempt = JSON.parse(extracted.jsonText + "]");
                         const items = Array.isArray(attempt) ? attempt : [attempt];
                         const filtered = this.filterValidUseCases(items);
-                        return { items: filtered, incomplete: false };
+                        console.warn(`⚠️ [safeJsonParseRobust] Đã repair JSON bị cắt bằng cách thêm ']'. Parse được ${filtered.length} items.`);
+                        return { items: filtered, incomplete: false, isTruncated: true };
                     } catch {
-                        // Thất bại, tiếp tục các chiến lược khác
+                        // Thất bại, thử parse từng object riêng lẻ
+                        const partialItems = this.parsePartialArray(extracted.jsonText);
+                        if (partialItems.length > 0) {
+                            console.warn(`⚠️ [safeJsonParseRobust] Parse từng object riêng lẻ từ array bị cắt. Parse được ${partialItems.length} items.`);
+                            return { items: partialItems, incomplete: true, isTruncated: true };
+                        }
                     }
                 }
             }
@@ -359,31 +527,109 @@ export class GeminiService {
         if (nd) {
             const filtered = this.filterValidUseCases(nd);
             if (filtered.length > 0) {
-                return { items: filtered, incomplete: false };
+                return { items: filtered, incomplete: false, isTruncated: false };
             }
         }
 
         // Chiến lược 4 (Fallback): Dùng regex để tìm tất cả các object JSON có thể có
-        const objMatches = txt.match(/\{[\s\S]*?\}/g);
-        if (objMatches && objMatches.length > 0) {
-            const parsedObjs: any[] = [];
-            for (const m of objMatches) {
-                try {
-                    parsedObjs.push(JSON.parse(m));
-                } catch {
-                    // Bỏ qua các object không thể parse
-                }
-            }
-            if (parsedObjs.length > 0) {
-                const filtered = this.filterValidUseCases(parsedObjs);
-                if (filtered.length > 0) {
-                    return { items: filtered, incomplete: true };
-                }
+        // ✅ CẢI THIỆN: Parse từng object riêng lẻ với balanced brackets
+        const parsedObjs = this.parseIndividualObjects(txt);
+        if (parsedObjs.length > 0) {
+            const filtered = this.filterValidUseCases(parsedObjs);
+            if (filtered.length > 0) {
+                console.warn(`⚠️ [safeJsonParseRobust] Parse từng object riêng lẻ (fallback strategy). Parse được ${filtered.length} items.`);
+                return { items: filtered, incomplete: true, isTruncated: true };
             }
         }
 
         // Nếu tất cả các chiến lược đều thất bại, trả về mảng rỗng
-        return { items: [], incomplete: true };
+        return { items: [], incomplete: true, isTruncated: true };
+    }
+
+    /**
+     * ✅ MỚI: Parse từng object riêng lẻ từ array bị cắt
+     * Tìm tất cả các object JSON hoàn chỉnh trong text, kể cả khi array bị cắt
+     */
+    private parsePartialArray(text: string): any[] {
+        const items: any[] = [];
+        let currentPos = 0;
+        const startPos = text.indexOf('[');
+        if (startPos === -1) return items;
+
+        // Tìm từng object trong array
+        let depth = 0;
+        let objStart = -1;
+        let braceDepth = 0;
+
+        for (let i = startPos + 1; i < text.length; i++) {
+            const ch = text[i];
+
+            if (ch === '{') {
+                if (braceDepth === 0) {
+                    objStart = i; // Bắt đầu object mới
+                }
+                braceDepth++;
+            } else if (ch === '}') {
+                braceDepth--;
+                if (braceDepth === 0 && objStart !== -1) {
+                    // Đã đóng object hoàn chỉnh
+                    try {
+                        const objText = text.slice(objStart, i + 1);
+                        const parsed = JSON.parse(objText);
+                        items.push(parsed);
+                    } catch {
+                        // Bỏ qua object không parse được
+                    }
+                    objStart = -1;
+                }
+            } else if (ch === '[') {
+                depth++;
+            } else if (ch === ']') {
+                depth--;
+                if (depth < 0) break; // Đã ra ngoài array
+            }
+        }
+
+        return items;
+    }
+
+    /**
+     * ✅ MỚI: Parse từng object JSON riêng lẻ với balanced brackets
+     * Tìm tất cả các object JSON hoàn chỉnh trong text
+     */
+    private parseIndividualObjects(text: string): any[] {
+        const items: any[] = [];
+        let braceDepth = 0;
+        let objStart = -1;
+
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+
+            if (ch === '{') {
+                if (braceDepth === 0) {
+                    objStart = i; // Bắt đầu object mới
+                }
+                braceDepth++;
+            } else if (ch === '}') {
+                braceDepth--;
+                if (braceDepth === 0 && objStart !== -1) {
+                    // Đã đóng object hoàn chỉnh
+                    try {
+                        const objText = text.slice(objStart, i + 1);
+                        const parsed = JSON.parse(objText);
+                        // Chỉ thêm nếu là object hợp lệ (có name hoặc goal)
+                        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                            items.push(parsed);
+                        }
+                    } catch {
+                        // Bỏ qua object không parse được
+                    }
+                    objStart = -1;
+                }
+            }
+        }
+
+        return items;
     }
 
     private filterValidUseCases(items: any[]): any[] {
@@ -592,9 +838,217 @@ export class GeminiService {
     }
 
     /**
+     * ✅ MỚI: Estimate số lượng usecases sẽ được generate
+     */
+    async estimateUseCasesCount(
+        text: string,
+        language: string = 'vi-VN',
+        modelName?: string,
+        userId?: string,
+        projectId?: string
+    ): Promise<{
+        estimated_count: number;
+        summary: string;
+        estimated_batches: number;
+        reasoning?: string;
+    }> {
+        console.log(`📊 [ESTIMATE] Estimating use cases count. Text length: ${text?.length ?? 0} chars`);
+
+        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
+        if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
+
+        const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+        const prompt = prompts[lang].estimateUseCasesCount(text);
+
+        // Thử từng key cho đến khi thành công
+        for (const k of keys) {
+            try {
+                const { GoogleGenerativeAI } = await import("@google/generative-ai");
+                const client = new GoogleGenerativeAI(k.key_value);
+                const effectiveModelName = modelName || k.model_name || 'gemini-2.0-flash-001';
+                const model = client.getGenerativeModel({ model: effectiveModelName });
+
+                const startTime = Date.now();
+                const resp: any = await model.generateContent({
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                });
+
+                const responseTime = Date.now() - startTime;
+                const tokens = extractGeminiTokens(resp);
+
+                // Log API usage
+                logApiUsage({
+                    api_key_id: k._id.toString(),
+                    provider: 'gemini',
+                    model_name: effectiveModelName,
+                    user_id: userId,
+                    project_id: projectId,
+                    request_type: 'text',
+                    endpoint: 'estimateUseCasesCount',
+                    ...tokens,
+                    status: 'success',
+                    status_code: 200,
+                    response_time: responseTime,
+                }).catch(err => console.error('Failed to log API usage:', err));
+
+                let text: string = resp?.response?.text?.() || "{}";
+
+                // Log raw response for debugging
+                console.log(`🔍 [ESTIMATE] Raw response (first 500 chars): ${text.substring(0, 500)}`);
+
+                text = this.cleanJsonString(text);
+
+                // Try to parse as JSON object (not array)
+                let parsed: any = null;
+                try {
+                    parsed = JSON.parse(text);
+                } catch (parseError: any) {
+                    // Try to extract JSON object from text if it's wrapped in markdown or has extra text
+                    const jsonMatch = text.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        try {
+                            parsed = JSON.parse(jsonMatch[0]);
+                        } catch (e) {
+                            console.error(`❌ [ESTIMATE] Failed to parse JSON: ${parseError.message}`);
+                            console.error(`❌ [ESTIMATE] Cleaned text: ${text.substring(0, 1000)}`);
+                            throw new Error(`Invalid JSON format: ${parseError.message}`);
+                        }
+                    } else {
+                        console.error(`❌ [ESTIMATE] No JSON object found in response`);
+                        console.error(`❌ [ESTIMATE] Cleaned text: ${text.substring(0, 1000)}`);
+                        throw new Error("No JSON object found in response");
+                    }
+                }
+
+                // Validate parsed object
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    const estimate = parsed as any;
+
+                    // Validate required fields
+                    if (typeof estimate.estimated_count !== 'number' || estimate.estimated_count < 1) {
+                        console.error(`❌ [ESTIMATE] Invalid estimated_count: ${estimate.estimated_count}`);
+                        throw new Error(`Invalid estimated_count: must be a positive number, got ${estimate.estimated_count}`);
+                    }
+
+                    const estimated_count = Math.max(1, Math.floor(estimate.estimated_count || 1));
+                    const estimated_batches = Math.ceil(estimated_count / 50);
+
+                    console.log(`✅ [ESTIMATE] Estimated ${estimated_count} use cases, ${estimated_batches} batches`);
+
+                    return {
+                        estimated_count,
+                        summary: estimate.summary || 'System analysis',
+                        estimated_batches,
+                        reasoning: estimate.reasoning
+                    };
+                }
+
+                console.error(`❌ [ESTIMATE] Parsed result is not a valid object. Type: ${typeof parsed}, IsArray: ${Array.isArray(parsed)}`);
+                console.error(`❌ [ESTIMATE] Parsed value: ${JSON.stringify(parsed).substring(0, 500)}`);
+                throw new Error("Invalid estimate response format: expected JSON object, got " + (Array.isArray(parsed) ? "array" : typeof parsed));
+            } catch (err: any) {
+                console.error(`❌ [ESTIMATE] Error with key ${k._id}:`, err.message);
+                const { analyzeApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
+                const errorInfo = analyzeApiKeyError(err);
+
+                if (!errorInfo.retryable) {
+                    throw err;
+                }
+                continue;
+            }
+        }
+
+        throw new Error("All Gemini API keys failed for estimate");
+    }
+
+    /**
+     * ✅ MỚI: Generate usecases theo batch
+     */
+    async generateUseCasesBatch(
+        text: string,
+        batchNumber: number,
+        totalBatches: number,
+        offset: number,
+        batchSize: number = 50,
+        language: string = 'vi-VN',
+        modelName?: string,
+        userId?: string,
+        projectId?: string
+    ): Promise<any[]> {
+        console.log(`📦 [BATCH ${batchNumber}/${totalBatches}] Generating use cases ${offset + 1} to ${offset + batchSize}`);
+
+        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
+        if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
+
+        const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+        const prompt = prompts[lang].generateBatchUseCases(text, batchNumber, totalBatches, offset, batchSize);
+
+        // Thử từng key cho đến khi thành công
+        for (const k of keys) {
+            try {
+                const { GoogleGenerativeAI } = await import("@google/generative-ai");
+                const client = new GoogleGenerativeAI(k.key_value);
+                const effectiveModelName = modelName || k.model_name || 'gemini-2.0-flash-001';
+                const model = client.getGenerativeModel({ model: effectiveModelName });
+
+                const startTime = Date.now();
+                const resp: any = await model.generateContent({
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                });
+
+                const responseTime = Date.now() - startTime;
+                const tokens = extractGeminiTokens(resp);
+
+                // Log API usage
+                logApiUsage({
+                    api_key_id: k._id.toString(),
+                    provider: 'gemini',
+                    model_name: effectiveModelName,
+                    user_id: userId,
+                    project_id: projectId,
+                    request_type: 'text',
+                    endpoint: 'generateUseCasesBatch',
+                    ...tokens,
+                    status: 'success',
+                    status_code: 200,
+                    response_time: responseTime,
+                }).catch(err => console.error('Failed to log API usage:', err));
+
+                let responseText: string = resp?.response?.text?.() || "[]";
+                responseText = this.cleanJsonString(responseText);
+
+                const parsed = this.safeJsonParseRobust(responseText);
+                const useCases = parsed.items || [];
+
+                if (useCases.length === 0) {
+                    console.log(`⏩ [BATCH ${batchNumber}/${totalBatches}] No more use cases to generate`);
+                    return [];
+                }
+
+                const normalized = this.normalizeUseCases(useCases);
+                console.log(`✅ [BATCH ${batchNumber}/${totalBatches}] Generated ${normalized.length} use cases`);
+
+                return normalized;
+            } catch (err: any) {
+                console.error(`❌ [BATCH ${batchNumber}/${totalBatches}] Error with key ${k._id}:`, err.message);
+                const { analyzeApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
+                const errorInfo = analyzeApiKeyError(err);
+
+                if (!errorInfo.retryable) {
+                    throw err;
+                }
+                continue;
+            }
+        }
+
+        throw new Error(`All Gemini API keys failed for batch ${batchNumber}`);
+    }
+
+    /**
      * ✅ REFACTORED: Phân tích requirements với logic đơn giản hơn
      * - Text nhỏ (< 80% context window): Single call, trả về TẤT CẢ usecases
      * - Text lớn: Đã được chunk ở RequirementService, mỗi chunk gọi 1 lần
+     * ⚠️ DEPRECATED: Sẽ được thay thế bởi estimateUseCasesCount + generateUseCasesBatch
      */
     async analyzeRequirements(
         cleanText: string,
@@ -686,6 +1140,14 @@ export class GeminiService {
 
                 // Parse và normalize
                 const parsed = this.safeJsonParseRobust(text);
+
+                // ✅ CẢI THIỆN: Log chi tiết về truncation trong single call
+                if (parsed.isTruncated) {
+                    console.warn(`${chunkLabel} ⚠️ PHÁT HIỆN RESPONSE BỊ CẮT trong single call! Parse được ${parsed.items.length} items từ response dài ${text.length} chars.`);
+                    console.warn(`${chunkLabel} ⚠️ Response preview (last 500 chars): ${text.slice(-500)}`);
+                    console.warn(`${chunkLabel} ⚠️ LƯU Ý: Single call strategy không thể retry. Có thể cần chuyển sang batch strategy cho text lớn.`);
+                }
+
                 if (parsed.items.length === 0) {
                     console.log(`${chunkLabel} ✅ No use cases found in response.`);
                     return [];
@@ -694,9 +1156,10 @@ export class GeminiService {
                 const normalizeStartTime = Date.now();
                 const normalized = this.normalizeUseCases(parsed.items);
                 const normalizeTime = Date.now() - normalizeStartTime;
-                console.log(`${chunkLabel} ✅ Parsed ${normalized.length} use cases from single call (normalize took ${normalizeTime}ms).`);
+                console.log(`${chunkLabel} ✅ Parsed ${normalized.length} use cases from single call (normalize took ${normalizeTime}ms, truncated=${parsed.isTruncated || false}).`);
 
                 // ✅ QUAN TRỌNG: Return ngay sau khi parse xong để tránh timeout
+                // ⚠️ Nếu response bị cắt, có thể cần chuyển sang batch strategy
                 return normalized;
 
             } catch (err: any) {
@@ -806,6 +1269,12 @@ export class GeminiService {
 
                     const parsed = this.safeJsonParseRobust(text);
 
+                    // ✅ CẢI THIỆN: Log chi tiết về truncation
+                    if (parsed.isTruncated) {
+                        console.warn(`${chunkLabel} ⚠️ PHÁT HIỆN RESPONSE BỊ CẮT! Parse được ${parsed.items.length} items từ response dài ${text.length} chars.`);
+                        console.warn(`${chunkLabel} ⚠️ Response preview (last 500 chars): ${text.slice(-500)}`);
+                    }
+
                     if (parsed.items.length > 0) {
                         const normalized = parsed.items.map((it: any) => {
                             if (typeof it === "string") return { name: it };
@@ -883,7 +1352,7 @@ export class GeminiService {
                         }
 
                         allResults = allResults.concat(validNormalized);
-                        console.log(`${chunkLabel} ✅ Parsed ${validNormalized.length} valid items from ${parsed.items.length} parsed items (incomplete=${parsed.incomplete}). total=${allResults.length}, offset=${offset} → ${offset + validNormalized.length}`);
+                        console.log(`${chunkLabel} ✅ Parsed ${validNormalized.length} valid items from ${parsed.items.length} parsed items (incomplete=${parsed.incomplete}, truncated=${parsed.isTruncated || false}). total=${allResults.length}, offset=${offset} → ${offset + validNormalized.length}`);
 
                         lastOffset = offset;
                         offset += validNormalized.length;
@@ -894,6 +1363,14 @@ export class GeminiService {
                         if (allResults.length >= this.MAX_TOTAL_USE_CASES) {
                             console.warn(`⚠️ Đã đạt giới hạn tối đa ${this.MAX_TOTAL_USE_CASES} use case. Dừng xử lý.`);
                             return allResults.slice(0, this.MAX_TOTAL_USE_CASES);
+                        }
+
+                        // ✅ CẢI THIỆN: Xử lý response bị cắt
+                        if (parsed.isTruncated) {
+                            console.warn(`${chunkLabel} ⚠️ Response bị cắt nhưng đã parse được ${validNormalized.length} items. Tiếp tục batch tiếp theo để lấy phần còn lại.`);
+                            // Không dừng, tiếp tục batch tiếp theo với offset mới
+                            // Có thể retry với chunk nhỏ hơn nếu cần
+                            break;
                         }
 
                         // Dừng nếu response hoàn chỉnh và số lượng < BATCH_SIZE (đã hết use case)

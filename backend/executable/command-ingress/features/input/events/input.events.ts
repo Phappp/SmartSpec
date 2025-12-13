@@ -32,6 +32,21 @@ export interface IncrementalProgressEvent extends InputEventData {
     progress: number;
     stage: string;
     isProcessing: boolean;
+    batchInfo?: {
+        currentBatch: number;
+        totalBatches: number;
+        usecasesInBatch: number;
+    };
+}
+
+export interface EstimateReceivedEvent extends InputEventData {
+    type: 'ESTIMATE_RECEIVED';
+    estimate: {
+        estimated_count: number;
+        summary: string;
+        estimated_batches: number;
+        reasoning?: string;
+    };
 }
 
 export interface InputsAddedSummaryEvent extends InputEventData {
@@ -55,4 +70,5 @@ export type InputEvent =
     | InputsUpdatedEvent
     | IncrementalProgressEvent
     | InputsAddedSummaryEvent
-    | InputDeletedSummaryEvent;
+    | InputDeletedSummaryEvent
+    | EstimateReceivedEvent;

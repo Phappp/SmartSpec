@@ -4,470 +4,429 @@ import Version from "../../../../../internal/model/version";
 import Usecase from "../../../../../internal/model/usecase";
 import { GeminiService } from "./GeminiService";
 
-interface ProcessingContext {
-    globalSummary?: string;
-    identifiedRoles: Set<string>;
-    keyDomains: Set<string>;
-    previousChunkKeyPoints: string[];
-}
-
-interface ChunkProcessingResult {
-    useCases: any[];
-    keyContext: string;
-    chunkIndex: number;
-    processedLength: number;
-}
-
 export class RequirementService {
-    private readonly MAX_CHUNK_SIZE = 8000; // Giảm để đảm bảo context
-    private readonly OVERLAP_SIZE = 500; // Chồng lấn giữa các chunk
-    private readonly MAX_GLOBAL_CONTEXT = 1000; // Context toàn cục tối đa
-    private readonly BATCH_INSERT_SIZE = 50; // Số use case insert mỗi lần để tránh memory issue
-    private readonly MAX_CHUNKS = 1000; // Giới hạn số chunks tối đa để tránh xử lý quá lâu
-
     /**
-     * Helper function để lấy usecase ID từ _id
+     * ✅ MỚI: Normalize role structure
      */
-    private getUsecaseId(uc: any): string {
-        if (!uc) return '';
-        return uc._id ? String(uc._id) : '';
-    }
-
-    /**
-     * Chuẩn hóa ID cho use case (không cần nữa vì dùng _id)
-     */
-    private normalizeUseCaseIds<T extends Record<string, any>>(
-        items: T[],
-        style: "UC" | "number" = "UC"
-    ): T[] {
-        // Không cần normalize nữa vì dùng _id
-        return items;
-    }
-
-    /**
-     * Chunking thông minh - cắt theo ngữ nghĩa
-     */
-    private splitIntelligentChunks(text: string): string[] {
-        if (!text || text.length <= this.MAX_CHUNK_SIZE) {
-            return [text];
-        }
-
-        const chunks: string[] = [];
-
-        // Ưu tiên cắt theo paragraph trước
-        const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0);
-
-        let currentChunk = "";
-        let currentSize = 0;
-
-        for (const paragraph of paragraphs) {
-            const paragraphSize = paragraph.length;
-
-            // Nếu paragraph quá lớn, cắt theo câu
-            if (paragraphSize > this.MAX_CHUNK_SIZE * 0.8) {
-                // Flush chunk hiện tại nếu có
-                if (currentChunk) {
-                    chunks.push(currentChunk);
-                    currentChunk = "";
-                    currentSize = 0;
-                }
-
-                // Xử lý paragraph lớn bằng cách cắt theo câu
-                const sentences = paragraph.split(/[.!?]+/).filter(s => s.trim().length > 0);
-                let sentenceChunk = "";
-
-                for (const sentence of sentences) {
-                    const sentenceSize = sentence.length;
-
-                    if (sentenceChunk.length + sentenceSize > this.MAX_CHUNK_SIZE) {
-                        if (sentenceChunk) {
-                            chunks.push(sentenceChunk);
-                            sentenceChunk = "";
-                        }
-                    }
-
-                    sentenceChunk += (sentenceChunk ? ". " : "") + sentence.trim() + ".";
-                }
-
-                if (sentenceChunk) {
-                    chunks.push(sentenceChunk);
-                }
-            } else {
-                // Paragraph bình thường
-                if (currentSize + paragraphSize > this.MAX_CHUNK_SIZE) {
-                    if (currentChunk) {
-                        chunks.push(currentChunk);
-                    }
-                    currentChunk = paragraph;
-                    currentSize = paragraphSize;
-                } else {
-                    currentChunk += (currentChunk ? "\n\n" : "") + paragraph;
-                    currentSize += paragraphSize + 2; // +2 cho newlines
-                }
+    private normalizeRoleStructure(useCases: any[]): any[] {
+        return useCases.map((uc: any) => {
+            if (!uc.role) {
+                uc.role = { id: 'role_unknown', name: 'Unknown' };
+            } else if (typeof uc.role === 'string') {
+                uc.role = {
+                    id: `role_${uc.role.toLowerCase().replace(/\s+/g, '_')}`,
+                    name: uc.role
+                };
+            } else if (uc.role && typeof uc.role === 'object' && !uc.role.id) {
+                uc.role.id = `role_${uc.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`;
             }
-        }
-
-        // Thêm chunk cuối cùng
-        if (currentChunk) {
-            chunks.push(currentChunk);
-        }
-
-        console.log(`📊 Split ${text.length} chars into ${chunks.length} intelligent chunks`);
-        return chunks;
-    }
-
-    /**
-     * Tạo context cho chunk tiếp theo
-     */
-    private createChunkContext(
-        chunkIndex: number,
-        totalChunks: number,
-        globalContext: ProcessingContext,
-        previousResults: ChunkProcessingResult[]
-    ): string {
-        const contextParts: string[] = [];
-
-        // Global context từ toàn bộ văn bản
-        if (globalContext.globalSummary) {
-            contextParts.push(`TỔNG QUAN HỆ THỐNG: ${globalContext.globalSummary}`);
-        }
-
-        // Context từ các chunk trước (giới hạn để tránh quá dài)
-        const recentContexts = previousResults
-            .slice(-3) // Chỉ lấy 3 chunk gần nhất
-            .map(result => result.keyContext)
-            .filter(ctx => ctx && ctx.length < 200);
-
-        if (recentContexts.length > 0) {
-            contextParts.push(`CONTEXT TỪ PHẦN TRƯỚC: ${recentContexts.join(" | ")}`);
-        }
-
-        // Thông tin về roles và domains đã xác định
-        if (globalContext.identifiedRoles.size > 0) {
-            contextParts.push(`ROLES ĐÃ XÁC ĐỊNH: ${Array.from(globalContext.identifiedRoles).join(", ")}`);
-        }
-
-        if (globalContext.keyDomains.size > 0) {
-            contextParts.push(`LĨNH VỰC CHÍNH: ${Array.from(globalContext.keyDomains).join(", ")}`);
-        }
-
-        // Thông tin vị trí chunk
-        contextParts.push(`VỊ TRÍ: Đang xử lý phần ${chunkIndex + 1}/${totalChunks} của văn bản`);
-
-        return contextParts.join("\n");
-    }
-
-    /**
-     * Trích xuất key context từ kết quả xử lý
-     */
-    private extractKeyContext(useCases: any[], chunkText: string): string {
-        if (!useCases || useCases.length === 0) {
-            return "Chưa xác định được use case quan trọng";
-        }
-
-        const keyPoints: string[] = [];
-
-        // Lấy 3 use case quan trọng nhất (priority high hoặc core functionality)
-        const importantUseCases = useCases
-            .filter(uc => uc.priority === 'high' ||
-                uc.name?.toLowerCase().includes('quản lý') ||
-                uc.name?.toLowerCase().includes('core') ||
-                uc.goal?.toLowerCase().includes('quan trọng'))
-            .slice(0, 3);
-
-        for (const uc of importantUseCases) {
-            if (uc.name) {
-                keyPoints.push(uc.name);
-            }
-        }
-
-        // Fallback: lấy use case đầu tiên nếu không có important
-        if (keyPoints.length === 0 && useCases[0]?.name) {
-            keyPoints.push(useCases[0].name);
-        }
-
-        return keyPoints.length > 0 ? keyPoints.join(", ") : "Đang phân tích tính năng hệ thống";
-    }
-
-    /**
-     * Cập nhật global context từ kết quả xử lý
-     */
-    private updateGlobalContext(
-        context: ProcessingContext,
-        result: ChunkProcessingResult
-    ): void {
-        // Cập nhật roles
-        result.useCases.forEach(uc => {
-            if (uc.role?.name) {
-                context.identifiedRoles.add(uc.role.name);
-            }
+            return uc;
         });
-
-        // Cập nhật key domains từ use cases
-        result.useCases.forEach(uc => {
-            if (uc.context) {
-                context.keyDomains.add(uc.context);
-            }
-            if (uc.name) {
-                // Extract domain từ tên use case
-                const domainKeywords = ['quản lý', 'hệ thống', 'module', 'tính năng'];
-                domainKeywords.forEach(keyword => {
-                    if (uc.name.toLowerCase().includes(keyword)) {
-                        context.keyDomains.add(keyword);
-                    }
-                });
-            }
-        });
-
-        // Giữ context từ chunk trước
-        context.previousChunkKeyPoints.push(result.keyContext);
-        if (context.previousChunkKeyPoints.length > 5) {
-            context.previousChunkKeyPoints.shift(); // Giới hạn lịch sử
-        }
     }
 
     /**
-     * Hợp nhất use cases từ nhiều chunk một cách thông minh
+     * ✅ MỚI: Estimate phase - LLM đọc toàn bộ text và estimate số usecases
      */
-    private mergeUseCasesIntelligently(allResults: ChunkProcessingResult[]): any[] {
-        const allUseCases = allResults.flatMap(result => result.useCases);
-
-        console.log(`🔍 Processing ${allUseCases.length} use cases for intelligent merge`);
-
-        const merged: any[] = [];
-        const usedNames = new Set<string>();
-        const usedGoals = new Set<string>();
-
-        for (const uc of allUseCases) {
-            const nameKey = (uc.name || '').toLowerCase().trim();
-            const goalKey = (uc.goal || '').toLowerCase().trim();
-
-            // Check for duplicates by name OR goal
-            if (!usedNames.has(nameKey) && !usedGoals.has(goalKey)) {
-                merged.push(uc);
-                usedNames.add(nameKey);
-                if (goalKey) usedGoals.add(goalKey);
-            } else {
-                console.log(`🔄 Skipping duplicate: "${uc.name}"`);
-            }
-        }
-
-        console.log(`🎯 Merged ${allUseCases.length} → ${merged.length} unique use cases`);
-        return merged;
-    }
-
-    /**
-     * So sánh semantic similarity giữa 2 use case
-     */
-    /**
- * So sánh semantic similarity giữa 2 use case (FIXED VERSION)
- */
-    private areUseCasesSimilar(uc1: any, uc2: any): boolean {
-        // So sánh name và goal
-        const name1 = (uc1.name || '').toLowerCase().trim();
-        const name2 = (uc2.name || '').toLowerCase().trim();
-        const goal1 = (uc1.goal || '').toLowerCase().trim();
-        const goal2 = (uc2.goal || '').toLowerCase().trim();
-
-        // Exact match
-        if (name1 === name2 && name1 !== '') return true;
-        if (goal1 === goal2 && goal1 !== '') return true;
-
-        // Contains match
-        if (name1 && name2 && (name1.includes(name2) || name2.includes(name1))) return true;
-        if (goal1 && goal2 && (goal1.includes(goal2) || goal2.includes(goal1))) return true;
-
-        // Keyword overlap (FIXED: không dùng spread operator với Set)
-        const keywords1 = this.stringToKeywords(name1 + ' ' + goal1);
-        const keywords2 = this.stringToKeywords(name2 + ' ' + goal2);
-
-        const overlap = keywords1.filter(k =>
-            keywords2.includes(k) && k.length > 3
-        );
-
-        return overlap.length >= 2; // Có ít nhất 2 keyword trùng
-    }
-
-    /**
-     * Helper: Chuyển string thành array keywords (thay thế cho Set)
-     */
-    private stringToKeywords(text: string): string[] {
-        const words = text.split(/\s+/).filter(word => word.length > 0);
-        const uniqueWords: string[] = [];
-        const seen = new Set<string>();
-
-        for (const word of words) {
-            if (!seen.has(word)) {
-                seen.add(word);
-                uniqueWords.push(word);
-            }
-        }
-
-        return uniqueWords;
-    }
-
-    /**
-     * Hợp nhất chi tiết từ 2 use case tương tự
-     */
-    /**
- * Hợp nhất chi tiết từ 2 use case tương tự (FIXED VERSION)
- */
-    private mergeUseCaseDetails(primary: any, secondary: any): any {
-        const merged = { ...primary };
-
-        // Merge tasks (loại bỏ trùng lặp - FIXED)
-        if (secondary.tasks && Array.isArray(secondary.tasks)) {
-            const existingTasks = primary.tasks || [];
-            const newTasks = secondary.tasks.filter((task: string) =>
-                !existingTasks.includes(task)
-            );
-            if (newTasks.length > 0) {
-                merged.tasks = [...existingTasks, ...newTasks];
-            }
-        }
-
-        // Merge inputs/outputs (FIXED)
-        if (secondary.inputs && Array.isArray(secondary.inputs)) {
-            const existingInputs = primary.inputs || [];
-            const newInputs = secondary.inputs.filter((input: string) =>
-                !existingInputs.includes(input)
-            );
-            if (newInputs.length > 0) {
-                merged.inputs = [...existingInputs, ...newInputs];
-            }
-        }
-
-        if (secondary.outputs && Array.isArray(secondary.outputs)) {
-            const existingOutputs = primary.outputs || [];
-            const newOutputs = secondary.outputs.filter((output: string) =>
-                !existingOutputs.includes(output)
-            );
-            if (newOutputs.length > 0) {
-                merged.outputs = [...existingOutputs, ...newOutputs];
-            }
-        }
-
-        // Ưu tiên mô tả dài hơn
-        if (secondary.description && secondary.description.length > (primary.description?.length || 0)) {
-            merged.description = secondary.description;
-        }
-
-        return merged;
-    }
-
-    /**
-     * Xử lý recovery khi chunk processing fail
-     */
-    private async processChunkWithRetry(
-        chunk: string,
-        context: string,
+    private async estimatePhase(
+        mergedText: string,
         gemini: GeminiService,
         language: string,
-        retryCount = 2,
-        chunkIndex?: number,
-        totalChunks?: number
-    ): Promise<ChunkProcessingResult> {
-        let lastError: Error | null = null;
-        let hasNonRetryableError = false;
-        // ✅ TĂNG TIMEOUT: 2 phút → 5 phút để đủ cho response lớn (48 usecases có thể mất thời gian parse)
-        const LLM_TIMEOUT = 300000; // 5 phút timeout cho mỗi LLM call
-        const chunkLabel = chunkIndex ? `[Chunk ${chunkIndex}${totalChunks ? `/${totalChunks}` : ''}]` : '[Chunk]';
+        modelName?: string,
+        userId?: string,
+        projectId?: string,
+        versionId?: string
+    ): Promise<{
+        estimated_count: number;
+        summary: string;
+        estimated_batches: number;
+        reasoning?: string;
+    }> {
+        console.log(`📊 [ESTIMATE PHASE] Starting estimate for ${mergedText.length} chars`);
 
-        for (let attempt = 0; attempt <= retryCount; attempt++) {
+        // Broadcast estimating stage
+        const { inputSocketService } = await import("../../input/domain/input.socket.service");
+        if (inputSocketService && projectId && versionId && userId) {
+            inputSocketService.emitIncrementalProgress(
+                projectId,
+                versionId,
+                userId,
+                10,
+                "estimating",
+                true
+            );
+        }
+
+        try {
+            const estimate = await gemini.estimateUseCasesCount(
+                mergedText,
+                language,
+                modelName,
+                userId,
+                projectId
+            );
+
+            console.log(`✅ [ESTIMATE PHASE] Estimated ${estimate.estimated_count} use cases, ${estimate.estimated_batches} batches`);
+
+            // Broadcast estimate received
+            if (inputSocketService && projectId && versionId && userId) {
+                inputSocketService.emitEstimateReceived(projectId, versionId, userId, estimate);
+            }
+
+            return estimate;
+        } catch (error: any) {
+            console.error(`❌ [ESTIMATE PHASE] Error:`, error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * ✅ MỚI: Generate and save batches - Generate và lưu usecases theo batch 50
+     */
+    private async generateAndSaveBatches(
+        versionId: string,
+        mergedText: string,
+        estimatedCount: number,
+        estimatedBatches: number,
+        gemini: GeminiService,
+        language: string,
+        mode: "full" | "incremental",
+        modelName?: string,
+        userId?: string,
+        projectId?: string
+    ): Promise<{
+        version_id: string;
+        usecases: any[];
+        totalGenerated: number;
+    }> {
+        console.log(`📦 [GENERATE PHASE] Starting generation: ${estimatedCount} use cases in ${estimatedBatches} batches`);
+
+        const version = await Version.findById(versionId).lean();
+        if (!version) throw new Error("Version not found");
+
+        const previousRequirements = await Usecase.find({ version_id: versionId }).lean();
+        const BATCH_SIZE = 50;
+        const allGeneratedUseCases: any[] = [];
+        const { inputSocketService } = await import("../../input/domain/input.socket.service");
+
+        // Xóa usecases cũ nếu full mode
+        if (mode === 'full') {
+            console.log(`🗑️ [GENERATE PHASE] Deleting old use cases for full mode...`);
+            await Usecase.deleteMany({ version_id: versionId });
+        }
+
+        // Generate từng batch
+        for (let batchNumber = 1; batchNumber <= estimatedBatches; batchNumber++) {
+            const offset = (batchNumber - 1) * BATCH_SIZE;
+            const progress = 20 + Math.floor((batchNumber / estimatedBatches) * 70); // 20-90%
+
             try {
-                console.log(`🔄 ${chunkLabel} Processing attempt ${attempt + 1}/${retryCount + 1} (chunk size: ${chunk.length} chars)`);
-
-                // Giảm kích thước chunk nếu retry
-                let processedChunk = chunk;
-                if (attempt > 0 && chunk.length > 4000) {
-                    processedChunk = chunk.slice(0, 4000);
-                    console.log(`📉 ${chunkLabel} Reduced chunk size to ${processedChunk.length} chars for retry`);
+                // Broadcast generating stage
+                if (inputSocketService && projectId && versionId && userId) {
+                    inputSocketService.emitIncrementalProgress(
+                        projectId,
+                        versionId,
+                        userId,
+                        progress,
+                        "generating",
+                        true,
+                        {
+                            currentBatch: batchNumber,
+                            totalBatches: estimatedBatches,
+                            usecasesInBatch: 0
+                        }
+                    );
                 }
 
-                // ✅ CẢI THIỆN: Tăng timeout cho single call (response có thể lớn)
-                // Nếu text nhỏ, dùng timeout dài hơn (5 phút)
-                // Nếu text lớn, dùng timeout ngắn hơn (3 phút)
-                const estimatedTokens = Math.ceil(processedChunk.length / 3);
-                const dynamicTimeout = estimatedTokens < 1000 ? 300000 : 180000; // 5 phút cho text nhỏ, 3 phút cho text lớn
+                console.log(`📦 [BATCH ${batchNumber}/${estimatedBatches}] Generating use cases ${offset + 1} to ${offset + BATCH_SIZE}...`);
 
-                console.log(`${chunkLabel} ⏱️ Using timeout: ${Math.floor(dynamicTimeout / 1000)}s for ${estimatedTokens} tokens`);
+                // Generate batch
+                const batchUseCases = await gemini.generateUseCasesBatch(
+                    mergedText,
+                    batchNumber,
+                    estimatedBatches,
+                    offset,
+                    BATCH_SIZE,
+                    language,
+                    modelName,
+                    userId,
+                    projectId
+                );
 
-                // Thêm timeout cho LLM call
-                const useCases = await Promise.race([
-                    gemini.analyzeRequirements(
-                        `CONTEXT CHO PHẦN NÀY:\n${context}\n\nNỘI DUNG CẦN PHÂN TÍCH:\n${processedChunk}`,
-                        language,
-                        undefined, // userId
-                        undefined, // projectId
-                        chunkIndex, // chunkIndex for logging
-                        totalChunks // totalChunks for logging
-                    ),
-                    new Promise<any[]>((_, reject) =>
-                        setTimeout(() => reject(new Error(`LLM call timeout after ${Math.floor(dynamicTimeout / 1000)} seconds`)), dynamicTimeout)
-                    )
-                ]);
-
-                // ✅ QUAN TRỌNG: Nếu có partial results, luôn return chúng thay vì throw error
-                // analyzeRequirements() đã xử lý việc return partial results khi có lỗi
-                if (useCases && useCases.length > 0) {
-                    const keyContext = this.extractKeyContext(useCases, processedChunk);
-                    console.log(`✅ ${chunkLabel} Received ${useCases.length} use cases from analyzeRequirements (attempt ${attempt + 1})`);
-
-                    return {
-                        useCases: useCases || [],
-                        keyContext,
-                        chunkIndex: 0, // sẽ được cập nhật sau
-                        processedLength: processedChunk.length
-                    };
-                }
-
-                // Nếu không có use cases nào, throw error
-                throw new Error("No use cases returned from analyzeRequirements");
-
-            } catch (error: any) {
-                lastError = error;
-                console.error(`❌ ${chunkLabel} Processing attempt ${attempt + 1}/${retryCount + 1} failed:`, error.message);
-
-                // Kiểm tra nếu là lỗi không retryable (API key sai, quota hết, etc.)
-                const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../shared/apiKeyErrorHandler");
-                const errorInfo = analyzeApiKeyError(error);
-
-                if (!errorInfo.retryable) {
-                    hasNonRetryableError = true;
-                    console.error(`💥 Non-retryable error detected: ${errorInfo.type}. Stopping retries and throwing error.`);
-                    // Throw ngay lập tức với lỗi không retryable
-                    throw error;
-                }
-
-                // Chỉ retry nếu lỗi có thể retry được
-                if (attempt < retryCount && errorInfo.retryable) {
-                    // Wait before retry
-                    await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
-                } else if (attempt === retryCount) {
-                    // Đã hết số lần retry, break để throw error
+                if (batchUseCases.length === 0) {
+                    console.log(`⏩ [BATCH ${batchNumber}/${estimatedBatches}] No more use cases to generate. Stopping.`);
                     break;
                 }
+
+                // Normalize role structure
+                const normalized = this.normalizeRoleStructure(batchUseCases);
+
+                // Add related use cases
+                let withRelations = normalized;
+                if (normalized.length > 1 || (mode === 'incremental' && previousRequirements.length > 0)) {
+                    try {
+                        const allForRelations = mode === 'incremental'
+                            ? [...previousRequirements, ...allGeneratedUseCases, ...normalized]
+                            : [...allGeneratedUseCases, ...normalized];
+                        withRelations = await gemini.addRelatedUseCases(
+                            allForRelations,
+                            { incremental: mode === "incremental" },
+                            language
+                        );
+                        // Chỉ lấy phần mới nếu incremental
+                        if (mode === 'incremental') {
+                            withRelations = withRelations.slice(previousRequirements.length + allGeneratedUseCases.length);
+                        } else {
+                            withRelations = withRelations.slice(allGeneratedUseCases.length);
+                        }
+                    } catch (err: any) {
+                        console.error("⚠️ Error adding related use cases:", err.message);
+                    }
+                }
+
+                // ✅ FIX: Normalize lại role structure sau khi addRelatedUseCases (có thể LLM đã thay đổi format)
+                withRelations = this.normalizeRoleStructure(withRelations);
+
+                // Map to database format
+                const usecasesToCreate = withRelations.map((uc: any) => {
+                    const relatedIds = (uc.related_usecases || [])
+                        .filter((id: any) => id && Types.ObjectId.isValid(String(id)))
+                        .map((id: any) => new Types.ObjectId(String(id)));
+
+                    // ✅ VALIDATE: Đảm bảo các field required có giá trị
+                    if (!uc.name || typeof uc.name !== 'string' || uc.name.trim() === '') {
+                        throw new Error(`Invalid usecase name: ${JSON.stringify(uc.name)}`);
+                    }
+                    if (!uc.role || typeof uc.role !== 'object' || !uc.role.id || !uc.role.name) {
+                        throw new Error(`Invalid usecase role: ${JSON.stringify(uc.role)}`);
+                    }
+                    if (!uc.goal || typeof uc.goal !== 'string' || uc.goal.trim() === '') {
+                        throw new Error(`Invalid usecase goal: ${JSON.stringify(uc.goal)}`);
+                    }
+                    if (!uc.tasks || !Array.isArray(uc.tasks) || uc.tasks.length === 0) {
+                        console.warn(`⚠️ Usecase "${uc.name}" has no tasks, adding default task`);
+                        uc.tasks = ['Complete the use case'];
+                    }
+                    if (!uc.reason || typeof uc.reason !== 'string' || uc.reason.trim() === '') {
+                        console.warn(`⚠️ Usecase "${uc.name}" has no reason, using goal as reason`);
+                        uc.reason = uc.goal || 'No reason provided';
+                    }
+                    if (!uc.priority || !['low', 'medium', 'high'].includes(uc.priority)) {
+                        uc.priority = 'medium';
+                    }
+
+                    return {
+                        project_id: version.project_id,
+                        version_id: new Types.ObjectId(versionId),
+                        name: uc.name.trim(),
+                        role: {
+                            id: uc.role.id || `role_${uc.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`,
+                            name: uc.role.name || 'Unknown',
+                            description: uc.role.description || ''
+                        },
+                        goal: uc.goal.trim(),
+                        reason: (uc.reason || uc.goal || 'No reason provided').trim(),
+                        tasks: Array.isArray(uc.tasks) && uc.tasks.length > 0 ? uc.tasks : ['Complete the use case'],
+                        inputs: Array.isArray(uc.inputs) ? uc.inputs : [],
+                        outputs: Array.isArray(uc.outputs) ? uc.outputs : [],
+                        context: (uc.context || '').trim(),
+                        priority: uc.priority || 'medium',
+                        feedback: uc.feedback || null,
+                        rules: Array.isArray(uc.rules) ? uc.rules : [],
+                        triggers: Array.isArray(uc.triggers) ? uc.triggers : [],
+                        preconditions: Array.isArray(uc.preconditions) ? uc.preconditions : [],
+                        postconditions: Array.isArray(uc.postconditions) ? uc.postconditions : [],
+                        exceptions: Array.isArray(uc.exceptions) ? uc.exceptions : [],
+                        stakeholders: Array.isArray(uc.stakeholders) ? uc.stakeholders : [],
+                        constraints: Array.isArray(uc.constraints) ? uc.constraints : [],
+                        related_usecases: relatedIds,
+                        created_by: version.created_by
+                    };
+                });
+
+                // Save batch
+                if (usecasesToCreate.length > 0) {
+                    try {
+                        console.log(`💾 [BATCH ${batchNumber}/${estimatedBatches}] Attempting to save ${usecasesToCreate.length} use cases...`);
+                        console.log(`💾 [BATCH ${batchNumber}/${estimatedBatches}] Sample usecase:`, JSON.stringify(usecasesToCreate[0], null, 2).substring(0, 500));
+
+                        // ✅ VALIDATE: Kiểm tra tất cả usecases trước khi save
+                        const validationErrors: string[] = [];
+                        usecasesToCreate.forEach((uc, index) => {
+                            if (!uc.name || uc.name.trim() === '') {
+                                validationErrors.push(`Usecase ${index}: missing name`);
+                            }
+                            if (!uc.role || !uc.role.id || !uc.role.name) {
+                                validationErrors.push(`Usecase ${index} (${uc.name}): invalid role`);
+                            }
+                            if (!uc.goal || uc.goal.trim() === '') {
+                                validationErrors.push(`Usecase ${index} (${uc.name}): missing goal`);
+                            }
+                            if (!uc.tasks || !Array.isArray(uc.tasks) || uc.tasks.length === 0) {
+                                validationErrors.push(`Usecase ${index} (${uc.name}): missing tasks`);
+                            }
+                        });
+
+                        if (validationErrors.length > 0) {
+                            console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Validation errors before save:`, validationErrors);
+                            throw new Error(`Validation failed: ${validationErrors.join('; ')}`);
+                        }
+
+                        let result: any[];
+                        let insertedCount = 0;
+
+                        try {
+                            result = await Usecase.insertMany(usecasesToCreate, { ordered: false });
+                            insertedCount = result.length;
+                        } catch (bulkError: any) {
+                            // Nếu có BulkWriteError, có thể một số documents đã được insert
+                            if (bulkError.name === 'BulkWriteError' && bulkError.result) {
+                                insertedCount = bulkError.result.insertedCount || 0;
+                                const writeErrors = bulkError.result.writeErrors || [];
+                                console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] BulkWriteError: ${insertedCount}/${usecasesToCreate.length} inserted`);
+                                console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Write errors:`, writeErrors.map((e: any) => ({
+                                    index: e.index,
+                                    code: e.code,
+                                    errmsg: e.errmsg,
+                                    op: e.op?.name
+                                })));
+
+                                // Nếu không có document nào được insert, throw error
+                                if (insertedCount === 0) {
+                                    throw new Error(`All ${usecasesToCreate.length} usecases failed to insert. First error: ${writeErrors[0]?.errmsg || bulkError.message}`);
+                                }
+
+                                // Nếu có một số được insert, tiếp tục với số đã insert
+                                result = [];
+                                for (let i = 0; i < insertedCount; i++) {
+                                    if (bulkError.result.insertedIds && bulkError.result.insertedIds[i]) {
+                                        const insertedDoc = await Usecase.findById(bulkError.result.insertedIds[i]);
+                                        if (insertedDoc) result.push(insertedDoc);
+                                    }
+                                }
+                            } else {
+                                throw bulkError;
+                            }
+                        }
+
+                        // ✅ VERIFY: Kiểm tra số lượng đã insert
+                        if (insertedCount === 0) {
+                            console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] CRITICAL: insertMany returned 0 documents!`);
+                            console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Attempted to insert ${usecasesToCreate.length} usecases`);
+                            console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Sample usecase data:`, JSON.stringify(usecasesToCreate[0], null, 2));
+
+                            // Thử insert từng document để xem document nào fail
+                            console.log(`🔍 [BATCH ${batchNumber}/${estimatedBatches}] Attempting to insert documents one by one to identify failures...`);
+                            const individualResults: any[] = [];
+                            const individualErrors: any[] = [];
+
+                            for (let i = 0; i < usecasesToCreate.length; i++) {
+                                try {
+                                    const doc = new Usecase(usecasesToCreate[i]);
+                                    await doc.validate();
+                                    const saved = await doc.save();
+                                    individualResults.push(saved);
+                                    console.log(`✅ [BATCH ${batchNumber}/${estimatedBatches}] Document ${i + 1} ("${usecasesToCreate[i].name}") inserted successfully`);
+                                } catch (individualError: any) {
+                                    individualErrors.push({ index: i, name: usecasesToCreate[i].name, error: individualError.message });
+                                    console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Document ${i + 1} ("${usecasesToCreate[i].name}") failed:`, individualError.message);
+                                }
+                            }
+
+                            if (individualResults.length > 0) {
+                                insertedCount = individualResults.length;
+                                result = individualResults;
+                                console.log(`✅ [BATCH ${batchNumber}/${estimatedBatches}] Successfully inserted ${insertedCount} usecases individually (${individualErrors.length} failed)`);
+                            } else {
+                                throw new Error(`All ${usecasesToCreate.length} usecases failed validation. Errors: ${individualErrors.map(e => `${e.name}: ${e.error}`).join('; ')}`);
+                            }
+                        }
+
+                        console.log(`✅ [BATCH ${batchNumber}/${estimatedBatches}] Successfully inserted ${insertedCount} use cases into database`);
+
+                        // ✅ VERIFY: Query lại để xác nhận
+                        const verifyCount = await Usecase.countDocuments({ version_id: versionId });
+                        console.log(`✅ [BATCH ${batchNumber}/${estimatedBatches}] Total usecases in database for version ${versionId}: ${verifyCount}`);
+
+                        if (insertedCount < usecasesToCreate.length) {
+                            console.warn(`⚠️ [BATCH ${batchNumber}/${estimatedBatches}] Only inserted ${insertedCount}/${usecasesToCreate.length} usecases. Some may have been skipped.`);
+                        }
+
+                        allGeneratedUseCases.push(...withRelations);
+                        console.log(`✅ [BATCH ${batchNumber}/${estimatedBatches}] Saved ${insertedCount} use cases (total: ${allGeneratedUseCases.length})`);
+
+                        // Broadcast saving progress
+                        if (inputSocketService && projectId && versionId && userId) {
+                            const saveProgress = 90 + Math.floor((batchNumber / estimatedBatches) * 10);
+                            inputSocketService.emitIncrementalProgress(
+                                projectId,
+                                versionId,
+                                userId,
+                                saveProgress,
+                                "saving",
+                                true,
+                                {
+                                    currentBatch: batchNumber,
+                                    totalBatches: estimatedBatches,
+                                    usecasesInBatch: usecasesToCreate.length
+                                }
+                            );
+                        }
+                    } catch (err: any) {
+                        console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Error saving usecases:`, err.message);
+                        console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Error details:`, {
+                            name: err.name,
+                            code: err.code,
+                            keyPattern: err.keyPattern,
+                            keyValue: err.keyValue,
+                            errors: err.errors,
+                            result: err.result
+                        });
+
+                        if (err.code === 11000 || err.name === 'BulkWriteError') {
+                            const inserted = err.result?.insertedCount || (Array.isArray(err.result?.insertedIds) ? err.result.insertedIds.length : 0);
+                            console.warn(`⚠️ [BATCH ${batchNumber}/${estimatedBatches}] Some duplicates, inserted ${inserted}/${usecasesToCreate.length}`);
+                            if (inserted > 0) {
+                                allGeneratedUseCases.push(...withRelations.slice(0, inserted));
+                            }
+                        } else if (err.name === 'ValidationError') {
+                            // Log validation errors chi tiết
+                            console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Validation errors:`, JSON.stringify(err.errors, null, 2));
+                            // Log sample usecase để debug
+                            if (usecasesToCreate.length > 0) {
+                                console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Sample usecase that failed:`, JSON.stringify(usecasesToCreate[0], null, 2));
+                            }
+                            throw err;
+                        } else {
+                            console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Unexpected error saving:`, err);
+                            throw err;
+                        }
+                    }
+                }
+
+                // Delay giữa các batch
+                if (batchNumber < estimatedBatches) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+
+            } catch (error: any) {
+                console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Error:`, error.message);
+                throw error;
             }
         }
 
-        // Nếu có lỗi không retryable hoặc tất cả retry đều fail, throw error
-        if (hasNonRetryableError || lastError) {
-            console.error(`💥 All retries failed for chunk. Throwing error to stop processing.`);
-            throw lastError || new Error("Chunk processing failed after all retries");
-        }
+        // Get final usecases
+        const finalUsecases = await Usecase.find({ version_id: versionId }).lean();
+        console.log(`✅ [GENERATE PHASE] Completed: ${finalUsecases.length} total use cases (${allGeneratedUseCases.length} new)`);
 
-        // Fallback: trả về kết quả rỗng (không nên đến đây)
-        console.warn(`⚠️ Unexpected: returning empty result without error`);
         return {
-            useCases: [],
-            keyContext: "Xử lý thất bại, bỏ qua phần này",
-            chunkIndex: 0,
-            processedLength: chunk.length
+            version_id: versionId,
+            usecases: finalUsecases,
+            totalGenerated: allGeneratedUseCases.length
         };
     }
 
     /**
-     * PHIÊN BẢN MỚI: Phân tích requirements với xử lý chunk thông minh
+     * ✅ REFACTORED: Phân tích requirements với flow mới: Estimate → Generate → Save
      */
     async finalize(
         versionId: string,
@@ -475,19 +434,18 @@ export class RequirementService {
         inputs: any[],
         gemini: GeminiService,
         language: string,
-        modelName?: string, // ✅ MỚI: Model name để tính toán token limits
-        userId?: string, // ✅ MỚI: User ID để broadcast realtime
-        projectId?: string // ✅ MỚI: Project ID để broadcast realtime
+        modelName?: string,
+        userId?: string,
+        projectId?: string
     ) {
         // 1. Lấy dữ liệu ban đầu
         const version = await Version.findById(versionId).lean();
         if (!version) throw new Error("Version not found");
 
-        // Lấy usecases hiện có từ collection
         const previousRequirements = await Usecase.find({ version_id: versionId }).lean();
         const markAsProcessed = inputs.map((i: any) => String(i._id));
 
-        // 2. Chuẩn bị text đầu vào và validate
+        // 2. Chuẩn bị text đầu vào
         const inputInfo = inputs.map((i: any) => ({
             id: i._id?.toString() || i.id,
             type: i.type,
@@ -507,1018 +465,180 @@ export class RequirementService {
             return { version_id: versionId, usecases: previousRequirements };
         }
 
-        // ✅ Validate và clean text trước khi xử lý
-        const { validateTextForLLM, cleanTextForLLM, splitTextIntoSafeChunks, detectTruncation } = await import("../../../shared/textPreprocessor");
+        // Validate và clean text
+        const { validateTextForLLM } = await import("../../../shared/textPreprocessor");
         const validation = validateTextForLLM(mergedText);
-
-        if (validation.warnings.length > 0) {
-            console.warn(`⚠️ Text validation warnings:`, validation.warnings);
-        }
-
-        // Sử dụng cleaned text
         mergedText = validation.cleanedText;
-        console.log(`📝 Processing text: ${validation.originalLength} -> ${validation.cleanedLength} characters (estimated ${validation.estimatedTokens} tokens)`);
+        console.log(`📝 Processing text: ${validation.originalLength} -> ${validation.cleanedLength} characters`);
 
-        // Cảnh báo nếu text quá dài
-        if (validation.estimatedTokens > 100000) {
-            console.warn(`⚠️ Text rất dài (${validation.estimatedTokens} tokens). Có thể mất nhiều thời gian xử lý.`);
-        }
-
-        // Kiểm tra xem có bị truncate không (so với original inputs)
-        const originalText = inputs.map((i: any) => (i.cleaned_text || i.raw_text || "")).join("\n\n");
-        const truncationCheck = detectTruncation(originalText, mergedText);
-        if (truncationCheck.isTruncated) {
-            console.warn(`⚠️ Phát hiện text có thể bị truncate: mất ${truncationCheck.missingChars} ký tự (${truncationCheck.lossPercentage.toFixed(1)}%)`);
-        }
-
-        // 3. Chunking thông minh với validation dựa trên model capabilities
-        // ✅ MỚI: Lấy model config để tính toán chunk size phù hợp
-        const { getModelConfig, determineStrategy, logTokenInfo } = await import("../../../shared/tokenManager");
-
-        // Lấy model name từ parameter hoặc dùng default
-        const effectiveModelName = modelName || 'gemini-2.0-flash';
-        const modelConfig = getModelConfig(effectiveModelName, 'gemini');
-        const strategy = determineStrategy(mergedText, modelConfig);
-
-        // Log token analysis
-        logTokenInfo(mergedText, modelConfig, 'RequirementService');
-
-        // Tính toán chunk size dựa trên model config
-        let chunkSize = this.MAX_CHUNK_SIZE;
-        if (strategy.needsChunking && strategy.recommendedChunkSize > 0) {
-            // Sử dụng recommended chunk size từ model config
-            // Nhưng không vượt quá MAX_CHUNK_SIZE để đảm bảo chất lượng
-            chunkSize = Math.min(strategy.recommendedChunkSize, this.MAX_CHUNK_SIZE);
-            console.log(`📊 Using model-aware chunk size: ${chunkSize.toLocaleString()} chars (model: ${modelConfig.modelName}, strategy: ${strategy.strategy})`);
-        } else if (!strategy.needsChunking) {
-            // Text vừa với context window → có thể dùng chunk lớn hơn
-            const safeSize = Math.min(strategy.recommendedChunkSize, modelConfig.contextWindow * modelConfig.tokenEstimationRatio * 0.8);
-            if (safeSize > chunkSize) {
-                chunkSize = safeSize;
-                console.log(`📊 Text fits context window. Using larger chunk size: ${chunkSize.toLocaleString()} chars`);
-            }
-        }
-
-        // Sử dụng utility mới để đảm bảo không mất dữ liệu
-        const chunks = splitTextIntoSafeChunks(mergedText, chunkSize, this.OVERLAP_SIZE);
-        console.log(`📊 Split into ${chunks.length} safe chunks (max ${chunkSize.toLocaleString()} chars, overlap ${this.OVERLAP_SIZE} chars)`);
-        console.log(`📊 Chunk sizes:`, chunks.map((c, idx) => `Chunk ${idx + 1}: ${c.length.toLocaleString()} chars`).join(', '));
-
-        // Validate từng chunk (chỉ log warnings, không block)
-        for (let i = 0; i < chunks.length; i++) {
-            const chunkValidation = validateTextForLLM(chunks[i]);
-            if (chunkValidation.warnings.length > 0) {
-                console.warn(`⚠️ Chunk ${i + 1}/${chunks.length} warnings:`, chunkValidation.warnings.slice(0, 2)); // Chỉ log 2 warnings đầu
-            }
-        }
-
-        // Kiểm tra giới hạn số chunks
-        if (chunks.length > this.MAX_CHUNKS) {
-            console.warn(`⚠️ Số chunks (${chunks.length}) vượt quá giới hạn (${this.MAX_CHUNKS}). Chỉ xử lý ${this.MAX_CHUNKS} chunks đầu tiên.`);
-            chunks.splice(this.MAX_CHUNKS);
-        }
-
-        // 3.1. Kiểm tra checkpoint để resume
-        const checkpoint = (version as any).processing_checkpoint;
-        let startChunkIndex = 0;
-        let processedChunkIndices: Set<number> = new Set();
-        let isResuming = false;
-
-        if (checkpoint && typeof checkpoint === 'object') {
-            const checkpointTextHash = checkpoint.text_hash;
-            const checkpointChunks = checkpoint.processed_chunks || [];
-            const currentTextHash = this.calculateTextHash(mergedText);
-
-            // Chỉ resume nếu text hash giống nhau (cùng input)
-            if (checkpointTextHash === currentTextHash && checkpointChunks.length > 0) {
-                isResuming = true;
-                processedChunkIndices = new Set(checkpointChunks);
-                const maxChunk = Math.max(...checkpointChunks);
-                startChunkIndex = maxChunk >= 0 ? maxChunk + 1 : 0; // Đảm bảo không bị -Infinity
-                const totalUseCasesFromCheckpoint = checkpoint.total_use_cases || 0;
-                console.log(`🔄 [RESUME] Resuming from checkpoint:`);
-                console.log(`   📍 Processed chunks: ${checkpointChunks.length}/${chunks.length} (indices: ${checkpointChunks.map(c => c + 1).join(', ')})`);
-                console.log(`   📍 Starting from chunk: ${startChunkIndex + 1}/${chunks.length}`);
-                console.log(`   📍 Use cases already saved: ${totalUseCasesFromCheckpoint}`);
-            } else {
-                // Text đã thay đổi, clear checkpoint
-                console.log(`🔄 Checkpoint found but text hash mismatch. Clearing checkpoint and starting fresh.`);
-                await Version.findByIdAndUpdate(versionId, {
-                    $unset: { processing_checkpoint: "" }
-                });
-            }
-        }
-
-        // 4. Khởi tạo context toàn cục
-        const globalContext: ProcessingContext = {
-            identifiedRoles: new Set(),
-            keyDomains: new Set(),
-            previousChunkKeyPoints: []
-        };
-
-        const chunkResults: ChunkProcessingResult[] = [];
-        const processingErrors: string[] = [];
-        let totalProcessedChunks = 0;
-        let totalUseCasesCreated = 0;
-
-        // 5. Xử lý tuần tự từng chunk với context và lưu partial results
-        for (let i = startChunkIndex; i < chunks.length; i++) {
-            // Skip chunk đã xử lý nếu đang resume
-            if (isResuming && processedChunkIndices.has(i)) {
-                console.log(`⏩ Skipping chunk ${i + 1} (already processed in checkpoint)`);
-                continue;
-            }
-
-            try {
-                const chunkSize = chunks[i].length;
-                const chunkStartPos = chunks.slice(0, i).reduce((sum, c) => sum + c.length, 0);
-                const chunkEndPos = chunkStartPos + chunkSize;
-                const totalTextLength = mergedText.length;
-                const chunkProgressPercent = Math.round((chunkEndPos / totalTextLength) * 100);
-
-                console.log(`🔍 [Chunk ${i + 1}/${chunks.length}] Processing chunk ${i + 1}${isResuming ? ' (resuming)' : ''}`);
-                console.log(`   📏 Chunk size: ${chunkSize} chars | Position: ${chunkStartPos}-${chunkEndPos}/${totalTextLength} (${chunkProgressPercent}% of text)`);
-                console.log(`   📝 Chunk preview: ${chunks[i].substring(0, 100).replace(/\n/g, ' ')}...`);
-
-                // Cập nhật progress chi tiết
-                const chunkProgress = 40 + Math.floor((i / chunks.length) * 50); // 40-90%
-                await Version.findByIdAndUpdate(versionId, {
-                    $set: {
-                        progress: chunkProgress,
-                        stage: "analyzing"
-                    }
-                });
-
-                const chunkContext = this.createChunkContext(i, chunks.length, globalContext, chunkResults);
-
-                const result = await this.processChunkWithRetry(
-                    chunks[i],
-                    chunkContext,
-                    gemini,
-                    language,
-                    2, // retryCount
-                    i + 1, // chunkIndex for logging
-                    chunks.length // totalChunks for logging
-                );
-
-                result.chunkIndex = i;
-                chunkResults.push(result);
-
-                // Cập nhật global context
-                this.updateGlobalContext(globalContext, result);
-
-                console.log(`✅ [Chunk ${i + 1}/${chunks.length}] Processed successfully: ${result.useCases.length} use cases found`);
-                console.log(`   📊 Progress: ${i + 1}/${chunks.length} chunks (${Math.round(((i + 1) / chunks.length) * 100)}%) | Total use cases so far: ${totalUseCasesCreated + result.useCases.length}`);
-
-                // ✅ MỚI: Lưu incremental - save từng usecase ngay khi parse được
-                if (result.useCases.length > 0) {
-                    console.log(`💾 [Chunk ${i + 1}/${chunks.length}] 🔄 Starting incremental save for ${result.useCases.length} use cases...`);
-                    try {
-                        const partialUseCases = await this.savePartialUseCasesIncremental(
-                            version,
-                            result.useCases,
-                            mode === 'full' && i === 0, // Chỉ xóa use cases cũ ở chunk đầu tiên nếu full mode
-                            projectId || version.project_id.toString(),
-                            versionId,
-                            userId
-                        );
-                        totalUseCasesCreated += partialUseCases;
-                        console.log(`💾 [Chunk ${i + 1}/${chunks.length}] ✅ Saved ${partialUseCases} use cases incrementally to database (total: ${totalUseCasesCreated})`);
-                    } catch (saveError: any) {
-                        console.error(`❌ [Chunk ${i + 1}/${chunks.length}] Failed to save partial use cases:`, saveError.message);
-                        console.error(`❌ Error stack:`, saveError.stack);
-                        processingErrors.push(`Chunk ${i + 1} save failed: ${saveError.message}`);
-                        // Không throw, tiếp tục xử lý chunk tiếp theo
-                    }
-                } else {
-                    console.log(`⏩ [Chunk ${i + 1}/${chunks.length}] No use cases to save (empty result)`);
-                }
-
-                totalProcessedChunks++;
-                processedChunkIndices.add(i);
-
-                // Lưu checkpoint sau mỗi chunk thành công
-                await this.saveCheckpoint(versionId, mergedText, Array.from(processedChunkIndices), totalUseCasesCreated);
-                console.log(`💾 [Chunk ${i + 1}/${chunks.length}] Checkpoint saved: ${processedChunkIndices.size}/${chunks.length} chunks processed`);
-
-                // Cleanup memory: xóa chunk đã xử lý khỏi memory
-                chunks[i] = null as any;
-
-                // Delay giữa các chunk để tránh rate limit
-                if (i < chunks.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                }
-
-            } catch (error: any) {
-                const errorMsg = `Chunk ${i + 1} processing failed: ${error.message}`;
-                console.error(`❌ ${errorMsg}`);
-                processingErrors.push(errorMsg);
-
-                // Kiểm tra nếu là lỗi không retryable (API key sai, quota hết, etc.)
-                const { analyzeApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
-                const errorInfo = analyzeApiKeyError(error);
-
-                // ✅ QUAN TRỌNG: Nếu đã có partial results được lưu (totalUseCasesCreated > 0),
-                // không throw error ngay mà tiếp tục xử lý để return partial success
-                const hasPartialResults = totalUseCasesCreated > 0;
-
-                if (!errorInfo.retryable) {
-                    if (hasPartialResults) {
-                        // Có partial results → không throw error, tiếp tục để return partial success
-                        console.warn(`⚠️ Non-retryable error (${errorInfo.type}) detected, but ${totalUseCasesCreated} use cases already saved. Continuing to return partial success.`);
-                        chunkResults.push({
-                            useCases: [],
-                            keyContext: `ERROR: ${error.message}`,
-                            chunkIndex: i,
-                            processedLength: chunks[i].length
-                        });
-                        // Không throw, tiếp tục xử lý để return partial success ở cuối
-                    } else {
-                        // Không có partial results → throw error để dừng ngay
-                        console.error(`💥 Critical non-retryable error detected: ${errorInfo.type}. No partial results. Stopping all processing.`);
-                        const enhancedError = error;
-                        if (!enhancedError.errors) {
-                            enhancedError.errors = processingErrors;
-                        }
-                        throw enhancedError;
-                    }
-                } else {
-                    // Lỗi retryable → thêm kết quả rỗng và tiếp tục
-                    chunkResults.push({
-                        useCases: [],
-                        keyContext: `ERROR: ${error.message}`,
-                        chunkIndex: i,
-                        processedLength: chunks[i].length
-                    });
-                }
-            }
-        }
-
-        // 6. Xử lý lỗi tổng thể - cho phép partial success
-        const hasPartialResults = totalUseCasesCreated > 0;
-        const errorRate = processingErrors.length / chunks.length;
-        const isPartialSuccess = hasPartialResults && errorRate < 0.5; // Cho phép partial success nếu < 50% chunks fail
-
-        if (processingErrors.length > 0) {
-            if (isPartialSuccess) {
-                console.warn(`⚠️ Partial success: ${totalUseCasesCreated} use cases created from ${totalProcessedChunks} chunks, but ${processingErrors.length} chunks failed`);
-
-                // Cập nhật status thành completed với warning
-                await Version.findByIdAndUpdate(versionId, {
-                    $set: {
-                        status: "completed",
-                        stage: "completed",
-                        progress: 100,
-                        processing_errors: processingErrors,
-                        affects_requirement: true,
-                        is_processing: false // ✅ QUAN TRỌNG: Reset flag để UI dừng loading
-                    }
-                });
-
-                // Đánh dấu inputs đã xử lý (partial success)
-                if (markAsProcessed.length > 0) {
-                    await Input.updateMany({ _id: { $in: markAsProcessed } }, { $set: { is_processed: true } });
-                }
-
-                const finalUsecases = await Usecase.find({ version_id: versionId }).lean();
-                return {
-                    version_id: versionId,
-                    usecases: finalUsecases,
-                    newRequirements: finalUsecases.slice(previousRequirements.length),
-                    warnings: processingErrors,
-                    partialSuccess: true
-                };
-            } else {
-                console.error("❌ Too many errors during processing, marking as failed");
-
-                // Giữ lại checkpoint để có thể resume sau (chỉ nếu có chunks đã xử lý)
-                let checkpoint = null;
-                if (processedChunkIndices.size > 0) {
-                    checkpoint = {
-                        text_hash: this.calculateTextHash(mergedText),
-                        processed_chunks: Array.from(processedChunkIndices).sort((a, b) => a - b), // Sort để đảm bảo thứ tự
-                        total_use_cases: totalUseCasesCreated,
-                        last_updated: new Date()
-                    };
-                }
-
-                await Version.findByIdAndUpdate(versionId, {
-                    $set: {
-                        status: "failed",
-                        stage: "failed",
-                        progress: 100,
-                        processing_errors: processingErrors,
-                        ...(checkpoint ? { processing_checkpoint: checkpoint } : {}) // Chỉ set checkpoint nếu có
-                    }
-                });
-
-                // KHÔNG đánh dấu is_processed = true khi có quá nhiều lỗi
-                return {
-                    version_id: versionId,
-                    usecases: previousRequirements,
-                    errors: processingErrors,
-                    canResume: checkpoint !== null, // Chỉ có thể resume nếu có checkpoint hợp lệ
-                    checkpoint: checkpoint
-                };
-            }
-        }
-
-        // 7. Bọc toàn bộ logic xử lý trong try-catch để đảm bảo chỉ đánh dấu is_processed khi thành công
         try {
-            // 7. Hợp nhất kết quả từ tất cả chunks (nếu chưa lưu hết)
-            // Lấy use cases đã lưu từ DB để merge với các chunk chưa lưu
-            const savedUseCases = await Usecase.find({ version_id: versionId }).lean();
-
-            // Nếu đã lưu partial results, chỉ cần xử lý related use cases
-            if (totalUseCasesCreated > 0) {
-                console.log(`📊 Đã lưu ${totalUseCasesCreated} use cases từ ${totalProcessedChunks} chunks. Xử lý related use cases...`);
-
-                // Bổ sung related use cases cho các use cases đã lưu
-                if (savedUseCases.length > 1 || (mode === 'incremental' && previousRequirements.length > 0)) {
-                    try {
-                        const allForRelations = mode === 'incremental'
-                            ? [...previousRequirements, ...savedUseCases]
-                            : savedUseCases;
-                        const requirementsWithRelations = await gemini.addRelatedUseCases(
-                            allForRelations,
-                            { incremental: mode === "incremental" },
-                            language
-                        );
-
-                        // Cập nhật related_usecases cho các use cases đã lưu
-                        await this.updateRelatedUseCases(requirementsWithRelations, versionId, mode === 'incremental' ? previousRequirements.length : 0);
-                    } catch (err: any) {
-                        console.error("⚠️ Error adding related use cases:", err.message);
-                        // Lỗi này không critical, tiếp tục
-                    }
-                }
-
-                // Lấy lại danh sách usecases sau khi cập nhật
-                const finalUsecases = await Usecase.find({ version_id: versionId }).lean();
-
-                // 11. CHỈ đánh dấu đã xử lý khi TẤT CẢ các bước trên đều thành công
-                if (markAsProcessed.length > 0 && processingErrors.length === 0) {
-                    await Input.updateMany({ _id: { $in: markAsProcessed } }, { $set: { is_processed: true } });
-                }
-
-                await Version.findByIdAndUpdate(versionId, {
-                    $set: {
-                        affects_requirement: true,
-                        status: "completed",
-                        stage: "completed",
-                        is_processing: false // ✅ QUAN TRỌNG: Reset flag để UI dừng loading
-                    }
-                });
-
-                console.log(`✅ Successfully processed ${totalUseCasesCreated} use cases from ${totalProcessedChunks} chunks`);
-
-                return {
-                    version_id: versionId,
-                    usecases: finalUsecases,
-                    newRequirements: savedUseCases.slice(previousRequirements.length),
-                };
-            }
-
-            // Fallback: Nếu chưa lưu partial results, xử lý như cũ
-            let newRequirements = this.mergeUseCasesIntelligently(chunkResults);
-
-            // Lọc use case hợp lệ
-            newRequirements = newRequirements.filter(uc =>
-                uc && typeof uc === 'object' &&
-                ((uc.name && uc.name.trim() !== "") || (uc.goal && uc.goal.trim() !== ""))
+            // 3. ESTIMATE PHASE
+            const estimate = await this.estimatePhase(
+                mergedText,
+                gemini,
+                language,
+                modelName,
+                userId,
+                projectId,
+                versionId
             );
 
-            console.log(`🎯 Final new requirements: ${newRequirements.length} use cases`);
+            // 4. GENERATE & SAVE PHASE
+            const result = await this.generateAndSaveBatches(
+                versionId,
+                mergedText,
+                estimate.estimated_count,
+                estimate.estimated_batches,
+                gemini,
+                language,
+                mode,
+                modelName,
+                userId,
+                projectId
+            );
 
-            // 8. Normalize role structure
-            newRequirements = this.normalizeRoleStructure(newRequirements);
-
-            // 8. Xử lý mode full: xóa usecases cũ nếu cần
-            if (mode === 'full') {
-                await Usecase.deleteMany({ version_id: versionId });
-            }
-
-            // 9. Bổ sung related use cases (trước khi tạo)
-            let requirementsWithRelations = newRequirements;
-            if (newRequirements.length > 1 || (mode === 'incremental' && previousRequirements.length > 0)) {
-                try {
-                    const allForRelations = mode === 'incremental'
-                        ? [...previousRequirements, ...newRequirements]
-                        : newRequirements;
-                    requirementsWithRelations = await gemini.addRelatedUseCases(
-                        allForRelations,
-                        { incremental: mode === "incremental" },
-                        language
-                    );
-                    // Chỉ lấy phần mới nếu là incremental
-                    if (mode === 'incremental') {
-                        requirementsWithRelations = requirementsWithRelations.slice(previousRequirements.length);
-                    }
-                } catch (err: any) {
-                    console.error("⚠️ Error adding related use cases:", err.message);
-                    // Lỗi này không critical, tiếp tục với requirements gốc
-                }
-            }
-
-            // 10. Map related_usecases từ string sang ObjectId và tạo usecases theo batch
-            const usecasesToCreate = requirementsWithRelations.map((uc: any) => {
-                const relatedIds = (uc.related_usecases || [])
-                    .filter((id: any) => id && Types.ObjectId.isValid(String(id)))
-                    .map((id: any) => new Types.ObjectId(String(id)));
-
-                return {
-                    project_id: version.project_id,
-                    version_id: new Types.ObjectId(versionId),
-                    name: uc.name,
-                    role: uc.role,
-                    goal: uc.goal,
-                    reason: uc.reason || '',
-                    tasks: uc.tasks || [],
-                    inputs: uc.inputs || [],
-                    outputs: uc.outputs || [],
-                    context: uc.context || '',
-                    priority: uc.priority || 'medium',
-                    feedback: uc.feedback || null,
-                    rules: uc.rules || [],
-                    triggers: uc.triggers || [],
-                    preconditions: uc.preconditions || [],
-                    postconditions: uc.postconditions || [],
-                    exceptions: uc.exceptions || [],
-                    stakeholders: uc.stakeholders || [],
-                    constraints: uc.constraints || [],
-                    related_usecases: relatedIds,
-                    created_by: version.created_by
-                };
-            });
-
-            // Tạo usecases mới theo batch để tránh memory issue
-            if (usecasesToCreate.length > 0) {
-                for (let i = 0; i < usecasesToCreate.length; i += this.BATCH_INSERT_SIZE) {
-                    const batch = usecasesToCreate.slice(i, i + this.BATCH_INSERT_SIZE);
-                    await Usecase.insertMany(batch);
-                    console.log(`💾 Inserted batch ${Math.floor(i / this.BATCH_INSERT_SIZE) + 1}: ${batch.length} use cases`);
-                }
-            }
-
-            // 11. CHỈ đánh dấu đã xử lý khi TẤT CẢ các bước trên đều thành công
+            // 5. Mark inputs as processed
             if (markAsProcessed.length > 0) {
                 await Input.updateMany({ _id: { $in: markAsProcessed } }, { $set: { is_processed: true } });
             }
 
-            // Clear checkpoint khi hoàn thành
+            // 6. Update version status
             await Version.findByIdAndUpdate(versionId, {
                 $set: {
                     affects_requirement: true,
                     status: "completed",
                     stage: "completed",
-                    is_processing: false // ✅ QUAN TRỌNG: Reset flag để UI dừng loading
-                },
-                $unset: { processing_checkpoint: "" }
+                    progress: 100,
+                    is_processing: false
+                }
             });
 
-            // Lấy lại danh sách usecases sau khi tạo
-            const finalUsecases = await Usecase.find({ version_id: versionId }).lean();
+            // 7. Broadcast completion
+            const { inputSocketService } = await import("../../input/domain/input.socket.service");
+            if (inputSocketService && projectId && versionId && userId) {
+                inputSocketService.emitIncrementalProgress(
+                    projectId,
+                    versionId,
+                    userId,
+                    100,
+                    "completed",
+                    false
+                );
+            }
 
-            console.log(`✅ Successfully processed ${usecasesToCreate.length} new use cases`);
+            console.log(`✅ [FINALIZE] Successfully processed ${result.totalGenerated} new use cases`);
 
             return {
                 version_id: versionId,
-                usecases: finalUsecases,
-                newRequirements: newRequirements,
+                usecases: result.usecases,
+                newRequirements: result.usecases.slice(previousRequirements.length)
             };
 
         } catch (error: any) {
-            // Nếu có lỗi xảy ra trong quá trình xử lý, KHÔNG đánh dấu is_processed = true
-            console.error("❌ Error during finalize processing:", error);
-
-            const errorMessage = error.message || "Unknown error during processing";
-            processingErrors.push(`Final processing failed: ${errorMessage}`);
-
-            // Giữ lại checkpoint để có thể resume sau (nếu đã xử lý được một số chunks)
-            let checkpoint = null;
-            if (processedChunkIndices.size > 0) {
-                try {
-                    const mergedText = inputs
-                        .map((i: any) => (i.cleaned_text || i.raw_text || ""))
-                        .filter(Boolean)
-                        .join("\n\n");
-                    checkpoint = {
-                        text_hash: this.calculateTextHash(mergedText),
-                        processed_chunks: Array.from(processedChunkIndices),
-                        total_use_cases: totalUseCasesCreated || 0,
-                        last_updated: new Date()
-                    };
-                } catch (e) {
-                    console.error("⚠️ Failed to create checkpoint:", e);
-                }
-            }
+            console.error("❌ [FINALIZE] Error:", error);
 
             await Version.findByIdAndUpdate(versionId, {
                 $set: {
                     status: "failed",
                     stage: "failed",
                     progress: 100,
-                    processing_errors: processingErrors,
-                    ...(checkpoint ? { processing_checkpoint: checkpoint } : {})
+                    is_processing: false,
+                    processing_errors: [error.message || "Unknown error"]
                 }
             });
 
-            // KHÔNG đánh dấu is_processed = true khi có lỗi
+            // Broadcast failure
+            const { inputSocketService } = await import("../../input/domain/input.socket.service");
+            if (inputSocketService && projectId && versionId && userId) {
+                inputSocketService.emitIncrementalProgress(
+                    projectId,
+                    versionId,
+                    userId,
+                    100,
+                    "failed",
+                    false
+                );
+            }
+
             return {
                 version_id: versionId,
                 usecases: previousRequirements,
-                errors: processingErrors,
-                canResume: checkpoint !== null,
-                checkpoint: checkpoint
+                errors: [error.message || "Unknown error"]
             };
         }
     }
 
     /**
-     * Lưu partial use cases vào DB ngay sau mỗi chunk (checkpoint mechanism)
+     * Tìm conflicts (duplicate usecases) trong version
      */
-    private async savePartialUseCases(
-        version: any,
-        useCases: any[],
-        shouldDeleteOld: boolean
-    ): Promise<number> {
-        if (!useCases || useCases.length === 0) return 0;
-
-        // Xóa use cases cũ nếu cần (chỉ ở lần đầu tiên của full mode)
-        if (shouldDeleteOld) {
-            await Usecase.deleteMany({ version_id: version._id });
-        }
-
-        // Normalize và filter use cases hợp lệ
-        const normalized = this.normalizeRoleStructure(
-            useCases.filter(uc =>
-                uc && typeof uc === 'object' &&
-                ((uc.name && uc.name.trim() !== "") || (uc.goal && uc.goal.trim() !== ""))
-            )
-        );
-
-        if (normalized.length === 0) return 0;
-
-        // Kiểm tra duplicate với use cases đã có (để tránh insert trùng)
-        const existingUseCases = await Usecase.find({
-            version_id: version._id
-        }).lean();
-
-        const existingNames = new Set(existingUseCases.map((uc: any) => (uc.name || '').toLowerCase().trim()));
-        const existingGoals = new Set(existingUseCases.map((uc: any) => (uc.goal || '').toLowerCase().trim()));
-
-        // Lọc bỏ các use case trùng lặp
-        const uniqueUseCases = normalized.filter(uc => {
-            const nameKey = (uc.name || '').toLowerCase().trim();
-            const goalKey = (uc.goal || '').toLowerCase().trim();
-            return !existingNames.has(nameKey) && !existingGoals.has(goalKey);
-        });
-
-        if (uniqueUseCases.length === 0) {
-            console.log(`⏩ All use cases from this chunk are duplicates, skipping insert`);
-            return 0;
-        }
-
-        // Map và tạo use cases theo batch
-        const usecasesToCreate = uniqueUseCases.map((uc: any) => {
-            const relatedIds = (uc.related_usecases || [])
-                .filter((id: any) => id && Types.ObjectId.isValid(String(id)))
-                .map((id: any) => new Types.ObjectId(String(id)));
-
-            return {
-                project_id: version.project_id,
-                version_id: new Types.ObjectId(version._id),
-                name: uc.name,
-                role: uc.role,
-                goal: uc.goal,
-                reason: uc.reason || '',
-                tasks: uc.tasks || [],
-                inputs: uc.inputs || [],
-                outputs: uc.outputs || [],
-                context: uc.context || '',
-                priority: uc.priority || 'medium',
-                feedback: uc.feedback || null,
-                rules: uc.rules || [],
-                triggers: uc.triggers || [],
-                preconditions: uc.preconditions || [],
-                postconditions: uc.postconditions || [],
-                exceptions: uc.exceptions || [],
-                stakeholders: uc.stakeholders || [],
-                constraints: uc.constraints || [],
-                related_usecases: relatedIds,
-                created_by: version.created_by
-            };
-        });
-
-        // Insert theo batch để tránh memory issue
-        let totalInserted = 0;
-        for (let i = 0; i < usecasesToCreate.length; i += this.BATCH_INSERT_SIZE) {
-            const batch = usecasesToCreate.slice(i, i + this.BATCH_INSERT_SIZE);
-            try {
-                await Usecase.insertMany(batch, { ordered: false }); // ordered: false để tiếp tục nếu có duplicate
-                totalInserted += batch.length;
-            } catch (err: any) {
-                // Nếu có lỗi duplicate, đếm số insert thành công
-                if (err.code === 11000 || err.name === 'BulkWriteError') {
-                    const inserted = err.result?.insertedCount || 0;
-                    totalInserted += inserted;
-                    console.warn(`⚠️ Some use cases in batch were duplicates, inserted ${inserted}/${batch.length}`);
-                } else {
-                    throw err;
-                }
-            }
-        }
-
-        return totalInserted;
-    }
-
-    /**
-     * ✅ MỚI: Lưu incremental - save từng usecase ngay khi parse được (batch nhỏ 5-10 usecases)
-     * Tối ưu UX: User thấy kết quả ngay, không phải chờ toàn bộ
-     */
-    private async savePartialUseCasesIncremental(
-        version: any,
-        useCases: any[],
-        shouldDeleteOld: boolean,
-        projectId: string,
-        versionId: string,
-        userId?: string
-    ): Promise<number> {
-        console.log(`🔍 [savePartialUseCasesIncremental] Called with ${useCases?.length || 0} use cases`);
-
-        if (!useCases || useCases.length === 0) {
-            console.log(`⏩ [savePartialUseCasesIncremental] No use cases provided, returning 0`);
-            return 0;
-        }
-
-        // Xóa use cases cũ nếu cần (chỉ ở lần đầu tiên của full mode)
-        if (shouldDeleteOld) {
-            console.log(`🗑️ [savePartialUseCasesIncremental] Deleting old use cases for version ${version._id}`);
-            await Usecase.deleteMany({ version_id: version._id });
-        }
-
-        // Normalize và filter use cases hợp lệ
-        const filtered = useCases.filter(uc =>
-            uc && typeof uc === 'object' &&
-            ((uc.name && uc.name.trim() !== "") || (uc.goal && uc.goal.trim() !== ""))
-        );
-        console.log(`🔍 [savePartialUseCasesIncremental] After filter: ${filtered.length}/${useCases.length} valid use cases`);
-
-        const normalized = this.normalizeRoleStructure(filtered);
-        console.log(`🔍 [savePartialUseCasesIncremental] After normalize: ${normalized.length} use cases`);
-
-        if (normalized.length === 0) {
-            console.log(`⏩ [savePartialUseCasesIncremental] No normalized use cases, returning 0`);
-            return 0;
-        }
-
-        // Kiểm tra duplicate với use cases đã có (để tránh insert trùng)
-        const existingUseCases = await Usecase.find({
-            version_id: version._id
-        }).lean();
-
-        const existingNames = new Set(existingUseCases.map((uc: any) => (uc.name || '').toLowerCase().trim()));
-        const existingGoals = new Set(existingUseCases.map((uc: any) => (uc.goal || '').toLowerCase().trim()));
-
-        // Lọc bỏ các use case trùng lặp
-        const uniqueUseCases = normalized.filter(uc => {
-            const nameKey = (uc.name || '').toLowerCase().trim();
-            const goalKey = (uc.goal || '').toLowerCase().trim();
-            return !existingNames.has(nameKey) && !existingGoals.has(goalKey);
-        });
-
-        if (uniqueUseCases.length === 0) {
-            console.log(`⏩ [savePartialUseCasesIncremental] All use cases are duplicates, skipping insert`);
-            return 0;
-        }
-
-        console.log(`💾 [savePartialUseCasesIncremental] Starting incremental save for ${uniqueUseCases.length} unique use cases`);
-
-        // ✅ INCREMENTAL SAVE: Batch nhỏ (5-10 usecases) để user thấy kết quả ngay
-        const INCREMENTAL_BATCH_SIZE = 5; // Batch nhỏ để UX tốt hơn
-        let totalInserted = 0;
-        const { inputSocketService } = await import("../../input/domain/input.socket.service");
-
-        for (let i = 0; i < uniqueUseCases.length; i += INCREMENTAL_BATCH_SIZE) {
-            const batch = uniqueUseCases.slice(i, i + INCREMENTAL_BATCH_SIZE);
-
-            // Map và tạo use cases cho batch này
-            const usecasesToCreate = batch.map((uc: any) => {
-                const relatedIds = (uc.related_usecases || [])
-                    .filter((id: any) => id && Types.ObjectId.isValid(String(id)))
-                    .map((id: any) => new Types.ObjectId(String(id)));
-
-                return {
-                    project_id: version.project_id,
-                    version_id: new Types.ObjectId(version._id),
-                    name: uc.name,
-                    role: uc.role,
-                    goal: uc.goal,
-                    reason: uc.reason || '',
-                    tasks: uc.tasks || [],
-                    inputs: uc.inputs || [],
-                    outputs: uc.outputs || [],
-                    context: uc.context || '',
-                    priority: uc.priority || 'medium',
-                    feedback: uc.feedback || null,
-                    rules: uc.rules || [],
-                    triggers: uc.triggers || [],
-                    preconditions: uc.preconditions || [],
-                    postconditions: uc.postconditions || [],
-                    exceptions: uc.exceptions || [],
-                    stakeholders: uc.stakeholders || [],
-                    constraints: uc.constraints || [],
-                    related_usecases: relatedIds,
-                    created_by: version.created_by
-                };
-            });
-
-            try {
-                console.log(`💾 [savePartialUseCasesIncremental] Saving batch ${Math.floor(i / INCREMENTAL_BATCH_SIZE) + 1} with ${batch.length} use cases...`);
-                // Save batch nhỏ
-                const inserted = await Usecase.insertMany(usecasesToCreate, { ordered: false });
-                // ✅ FIX: insertMany trả về array, cần lấy length
-                const insertedCount = Array.isArray(inserted) ? inserted.length : (inserted as any)?.insertedCount || 0;
-                totalInserted += insertedCount;
-                console.log(`✅ [savePartialUseCasesIncremental] Batch ${Math.floor(i / INCREMENTAL_BATCH_SIZE) + 1} saved: ${insertedCount} use cases (total: ${totalInserted})`);
-
-                // ✅ BROADCAST REALTIME: Emit từng batch usecases mới cho frontend
-                if (insertedCount > 0 && inputSocketService) {
-                    // Broadcast realtime (có thể thêm event mới hoặc dùng existing)
-                    inputSocketService.emitIncrementalProgress(
-                        projectId,
-                        versionId,
-                        userId || version.created_by?.toString() || '',
-                        Math.min(90, 40 + Math.floor((totalInserted / uniqueUseCases.length) * 50)), // Progress 40-90%
-                        "analyzing",
-                        true
-                    );
-
-                    console.log(`📢 [Incremental] Broadcasted ${insertedCount} new use cases to frontend (total: ${totalInserted})`);
-                }
-            } catch (err: any) {
-                // Nếu có lỗi duplicate, đếm số insert thành công
-                if (err.code === 11000 || err.name === 'BulkWriteError') {
-                    const inserted = err.result?.insertedCount || 0;
-                    totalInserted += inserted;
-                    console.warn(`⚠️ Some use cases in incremental batch were duplicates, inserted ${inserted}/${batch.length}`);
-                } else {
-                    console.error(`❌ Error saving incremental batch:`, err);
-                    // Không throw, tiếp tục với batch tiếp theo
-                }
-            }
-
-            // ✅ FIX: Tăng delay giữa các batch từ 100ms lên 300ms để user thấy rõ hơn
-            // User cần thời gian để nhận event và fetch usecases từ frontend
-            if (i + INCREMENTAL_BATCH_SIZE < uniqueUseCases.length) {
-                await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay (tăng từ 100ms)
-            }
-        }
-
-        return totalInserted;
-    }
-
-    /**
-     * Cập nhật related use cases cho các use cases đã lưu
-     */
-    private async updateRelatedUseCases(
-        allUseCases: any[],
-        versionId: string,
-        skipCount: number
-    ): Promise<void> {
-        // Chỉ cập nhật các use cases mới (bỏ qua các use cases cũ nếu incremental)
-        const newUseCases = allUseCases.slice(skipCount);
-
-        for (const uc of newUseCases) {
-            if (!uc._id) continue;
-
-            const relatedIds = (uc.related_usecases || [])
-                .filter((id: any) => id && Types.ObjectId.isValid(String(id)))
-                .map((id: any) => new Types.ObjectId(String(id)));
-
-            await Usecase.findByIdAndUpdate(uc._id, {
-                $set: { related_usecases: relatedIds }
-            });
-        }
-    }
-
-    /**
-     * Tính hash của text để kiểm tra checkpoint có hợp lệ không
-     */
-    private calculateTextHash(text: string): string {
-        // Sử dụng crypto để tạo hash đơn giản
-        const crypto = require('crypto');
-        return crypto.createHash('md5').update(text).digest('hex');
-    }
-
-    /**
-     * Lưu checkpoint sau mỗi chunk thành công
-     */
-    private async saveCheckpoint(
-        versionId: string,
-        text: string,
-        processedChunks: number[],
-        totalUseCasesCreated: number
-    ): Promise<void> {
-        try {
-            const textHash = this.calculateTextHash(text);
-            await Version.findByIdAndUpdate(versionId, {
-                $set: {
-                    processing_checkpoint: {
-                        text_hash: textHash,
-                        processed_chunks: processedChunks,
-                        total_use_cases: totalUseCasesCreated,
-                        last_updated: new Date()
-                    }
-                }
-            });
-        } catch (error: any) {
-            console.error("⚠️ Failed to save checkpoint:", error.message);
-            // Không throw, checkpoint là optional
-        }
-    }
-
-    /**
-     * Normalize role structure (giữ nguyên từ version cũ)
-     */
-    private normalizeRoleStructure(requirements: any[]): any[] {
-        return requirements.map(uc => {
-            if (!uc.role) return uc;
-
-            if (typeof uc.role === 'string') {
-                uc.role = {
-                    id: `role_${uc.role.toLowerCase().replace(/\s+/g, '_')}`,
-                    name: uc.role
-                };
-            } else if (typeof uc.role === 'object' && !uc.role.id) {
-                uc.role.id = `role_${uc.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`;
-            }
-
-            return uc;
-        });
-    }
-
-    // Các method khác giữ nguyên từ version cũ...
-    // (resolveDuplicate, isConflict, findConflicts, resolveConflict)
-
-    async resolveDuplicate(versionId: string, conflictId: string, keep: "old" | "new") {
-        const version = await Version.findById(versionId);
-        if (!version) throw new Error("Version not found");
-
-        const pendingConflicts = version.pending_conflicts || [];
-        const conflictIndex = pendingConflicts.findIndex((c: any) => c.conflict_id === conflictId);
-        if (conflictIndex === -1) throw new Error("Conflict not found");
-
-        const conflict = pendingConflicts[conflictIndex];
-
-        // Conflict items giờ là array of ObjectId
-        const conflictItemIds = conflict.items.map((id: any) => String(id));
-
-        if (keep === "new") {
-            // Xóa tất cả items trong conflict
-            await Usecase.deleteMany({
-                _id: { $in: conflictItemIds },
-                version_id: versionId
-            });
-        } else {
-            // Xóa tất cả trừ item đầu tiên (old)
-            const keepId = conflictItemIds[0];
-            const idsToDelete = conflictItemIds.slice(1);
-            if (idsToDelete.length > 0) {
-                await Usecase.deleteMany({
-                    _id: { $in: idsToDelete.map(id => new Types.ObjectId(id)) },
-                    version_id: versionId
-                });
-            }
-        }
-
-        // Xóa conflict
-        version.pending_conflicts.splice(conflictIndex, 1);
-        version.updated_at = new Date();
-        await version.save();
-
-        // Lấy lại danh sách usecases
-        const finalUsecases = await Usecase.find({ version_id: versionId }).lean();
-
-        return {
-            version_id: versionId,
-            usecases: finalUsecases,
-            resolved: { conflict_id: conflictId, kept: keep },
-        };
-    }
-
-    private async isConflict(reqA: any, reqB: any, gemini: GeminiService, language: string): Promise<boolean> {
-        const a = (reqA.name || reqA.goal || "").trim();
-        const b = (reqB.name || reqB.goal || "").trim();
-        if (!a || !b) return false;
-
-        try {
-            const result: boolean = await gemini.checkConflictWithGemini(a, b, language);
-            return result;
-        } catch (err: any) {
-            console.error("❌ Gemini conflict check error:", err.message);
-            return false;
-        }
-    }
-
     async findConflicts(versionId: string, gemini: GeminiService, language: string) {
-        const version = await Version.findById(versionId);
-        if (!version) throw new Error("Version not found.");
+        console.log(`🔍 [FIND CONFLICTS] Finding conflicts for version ${versionId}`);
 
-        // Lấy usecases từ collection
-        const useCases = await Usecase.find({ version_id: versionId }).lean();
-        if (useCases.length < 2) {
-            return { message: "Not enough use cases to compare.", conflicts_found: 0 };
+        // Lấy tất cả usecases
+        const usecases = await Usecase.find({ version_id: versionId }).lean();
+        if (usecases.length < 2) {
+            console.log(`⏩ [FIND CONFLICTS] Not enough usecases (${usecases.length}) to find conflicts`);
+            await Version.findByIdAndUpdate(versionId, {
+                $set: { pending_conflicts: [] }
+            });
+            return { conflicts: [] };
         }
 
-        const conflictIdGroups = await gemini.findConflictGroups(useCases, language);
+        // Gọi GeminiService để tìm conflict groups
+        const conflictGroups = await gemini.findConflictGroups(usecases, language);
 
-        if (conflictIdGroups.length === 0) {
-            version.set('pending_conflicts', []);
-            version.status = "completed";
-            await version.save();
-            return { version_id: versionId, conflicts_found: 0, conflicts: [] };
-        }
+        // Format conflicts
+        const conflicts = conflictGroups.map((group, index) => ({
+            conflict_id: `conflict_${versionId}_${index}`,
+            items: group
+        }));
 
-        // Map conflict groups: chuyển từ id (string) sang ObjectId
-        const pending_conflicts = conflictIdGroups.map(idGroup => {
-            const itemIds = idGroup
-                .filter(id => Types.ObjectId.isValid(id))
-                .map(id => new Types.ObjectId(id));
-
-            return {
-                conflict_id: `conflict_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                items: itemIds
-            };
+        // Lưu vào version
+        await Version.findByIdAndUpdate(versionId, {
+            $set: { pending_conflicts: conflicts }
         });
 
-        version.pending_conflicts = pending_conflicts as any;
-        version.status = "has_conflicts";
-        await version.save();
+        console.log(`✅ [FIND CONFLICTS] Found ${conflicts.length} conflict groups`);
 
-        return {
-            version_id: versionId,
-            conflicts_found: pending_conflicts.length,
-            conflicts: version.pending_conflicts,
-        };
+        return { conflicts };
     }
 
+    /**
+     * Giải quyết conflict bằng cách giữ lại một usecase và xóa các usecase khác
+     */
     async resolveConflict(versionId: string, conflictId: string, keepUseCaseId: string) {
-        const version = await Version.findById(versionId);
+        console.log(`🔧 [RESOLVE CONFLICT] Resolving conflict ${conflictId}, keeping usecase ${keepUseCaseId}`);
+
+        // Lấy version để tìm conflict
+        const version = await Version.findById(versionId).lean();
         if (!version) throw new Error("Version not found");
 
-        const conflictIndex = version.pending_conflicts.findIndex(
-            (c: any) => c.conflict_id === conflictId
-        );
-        if (conflictIndex === -1) throw new Error("Conflict not found");
+        const pendingConflicts = (version as any).pending_conflicts || [];
+        const conflict = pendingConflicts.find((c: any) => c.conflict_id === conflictId);
 
-        const conflict = version.pending_conflicts[conflictIndex];
-
-        // Conflict items giờ là array of ObjectId
-        const conflictItemIds = conflict.items.map((id: any) => String(id));
-        const keepUseCaseObjectId = new Types.ObjectId(keepUseCaseId);
-
-        // Kiểm tra keepUseCaseId có trong conflict không
-        if (!conflictItemIds.includes(keepUseCaseId)) {
-            throw new Error(
-                `Invalid keepUseCaseId '${keepUseCaseId}' for this conflict group.`
-            );
+        if (!conflict) {
+            throw new Error(`Conflict ${conflictId} not found`);
         }
 
-        // Xóa các usecases không được giữ lại
-        const idsToRemove = conflictItemIds
-            .filter(id => id !== keepUseCaseId)
-            .map(id => new Types.ObjectId(id));
+        // Xóa các usecases khác (không phải keepUseCaseId)
+        const usecasesToDelete = conflict.items.filter((id: string) => id !== keepUseCaseId);
 
-        if (idsToRemove.length > 0) {
-            // Xóa usecases
+        if (usecasesToDelete.length > 0) {
             await Usecase.deleteMany({
-                _id: { $in: idsToRemove },
-                version_id: versionId
+                version_id: versionId,
+                _id: { $in: usecasesToDelete.map((id: string) => new Types.ObjectId(id)) }
             });
-
-            // Xóa references từ các usecases còn lại
-            await Usecase.updateMany(
-                { version_id: versionId },
-                { $pull: { related_usecases: { $in: idsToRemove } } }
-            );
+            console.log(`🗑️ [RESOLVE CONFLICT] Deleted ${usecasesToDelete.length} duplicate usecases`);
         }
 
-        // Xóa conflict
-        version.pending_conflicts.splice(conflictIndex, 1);
-        if (version.pending_conflicts.length === 0) {
-            version.status = "completed";
-        }
-        version.updated_at = new Date();
-        await version.save();
+        // Xóa conflict khỏi pending_conflicts
+        const updatedConflicts = pendingConflicts.filter((c: any) => c.conflict_id !== conflictId);
+        await Version.findByIdAndUpdate(versionId, {
+            $set: { pending_conflicts: updatedConflicts }
+        });
 
-        // Lấy lại danh sách usecases
-        const finalUsecases = await Usecase.find({ version_id: versionId }).lean();
+        console.log(`✅ [RESOLVE CONFLICT] Conflict resolved successfully`);
 
-        return {
-            version_id: versionId,
-            usecases: finalUsecases,
-            resolved: { conflict_id: conflictId, kept_id: keepUseCaseId },
-        };
+        return { success: true, deletedCount: usecasesToDelete.length };
     }
 }
