@@ -4,10 +4,10 @@
       <!-- Header -->
       <div class="modal-header">
         <div class="header-left">
-          <h2>Preview Changes</h2>
+          <h2>Review Changes</h2>
           <div class="project-info">
             <span class="project-name">{{ projectData?.name }}</span>
-            <span class="version-info">Version: {{ currentVersion?.version_number }}</span>
+            <span class="version-info">Current Version: {{ currentVersion?.version_number }}</span>
           </div>
         </div>
         <div class="header-right">
@@ -25,32 +25,38 @@
             <h3>Pending Changes ({{ filteredChanges.length }}/{{ changes.length }})</h3>
             <div class="section-actions">
               <!-- Search Input -->
-              <input
-                v-model="searchQuery"
-                type="text"
-                placeholder="Search changes..."
-                class="search-input"
-                @input="handleSearch"
-              />
+              <div class="search-wrapper">
+                <span class="material-symbols-outlined search-icon">search</span>
+                <input
+                  v-model="searchQuery"
+                  type="text"
+                  placeholder="Search..."
+                  class="search-input"
+                  @input="handleSearch"
+                />
+              </div>
               <!-- Filter Dropdown -->
-              <select v-model="filterType" class="filter-select" @change="handleFilter">
-                <option value="all">All Types</option>
-                <option value="requirement">Requirement</option>
-                <option value="testcase">Test Case</option>
-                <option value="database">Database</option>
-                <option value="activity_diagram">Activity Diagram</option>
-                <option value="sequence_diagram">Sequence Diagram</option>
-                <option value="usecase_diagram">Use Case Diagram</option>
-              </select>
-              <select v-model="filterChangeType" class="filter-select" @change="handleFilter">
-                <option value="all">All Changes</option>
-                <option value="added">Added</option>
-                <option value="updated">Updated</option>
-                <option value="deleted">Deleted</option>
-              </select>
-              <button class="btn-refresh" @click="refreshPreview" :disabled="isLoading">
+              <div class="filter-wrapper">
+                <select v-model="filterType" class="filter-select" @change="handleFilter" title="Filter by item type">
+                  <option value="all">All Types</option>
+                  <option value="requirement">Requirements</option>
+                  <option value="testcase">Test Cases</option>
+                  <option value="database">Database</option>
+                  <option value="activity_diagram">Activity Diagrams</option>
+                  <option value="sequence_diagram">Sequence Diagrams</option>
+                  <option value="usecase_diagram">Use Case Diagrams</option>
+                </select>
+              </div>
+              <div class="filter-wrapper">
+                <select v-model="filterChangeType" class="filter-select" @change="handleFilter" title="Filter by change type">
+                  <option value="all">All Changes</option>
+                  <option value="added">Added</option>
+                  <option value="updated">Updated</option>
+                  <option value="deleted">Deleted</option>
+                </select>
+              </div>
+              <button class="btn-refresh" @click="refreshPreview" :disabled="isLoading" title="Refresh">
                 <span class="material-symbols-outlined">refresh</span>
-                Refresh
               </button>
             </div>
           </div>
@@ -76,11 +82,11 @@
               <span class="bulk-info">{{ selectedChanges.length }} selected</span>
               <button class="btn-bulk-revert" @click="bulkRevertChanges">
                 <span class="material-symbols-outlined">undo</span>
-                Revert Selected
+                Undo Selected
               </button>
               <button class="btn-bulk-clear" @click="clearSelection">
                 <span class="material-symbols-outlined">close</span>
-                Clear
+                Clear Selection
               </button>
             </div>
 
@@ -94,38 +100,33 @@
               }"
               @click="selectChange(change.change_id)"
             >
-              <!-- Bulk Selection Checkbox -->
-              <div class="bulk-checkbox" @click.stop="toggleBulkSelection(change.change_id)">
-                <input
-                  type="checkbox"
-                  :checked="selectedChanges.includes(change.change_id)"
-                  @change.stop="toggleBulkSelection(change.change_id)"
-                />
-              </div>
-              <div class="change-header">
-                <span class="entity-type" :class="change.entity_type">
-                  {{ formatEntityType(change.entity_type) }}
-                </span>
-                <span class="change-type" :class="change.change_type">
-                  {{ formatChangeType(change.change_type) }}
-                </span>
-              </div>
-              <div class="change-details">
-                <span class="entity-name" v-if="change.entity_name || change.entity_id">
-                  {{ change.entity_name || formatEntityId(change.entity_id) }}
-                </span>
-                <span class="change-time">
-                  {{ formatDate(change.add_at) }}
-                </span>
-              </div>
-              <div class="change-actions">
-                <button
-                  class="btn-revert"
-                  @click.stop="revertChange(change.change_id)"
-                  title="Revert this change"
-                >
-                  <span class="material-symbols-outlined">undo</span>
-                </button>
+              
+              <div class="change-content">
+                <div class="change-header">
+                  <span class="entity-type" :class="change.entity_type">
+                    {{ formatEntityTypeShort(change.entity_type) }}
+                  </span>
+                  <span class="change-type" :class="change.change_type">
+                    {{ formatChangeType(change.change_type) }}
+                  </span>
+                </div>
+                <div class="change-details">
+                  <span class="entity-name" v-if="change.entity_name">
+                    {{ change.entity_name }}
+                  </span>
+                </div>
+                <div class="change-footer">
+                  <span class="change-time">
+                    {{ formatDate(change.add_at) }}
+                  </span>
+                  <button
+                    class="btn-revert"
+                    @click.stop="revertChange(change.change_id)"
+                    title="Undo this change"
+                  >
+                    <span class="material-symbols-outlined">undo</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -134,7 +135,7 @@
         <!-- Change Comparison -->
         <div class="comparison-section" v-if="selectedChange">
           <div class="section-header">
-            <h3>Change Comparison</h3>
+            <h3>Change Details</h3>
             <div class="change-navigation">
               <button class="btn-nav" @click="selectPreviousChange" :disabled="!hasPreviousChange">
                 <span class="material-symbols-outlined">chevron_left</span>
@@ -153,31 +154,6 @@
               :after-snapshot="selectedChange.after_snapshot"
               :entity-type="selectedChange.entity_type"
             />
-
-            <!-- Change Summary -->
-            <div class="change-summary">
-              <h4>Change Summary</h4>
-              <div class="summary-content">
-                <div class="summary-item">
-                  <span class="label">Entity Type:</span>
-                  <span class="value">{{ formatEntityType(selectedChange.entity_type) }}</span>
-                </div>
-                <div class="summary-item">
-                  <span class="label">Change Type:</span>
-                  <span class="value" :class="selectedChange.change_type">
-                    {{ formatChangeType(selectedChange.change_type) }}
-                  </span>
-                </div>
-                <div class="summary-item" v-if="selectedChange.entity_id">
-                  <span class="label">Entity ID:</span>
-                  <span class="value">{{ selectedChange.entity_id }}</span>
-                </div>
-                <div class="summary-item">
-                  <span class="label">Timestamp:</span>
-                  <span class="value">{{ formatDate(selectedChange.add_at) }}</span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -186,7 +162,7 @@
           <div class="no-selection-content">
             <span class="material-symbols-outlined">compare_arrows</span>
             <h3>Select a change to view details</h3>
-            <p>Click on any change from the list to see the side-by-side comparison</p>
+            <p>Click on any change from the list to see the before and after comparison</p>
           </div>
         </div>
       </div>
@@ -198,9 +174,9 @@
         </div>
 
         <div class="footer-right" v-if="changes.length > 0">
-          <!-- Version Bump Selection -->
+          <!-- Release Version Selection -->
           <div class="version-selection">
-            <label>Version bump type:</label>
+            <label>Release as version:</label>
             <div class="version-options">
               <label class="version-option">
                 <input
@@ -209,7 +185,7 @@
                   value="minor"
                   :disabled="isApproving"
                 />
-                <span class="radio-label">Minor ({{ nextMinorVersion }})</span>
+                <span class="radio-label">Minor Update ({{ nextMinorVersion }})</span>
               </label>
               <label class="version-option">
                 <input
@@ -218,7 +194,7 @@
                   value="major"
                   :disabled="isApproving"
                 />
-                <span class="radio-label">Major ({{ nextMajorVersion }})</span>
+                <span class="radio-label">Major Update ({{ nextMajorVersion }})</span>
               </label>
             </div>
           </div>
@@ -230,7 +206,8 @@
             :disabled="isApproving || changes.length === 0"
           >
             <span v-if="isApproving" class="material-symbols-outlined spin">sync</span>
-            Approve {{ changes.length }} Change{{ changes.length > 1 ? 's' : '' }}
+            <span v-else class="material-symbols-outlined">publish</span>
+            {{ isApproving ? 'Releasing...' : `Release ${changes.length} Change${changes.length > 1 ? 's' : ''}` }}
           </button>
         </div>
       </div>
@@ -472,18 +449,18 @@ export default {
           return
         }
 
-        console.log('🔧 Revert change called:', {
+        console.log('🔧 Undo change called:', {
           versionId: this.versionId,
           changeId: changeId,
         })
 
-        // Gọi API revert change
+        // Call API to undo change
         await revertChange(this.versionId, changeId)
 
-        // Refresh ngay lập tức
+        // Refresh immediately
         await this.refreshPreviewData()
 
-        // QUAN TRỌNG: Emit event để component cha biết có thay đổi
+        // IMPORTANT: Emit event to notify parent component of changes
         this.$emit('changes-updated', {
           projectId: this.projectId,
           versionId: this.versionId,
@@ -491,7 +468,7 @@ export default {
           action: 'reverted',
         })
       } catch (error) {
-        console.error('Error reverting change:', error)
+        console.error('Error undoing change:', error)
         await this.refreshPreviewData()
         this.$emit('changes-updated', {
           projectId: this.projectId,
@@ -536,77 +513,77 @@ export default {
           return
         }
 
-        console.log('🚀 Starting approval process...', {
+        console.log('🚀 Starting release process...', {
           versionId: this.versionId,
-          bumpType: this.selectedBumpType,
+          versionType: this.selectedBumpType,
           changesCount: this.changes.length,
         })
 
-        // Approve the preview
+        // Release the preview as new version
         const approveResponse = await approveVersion(
           this.versionId,
           this.selectedBumpType,
-          `Approved ${this.changes.length} changes`
+          `Released ${this.changes.length} changes`
         )
 
-        console.log('📦 Approval response:', approveResponse.data)
+        console.log('📦 Release response:', approveResponse.data)
 
         // Check response format: backend returns { status: "Success", message: "...", data: {...} }
         const responseStatus = approveResponse.data?.status || approveResponse.data?.success
         const isSuccess = responseStatus === 'Success' || responseStatus === true
 
         if (isSuccess) {
-          // Lưu số lượng changes trước khi clear
+          // Save changes count before clearing
           const changesCount = this.changes.length
           
           // Get new version from response data or calculate it
-          const approvedVersion = approveResponse.data?.data?.version
+          const releasedVersion = approveResponse.data?.data?.version
           let newVersion
           
-          if (approvedVersion) {
+          if (releasedVersion) {
             // Use version from backend response
-            newVersion = approvedVersion.version_number || 
-              `${approvedVersion.version_major}.${approvedVersion.version_minor}`
+            newVersion = releasedVersion.version_number || 
+              `${releasedVersion.version_major}.${releasedVersion.version_minor}`
           } else {
             // Fallback: calculate from current version
             newVersion =
               this.selectedBumpType === 'major' ? this.nextMajorVersion : this.nextMinorVersion
           }
           
-          console.log('✅ Approval successful, new version:', newVersion)
+          console.log('✅ Release successful, new version:', newVersion)
 
           // Thông báo thành công
           this.toast.success(
-            `Successfully approved ${changesCount} change(s). New version: ${newVersion}`
+            `Successfully released ${changesCount} change(s) as version ${newVersion}`
           )
 
-          // Clear changes list vì preview đã bị xóa sau khi approve
+          // Clear changes list because preview is deleted after release
           this.changes = []
           this.selectedChangeId = null
           
-          // Set flag để biết đã approve thành công
+          // Set flag to indicate successful release
           this.isApproved = true
 
-          // Emit success event với thông tin đầy đủ
+          // Emit success event with full information
           this.$emit('approved', {
             bumpType: this.selectedBumpType,
             changesCount: changesCount,
             newVersion: newVersion,
-            version: approvedVersion,
+            version: releasedVersion,
           })
 
-          // Đợi một chút để đảm bảo event được emit trước khi đóng modal
+          // Wait a bit to ensure event is emitted before closing modal
           await new Promise((resolve) => setTimeout(resolve, 100))
 
-          // Đóng modal sau khi approve thành công
+          // Close modal after successful release
           this.closeModal()
         } else {
           // Handle failed response
-          const errorMessage = approveResponse.data?.message || 'Approval failed'
+          const errorMessage = approveResponse.data?.message || 'Release failed'
           throw new Error(errorMessage)
         }
       } catch (error) {
-        console.error('❌ Error approving changes:', error)
+        console.error('❌ Error releasing changes:', error)
         
         // Thông báo thất bại
         const errorMessage =
@@ -616,7 +593,7 @@ export default {
           'Failed to approve changes'
         
         const { formatErrorForDisplay } = require('@/utils/errorMessages')
-        this.toast.error(formatErrorForDisplay(error, 'Failed to approve changes. Please try again.'))
+        this.toast.error(formatErrorForDisplay(error, 'Failed to release changes. Please try again.'))
       } finally {
         this.isApproving = false
       }
@@ -638,6 +615,23 @@ export default {
         usecase_diagram: 'Use Case Diagram',
       }
       return types[entityType] || entityType
+    },
+    formatEntityTypeShort(entityType) {
+      const shortTypes = {
+        requirement: 'REQ',
+        input: 'INP',
+        output: 'OUT',
+        database: 'DB',
+        table: 'TBL',
+        column: 'COL',
+        relationship: 'REL',
+        testcase: 'TST',
+        uml: 'UML',
+        activity_diagram: 'ACT',
+        sequence_diagram: 'SEQ',
+        usecase_diagram: 'UC',
+      }
+      return shortTypes[entityType] || entityType.substring(0, 3).toUpperCase()
     },
 
     formatChangeType(changeType) {
@@ -663,7 +657,12 @@ export default {
     formatDate(dateString) {
       if (!dateString) return ''
       const date = new Date(dateString)
-      return date.toLocaleString()
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const year = date.getFullYear()
+      return `${hours}:${minutes} ${day}/${month}/${year}`
     },
 
     formatEntityId(entityId) {
@@ -732,12 +731,12 @@ export default {
 
       const count = this.selectedChanges.length
       try {
-        const confirmMessage = `Are you sure you want to revert ${count} change(s)?`
+        const confirmMessage = `Are you sure you want to undo ${count} change(s)? This will remove them from the pending changes list.`
         if (!confirm(confirmMessage)) {
           return
         }
 
-        // Revert all selected changes
+        // Undo all selected changes
         const revertPromises = this.selectedChanges.map(changeId =>
           revertChange(this.versionId, changeId)
         )
@@ -750,11 +749,11 @@ export default {
         // Clear selection
         this.selectedChanges = []
 
-        this.toast.success(`Successfully reverted ${count} change(s)`)
+        this.toast.success(`Successfully undone ${count} change(s)`)
       } catch (error) {
-        console.error('Error reverting changes:', error)
+        console.error('Error undoing changes:', error)
         const { formatErrorForDisplay } = require('@/utils/errorMessages')
-        this.toast.error(formatErrorForDisplay(error, 'Failed to revert some changes. Please try again.'))
+        this.toast.error(formatErrorForDisplay(error, 'Failed to undo some changes. Please try again.'))
         // Still refresh and clear selection
         await this.refreshPreviewData()
         this.selectedChanges = []
@@ -825,12 +824,23 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .preview-modal {
@@ -841,7 +851,20 @@ export default {
   height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* Header */
@@ -849,7 +872,7 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: 24px;
   border-bottom: 1px solid #e5e7eb;
   background: #f8fafc;
   border-radius: 12px 12px 0 0;
@@ -857,24 +880,27 @@ export default {
 
 .header-left h2 {
   margin: 0 0 8px 0;
-  color: #1a365d;
-  font-size: 1.5rem;
+  color: #1f2937;
+  font-size: 24px;
+  font-weight: 700;
 }
 
 .project-info {
   display: flex;
   gap: 16px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .project-name {
-  font-weight: 600;
-  color: #374151;
+  font-weight: 500;
+  color: #6b7280;
+  font-size: 0.875rem;
 }
 
 .version-info {
-  background: #e8f3ff;
-  color: #0066cc;
+  background: #e5e7eb;
+  color: #374151;
   padding: 4px 8px;
   border-radius: 6px;
   font-size: 0.875rem;
@@ -882,13 +908,16 @@ export default {
 }
 
 .btn-close {
-  background: none;
+  background: transparent;
   border: none;
-  padding: 8px;
   border-radius: 6px;
+  padding: 6px;
   cursor: pointer;
   color: #6b7280;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-close:hover {
@@ -920,126 +949,206 @@ export default {
   padding: 16px 20px;
   background: #f8fafc;
   border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .section-header h3 {
   margin: 0;
   font-size: 1.1rem;
-  color: #374151;
+  color: #1f2937;
+  font-weight: 600;
 }
 
 .btn-refresh {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  justify-content: center;
+  padding: 8px;
   background: white;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 0.875rem;
+  color: #6b7280;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  width: 32px;
+  height: 32px;
+}
+
+.btn-refresh .material-symbols-outlined {
+  font-size: 18px;
 }
 
 .btn-refresh:hover:not(:disabled) {
   background: #f3f4f6;
   border-color: #9ca3af;
+  color: #374151;
 }
 
 .btn-refresh:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .changes-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(26, 54, 93, 0.2) transparent;
+}
+
+.changes-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.changes-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.changes-list::-webkit-scrollbar-thumb {
+  background: rgba(26, 54, 93, 0.2);
+  border-radius: 4px;
+}
+
+.changes-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(26, 54, 93, 0.3);
 }
 
 .change-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   padding: 12px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   margin-bottom: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
   background: white;
+  position: relative;
 }
 
 .change-item:hover {
   border-color: #9ca3af;
-  background: #f9fafb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .change-item.selected {
-  border-color: #007bff;
-  background: #f0f8ff;
-  box-shadow: 0 0 0 1px #007bff;
+  border-color: #1a365d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.change-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 
 .change-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  gap: 8px;
 }
 
 .entity-type {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  color: #374151;
-  padding: 2px 6px;
-  border-radius: 4px;
+  color: #1f2937;
+  padding: 3px 8px;
+  border-radius: 6px;
   background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  letter-spacing: 0.05em;
+  min-width: 40px;
+  text-align: center;
 }
 
 .change-type {
   font-size: 0.75rem;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .change-type.added {
-  background: #dcfce7;
-  color: #166534;
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #065f46;
+  border: 1px solid rgba(5, 95, 70, 0.2);
 }
 
 .change-type.updated {
-  background: #fef3c7;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
   color: #92400e;
+  border: 1px solid rgba(146, 64, 14, 0.2);
 }
 
 .change-type.deleted {
-  background: #fee2e2;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
   color: #991b1b;
+  border: 1px solid rgba(153, 27, 27, 0.2);
 }
 
 .change-details {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  font-size: 0.75rem;
-  color: #6b7280;
-  margin-bottom: 8px;
+  font-size: 0.875rem;
+  color: #4b5563;
+  min-height: 20px;
 }
 
-.change-actions {
+.entity-name {
+  font-weight: 500;
+  color: #1f2937;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.change-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  gap: 8px;
+}
+
+.change-time {
+  font-weight: 400;
+  color: #6b7280;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  margin-left: auto;
 }
 
 .btn-revert {
   background: #fee2e2;
-  border: none;
+  border: 1px solid #fecaca;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   color: #dc2626;
   font-size: 0.75rem;
-  transition: all 0.2s;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.btn-revert .material-symbols-outlined {
+  font-size: 16px;
 }
 
 .btn-revert:hover {
@@ -1052,9 +1161,23 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
+  padding: 60px 20px;
   color: #6b7280;
   text-align: center;
+  gap: 16px;
+}
+
+.loading-state .material-symbols-outlined,
+.empty-state .material-symbols-outlined {
+  font-size: 3rem;
+  color: #9ca3af;
+}
+
+.empty-state p {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  margin: 0;
 }
 
 .spin {
@@ -1099,12 +1222,17 @@ export default {
   padding: 6px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-nav:hover:not(:disabled) {
   background: #f3f4f6;
   border-color: #9ca3af;
+  color: #374151;
 }
 
 .btn-nav:disabled {
@@ -1116,6 +1244,7 @@ export default {
   font-size: 0.875rem;
   color: #6b7280;
   font-weight: 500;
+  padding: 0 8px;
 }
 
 .comparison-view {
@@ -1181,41 +1310,6 @@ export default {
   gap: 8px;
 }
 
-.change-summary {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 16px;
-  background: #f8fafc;
-  display:none;
-}
-
-.change-summary h4 {
-  margin: 0 0 12px 0;
-  color: #374151;
-}
-
-.summary-content {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.summary-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-}
-
-.summary-item .label {
-  font-weight: 500;
-  color: #6b7280;
-}
-
-.summary-item .value {
-  font-weight: 600;
-  color: #374151;
-}
 
 .no-selection-content {
   display: flex;
@@ -1225,12 +1319,27 @@ export default {
   height: 100%;
   color: #6b7280;
   text-align: center;
-  gap: 12px;
+  gap: 16px;
+  padding: 40px;
 }
 
 .no-selection-content .material-symbols-outlined {
   font-size: 3rem;
   color: #d1d5db;
+}
+
+.no-selection-content h3 {
+  color: #1f2937;
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.no-selection-content p {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0;
+  max-width: 400px;
 }
 
 /* Footer */
@@ -1256,7 +1365,7 @@ export default {
   gap: 12px;
 }
 
-.version-selection label {
+.version-selection > label {
   font-weight: 500;
   color: #374151;
   font-size: 0.875rem;
@@ -1275,30 +1384,43 @@ export default {
   font-size: 0.875rem;
 }
 
+.version-option input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #1a365d;
+}
+
 .radio-label {
   color: #374151;
+  font-weight: 500;
+  cursor: pointer;
 }
 
 .btn-primary,
 .btn-secondary {
-  padding: 10px 20px;
+  padding: 12px 24px;
   border: none;
-  border-radius: 6px;
+  border-radius: 10px;
   font-weight: 600;
+  font-size: 0.9375rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .btn-primary {
-  background: #007bff;
+  background: #1a365d;
   color: white;
+  border: none;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #0056b3;
+  background: #2d4a8a;
 }
 
 .btn-primary:disabled {
@@ -1307,12 +1429,13 @@ export default {
 }
 
 .btn-secondary {
-  background: #6b7280;
-  color: white;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #4b5563;
+  background: #e5e7eb;
 }
 
 /* Responsive Design */
@@ -1402,28 +1525,40 @@ export default {
 
 /* Search & Filter Styles */
 .search-input {
-  padding: 6px 12px;
+  padding: 8px 10px 8px 32px;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.875rem;
-  width: 200px;
-  transition: all 0.2s;
+  width: 140px;
+  transition: border-color 0.3s ease;
+  background: white;
+  color: #1f2937;
+}
+
+.search-input::placeholder {
+  color: #9ca3af;
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  border-color: #1a365d;
+  width: 160px;
+}
+
+.search-input:hover:not(:focus) {
+  border-color: #9ca3af;
 }
 
 .filter-select {
-  padding: 6px 12px;
+  padding: 8px 24px 8px 8px;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.875rem;
   background: white;
+  color: #1f2937;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.3s ease;
+  min-width: 60px;
 }
 
 .filter-select:hover {
@@ -1432,8 +1567,7 @@ export default {
 
 .filter-select:focus {
   outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  border-color: #1a365d;
 }
 
 /* Bulk Actions Styles */
@@ -1442,21 +1576,37 @@ export default {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: #f0f8ff;
-  border-bottom: 1px solid #bee3f8;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
   margin-bottom: 8px;
+  border-radius: 8px;
+  margin-left: 12px;
+  margin-right: 12px;
+  margin-top: 8px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .bulk-info {
   font-weight: 600;
-  color: #1a365d;
+  color: #1f2937;
   font-size: 0.875rem;
 }
 
 .btn-bulk-revert,
 .btn-bulk-clear {
-  padding: 6px 12px;
-  border: none;
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
   border-radius: 6px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -1464,12 +1614,13 @@ export default {
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .btn-bulk-revert {
   background: #fee2e2;
   color: #dc2626;
+  border-color: #fecaca;
 }
 
 .btn-bulk-revert:hover {
@@ -1500,20 +1651,44 @@ export default {
 }
 
 .change-item.bulk-selected {
-  background: #eff6ff;
+  background: #f0f8ff;
   border-color: #3b82f6;
-}
-
-.change-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
 }
 
 .section-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+}
+
+.search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 8px;
+  font-size: 18px;
+  color: #718096;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.filter-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.filter-icon {
+  position: absolute;
+  left: 6px;
+  font-size: 18px;
+  color: #718096;
+  pointer-events: none;
+  z-index: 1;
 }
 </style>

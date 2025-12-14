@@ -28,7 +28,7 @@
                   :value="field.key"
                   v-model="selectedFields"
                 />
-                <span class="checkmark"></span>
+                
                 <span class="field-label">{{ field.label }}</span>
               </label>
             </div>
@@ -119,27 +119,6 @@
             </div>
           </div>
 
-          <div class="option-group">
-            <label class="option-label">Data Selection</label>
-            <div class="checkbox-options">
-              <label class="checkbox-option">
-                <input type="checkbox" v-model="includeSteps" />
-                <span class="checkmark"></span>
-                Include test steps
-              </label>
-              <label class="checkbox-option">
-                <input type="checkbox" v-model="includeExecutionHistory" />
-                <span class="checkmark"></span>
-                Include execution history
-              </label>
-              <label class="checkbox-option">
-                <input type="checkbox" v-model="includeAttachments" />
-                <span class="checkmark"></span>
-                Include attachment references
-              </label>
-            </div>
-          </div>
-
           <div v-if="selectionMode === 'all'" class="option-group">
             <label class="option-label">Apply Current Filters</label>
             <div class="filter-info">
@@ -219,7 +198,7 @@
                     :checked="isTestcaseSelected(testcase, currentSheetIndex)"
                     @change="toggleTestcaseForSheet(testcase, currentSheetIndex)"
                   />
-                  <span class="checkmark"></span>
+                  
                   <div class="testcase-info">
                     <span class="testcase-title">{{ testcase.title || testcase.name }}</span>
                     <span class="testcase-desc">{{ testcase.description || 'No description' }}</span>
@@ -249,19 +228,61 @@
                 <div
                   v-for="usecase in filteredUseCasesInSelector"
                   :key="getUsecaseId(usecase)"
-                  class="usecase-option clickable"
-                  @click="addUsecaseTestCases(usecase, currentSheetIndex)"
+                  class="usecase-option-group"
                 >
-                  <div class="usecase-info">
-                    <div class="usecase-header">
-                      <span class="usecase-name">{{ usecase.name }}</span>
-                      <span class="usecase-badge" :class="{ 'badge-zero': getUsecaseTestCasesCount(usecase) === 0 }">
-                        {{ getUsecaseTestCasesCount(usecase) }} test case(s)
+                  <div class="usecase-option-header">
+                    <label class="usecase-checkbox-wrapper" @click.stop>
+                      <input
+                        type="checkbox"
+                        :checked="isUsecaseFullySelected(usecase, currentSheetIndex)"
+                        :indeterminate="isUsecasePartiallySelected(usecase, currentSheetIndex)"
+                        @change="toggleUsecaseSelection(usecase, currentSheetIndex)"
+                      />
+                      
+                    </label>
+                    <div 
+                      class="usecase-option clickable"
+                      @click="toggleUsecaseExpand(usecase)"
+                    >
+                      <div class="usecase-info">
+                        <div class="usecase-header">
+                          <span class="usecase-name">{{ usecase.name }}</span>
+                          <span class="usecase-badge" :class="{ 'badge-zero': getUsecaseTestCasesCount(usecase) === 0 }">
+                            {{ getUsecaseTestCasesCount(usecase) }} test case(s)
+                          </span>
+                        </div>
+                        <span class="usecase-goal">{{ usecase.goal || 'No goal' }}</span>
+                      </div>
+                      <span class="material-symbols-outlined expand-icon" :class="{ expanded: isUsecaseExpanded(usecase) }">
+                        expand_more
                       </span>
                     </div>
-                    <span class="usecase-goal">{{ usecase.goal || 'No goal' }}</span>
                   </div>
-                  <span class="material-symbols-outlined add-icon">add_circle</span>
+                  <!-- Expanded Test Cases List -->
+                  <div v-if="isUsecaseExpanded(usecase)" class="usecase-testcases-list">
+                    <label
+                      v-for="testcase in getUsecaseTestCases(usecase)"
+                      :key="testcase._id || testcase.id"
+                      class="testcase-option nested"
+                      @click.stop
+                    >
+                      <input
+                        type="checkbox"
+                        :value="String(testcase._id || testcase.id)"
+                        :checked="isTestcaseSelected(testcase, currentSheetIndex)"
+                        @change="toggleTestcaseForSheet(testcase, currentSheetIndex)"
+                      />
+                      
+                      <div class="testcase-info">
+                        <span class="testcase-title">{{ testcase.title || testcase.name }}</span>
+                        <span class="testcase-desc">{{ testcase.description || 'No description' }}</span>
+                      </div>
+                    </label>
+                    <div v-if="getUsecaseTestCases(usecase).length === 0" class="empty-testcases-nested">
+                      <span class="material-symbols-outlined">info</span>
+                      <p>No test cases for this use case</p>
+                    </div>
+                  </div>
                 </div>
                 <div v-if="filteredUseCasesInSelector.length === 0" class="empty-usecases">
                   <span class="material-symbols-outlined">search_off</span>
@@ -324,11 +345,9 @@ export default {
   setup(props, { emit }) {
     const toast = useToast()
 
-    const includeSteps = ref(true)
-    const includeExecutionHistory = ref(true)
-    const includeAttachments = ref(false)
     const selectorTab = ref('testcases') // 'testcases' or 'usecases'
     const usecaseSearchQueryInSelector = ref('')
+    const expandedUsecases = ref(new Set()) // Track expanded usecases
 
     // Available fields for export
     const availableFields = [
@@ -494,6 +513,97 @@ export default {
       }
     }
 
+    // Get testcases for a usecase
+    const getUsecaseTestCases = (usecase) => {
+      const usecaseId = normalizeId(usecase._id || usecase.id || usecase.requirement_id)
+      if (!usecaseId) return []
+      
+      return (props.testCases || []).filter((tc) => {
+        const reqIds = tc.source_requirement_ids || []
+        return reqIds.some((reqId) => idsMatch(reqId, usecaseId))
+      })
+    }
+
+    // Check if usecase is fully selected (all testcases selected)
+    const isUsecaseFullySelected = (usecase, sheetIndex) => {
+      const usecaseTestCases = getUsecaseTestCases(usecase)
+      if (usecaseTestCases.length === 0) return false
+      
+      const sheet = sheets.value[sheetIndex]
+      if (!sheet) return false
+      
+      return usecaseTestCases.every((tc) => {
+        const tcId = normalizeId(tc._id || tc.id)
+        return sheet.testCaseIds.some((id) => idsMatch(id, tcId))
+      })
+    }
+
+    // Check if usecase is partially selected (some but not all testcases selected)
+    const isUsecasePartiallySelected = (usecase, sheetIndex) => {
+      const usecaseTestCases = getUsecaseTestCases(usecase)
+      if (usecaseTestCases.length === 0) return false
+      
+      const sheet = sheets.value[sheetIndex]
+      if (!sheet) return false
+      
+      const selectedCount = usecaseTestCases.filter((tc) => {
+        const tcId = normalizeId(tc._id || tc.id)
+        return sheet.testCaseIds.some((id) => idsMatch(id, tcId))
+      }).length
+      
+      return selectedCount > 0 && selectedCount < usecaseTestCases.length
+    }
+
+    // Toggle usecase selection (select/deselect all testcases)
+    const toggleUsecaseSelection = (usecase, sheetIndex) => {
+      const usecaseTestCases = getUsecaseTestCases(usecase)
+      const sheet = sheets.value[sheetIndex]
+      
+      if (!sheet) return
+      
+      const isFullySelected = isUsecaseFullySelected(usecase, sheetIndex)
+      
+      if (isFullySelected) {
+        // Deselect all testcases
+        usecaseTestCases.forEach((tc) => {
+          const tcId = normalizeId(tc._id || tc.id)
+          if (!tcId) return
+          
+          const existingIndex = sheet.testCaseIds.findIndex((id) => idsMatch(id, tcId))
+          if (existingIndex > -1) {
+            sheet.testCaseIds.splice(existingIndex, 1)
+          }
+        })
+      } else {
+        // Select all testcases
+        usecaseTestCases.forEach((tc) => {
+          const tcId = normalizeId(tc._id || tc.id)
+          if (!tcId) return
+          
+          const alreadyExists = sheet.testCaseIds.some((id) => idsMatch(id, tcId))
+          if (!alreadyExists) {
+            sheet.testCaseIds.push(tcId)
+          }
+        })
+      }
+    }
+
+    // Toggle usecase expand/collapse
+    const toggleUsecaseExpand = (usecase) => {
+      const usecaseId = getUsecaseId(usecase)
+      if (expandedUsecases.value.has(usecaseId)) {
+        expandedUsecases.value.delete(usecaseId)
+      } else {
+        expandedUsecases.value.add(usecaseId)
+      }
+    }
+
+    // Check if usecase is expanded
+    const isUsecaseExpanded = (usecase) => {
+      const usecaseId = getUsecaseId(usecase)
+      return expandedUsecases.value.has(usecaseId)
+    }
+
     // Field selection methods
     const selectAllFields = () => {
       selectedFields.value = availableFields.map((f) => f.key)
@@ -616,9 +726,6 @@ export default {
         options: {
           ...props.filters,
           versionId: props.versionId,
-          includeSteps: includeSteps.value,
-          includeExecutionHistory: includeExecutionHistory.value,
-          includeAttachments: includeAttachments.value,
         },
       }
 
@@ -626,9 +733,6 @@ export default {
     }
 
     return {
-      includeSteps,
-      includeExecutionHistory,
-      includeAttachments,
       hasActiveFilters,
       selectorTab,
       usecaseSearchQueryInSelector,
@@ -637,6 +741,12 @@ export default {
       getTestCaseName,
       getUsecaseTestCasesCount,
       addUsecaseTestCases,
+      getUsecaseTestCases,
+      isUsecaseFullySelected,
+      isUsecasePartiallySelected,
+      toggleUsecaseSelection,
+      toggleUsecaseExpand,
+      isUsecaseExpanded,
       handleExport,
       // Fields
       availableFields,
@@ -1108,22 +1218,49 @@ export default {
   background: #f8fafc;
 }
 
+.usecase-option-group {
+  margin-bottom: 0.5rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  overflow: hidden;
+}
+
+.usecase-option-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.usecase-checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.usecase-checkbox-wrapper input[type="checkbox"] {
+  margin: 0;
+  accent-color: #1a365d;
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
 .usecase-option {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.75rem;
+  padding-left: 0;
   border-radius: 6px;
   cursor: default;
   transition: all 0.2s;
-  margin-bottom: 0.25rem;
-  background: white;
-  border: 1px solid transparent;
-}
-
-.usecase-option:last-child {
-  margin-bottom: 0;
+  flex: 1;
+  background: transparent;
+  border: none;
 }
 
 .usecase-option.clickable {
@@ -1132,8 +1269,6 @@ export default {
 
 .usecase-option.clickable:hover {
   background: #f0f4f8;
-  border-color: #cbd5e1;
-  transform: translateX(2px);
 }
 
 .usecase-option input[type="checkbox"] {
@@ -1164,16 +1299,54 @@ export default {
   color: #6b7280;
 }
 
-.add-icon {
-  color: #1a365d;
+.expand-icon {
+  color: #6b7280;
   font-size: 1.5rem;
   flex-shrink: 0;
   transition: transform 0.2s;
 }
 
-.usecase-option.clickable:hover .add-icon {
-  transform: scale(1.1);
-  color: #27446c;
+.expand-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.usecase-testcases-list {
+  padding: 0.5rem 0.75rem 0.75rem 2.5rem;
+  background: #f8fafc;
+  border-top: 1px solid #e5e7eb;
+}
+
+.testcase-option.nested {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+}
+
+.testcase-option.nested:hover {
+  background: #f0f4f8;
+  border-color: #cbd5e1;
+}
+
+.empty-testcases-nested {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  text-align: center;
+  color: #9ca3af;
+}
+
+.empty-testcases-nested .material-symbols-outlined {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.empty-testcases-nested p {
+  margin: 0;
+  font-size: 0.75rem;
 }
 
 .usecase-info {

@@ -167,14 +167,61 @@
             <div class="sql-actions">
               <!-- SQL Dialect Selector -->
               <div class="sql-dialect-selector">
-                <label>SQL Dialect:</label>
-                <select v-model="selectedSQLDialect" class="dialect-select">
-                  <option value="mysql">MySQL</option>
-                  <option value="sqlserver">SQL Server</option>
-                  <option value="postgresql">PostgreSQL</option>
-                  <option value="oracle">Oracle</option>
-                  <option value="sqlite">SQLite</option>
-                </select>
+                <div class="filter-icon-wrapper">
+                  <button 
+                    class="filter-icon-btn" 
+                    @click.stop="toggleDialectFilter"
+                    :title="`SQL Dialect: ${getDialectName(selectedSQLDialect)}`"
+                  >
+                    <span class="material-symbols-outlined">database</span>
+                  </button>
+                  <div 
+                    v-if="showDialectFilter" 
+                    class="filter-dropdown-menu"
+                    @click.stop
+                  >
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: selectedSQLDialect === 'mysql' }"
+                      @click="setDialect('mysql')"
+                    >
+                      <span class="material-symbols-outlined">storage</span>
+                      MySQL
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: selectedSQLDialect === 'sqlserver' }"
+                      @click="setDialect('sqlserver')"
+                    >
+                      <span class="material-symbols-outlined">dns</span>
+                      SQL Server
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: selectedSQLDialect === 'postgresql' }"
+                      @click="setDialect('postgresql')"
+                    >
+                      <span class="material-symbols-outlined">cloud</span>
+                      PostgreSQL
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: selectedSQLDialect === 'oracle' }"
+                      @click="setDialect('oracle')"
+                    >
+                      <span class="material-symbols-outlined">account_tree</span>
+                      Oracle
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: selectedSQLDialect === 'sqlite' }"
+                      @click="setDialect('sqlite')"
+                    >
+                      <span class="material-symbols-outlined">folder_data</span>
+                      SQLite
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <button class="btn-secondary" @click="copySQL">
@@ -326,6 +373,7 @@ export default {
 
       viewMode: 'diagram',
       selectedSQLDialect: 'mysql', // Mặc định là MySQL
+      showDialectFilter: false,
 
       showCreateTableModal: false,
       showRelationshipModal: false,
@@ -394,6 +442,9 @@ export default {
     
     // Listen for version-approved event from PreviewModal
     eventBus.on('version-approved', this.handleVersionApproved)
+    
+    // Add click outside listener for dialect filter
+    document.addEventListener('click', this.handleClickOutsideDialectFilter)
   },
   beforeUnmount() {
     // ✅ THÊM: Cleanup socket connection
@@ -404,6 +455,9 @@ export default {
     
     // Remove event listener
     eventBus.off('version-approved', this.handleVersionApproved)
+    
+    // Remove click outside listener
+    document.removeEventListener('click', this.handleClickOutsideDialectFilter)
   },
   methods: {
     // Navigation methods
@@ -1416,6 +1470,29 @@ export default {
       return typesWithoutLength.includes(type?.toUpperCase())
     },
 
+    // Dialect filter methods
+    toggleDialectFilter() {
+      this.showDialectFilter = !this.showDialectFilter
+    },
+    setDialect(value) {
+      this.selectedSQLDialect = value
+      this.showDialectFilter = false
+    },
+    getDialectName(dialect) {
+      const names = {
+        mysql: 'MySQL',
+        sqlserver: 'SQL Server',
+        postgresql: 'PostgreSQL',
+        oracle: 'Oracle',
+        sqlite: 'SQLite',
+      }
+      return names[dialect] || dialect
+    },
+    handleClickOutsideDialectFilter(event) {
+      if (!event.target.closest('.filter-icon-wrapper')) {
+        this.showDialectFilter = false
+      }
+    },
     closeModal() {
       this.showCreateTableModal = false
       this.editingTable = null
@@ -1685,6 +1762,84 @@ export default {
   outline: none;
   border-color: #1a365d;
   box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
+}
+
+/* Filter Icon Buttons */
+.filter-icon-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.filter-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 40px;
+  height: 40px;
+}
+
+.filter-icon-btn:hover {
+  background: #f9fafb;
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.filter-icon-btn .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: white;
+  color: #374151;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-option:hover {
+  background: #f9fafb;
+}
+
+.filter-option.active {
+  background: #e6f2ff;
+  color: #1a365d;
+  font-weight: 500;
+}
+
+.filter-option .material-symbols-outlined {
+  font-size: 18px;
+  color: #6b7280;
+}
+
+.filter-option.active .material-symbols-outlined {
+  color: #1a365d;
 }
 
 /* SQL Preview Header */

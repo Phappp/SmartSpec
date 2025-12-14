@@ -75,18 +75,100 @@
                 />
               </div>
               <div class="filter-controls">
-                <select v-model="globalSortFilter" class="sort-select">
-                  <option value="name">Sort by Name</option>
-                  <option value="date">Sort by Date</option>
-                  <option value="created">Sort by Created Date</option>
-                  <option value="actors">Sort by Actors</option>
-                  <option value="usecases">Sort by Use Cases</option>
-                </select>
-                <select v-model="languageFilters.usecase" class="lang-select">
-                  <option value="all">All Languages</option>
-                  <option value="en-US">English</option>
-                  <option value="vi-VN">Vietnamese</option>
-                </select>
+                <div class="filter-dropdown">
+                  <button 
+                    class="filter-icon-btn" 
+                    @click.stop="toggleSortDropdown('usecase')"
+                    :title="getSortLabel(globalSortFilter)"
+                  >
+                    <span class="material-symbols-outlined">sort</span>
+                  </button>
+                  <div 
+                    v-if="activeSortDropdown === 'usecase'" 
+                    class="filter-dropdown-menu"
+                    @click.stop
+                  >
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'name' }"
+                      @click="setSortFilter('name')"
+                    >
+                      <span class="material-symbols-outlined">text_fields</span>
+                      Sort by Name
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'date' }"
+                      @click="setSortFilter('date')"
+                    >
+                      <span class="material-symbols-outlined">schedule</span>
+                      Sort by Date
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'created' }"
+                      @click="setSortFilter('created')"
+                    >
+                      <span class="material-symbols-outlined">calendar_today</span>
+                      Sort by Created Date
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'actors' }"
+                      @click="setSortFilter('actors')"
+                    >
+                      <span class="material-symbols-outlined">person</span>
+                      Sort by Actors
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'usecases' }"
+                      @click="setSortFilter('usecases')"
+                    >
+                      <span class="material-symbols-outlined">task</span>
+                      Sort by Use Cases
+                    </button>
+                  </div>
+                </div>
+                <div class="filter-dropdown">
+                  <button 
+                    class="filter-icon-btn" 
+                    @click.stop="toggleLangDropdown('usecase')"
+                    :title="getLangLabel(languageFilters.usecase)"
+                  >
+                    <span class="material-symbols-outlined">language</span>
+                  </button>
+                  <div 
+                    v-if="activeLangDropdown === 'usecase'" 
+                    class="filter-dropdown-menu"
+                    @click.stop
+                  >
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: languageFilters.usecase === 'all' }"
+                      @click="setLangFilter('usecase', 'all')"
+                    >
+                      <span class="material-symbols-outlined">public</span>
+                      All Languages
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: languageFilters.usecase === 'en-US' }"
+                      @click="setLangFilter('usecase', 'en-US')"
+                    >
+                      <span class="material-symbols-outlined">flag</span>
+                      English
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: languageFilters.usecase === 'vi-VN' }"
+                      @click="setLangFilter('usecase', 'vi-VN')"
+                    >
+                      <span class="material-symbols-outlined">flag</span>
+                      Vietnamese
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -251,17 +333,92 @@
                 />
               </div>
               <div class="filter-controls">
-                <select v-model="globalSortFilter" class="sort-select">
-                  <option value="name">Sort by Name</option>
-                  <option value="date">Sort by Date</option>
-                  <option value="created">Sort by Created Date</option>
-                  <option value="nodes">Sort by Nodes</option>
-                </select>
-                <select v-model="languageFilters.activity" class="lang-select">
-                  <option value="all">All Languages</option>
-                  <option value="en-US">English</option>
-                  <option value="vi-VN">Vietnamese</option>
-                </select>
+                <div class="filter-dropdown">
+                  <button 
+                    class="filter-icon-btn" 
+                    @click.stop="toggleSortDropdown('activity')"
+                    :title="getSortLabel(globalSortFilter)"
+                  >
+                    <span class="material-symbols-outlined">sort</span>
+                  </button>
+                  <div 
+                    v-if="activeSortDropdown === 'activity'" 
+                    class="filter-dropdown-menu"
+                    @click.stop
+                  >
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'name' }"
+                      @click="setSortFilter('name')"
+                    >
+                      <span class="material-symbols-outlined">text_fields</span>
+                      Sort by Name
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'date' }"
+                      @click="setSortFilter('date')"
+                    >
+                      <span class="material-symbols-outlined">schedule</span>
+                      Sort by Date
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'created' }"
+                      @click="setSortFilter('created')"
+                    >
+                      <span class="material-symbols-outlined">calendar_today</span>
+                      Sort by Created Date
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'nodes' }"
+                      @click="setSortFilter('nodes')"
+                    >
+                      <span class="material-symbols-outlined">play_arrow</span>
+                      Sort by Nodes
+                    </button>
+                  </div>
+                </div>
+                <div class="filter-dropdown">
+                  <button 
+                    class="filter-icon-btn" 
+                    @click.stop="toggleLangDropdown('activity')"
+                    :title="getLangLabel(languageFilters.activity)"
+                  >
+                    <span class="material-symbols-outlined">language</span>
+                  </button>
+                  <div 
+                    v-if="activeLangDropdown === 'activity'" 
+                    class="filter-dropdown-menu"
+                    @click.stop
+                  >
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: languageFilters.activity === 'all' }"
+                      @click="setLangFilter('activity', 'all')"
+                    >
+                      <span class="material-symbols-outlined">public</span>
+                      All Languages
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: languageFilters.activity === 'en-US' }"
+                      @click="setLangFilter('activity', 'en-US')"
+                    >
+                      <span class="material-symbols-outlined">flag</span>
+                      English
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: languageFilters.activity === 'vi-VN' }"
+                      @click="setLangFilter('activity', 'vi-VN')"
+                    >
+                      <span class="material-symbols-outlined">flag</span>
+                      Vietnamese
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -422,17 +579,92 @@
                 />
               </div>
               <div class="filter-controls">
-                <select v-model="globalSortFilter" class="sort-select">
-                  <option value="name">Sort by Name</option>
-                  <option value="date">Sort by Date</option>
-                  <option value="created">Sort by Created Date</option>
-                  <option value="lifelines">Sort by Lifelines</option>
-                </select>
-                <select v-model="languageFilters.sequence" class="lang-select">
-                  <option value="all">All Languages</option>
-                  <option value="en-US">English</option>
-                  <option value="vi-VN">Vietnamese</option>
-                </select>
+                <div class="filter-dropdown">
+                  <button 
+                    class="filter-icon-btn" 
+                    @click.stop="toggleSortDropdown('sequence')"
+                    :title="getSortLabel(globalSortFilter)"
+                  >
+                    <span class="material-symbols-outlined">sort</span>
+                  </button>
+                  <div 
+                    v-if="activeSortDropdown === 'sequence'" 
+                    class="filter-dropdown-menu"
+                    @click.stop
+                  >
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'name' }"
+                      @click="setSortFilter('name')"
+                    >
+                      <span class="material-symbols-outlined">text_fields</span>
+                      Sort by Name
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'date' }"
+                      @click="setSortFilter('date')"
+                    >
+                      <span class="material-symbols-outlined">schedule</span>
+                      Sort by Date
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'created' }"
+                      @click="setSortFilter('created')"
+                    >
+                      <span class="material-symbols-outlined">calendar_today</span>
+                      Sort by Created Date
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: globalSortFilter === 'lifelines' }"
+                      @click="setSortFilter('lifelines')"
+                    >
+                      <span class="material-symbols-outlined">timeline</span>
+                      Sort by Lifelines
+                    </button>
+                  </div>
+                </div>
+                <div class="filter-dropdown">
+                  <button 
+                    class="filter-icon-btn" 
+                    @click.stop="toggleLangDropdown('sequence')"
+                    :title="getLangLabel(languageFilters.sequence)"
+                  >
+                    <span class="material-symbols-outlined">language</span>
+                  </button>
+                  <div 
+                    v-if="activeLangDropdown === 'sequence'" 
+                    class="filter-dropdown-menu"
+                    @click.stop
+                  >
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: languageFilters.sequence === 'all' }"
+                      @click="setLangFilter('sequence', 'all')"
+                    >
+                      <span class="material-symbols-outlined">public</span>
+                      All Languages
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: languageFilters.sequence === 'en-US' }"
+                      @click="setLangFilter('sequence', 'en-US')"
+                    >
+                      <span class="material-symbols-outlined">flag</span>
+                      English
+                    </button>
+                    <button 
+                      class="filter-option" 
+                      :class="{ active: languageFilters.sequence === 'vi-VN' }"
+                      @click="setLangFilter('sequence', 'vi-VN')"
+                    >
+                      <span class="material-symbols-outlined">flag</span>
+                      Vietnamese
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -733,12 +965,14 @@ import { getProjectDetail } from '@/api/project'
 import { usecaseApi } from '@/api/project'
 import {
   getUsecaseDiagrams,
+  getUsecaseDiagramById,
   generateUsecaseDiagram,
   deleteUsecaseDiagram,
   updateMultiplePositions,
 } from '@/api/ucd'
 import {
   getActivityDiagrams,
+  getActivityDiagramById,
   generateFromUsecase,
   generateFromActor,
   deleteActivityDiagram,
@@ -746,7 +980,7 @@ import {
   updateMultipleNodePositions,
 } from '@/api/avd'
 
-import { getSequenceDiagrams, generateSequenceDiagram, deleteSequenceDiagram } from '@/api/sqd'
+import { getSequenceDiagrams, getSequenceDiagramById, generateSequenceDiagram, deleteSequenceDiagram } from '@/api/sqd'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
 import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
@@ -815,6 +1049,8 @@ export default {
       previewCache: new Map(),
       generatingPreviews: new Set(),
       activeExportDropdown: null,
+      // Cache key prefix để tránh conflict giữa các projects/versions
+      cacheKeyPrefix: null,
       // Filter và search
       searchFilters: {
         usecase: '',
@@ -835,6 +1071,8 @@ export default {
       saveTimeout: null,
       // Track changed nodes for activity diagram (debounce save)
       activityChangedNodes: null,
+      // Track if diagram has been modified
+      diagramHasChanges: false,
       // Scroll handlers để cleanup
       scrollHandlers: null,
       // Scroll button states - track để reactive
@@ -843,6 +1081,9 @@ export default {
         activity: { canScrollLeft: false, canScrollRight: false },
         sequence: { canScrollLeft: false, canScrollRight: false },
       },
+      // Dropdown states for sort and filter
+      activeSortDropdown: null,
+      activeLangDropdown: null,
     }
   },
   computed: {
@@ -1030,6 +1271,8 @@ export default {
     if (projectId) {
       await this.fetchProjectData(projectId)
       await this.loadAvailableUsecases()
+      // Load preview cache từ localStorage trước khi load diagrams
+      this.loadPreviewCache()
       await this.loadDiagrams()
       this.initSocketConnection(projectId)
       this.initVersionSocketListeners(projectId)
@@ -1390,12 +1633,15 @@ export default {
       this.zoomLevel = 1
       // Reset activity changed nodes khi mở editor mới
       this.activityChangedNodes = null
+      // Reset flag thay đổi
+      this.diagramHasChanges = false
     },
     closeEditor() {
       const editedDiagramId = this.editingDiagram
         ? this.editingDiagram.id || this.editingDiagram._id
         : null
       const diagramType = this.editingDiagram?._type
+      const hasChanges = this.diagramHasChanges
 
       // Clear save timeout nếu có
       if (this.saveTimeout) {
@@ -1406,10 +1652,14 @@ export default {
       // Clear activity changed nodes
       this.activityChangedNodes = null
 
+      // Reset flag thay đổi
+      this.diagramHasChanges = false
+
       this.editingDiagram = null
       this.selectedElement = null
 
-      if (editedDiagramId && diagramType) {
+      // Chỉ refresh và regenerate preview nếu có thay đổi
+      if (hasChanges && editedDiagramId && diagramType) {
         const diagrams = this.getDiagramsByType(diagramType)
         const diagram = diagrams.find((d) => (d.id || d._id) === editedDiagramId)
         if (diagram) {
@@ -1478,8 +1728,17 @@ export default {
             break
         }
 
+        // Xóa cache trong memory
         this.previewCache.delete(diagramId)
         this.generatingPreviews.delete(diagramId)
+        
+        // Xóa cache trong localStorage
+        try {
+          const cacheKey = this.getCacheKey(diagramId)
+          localStorage.removeItem(cacheKey)
+        } catch (err) {
+          console.warn('Error removing cache:', err)
+        }
 
         if (
           this.editingDiagram &&
@@ -1675,6 +1934,8 @@ export default {
         console.log('📡 Emitted VERSION_SWITCHED socket event')
       }
 
+      // Load cache cho version mới
+      this.loadPreviewCache()
       this.loadAvailableUsecases()
       this.loadDiagrams()
     },
@@ -1732,7 +1993,8 @@ export default {
         // Lưu vào localStorage để đồng bộ với các trang khác
         saveSelectedVersion(this.project._id, versionId)
 
-        // Refresh diagrams với version mới
+        // Load cache cho version mới và refresh diagrams
+        this.loadPreviewCache()
         await this.loadAvailableUsecases()
         await this.loadDiagrams()
 
@@ -1754,10 +2016,142 @@ export default {
       this.toast.success('Diagrams refreshed')
     },
     // Preview Image Management
+    getCacheKey(diagramId) {
+      if (!this.cacheKeyPrefix) {
+        const projectId = this.project._id || this.$route.params.id
+        const versionId = this.selectedVersionId || 'default'
+        this.cacheKeyPrefix = `diagram_preview_${projectId}_${versionId}_`
+      }
+      return `${this.cacheKeyPrefix}${diagramId}`
+    },
+
+    loadPreviewCache() {
+      try {
+        // Reset cache key prefix khi version thay đổi
+        const projectId = this.project._id || this.$route.params.id
+        const versionId = this.selectedVersionId || 'default'
+        this.cacheKeyPrefix = `diagram_preview_${projectId}_${versionId}_`
+        
+        // Load tất cả cache keys cho project và version này
+        const cacheKeys = Object.keys(localStorage).filter(key => 
+          key.startsWith(this.cacheKeyPrefix)
+        )
+        
+        let loadedCount = 0
+        cacheKeys.forEach(key => {
+          try {
+            const cachedData = localStorage.getItem(key)
+            if (cachedData) {
+              const data = JSON.parse(cachedData)
+              // Check cache age (7 days)
+              const cacheAge = Date.now() - (data.timestamp || 0)
+              const maxAge = 7 * 24 * 60 * 60 * 1000 // 7 days
+              
+              if (cacheAge < maxAge && data.previewImage) {
+                const diagramId = key.replace(this.cacheKeyPrefix, '')
+                this.previewCache.set(diagramId, data.previewImage)
+                loadedCount++
+              } else {
+                // Remove expired cache
+                localStorage.removeItem(key)
+              }
+            }
+          } catch (err) {
+            console.warn('Error loading cached preview:', key, err)
+            localStorage.removeItem(key)
+          }
+        })
+        
+        if (loadedCount > 0) {
+          console.log(`📦 Loaded ${loadedCount} preview images from cache`)
+        }
+      } catch (err) {
+        console.error('Error loading preview cache:', err)
+      }
+    },
+
+    savePreviewToCache(diagramId, previewData) {
+      try {
+        const cacheKey = this.getCacheKey(diagramId)
+        const cacheData = {
+          previewImage: previewData,
+          timestamp: Date.now(),
+          diagramId: diagramId,
+        }
+        
+        // Check localStorage size limit (5MB)
+        const dataString = JSON.stringify(cacheData)
+        const estimatedSize = new Blob([dataString]).size
+        
+        // Nếu quá lớn, skip cache (mỗi preview thường < 100KB)
+        if (estimatedSize > 500 * 1024) {
+          console.warn('Preview too large to cache:', diagramId)
+          return
+        }
+        
+        localStorage.setItem(cacheKey, dataString)
+      } catch (err) {
+        // Nếu localStorage đầy, try cleanup old cache
+        if (err.name === 'QuotaExceededError') {
+          console.warn('LocalStorage full, cleaning old cache...')
+          this.cleanupOldCache()
+          // Retry once
+          try {
+            const cacheKey = this.getCacheKey(diagramId)
+            const cacheData = {
+              previewImage: previewData,
+              timestamp: Date.now(),
+              diagramId: diagramId,
+            }
+            localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+          } catch (retryErr) {
+            console.error('Failed to cache preview after cleanup:', retryErr)
+          }
+        } else {
+          console.error('Error saving preview to cache:', err)
+        }
+      }
+    },
+
+    cleanupOldCache() {
+      try {
+        // Cleanup cache older than 7 days
+        const maxAge = 7 * 24 * 60 * 60 * 1000
+        const allKeys = Object.keys(localStorage)
+        let cleanedCount = 0
+        
+        allKeys.forEach(key => {
+          if (key.startsWith('diagram_preview_')) {
+            try {
+              const data = JSON.parse(localStorage.getItem(key))
+              const cacheAge = Date.now() - (data.timestamp || 0)
+              if (cacheAge > maxAge) {
+                localStorage.removeItem(key)
+                cleanedCount++
+              }
+            } catch (err) {
+              // Invalid cache entry, remove it
+              localStorage.removeItem(key)
+              cleanedCount++
+            }
+          }
+        })
+        
+        if (cleanedCount > 0) {
+          console.log(`🧹 Cleaned up ${cleanedCount} old cache entries`)
+        }
+      } catch (err) {
+        console.error('Error cleaning up cache:', err)
+      }
+    },
+
     handlePreviewGenerated(diagram, previewData) {
       if (previewData) {
         const diagramId = diagram.id || diagram._id
         this.previewCache.set(diagramId, previewData)
+        // Save to persistent cache
+        this.savePreviewToCache(diagramId, previewData)
+        
         const diagrams = this.getDiagramsByType(diagram._type)
         const diagramIndex = diagrams.findIndex((d) => (d.id || d._id) === diagramId)
         if (diagramIndex !== -1) {
@@ -1802,6 +2196,8 @@ export default {
       if (event.projectId !== this.project._id) return
       this.selectedVersionId = event.toVersionId
       saveSelectedVersion(this.project._id, event.toVersionId)
+      // Load cache cho version mới
+      this.loadPreviewCache()
       await this.loadAvailableUsecases()
       await this.loadDiagrams()
       const version = this.versions.find((v) => v._id === event.toVersionId)
@@ -1823,6 +2219,8 @@ export default {
         }
         this.selectedVersionId = event.version._id
         saveSelectedVersion(this.project._id, event.version._id)
+        // Load cache cho version mới
+        this.loadPreviewCache()
         await this.loadAvailableUsecases()
         await this.loadDiagrams()
         this.toast.info(`New version created: ${event.version.version_number || event.version._id}`)
@@ -1840,7 +2238,17 @@ export default {
       const diagramId = diagram.id || diagram._id
       if (this.generatingPreviews.has(diagramId)) return
 
+      // Xóa cache trong memory
       this.previewCache.delete(diagramId)
+      
+      // Xóa cache trong localStorage
+      try {
+        const cacheKey = this.getCacheKey(diagramId)
+        localStorage.removeItem(cacheKey)
+      } catch (err) {
+        console.warn('Error removing cache:', err)
+      }
+      
       const diagrams = this.getDiagramsByType(diagram._type)
       const diagramIndex = diagrams.findIndex((d) => (d.id || d._id) === diagramId)
       if (diagramIndex !== -1) {
@@ -1860,6 +2268,47 @@ export default {
       if (!event.target.closest('.export-dropdown')) {
         this.closeExportDropdown()
       }
+      if (!event.target.closest('.filter-dropdown')) {
+        this.activeSortDropdown = null
+        this.activeLangDropdown = null
+      }
+    },
+    // Sort and filter dropdown methods
+    toggleSortDropdown(type) {
+      this.activeSortDropdown = this.activeSortDropdown === type ? null : type
+      this.activeLangDropdown = null
+    },
+    toggleLangDropdown(type) {
+      this.activeLangDropdown = this.activeLangDropdown === type ? null : type
+      this.activeSortDropdown = null
+    },
+    setSortFilter(value) {
+      this.globalSortFilter = value
+      this.activeSortDropdown = null
+    },
+    setLangFilter(type, value) {
+      this.languageFilters[type] = value
+      this.activeLangDropdown = null
+    },
+    getSortLabel(value) {
+      const labels = {
+        name: 'Sort by Name',
+        date: 'Sort by Date',
+        created: 'Sort by Created Date',
+        actors: 'Sort by Actors',
+        usecases: 'Sort by Use Cases',
+        nodes: 'Sort by Nodes',
+        lifelines: 'Sort by Lifelines',
+      }
+      return labels[value] || 'Sort'
+    },
+    getLangLabel(value) {
+      const labels = {
+        all: 'All Languages',
+        'en-US': 'English',
+        'vi-VN': 'Vietnamese',
+      }
+      return labels[value] || 'Language'
     },
     // Editor Methods
     handleElementSelect(event) {
@@ -1873,6 +2322,9 @@ export default {
     },
     handlePositionUpdate({ element, type, position }) {
       if (!this.editingDiagram) return
+
+      // Đánh dấu diagram có thay đổi
+      this.diagramHasChanges = true
 
       const diagramType = this.editingDiagram._type
 
@@ -2072,15 +2524,16 @@ export default {
       }, 1500)
     },
     async refreshSingleDiagram(diagramType, diagramId) {
-      if (!this.selectedVersionId || !diagramId) return
+      if (!diagramId) return
       
       try {
         let updatedDiagram = null
+        let response = null
+        
         switch (diagramType) {
           case 'usecase':
-            const { data: usecaseData } = await getUsecaseDiagrams(this.selectedVersionId)
-            const usecaseDiagrams = usecaseData?.data || []
-            updatedDiagram = usecaseDiagrams.find((d) => (d.id || d._id) === diagramId)
+            response = await getUsecaseDiagramById(diagramId)
+            updatedDiagram = response?.data?.data || response?.data
             if (updatedDiagram) {
               const index = this.usecaseDiagrams.findIndex((d) => (d.id || d._id) === diagramId)
               if (index !== -1) {
@@ -2088,13 +2541,15 @@ export default {
                   ...this.processDiagrams([updatedDiagram], 'usecase')[0],
                   previewImage: this.usecaseDiagrams[index].previewImage, // Giữ preview image cũ
                 })
+              } else {
+                // Nếu không tìm thấy trong list, thêm vào (trường hợp diagram mới được tạo)
+                this.usecaseDiagrams.push(this.processDiagrams([updatedDiagram], 'usecase')[0])
               }
             }
             break
           case 'activity':
-            const { data: activityData } = await getActivityDiagrams(this.selectedVersionId)
-            const activityDiagrams = activityData?.data || []
-            updatedDiagram = activityDiagrams.find((d) => (d.id || d._id) === diagramId)
+            response = await getActivityDiagramById(diagramId)
+            updatedDiagram = response?.data?.data || response?.data
             if (updatedDiagram) {
               const index = this.activityDiagrams.findIndex((d) => (d.id || d._id) === diagramId)
               if (index !== -1) {
@@ -2102,13 +2557,15 @@ export default {
                   ...this.processDiagrams([updatedDiagram], 'activity')[0],
                   previewImage: this.activityDiagrams[index].previewImage, // Giữ preview image cũ
                 })
+              } else {
+                // Nếu không tìm thấy trong list, thêm vào (trường hợp diagram mới được tạo)
+                this.activityDiagrams.push(this.processDiagrams([updatedDiagram], 'activity')[0])
               }
             }
             break
           case 'sequence':
-            const { data: sequenceData } = await getSequenceDiagrams(this.selectedVersionId)
-            const sequenceDiagrams = sequenceData?.data || []
-            updatedDiagram = sequenceDiagrams.find((d) => (d.id || d._id) === diagramId)
+            response = await getSequenceDiagramById(diagramId)
+            updatedDiagram = response?.data?.data || response?.data
             if (updatedDiagram) {
               const index = this.sequenceDiagrams.findIndex((d) => (d.id || d._id) === diagramId)
               if (index !== -1) {
@@ -2116,14 +2573,17 @@ export default {
                   ...this.processDiagrams([updatedDiagram], 'sequence')[0],
                   previewImage: this.sequenceDiagrams[index].previewImage, // Giữ preview image cũ
                 })
+              } else {
+                // Nếu không tìm thấy trong list, thêm vào (trường hợp diagram mới được tạo)
+                this.sequenceDiagrams.push(this.processDiagrams([updatedDiagram], 'sequence')[0])
               }
             }
             break
         }
       } catch (err) {
         console.error('Error refreshing single diagram:', err)
-        // Fallback: reload all diagrams nếu refresh single diagram fail
-        await this.loadDiagrams()
+        // Không fallback về loadDiagrams() để tránh refresh tất cả
+        // Chỉ log error và giữ nguyên data hiện tại
       }
     },
     // Scroll methods - FIXED VERSION
@@ -2470,16 +2930,6 @@ export default {
 .filter-controls {
   display: flex;
   gap: 8px;
-}
-
-.sort-select,
-.lang-select {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: white;
-  font-size: 0.875rem;
-  min-width: 120px;
 }
 
 /* Diagrams Scroll Container - FIXED */
@@ -3161,11 +3611,6 @@ export default {
     justify-content: space-between;
   }
 
-  .sort-select,
-  .lang-select {
-    flex: 1;
-  }
-
   .diagram-card {
     min-width: 280px;
   }
@@ -3237,5 +3682,84 @@ export default {
   .scroll-arrow .material-symbols-outlined {
     font-size: 20px;
   }
+}
+
+/* Filter Dropdown Styles */
+.filter-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-dropdown {
+  position: relative;
+}
+
+.filter-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-icon-btn:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.filter-icon-btn .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: white;
+  color: #374151;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.filter-option:hover {
+  background: #f9fafb;
+}
+
+.filter-option.active {
+  background: #eff6ff;
+  color: #1e40af;
+  font-weight: 500;
+}
+
+.filter-option .material-symbols-outlined {
+  font-size: 18px;
+  color: inherit;
 }
 </style>

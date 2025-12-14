@@ -517,10 +517,10 @@ export default {
       dragSmoothness: 1, // 1 = immediate, higher = smoother but slower
 
       virtualSpace: {
-        minX: -1000,
-        maxX: 2200,
-        minY: -1000,
-        maxY: 1800,
+        minX: 0,
+        maxX: 1200,
+        minY: 0,
+        maxY: 2060,
         get width() {
           return this.maxX - this.minX
         },
@@ -540,7 +540,7 @@ export default {
       laneHeaderHeight: 60,
       horizontalSpacing: 200,
       laneMaxHeight: 2000,
-      fixedLaneWidth: 400, // Kích thước cố định cho mỗi lane
+      fixedLaneWidth: 600, // Kích thước cố định cho mỗi lane (tăng 1.5 lần từ 400)
       showAutoFixSuggestion: false,
       autoFixDismissed: false,
     }
@@ -603,12 +603,15 @@ export default {
         
         // Nếu node có position từ database, validate và điều chỉnh nếu cần
         let x, y
+        const isStartOrEnd = node.type === 'start' || node.type === 'end'
+        
         if (node.position && typeof node.position.x === 'number' && typeof node.position.y === 'number') {
           x = node.position.x
           y = node.position.y
           
-          // ✅ MỚI: Nếu node có lane_id, validate position có nằm trong lane không
-          if (laneId && laneIndex !== -1 && this.computedLanes.length > 0) {
+          // ✅ Nếu node có lane_id và KHÔNG phải start/end, validate position có nằm trong lane không
+          // Start và end nodes có thể di chuyển tự do giữa các lanes
+          if (laneId && laneIndex !== -1 && this.computedLanes.length > 0 && !isStartOrEnd) {
             const laneX = this.getLaneX(laneIndex)
             const laneWidth = this.getLaneWidth()
             const laneMinX = laneX + safePadding + nodeHalfWidth
@@ -720,6 +723,10 @@ export default {
       
       let count = 0
       this.computedNodes.forEach((node) => {
+        // Bỏ qua start và end nodes vì chúng được phép di chuyển tự do
+        const isStartOrEnd = node.type === 'start' || node.type === 'end'
+        if (isStartOrEnd) return
+        
         if (node.lane_id) {
           const laneIndex = this.getLaneIndex(node.lane_id)
           if (laneIndex !== -1) {
@@ -813,7 +820,13 @@ export default {
     this.setupEventListeners()
     this.setupKeyboardShortcuts()
     this.setupFullscreenListener()
-    this.centerViewport()
+    
+    // Center viewport sau khi DOM đã render và computed properties đã được tính toán
+    // Sử dụng $nextTick để đảm bảo computed properties (computedNodes, computedLanes) đã được tính
+    this.$nextTick(() => {
+      this.updateVirtualSpace() // Update lại virtualSpace sau khi computed properties đã sẵn sàng
+      this.centerViewport()
+    })
 
     if (this.autoGeneratePreview) {
       this.$nextTick(() => {
@@ -871,28 +884,24 @@ export default {
     },
 
     getDecisionPoints(node) {
+      if (!node || !isFinite(node.x) || !isFinite(node.y)) {
+        return ''
+      }
       const size = 40
-      return `
-        ${node.x},${node.y - size}
-        ${node.x + size},${node.y}
-        ${node.x},${node.y + size}
-        ${node.x - size},${node.y}
-      `
+      return `${node.x},${node.y - size} ${node.x + size},${node.y} ${node.x},${node.y + size} ${node.x - size},${node.y}`
     },
 
     getMergePoints(node) {
+      if (!node || !isFinite(node.x) || !isFinite(node.y)) {
+        return ''
+      }
       // Hình thang ngược (inverted trapezoid) cho merge node
       const width = node.width || 80
       const height = node.height || 80
       const topWidth = width * 0.6 // Đỉnh nhỏ hơn
       const bottomWidth = width // Đáy rộng hơn
       
-      return `
-        ${node.x - topWidth / 2},${node.y - height / 2}
-        ${node.x + topWidth / 2},${node.y - height / 2}
-        ${node.x + bottomWidth / 2},${node.y + height / 2}
-        ${node.x - bottomWidth / 2},${node.y + height / 2}
-      `
+      return `${node.x - topWidth / 2},${node.y - height / 2} ${node.x + topWidth / 2},${node.y - height / 2} ${node.x + bottomWidth / 2},${node.y + height / 2} ${node.x - bottomWidth / 2},${node.y + height / 2}`
     },
 
     getNodeLabelPosition(node) {
@@ -1147,12 +1156,14 @@ export default {
       let newY = svgPoint.y - this.dragOffset.y
 
       // Giới hạn node trong lane nếu node có lane_id
+      // NHƯNG cho phép start và end nodes di chuyển tự do giữa các lanes
       const nodeHalfWidth = (this.draggingElement.width || 60) / 2
       const nodeHalfHeight = (this.draggingElement.height || 60) / 2
       const safePadding = 20
+      const isStartOrEnd = this.draggingElement.type === 'start' || this.draggingElement.type === 'end'
 
-      if (this.draggingElement.lane_id && this.computedLanes.length > 0) {
-        // Node thuộc lane - giới hạn trong lane
+      if (this.draggingElement.lane_id && this.computedLanes.length > 0 && !isStartOrEnd) {
+        // Node thuộc lane và không phải start/end - giới hạn trong lane
         const laneIndex = this.getLaneIndex(this.draggingElement.lane_id)
         if (laneIndex !== -1) {
           const laneX = this.getLaneX(laneIndex)
@@ -1169,7 +1180,7 @@ export default {
           newY = Math.max(laneMinY, Math.min(laneMaxY, newY))
         }
       } else {
-        // Node không có lane - giới hạn trong virtual space
+        // Node không có lane HOẶC là start/end node - giới hạn trong virtual space (có thể di chuyển tự do)
         newX = Math.max(
           this.virtualSpace.minX + nodeHalfWidth + safePadding,
           Math.min(this.virtualSpace.maxX - nodeHalfWidth - safePadding, newX)
@@ -1348,52 +1359,17 @@ export default {
     },
 
     centerViewport() {
-      const centerX = this.containerWidth / 2 - this.virtualSpace.centerX * this.internalZoom
-      const centerY = this.containerHeight / 2 - this.virtualSpace.centerY * this.internalZoom
-      this.viewport.x = centerX
-      this.viewport.y = centerY
+      // Cố định viewport ở vị trí (270, 74)
+      this.viewport.x = 270
+      this.viewport.y = 74
     },
 
     updateVirtualSpace() {
-      // Nếu có lanes, tính toán virtualSpace dựa trên lanes với kích thước cố định
-      if (this.computedLanes.length > 0) {
-        const totalLanesWidth = this.computedLanes.length * this.fixedLaneWidth
-        const lanesHeight = this.laneHeaderHeight + this.laneMaxHeight
-        
-        // Cố định virtualSpace để chứa toàn bộ lanes
-        this.virtualSpace.minX = -1000
-        this.virtualSpace.maxX = -1000 + totalLanesWidth
-        this.virtualSpace.minY = -1000
-        this.virtualSpace.maxY = -1000 + lanesHeight
-        
-        return
-      }
-
-      // Nếu không có lanes, tính toán như cũ
-      const allElements = [...this.positionedNodes]
-      if (allElements.length === 0) {
-        this.virtualSpace.minX = -1000
-        this.virtualSpace.maxX = 2200
-        this.virtualSpace.minY = -1000
-        this.virtualSpace.maxY = 1800
-        return
-      }
-
-      const bounds = allElements.reduce(
-        (acc, element) => ({
-          minX: Math.min(acc.minX, element.x - (element.width || 60)),
-          maxX: Math.max(acc.maxX, element.x + (element.width || 60)),
-          minY: Math.min(acc.minY, element.y - (element.height || 60)),
-          maxY: Math.max(acc.maxY, element.y + (element.height || 60)),
-        }),
-        { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
-      )
-
-      const padding = 200
-      this.virtualSpace.minX = Math.min(this.virtualSpace.minX, bounds.minX - padding)
-      this.virtualSpace.maxX = Math.max(this.virtualSpace.maxX, bounds.maxX + padding)
-      this.virtualSpace.minY = Math.min(this.virtualSpace.minY, bounds.minY - padding)
-      this.virtualSpace.maxY = Math.max(this.virtualSpace.maxY, bounds.maxY + padding)
+      // Cố định virtualSpace ở kích thước 1200x2060
+      this.virtualSpace.minX = 0
+      this.virtualSpace.maxX = 1200
+      this.virtualSpace.minY = 0
+      this.virtualSpace.maxY = 2060
     },
 
     // ============ SELECTION METHODS ============
@@ -1507,38 +1483,71 @@ export default {
               bounds.maxY = Math.max(bounds.maxY, lanesMaxY)
             }
 
+            // Validate bounds
+            if (!isFinite(bounds.minX) || !isFinite(bounds.maxX) || 
+                !isFinite(bounds.minY) || !isFinite(bounds.maxY) ||
+                bounds.minX >= bounds.maxX || bounds.minY >= bounds.maxY) {
+              console.error('🖼️ ActivityDiagramRenderer: Invalid bounds:', bounds)
+              resolve(null)
+              return
+            }
+
             console.log('🖼️ ActivityDiagramRenderer: Bounds:', bounds)
 
             const padding = 80
             const contentWidth = Math.max(bounds.maxX - bounds.minX + padding * 2, 400)
             const contentHeight = Math.max(bounds.maxY - bounds.minY + padding * 2, 300)
 
+            // Validate content size
+            if (!isFinite(contentWidth) || !isFinite(contentHeight) || 
+                contentWidth <= 0 || contentHeight <= 0) {
+              console.error('🖼️ ActivityDiagramRenderer: Invalid content size:', contentWidth, contentHeight)
+              resolve(null)
+              return
+            }
+
             console.log('🖼️ ActivityDiagramRenderer: Content size:', contentWidth, 'x', contentHeight)
 
             const svgString = this.generateExportSVG(bounds, padding, contentWidth, contentHeight)
+            
+            // Validate SVG string
+            if (!svgString || svgString.trim().length === 0) {
+              console.error('🖼️ ActivityDiagramRenderer: Empty SVG string')
+              resolve(null)
+              return
+            }
+
             const svgData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`
 
             const img = new Image()
             img.onload = () => {
-              const canvas = document.createElement('canvas')
-              const ctx = canvas.getContext('2d')
-              const scale = 1
+              try {
+                const canvas = document.createElement('canvas')
+                const ctx = canvas.getContext('2d')
+                const scale = 1
 
-              canvas.width = contentWidth * scale
-              canvas.height = contentHeight * scale
-              ctx.scale(scale, scale)
+                canvas.width = contentWidth * scale
+                canvas.height = contentHeight * scale
+                ctx.scale(scale, scale)
 
-              ctx.fillStyle = 'white'
-              ctx.fillRect(0, 0, contentWidth, contentHeight)
+                ctx.fillStyle = 'white'
+                ctx.fillRect(0, 0, contentWidth, contentHeight)
 
-              ctx.drawImage(img, 0, 0, contentWidth, contentHeight)
+                ctx.drawImage(img, 0, 0, contentWidth, contentHeight)
 
-              const base64 = canvas.toDataURL('image/png', 0.8)
-              console.log('🖼️ ActivityDiagramRenderer: Preview generation completed successfully')
-              resolve(base64)
+                const base64 = canvas.toDataURL('image/png', 0.8)
+                console.log('🖼️ ActivityDiagramRenderer: Preview generation completed successfully')
+                resolve(base64)
+              } catch (error) {
+                console.error('🖼️ ActivityDiagramRenderer: Error drawing image to canvas:', error)
+                resolve(null)
+              }
             }
             img.onerror = (error) => {
               console.error('🖼️ ActivityDiagramRenderer: Image load error:', error)
+              console.error('🖼️ ActivityDiagramRenderer: SVG data length:', svgData.length)
+              // Log first 500 chars of SVG for debugging
+              console.error('🖼️ ActivityDiagramRenderer: SVG preview:', svgString.substring(0, 500))
               resolve(null)
             }
             img.src = svgData
@@ -1550,10 +1559,30 @@ export default {
       })
     },
 
+    // Helper function to escape XML text
+    escapeXml(text) {
+      if (!text) return ''
+      const textStr = String(text)
+      return textStr
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;')
+    },
+
     generateExportSVG(bounds, padding, contentWidth, contentHeight) {
-      const viewBox = `${bounds.minX - padding} ${
-        bounds.minY - padding
-      } ${contentWidth} ${contentHeight}`
+      // Validate viewBox values
+      const viewBoxMinX = bounds.minX - padding
+      const viewBoxMinY = bounds.minY - padding
+      
+      if (!isFinite(viewBoxMinX) || !isFinite(viewBoxMinY) || 
+          !isFinite(contentWidth) || !isFinite(contentHeight)) {
+        console.error('🖼️ ActivityDiagramRenderer: Invalid viewBox values')
+        return ''
+      }
+
+      const viewBox = `${viewBoxMinX} ${viewBoxMinY} ${contentWidth} ${contentHeight}`
 
       return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${contentWidth}" height="${contentHeight}" viewBox="${viewBox}">
@@ -1564,7 +1593,7 @@ export default {
   </defs>
 
   <!-- Background trắng -->
-  <rect x="${bounds.minX - padding}" y="${bounds.minY - padding}" 
+  <rect x="${viewBoxMinX}" y="${viewBoxMinY}" 
         width="${contentWidth}" height="${contentHeight}" fill="white" />
 
   <!-- Render Swimlanes -->
@@ -1574,7 +1603,12 @@ export default {
       const laneWidth = this.getLaneWidth()
       const laneY = this.virtualSpace.minY - bounds.minY + padding
       const laneHeight = this.laneHeaderHeight + this.laneMaxHeight
-      const laneName = lane.name || `Lane ${index + 1}`
+      const laneName = this.escapeXml(lane.name || `Lane ${index + 1}`)
+
+      // Validate lane coordinates
+      if (!isFinite(laneX) || !isFinite(laneY) || !isFinite(laneWidth) || !isFinite(laneHeight)) {
+        return ''
+      }
 
       return `
       <rect x="${laneX}" y="${laneY}" 
@@ -1603,29 +1637,47 @@ export default {
   <!-- Render Edges -->
   ${this.computedEdges
     .map((edge) => {
+      if (!edge.source || !edge.target) return ''
+      
       const path = this.calculateEdgePath(edge)
-      const labelContent = this.getEdgeLabel(edge)
-        ? `<text x="${this.getEdgeLabelPosition(edge).x - bounds.minX + padding}" y="${
-            this.getEdgeLabelPosition(edge).y - bounds.minY + padding
-          }" font-size="10" fill="#6b7280" text-anchor="middle" dominant-baseline="middle">${this.getEdgeLabel(
-            edge
-          )}</text>`
+      if (!path || path.trim().length === 0) return ''
+      
+      const adjustedPath = this.adjustPathForExport(path, bounds, padding)
+      if (!adjustedPath || adjustedPath.trim().length === 0) return ''
+      
+      const edgeLabel = this.getEdgeLabel(edge)
+      const labelContent = edgeLabel
+        ? (() => {
+            const labelPos = this.getEdgeLabelPosition(edge)
+            if (!labelPos || !isFinite(labelPos.x) || !isFinite(labelPos.y)) return ''
+            const labelX = labelPos.x - bounds.minX + padding
+            const labelY = labelPos.y - bounds.minY + padding
+            if (!isFinite(labelX) || !isFinite(labelY)) return ''
+            return `<text x="${labelX}" y="${labelY}" font-size="10" fill="#6b7280" text-anchor="middle" dominant-baseline="middle">${this.escapeXml(edgeLabel)}</text>`
+          })()
         : ''
 
       return `
-        <path d="${this.adjustPathForExport(path, bounds, padding)}" 
+        <path d="${adjustedPath}" 
               stroke="#374151" stroke-width="2" fill="none" 
               marker-end="url(#activity-arrow-preview)" />
         ${labelContent}
       `
     })
+    .filter(html => html.trim().length > 0)
     .join('')}
 
   <!-- Render Nodes -->
   ${this.positionedNodes
     .map((node) => {
+      if (!node || !isFinite(node.x) || !isFinite(node.y)) return ''
+      
       const x = node.x - bounds.minX + padding
       const y = node.y - bounds.minY + padding
+      
+      if (!isFinite(x) || !isFinite(y)) return ''
+
+      const nodeLabel = this.escapeXml(node.label || '')
 
       if (node.type === 'start' || node.type === 'end') {
         return `
@@ -1639,73 +1691,103 @@ export default {
           </text>
         `
       } else if (node.type === 'action') {
+        const width = node.width || 120
+        const height = node.height || 60
         return `
-          <rect x="${x - node.width / 2}" y="${y - node.height / 2}" 
-                width="${node.width}" height="${node.height}" rx="8"
+          <rect x="${x - width / 2}" y="${y - height / 2}" 
+                width="${width}" height="${height}" rx="8"
                 fill="white" stroke="#3b82f6" stroke-width="2" />
           <text x="${x}" y="${y}" font-size="12" fill="#1e40af" 
-                text-anchor="middle" dominant-baseline="middle">${node.label}</text>
+                text-anchor="middle" dominant-baseline="middle">${nodeLabel}</text>
         `
       } else if (node.type === 'decision') {
         const points = this.getDecisionPoints({ ...node, x, y })
+        if (!points || points.trim().length === 0) return ''
         return `
           <polygon points="${points}" fill="white" stroke="#8b5cf6" stroke-width="2" />
           <text x="${x}" y="${y}" font-size="12" fill="#6b21a8" 
-                text-anchor="middle" dominant-baseline="middle">${node.label}</text>
+                text-anchor="middle" dominant-baseline="middle">${nodeLabel}</text>
         `
       } else if (node.type === 'merge') {
         const points = this.getMergePoints({ ...node, x, y })
+        if (!points || points.trim().length === 0) return ''
         return `
           <polygon points="${points}" fill="white" stroke="#8b5cf6" stroke-width="2" />
           <text x="${x}" y="${y}" font-size="12" fill="#6b21a8" 
-                text-anchor="middle" dominant-baseline="middle">${node.label}</text>
+                text-anchor="middle" dominant-baseline="middle">${nodeLabel}</text>
         `
       } else if (node.type === 'fork' || node.type === 'join') {
+        const width = node.width || 100
+        const height = node.height || 20
         return `
-          <rect x="${x - node.width / 2}" y="${y - node.height / 2}" 
-                width="${node.width}" height="${node.height}"
+          <rect x="${x - width / 2}" y="${y - height / 2}" 
+                width="${width}" height="${height}"
                 fill="#6b7280" stroke="#374151" stroke-width="2" />
-          <text x="${x}" y="${y + node.height / 2 + 15}" font-size="10" fill="#374151" 
-                text-anchor="middle" dominant-baseline="middle">${node.label}</text>
+          <text x="${x}" y="${y + height / 2 + 15}" font-size="10" fill="#374151" 
+                text-anchor="middle" dominant-baseline="middle">${nodeLabel}</text>
         `
       } else if (node.type === 'object') {
+        const width = node.width || 120
+        const height = node.height || 60
         return `
-          <rect x="${x - node.width / 2}" y="${y - node.height / 2}" 
-                width="${node.width}" height="${node.height}" rx="8"
+          <rect x="${x - width / 2}" y="${y - height / 2}" 
+                width="${width}" height="${height}" rx="8"
                 fill="white" stroke="#f59e0b" stroke-width="2" />
           <text x="${x}" y="${y}" font-size="12" fill="#92400e" 
-                text-anchor="middle" dominant-baseline="middle" text-decoration="underline">${
-                  node.label
-                }</text>
+                text-anchor="middle" dominant-baseline="middle" text-decoration="underline">${nodeLabel}</text>
         `
       }
       return ''
     })
+    .filter(html => html.trim().length > 0)
     .join('')}
 </svg>`
     },
 
     adjustPathForExport(path, bounds, padding) {
-      if (!path) return ''
-      // Xử lý tất cả các lệnh SVG path: M, L, C, Q, S, T, Z
-      return path.replace(/([MmLlCcQqSsTtZz])\s*([-\d.]+(?:\s+[-\d.]+)*)/g, (match, command, coords) => {
-        if (command.toLowerCase() === 'z') {
-          return command // Z không có tọa độ
-        }
-        
-        const numbers = coords.trim().split(/\s+/).map(Number)
-        const adjusted = numbers.map((num, index) => {
-          if (index % 2 === 0) {
-            // X coordinate
-            return num - bounds.minX + padding
-          } else {
-            // Y coordinate
-            return num - bounds.minY + padding
+      if (!path || typeof path !== 'string' || path.trim().length === 0) return ''
+      
+      // Validate bounds
+      if (!bounds || !isFinite(bounds.minX) || !isFinite(bounds.minY) || 
+          !isFinite(padding)) {
+        console.error('🖼️ ActivityDiagramRenderer: Invalid bounds or padding in adjustPathForExport')
+        return ''
+      }
+      
+      try {
+        // Xử lý tất cả các lệnh SVG path: M, L, C, Q, S, T, Z
+        return path.replace(/([MmLlCcQqSsTtZz])\s*([-\d.]+(?:\s+[-\d.]+)*)/g, (match, command, coords) => {
+          if (command.toLowerCase() === 'z') {
+            return command // Z không có tọa độ
           }
+          
+          if (!coords || coords.trim().length === 0) {
+            return command
+          }
+          
+          const numbers = coords.trim().split(/\s+/).map(Number)
+          const adjusted = numbers.map((num, index) => {
+            if (!isFinite(num)) {
+              return 0 // Replace NaN/Infinity with 0
+            }
+            
+            if (index % 2 === 0) {
+              // X coordinate
+              const adjustedX = num - bounds.minX + padding
+              return isFinite(adjustedX) ? adjustedX : 0
+            } else {
+              // Y coordinate
+              const adjustedY = num - bounds.minY + padding
+              return isFinite(adjustedY) ? adjustedY : 0
+            }
+          })
+          
+          return `${command} ${adjusted.join(' ')}`
         })
-        
-        return `${command} ${adjusted.join(' ')}`
-      })
+      } catch (error) {
+        console.error('🖼️ ActivityDiagramRenderer: Error adjusting path for export:', error)
+        return ''
+      }
     },
 
     regeneratePreview() {
@@ -1883,6 +1965,10 @@ export default {
       const safePadding = 20
       
       this.computedNodes.forEach((node) => {
+        // Bỏ qua start và end nodes vì chúng được phép di chuyển tự do
+        const isStartOrEnd = node.type === 'start' || node.type === 'end'
+        if (isStartOrEnd) return
+        
         if (node.lane_id) {
           const laneIndex = this.getLaneIndex(node.lane_id)
           if (laneIndex !== -1) {
@@ -1908,7 +1994,7 @@ export default {
               
               // Tìm node gần nhất trong cùng lane để đặt phía dưới
               const nodesInSameLane = this.computedNodes.filter(n => 
-                n.lane_id === node.lane_id && n.id !== node.id
+                n.lane_id === node.lane_id && n.id !== node.id && n.type !== 'start' && n.type !== 'end'
               )
               
               if (nodesInSameLane.length > 0) {

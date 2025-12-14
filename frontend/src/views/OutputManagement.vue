@@ -87,30 +87,165 @@
               <!-- Compact Filter Controls -->
               <div class="compact-filter-controls">
                 <div class="filter-select-group">
-                  <select v-model="filters.type" @change="applyFilters" class="filter-select">
-                    <option value="all">All Types</option>
-                    <option value="testcase">Test Cases</option>
-                    <option value="database">Database</option>
-                    <option value="uml">UML Diagrams</option>
-                    <option value="version">Versions</option>
-                    <option value="project">Projects</option>
-                  </select>
-
-                  <select v-model="filters.action" @change="applyFilters" class="filter-select">
-                    <option value="all">All Actions</option>
-                    <option value="create">Create</option>
-                    <option value="update">Update</option>
-                    <option value="delete">Delete</option>
-                    <option value="execute">Execute</option>
-                    <option value="export">Export</option>
-                  </select>
-
-                  <select v-model="filters.user" @change="applyFilters" class="filter-select">
-                    <option value="all">All Users</option>
-                    <option v-for="user in uniqueUsers" :key="user" :value="user">
-                      {{ user }}
-                    </option>
-                  </select>
+                  <div class="filter-icon-wrapper">
+                    <button 
+                      class="filter-icon-btn-compact" 
+                      @click.stop="toggleTypeFilter"
+                      :title="getTypeFilterLabel()"
+                    >
+                      <span class="material-symbols-outlined">category</span>
+                    </button>
+                    <div 
+                      v-if="showTypeFilter" 
+                      class="filter-dropdown-menu"
+                      @click.stop
+                    >
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.type === 'all' }"
+                        @click="setTypeFilter('all')"
+                      >
+                        <span class="material-symbols-outlined">filter_alt_off</span>
+                        All Types
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.type === 'testcase' }"
+                        @click="setTypeFilter('testcase')"
+                      >
+                        <span class="material-symbols-outlined">play_arrow</span>
+                        Test Cases
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.type === 'database' }"
+                        @click="setTypeFilter('database')"
+                      >
+                        <span class="material-symbols-outlined">storage</span>
+                        Database
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.type === 'uml' }"
+                        @click="setTypeFilter('uml')"
+                      >
+                        <span class="material-symbols-outlined">schema</span>
+                        UML Diagrams
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.type === 'version' }"
+                        @click="setTypeFilter('version')"
+                      >
+                        <span class="material-symbols-outlined">history</span>
+                        Versions
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.type === 'project' }"
+                        @click="setTypeFilter('project')"
+                      >
+                        <span class="material-symbols-outlined">folder</span>
+                        Projects
+                      </button>
+                    </div>
+                  </div>
+                  <div class="filter-icon-wrapper">
+                    <button 
+                      class="filter-icon-btn-compact" 
+                      @click.stop="toggleActionFilter"
+                      :title="getActionFilterLabel()"
+                    >
+                      <span class="material-symbols-outlined">tune</span>
+                    </button>
+                    <div 
+                      v-if="showActionFilter" 
+                      class="filter-dropdown-menu"
+                      @click.stop
+                    >
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.action === 'all' }"
+                        @click="setActionFilter('all')"
+                      >
+                        <span class="material-symbols-outlined">filter_alt_off</span>
+                        All Actions
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.action === 'create' }"
+                        @click="setActionFilter('create')"
+                      >
+                        <span class="material-symbols-outlined">add</span>
+                        Create
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.action === 'update' }"
+                        @click="setActionFilter('update')"
+                      >
+                        <span class="material-symbols-outlined">edit</span>
+                        Update
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.action === 'delete' }"
+                        @click="setActionFilter('delete')"
+                      >
+                        <span class="material-symbols-outlined">delete</span>
+                        Delete
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.action === 'execute' }"
+                        @click="setActionFilter('execute')"
+                      >
+                        <span class="material-symbols-outlined">play_arrow</span>
+                        Execute
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.action === 'export' }"
+                        @click="setActionFilter('export')"
+                      >
+                        <span class="material-symbols-outlined">download</span>
+                        Export
+                      </button>
+                    </div>
+                  </div>
+                  <div class="filter-icon-wrapper">
+                    <button 
+                      class="filter-icon-btn-compact" 
+                      @click.stop="toggleUserFilter"
+                      :title="getUserFilterLabel()"
+                    >
+                      <span class="material-symbols-outlined">person</span>
+                    </button>
+                    <div 
+                      v-if="showUserFilter" 
+                      class="filter-dropdown-menu"
+                      @click.stop
+                    >
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: filters.user === 'all' }"
+                        @click="setUserFilter('all')"
+                      >
+                        <span class="material-symbols-outlined">filter_alt_off</span>
+                        All Users
+                      </button>
+                      <button 
+                        v-for="user in uniqueUsers" 
+                        :key="user"
+                        class="filter-option" 
+                        :class="{ active: filters.user === user }"
+                        @click="setUserFilter(user)"
+                      >
+                        <span class="material-symbols-outlined">account_circle</span>
+                        {{ user }}
+                      </button>
+                    </div>
+                  </div>
                   <button
                     @click="clearFilters"
                     class="clear-filters-button"
@@ -375,6 +510,9 @@ export default {
         action: 'all',
         user: 'all',
       },
+      showTypeFilter: false,
+      showActionFilter: false,
+      showUserFilter: false,
       searchQuery: '',
       searchTimeout: null,
 
@@ -507,6 +645,9 @@ export default {
     if (this.project._id) {
       this.initVersionSocketListeners(this.project._id)
     }
+    
+    // Add click outside listener for filter dropdowns
+    document.addEventListener('click', this.handleClickOutsideFilters)
   },
   beforeUnmount() {
     if (this.project._id) {
@@ -516,6 +657,9 @@ export default {
     
     // Remove event listener
     eventBus.off('version-approved', this.handleVersionApproved)
+    
+    // Remove click outside listener
+    document.removeEventListener('click', this.handleClickOutsideFilters)
   },
   methods: {
     // Navigation methods
@@ -959,6 +1103,67 @@ export default {
       }
       this.searchQuery = ''
       this.pagination.currentPage = 1
+      this.showTypeFilter = false
+      this.showActionFilter = false
+      this.showUserFilter = false
+    },
+    
+    // Filter dropdown methods
+    toggleTypeFilter() {
+      this.showTypeFilter = !this.showTypeFilter
+      this.showActionFilter = false
+      this.showUserFilter = false
+    },
+    toggleActionFilter() {
+      this.showActionFilter = !this.showActionFilter
+      this.showTypeFilter = false
+      this.showUserFilter = false
+    },
+    toggleUserFilter() {
+      this.showUserFilter = !this.showUserFilter
+      this.showTypeFilter = false
+      this.showActionFilter = false
+    },
+    setTypeFilter(value) {
+      this.filters.type = value
+      this.showTypeFilter = false
+      this.applyFilters()
+    },
+    setActionFilter(value) {
+      this.filters.action = value
+      this.showActionFilter = false
+      this.applyFilters()
+    },
+    setUserFilter(value) {
+      this.filters.user = value
+      this.showUserFilter = false
+      this.applyFilters()
+    },
+    getTypeFilterLabel() {
+      if (this.filters.type === 'all') return 'All Types'
+      const labels = {
+        testcase: 'Test Cases',
+        database: 'Database',
+        uml: 'UML Diagrams',
+        version: 'Versions',
+        project: 'Projects',
+      }
+      return labels[this.filters.type] || this.filters.type
+    },
+    getActionFilterLabel() {
+      if (this.filters.action === 'all') return 'All Actions'
+      return this.filters.action.charAt(0).toUpperCase() + this.filters.action.slice(1)
+    },
+    getUserFilterLabel() {
+      if (this.filters.user === 'all') return 'All Users'
+      return this.filters.user
+    },
+    handleClickOutsideFilters(event) {
+      if (!event.target.closest('.filter-icon-wrapper')) {
+        this.showTypeFilter = false
+        this.showActionFilter = false
+        this.showUserFilter = false
+      }
     },
 
     debouncedSearch() {
@@ -1292,7 +1497,7 @@ export default {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .section-header {
@@ -1302,6 +1507,8 @@ export default {
   align-items: flex-start;
   margin-bottom: 20px;
   gap: 16px;
+  overflow: visible;
+  position: relative;
 }
 
 .section-header h3 {
@@ -1315,6 +1522,7 @@ export default {
 .controls-header {
   flex: 1;
   width: 100%;
+  overflow: visible;
 }
 
 /* Compact Filter Controls */
@@ -1324,12 +1532,14 @@ export default {
   align-items: center;
   flex-direction: row;
   gap: 12px;
+  overflow: visible;
 }
 
 .filter-select-group {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  overflow: visible;
 }
 
 .filter-select {
@@ -1348,6 +1558,84 @@ export default {
   outline: none;
   border-color: #1a365d;
   box-shadow: 0 0 0 2px rgba(26, 54, 93, 0.1);
+}
+
+/* Filter Icon Buttons */
+.filter-icon-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.filter-icon-btn-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 32px;
+  height: 32px;
+}
+
+.filter-icon-btn-compact:hover {
+  background: #f9fafb;
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.filter-icon-btn-compact .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: white;
+  color: #374151;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-option:hover {
+  background: #f9fafb;
+}
+
+.filter-option.active {
+  background: #e6f2ff;
+  color: #1a365d;
+  font-weight: 500;
+}
+
+.filter-option .material-symbols-outlined {
+  font-size: 18px;
+  color: #6b7280;
+}
+
+.filter-option.active .material-symbols-outlined {
+  color: #1a365d;
 }
 
 .search-refresh-group {

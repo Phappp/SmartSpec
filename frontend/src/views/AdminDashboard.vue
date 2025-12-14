@@ -132,24 +132,84 @@
               </div>
               <div class="chart-actions">
                 <div class="user-filters-modern">
-                  <select
-                    v-model="userAnalyticsFilters.rangeDays"
-                    @change="loadUserAnalytics"
-                    class="filter-select-modern small"
-                  >
-                    <option :value="7">7 ngày</option>
-                    <option :value="30">30 ngày</option>
-                    <option :value="90">90 ngày</option>
-                  </select>
-                  <select
-                    v-model="userAnalyticsFilters.viewMode"
-                    @change="() => { loadUserTimelineChart(); }"
-                    class="filter-select-modern small"
-                  >
-                    <option value="day">Theo ngày</option>
-                    <option value="month">Theo tháng</option>
-                    <option value="year">Theo năm</option>
-                  </select>
+                  <div class="filter-icon-wrapper">
+                    <button 
+                      class="filter-icon-btn-modern" 
+                      @click.stop="toggleRangeDaysFilter"
+                      :title="`Range: ${userAnalyticsFilters.rangeDays} days`"
+                    >
+                      <span class="material-symbols-outlined">calendar_month</span>
+                    </button>
+                    <div 
+                      v-if="showRangeDaysFilter" 
+                      class="filter-dropdown-menu"
+                      @click.stop
+                    >
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: userAnalyticsFilters.rangeDays === 7 }"
+                        @click="setRangeDays(7)"
+                      >
+                        <span class="material-symbols-outlined">today</span>
+                        7 days
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: userAnalyticsFilters.rangeDays === 30 }"
+                        @click="setRangeDays(30)"
+                      >
+                        <span class="material-symbols-outlined">date_range</span>
+                        30 days
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: userAnalyticsFilters.rangeDays === 90 }"
+                        @click="setRangeDays(90)"
+                      >
+                        <span class="material-symbols-outlined">event</span>
+                        90 days
+                      </button>
+                    </div>
+                  </div>
+                  <div class="filter-icon-wrapper">
+                    <button 
+                      class="filter-icon-btn-modern" 
+                      @click.stop="toggleViewModeFilter"
+                      :title="`View: ${getViewModeLabel()}`"
+                    >
+                      <span class="material-symbols-outlined">timeline</span>
+                    </button>
+                    <div 
+                      v-if="showViewModeFilter" 
+                      class="filter-dropdown-menu"
+                      @click.stop
+                    >
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: userAnalyticsFilters.viewMode === 'day' }"
+                        @click="setViewMode('day')"
+                      >
+                        <span class="material-symbols-outlined">today</span>
+                        By Day
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: userAnalyticsFilters.viewMode === 'month' }"
+                        @click="setViewMode('month')"
+                      >
+                        <span class="material-symbols-outlined">calendar_month</span>
+                        By Month
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: userAnalyticsFilters.viewMode === 'year' }"
+                        @click="setViewMode('year')"
+                      >
+                        <span class="material-symbols-outlined">event</span>
+                        By Year
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <button class="btn-icon-modern" @click="() => { loadUserAnalytics(); loadUserTimelineChart(); }" title="Làm mới">
                   <span class="material-symbols-outlined">refresh</span>
@@ -320,24 +380,106 @@
                     <span class="material-symbols-outlined">cloud</span>
                     Provider
                   </label>
-                  <select v-model="apiFilters.provider" @change="applyApiFilters" class="filter-select-modern">
-                    <option value="">Tất cả</option>
-                    <option value="gemini">Gemini</option>
-                    <option value="openai">OpenAI</option>
-                    <option value="claude">Claude</option>
-                  </select>
+                  <div class="filter-icon-wrapper">
+                    <button 
+                      class="filter-icon-btn-modern" 
+                      @click.stop="toggleProviderFilter"
+                      :title="getProviderFilterLabel()"
+                    >
+                      <span class="material-symbols-outlined">cloud</span>
+                    </button>
+                    <div 
+                      v-if="showProviderFilter" 
+                      class="filter-dropdown-menu"
+                      @click.stop
+                    >
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: apiFilters.provider === '' }"
+                        @click="setProviderFilter('')"
+                      >
+                        <span class="material-symbols-outlined">filter_alt_off</span>
+                        All Providers
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: apiFilters.provider === 'gemini' }"
+                        @click="setProviderFilter('gemini')"
+                      >
+                        <span class="material-symbols-outlined">auto_awesome</span>
+                        Gemini
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: apiFilters.provider === 'openai' }"
+                        @click="setProviderFilter('openai')"
+                      >
+                        <span class="material-symbols-outlined">smart_toy</span>
+                        OpenAI
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: apiFilters.provider === 'claude' }"
+                        @click="setProviderFilter('claude')"
+                      >
+                        <span class="material-symbols-outlined">psychology</span>
+                        Claude
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <div class="filter-item-modern">
                   <label class="filter-label">
                     <span class="material-symbols-outlined">check_circle</span>
-                    Trạng thái
+                    Status
                   </label>
-                  <select v-model="apiFilters.status" @change="applyApiFilters" class="filter-select-modern">
-                    <option value="">Tất cả</option>
-                    <option value="success">Thành công</option>
-                    <option value="failed">Thất bại</option>
-                    <option value="timeout">Timeout</option>
-                  </select>
+                  <div class="filter-icon-wrapper">
+                    <button 
+                      class="filter-icon-btn-modern" 
+                      @click.stop="toggleStatusFilter"
+                      :title="getStatusFilterLabel()"
+                    >
+                      <span class="material-symbols-outlined">check_circle</span>
+                    </button>
+                    <div 
+                      v-if="showStatusFilter" 
+                      class="filter-dropdown-menu"
+                      @click.stop
+                    >
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: apiFilters.status === '' }"
+                        @click="setStatusFilter('')"
+                      >
+                        <span class="material-symbols-outlined">filter_alt_off</span>
+                        All Status
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: apiFilters.status === 'success' }"
+                        @click="setStatusFilter('success')"
+                      >
+                        <span class="material-symbols-outlined">check_circle</span>
+                        Success
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: apiFilters.status === 'failed' }"
+                        @click="setStatusFilter('failed')"
+                      >
+                        <span class="material-symbols-outlined">cancel</span>
+                        Failed
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: apiFilters.status === 'timeout' }"
+                        @click="setStatusFilter('timeout')"
+                      >
+                        <span class="material-symbols-outlined">schedule</span>
+                        Timeout
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <button class="btn-reset-modern" @click="resetApiFilters">
                   <span class="material-symbols-outlined">clear_all</span>
@@ -627,19 +769,108 @@
               </h3>
               <div class="card-actions">
                 <div class="log-filters">
-                  <select v-model="logFilter.level" class="filter-select">
-                    <option value="all">Tất cả level</option>
-                    <option value="info">Info</option>
-                    <option value="warning">Warning</option>
-                    <option value="error">Error</option>
-                  </select>
-                  <select v-model="logFilter.type" class="form-input">
-                    <option value="all">Tất cả</option>
-                    <option value="system">Hệ thống</option>
-                    <option value="user">Người dùng</option>
-                    <option value="project">Dự án</option>
-                    <option value="member">Thành viên</option>
-                  </select>
+                  <div class="filter-icon-wrapper">
+                    <button 
+                      class="filter-icon-btn-modern" 
+                      @click.stop="toggleLogLevelFilter"
+                      :title="getLogLevelFilterLabel()"
+                    >
+                      <span class="material-symbols-outlined">signal_cellular_alt</span>
+                    </button>
+                    <div 
+                      v-if="showLogLevelFilter" 
+                      class="filter-dropdown-menu"
+                      @click.stop
+                    >
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: logFilter.level === 'all' }"
+                        @click="setLogLevelFilter('all')"
+                      >
+                        <span class="material-symbols-outlined">filter_alt_off</span>
+                        All Levels
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: logFilter.level === 'info' }"
+                        @click="setLogLevelFilter('info')"
+                      >
+                        <span class="material-symbols-outlined">info</span>
+                        Info
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: logFilter.level === 'warning' }"
+                        @click="setLogLevelFilter('warning')"
+                      >
+                        <span class="material-symbols-outlined">warning</span>
+                        Warning
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: logFilter.level === 'error' }"
+                        @click="setLogLevelFilter('error')"
+                      >
+                        <span class="material-symbols-outlined">error</span>
+                        Error
+                      </button>
+                    </div>
+                  </div>
+                  <div class="filter-icon-wrapper">
+                    <button 
+                      class="filter-icon-btn-modern" 
+                      @click.stop="toggleLogTypeFilter"
+                      :title="getLogTypeFilterLabel()"
+                    >
+                      <span class="material-symbols-outlined">category</span>
+                    </button>
+                    <div 
+                      v-if="showLogTypeFilter" 
+                      class="filter-dropdown-menu"
+                      @click.stop
+                    >
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: logFilter.type === 'all' }"
+                        @click="setLogTypeFilter('all')"
+                      >
+                        <span class="material-symbols-outlined">filter_alt_off</span>
+                        All Types
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: logFilter.type === 'system' }"
+                        @click="setLogTypeFilter('system')"
+                      >
+                        <span class="material-symbols-outlined">settings</span>
+                        System
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: logFilter.type === 'user' }"
+                        @click="setLogTypeFilter('user')"
+                      >
+                        <span class="material-symbols-outlined">person</span>
+                        User
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: logFilter.type === 'project' }"
+                        @click="setLogTypeFilter('project')"
+                      >
+                        <span class="material-symbols-outlined">folder</span>
+                        Project
+                      </button>
+                      <button 
+                        class="filter-option" 
+                        :class="{ active: logFilter.type === 'member' }"
+                        @click="setLogTypeFilter('member')"
+                      >
+                        <span class="material-symbols-outlined">group</span>
+                        Member
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <button class="btn-icon" @click="refreshLogs">
                   <span class="material-symbols-outlined">refresh</span>
@@ -923,6 +1154,14 @@ const logFilter = ref({
   level: 'all',
   type: 'all',
 })
+
+// Filter dropdown states
+const showRangeDaysFilter = ref(false)
+const showViewModeFilter = ref(false)
+const showProviderFilter = ref(false)
+const showStatusFilter = ref(false)
+const showLogLevelFilter = ref(false)
+const showLogTypeFilter = ref(false)
 
 const systemSettings = ref({})
 
@@ -2060,6 +2299,104 @@ const exportLogs = async (format) => {
   }
 };
 
+// Filter dropdown methods
+const toggleRangeDaysFilter = () => {
+  showRangeDaysFilter.value = !showRangeDaysFilter.value
+  showViewModeFilter.value = false
+}
+const toggleViewModeFilter = () => {
+  showViewModeFilter.value = !showViewModeFilter.value
+  showRangeDaysFilter.value = false
+}
+const setRangeDays = (value) => {
+  userAnalyticsFilters.value.rangeDays = value
+  showRangeDaysFilter.value = false
+  loadUserAnalytics()
+}
+const setViewMode = (value) => {
+  userAnalyticsFilters.value.viewMode = value
+  showViewModeFilter.value = false
+  loadUserTimelineChart()
+}
+const getViewModeLabel = () => {
+  const labels = {
+    day: 'By Day',
+    month: 'By Month',
+    year: 'By Year',
+  }
+  return labels[userAnalyticsFilters.value.viewMode] || 'View'
+}
+
+const toggleProviderFilter = () => {
+  showProviderFilter.value = !showProviderFilter.value
+  showStatusFilter.value = false
+}
+const toggleStatusFilter = () => {
+  showStatusFilter.value = !showStatusFilter.value
+  showProviderFilter.value = false
+}
+const setProviderFilter = (value) => {
+  apiFilters.value.provider = value
+  showProviderFilter.value = false
+  applyApiFilters()
+}
+const setStatusFilter = (value) => {
+  apiFilters.value.status = value
+  showStatusFilter.value = false
+  applyApiFilters()
+}
+const getProviderFilterLabel = () => {
+  if (apiFilters.value.provider === '') return 'All Providers'
+  return apiFilters.value.provider.charAt(0).toUpperCase() + apiFilters.value.provider.slice(1)
+}
+const getStatusFilterLabel = () => {
+  if (apiFilters.value.status === '') return 'All Status'
+  const labels = {
+    success: 'Success',
+    failed: 'Failed',
+    timeout: 'Timeout',
+  }
+  return labels[apiFilters.value.status] || apiFilters.value.status
+}
+
+const toggleLogLevelFilter = () => {
+  showLogLevelFilter.value = !showLogLevelFilter.value
+  showLogTypeFilter.value = false
+}
+const toggleLogTypeFilter = () => {
+  showLogTypeFilter.value = !showLogTypeFilter.value
+  showLogLevelFilter.value = false
+}
+const setLogLevelFilter = (value) => {
+  logFilter.value.level = value
+  showLogLevelFilter.value = false
+  refreshLogs()
+}
+const setLogTypeFilter = (value) => {
+  logFilter.value.type = value
+  showLogTypeFilter.value = false
+  refreshLogs()
+}
+const getLogLevelFilterLabel = () => {
+  if (logFilter.value.level === 'all') return 'All Levels'
+  return logFilter.value.level.charAt(0).toUpperCase() + logFilter.value.level.slice(1)
+}
+const getLogTypeFilterLabel = () => {
+  if (logFilter.value.type === 'all') return 'All Types'
+  return logFilter.value.type.charAt(0).toUpperCase() + logFilter.value.type.slice(1)
+}
+
+const handleClickOutsideFilters = (event) => {
+  if (!event.target.closest('.filter-icon-wrapper')) {
+    showRangeDaysFilter.value = false
+    showViewModeFilter.value = false
+    showProviderFilter.value = false
+    showStatusFilter.value = false
+    showLogLevelFilter.value = false
+    showLogTypeFilter.value = false
+  }
+}
+
 
 const viewLogDetails = (log) => {
   console.log('Viewing log details:', log)
@@ -2139,6 +2476,7 @@ watch(() => userAnalyticsFilters.value.viewMode, () => {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  document.addEventListener('click', handleClickOutsideFilters)
   initSocketConnection()
   // 🔥 Lắng nghe log realtime từ server (cả project + system)
   socket.on("log_event", (event) => {
@@ -2971,6 +3309,84 @@ async function loadDashboardStatsFromAPI() {
   border-color: #1a365d;
   box-shadow: 0 0 0 4px rgba(26, 54, 93, 0.1);
   transform: translateY(-1px);
+}
+
+/* Filter Icon Buttons */
+.filter-icon-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.filter-icon-btn-modern {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 40px;
+  height: 40px;
+}
+
+.filter-icon-btn-modern:hover {
+  background: #f9fafb;
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.filter-icon-btn-modern .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: white;
+  color: #374151;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-option:hover {
+  background: #f9fafb;
+}
+
+.filter-option.active {
+  background: #e6f2ff;
+  color: #1a365d;
+  font-weight: 500;
+}
+
+.filter-option .material-symbols-outlined {
+  font-size: 18px;
+  color: #6b7280;
+}
+
+.filter-option.active .material-symbols-outlined {
+  color: #1a365d;
 }
 
 .btn-reset-modern {

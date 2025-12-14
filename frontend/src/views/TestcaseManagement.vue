@@ -132,45 +132,198 @@
               :disabled="loading"
             />
           </div>
-          <select
-            v-model="statusFilter"
-            class="filter-select"
-            @change="loadTestCases"
-            :disabled="loading"
-          >
-            <option value="">All Status</option>
-            <option value="passed">Passed</option>
-            <option value="failed">Failed</option>
-            <option value="blocked">Blocked</option>
-            <option value="not_executed">Not Executed</option>
-            <option value="in_progress">In Progress</option>
-          </select>
-          <select
-            v-model="testTypeFilter"
-            class="filter-select"
-            @change="loadTestCases"
-            :disabled="loading"
-          >
-            <option value="">All Types</option>
-            <option value="unit">Unit</option>
-            <option value="integration">Integration</option>
-            <option value="api">API</option>
-            <option value="ui">UI</option>
-            <option value="performance">Performance</option>
-            <option value="security">Security</option>
-          </select>
-          <select
-            v-model="priorityFilter"
-            class="filter-select"
-            @change="loadTestCases"
-            :disabled="loading"
-          >
-            <option value="">All Priorities</option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
+          <div class="filter-icon-wrapper">
+            <button 
+              class="filter-icon-btn" 
+              @click.stop="toggleStatusFilter"
+              :title="getStatusFilterLabel()"
+              :disabled="loading"
+            >
+              <span class="material-symbols-outlined">check_circle</span>
+            </button>
+            <div 
+              v-if="showStatusFilter" 
+              class="filter-dropdown-menu"
+              @click.stop
+            >
+              <button 
+                class="filter-option" 
+                :class="{ active: statusFilter === '' }"
+                @click="setStatusFilter('')"
+              >
+                <span class="material-symbols-outlined">filter_alt_off</span>
+                All Status
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: statusFilter === 'passed' }"
+                @click="setStatusFilter('passed')"
+              >
+                <span class="material-symbols-outlined">check_circle</span>
+                Passed
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: statusFilter === 'failed' }"
+                @click="setStatusFilter('failed')"
+              >
+                <span class="material-symbols-outlined">cancel</span>
+                Failed
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: statusFilter === 'blocked' }"
+                @click="setStatusFilter('blocked')"
+              >
+                <span class="material-symbols-outlined">block</span>
+                Blocked
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: statusFilter === 'not_executed' }"
+                @click="setStatusFilter('not_executed')"
+              >
+                <span class="material-symbols-outlined">schedule</span>
+                Not Executed
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: statusFilter === 'in_progress' }"
+                @click="setStatusFilter('in_progress')"
+              >
+                <span class="material-symbols-outlined">hourglass_empty</span>
+                In Progress
+              </button>
+            </div>
+          </div>
+          <div class="filter-icon-wrapper">
+            <button 
+              class="filter-icon-btn" 
+              @click.stop="toggleTypeFilter"
+              :title="getTypeFilterLabel()"
+              :disabled="loading"
+            >
+              <span class="material-symbols-outlined">category</span>
+            </button>
+            <div 
+              v-if="showTypeFilter" 
+              class="filter-dropdown-menu"
+              @click.stop
+            >
+              <button 
+                class="filter-option" 
+                :class="{ active: testTypeFilter === '' }"
+                @click="setTypeFilter('')"
+              >
+                <span class="material-symbols-outlined">filter_alt_off</span>
+                All Types
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: testTypeFilter === 'unit' }"
+                @click="setTypeFilter('unit')"
+              >
+                <span class="material-symbols-outlined">science</span>
+                Unit
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: testTypeFilter === 'integration' }"
+                @click="setTypeFilter('integration')"
+              >
+                <span class="material-symbols-outlined">hub</span>
+                Integration
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: testTypeFilter === 'api' }"
+                @click="setTypeFilter('api')"
+              >
+                <span class="material-symbols-outlined">api</span>
+                API
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: testTypeFilter === 'ui' }"
+                @click="setTypeFilter('ui')"
+              >
+                <span class="material-symbols-outlined">web</span>
+                UI
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: testTypeFilter === 'performance' }"
+                @click="setTypeFilter('performance')"
+              >
+                <span class="material-symbols-outlined">speed</span>
+                Performance
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: testTypeFilter === 'security' }"
+                @click="setTypeFilter('security')"
+              >
+                <span class="material-symbols-outlined">security</span>
+                Security
+              </button>
+            </div>
+          </div>
+          <div class="filter-icon-wrapper">
+            <button 
+              class="filter-icon-btn" 
+              @click.stop="togglePriorityFilter"
+              :title="getPriorityFilterLabel()"
+              :disabled="loading"
+            >
+              <span class="material-symbols-outlined">priority_high</span>
+            </button>
+            <div 
+              v-if="showPriorityFilter" 
+              class="filter-dropdown-menu"
+              @click.stop
+            >
+              <button 
+                class="filter-option" 
+                :class="{ active: priorityFilter === '' }"
+                @click="setPriorityFilter('')"
+              >
+                <span class="material-symbols-outlined">filter_alt_off</span>
+                All Priorities
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: priorityFilter === 'critical' }"
+                @click="setPriorityFilter('critical')"
+              >
+                <span class="material-symbols-outlined">error</span>
+                Critical
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: priorityFilter === 'high' }"
+                @click="setPriorityFilter('high')"
+              >
+                <span class="material-symbols-outlined">priority_high</span>
+                High
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: priorityFilter === 'medium' }"
+                @click="setPriorityFilter('medium')"
+              >
+                <span class="material-symbols-outlined">remove</span>
+                Medium
+              </button>
+              <button 
+                class="filter-option" 
+                :class="{ active: priorityFilter === 'low' }"
+                @click="setPriorityFilter('low')"
+              >
+                <span class="material-symbols-outlined">arrow_downward</span>
+                Low
+              </button>
+            </div>
+          </div>
           <button class="btn-secondary clear-filters" @click="clearFilters" :disabled="loading">
             <span class="material-symbols-outlined">clear_all</span>
             Clear
@@ -698,6 +851,11 @@ export default {
     const sortOrder = ref('asc')
     const selectedTestCases = ref([])
     const selectAll = ref(false)
+    
+    // Filter dropdown states
+    const showStatusFilter = ref(false)
+    const showTypeFilter = ref(false)
+    const showPriorityFilter = ref(false)
 
     const showExportModal = ref(false)
     // Export progress
@@ -1246,6 +1404,67 @@ export default {
       statusFilter.value = ''
       testTypeFilter.value = ''
       priorityFilter.value = ''
+      showStatusFilter.value = false
+      showTypeFilter.value = false
+      showPriorityFilter.value = false
+    }
+    
+    // Filter dropdown methods
+    const toggleStatusFilter = () => {
+      showStatusFilter.value = !showStatusFilter.value
+      showTypeFilter.value = false
+      showPriorityFilter.value = false
+    }
+    const toggleTypeFilter = () => {
+      showTypeFilter.value = !showTypeFilter.value
+      showStatusFilter.value = false
+      showPriorityFilter.value = false
+    }
+    const togglePriorityFilter = () => {
+      showPriorityFilter.value = !showPriorityFilter.value
+      showStatusFilter.value = false
+      showTypeFilter.value = false
+    }
+    const setStatusFilter = (value) => {
+      statusFilter.value = value
+      showStatusFilter.value = false
+      loadTestCases()
+    }
+    const setTypeFilter = (value) => {
+      testTypeFilter.value = value
+      showTypeFilter.value = false
+      loadTestCases()
+    }
+    const setPriorityFilter = (value) => {
+      priorityFilter.value = value
+      showPriorityFilter.value = false
+      loadTestCases()
+    }
+    const getStatusFilterLabel = () => {
+      if (statusFilter.value === '') return 'All Status'
+      const labels = {
+        passed: 'Passed',
+        failed: 'Failed',
+        blocked: 'Blocked',
+        not_executed: 'Not Executed',
+        in_progress: 'In Progress',
+      }
+      return labels[statusFilter.value] || 'All Status'
+    }
+    const getTypeFilterLabel = () => {
+      if (testTypeFilter.value === '') return 'All Types'
+      return testTypeFilter.value.charAt(0).toUpperCase() + testTypeFilter.value.slice(1)
+    }
+    const getPriorityFilterLabel = () => {
+      if (priorityFilter.value === '') return 'All Priorities'
+      return priorityFilter.value.charAt(0).toUpperCase() + priorityFilter.value.slice(1)
+    }
+    const handleClickOutsideFilters = (event) => {
+      if (!event.target.closest('.filter-icon-wrapper')) {
+        showStatusFilter.value = false
+        showTypeFilter.value = false
+        showPriorityFilter.value = false
+      }
     }
 
     const handleSearch = () => {
@@ -1535,6 +1754,8 @@ export default {
 
       // Add click outside listener for column menu
       document.addEventListener('click', handleClickOutsideColumnMenu)
+      // Add click outside listener for filter dropdowns
+      document.addEventListener('click', handleClickOutsideFilters)
     })
 
     onUnmounted(() => {
@@ -1550,6 +1771,7 @@ export default {
 
       // Remove click outside listener
       document.removeEventListener('click', handleClickOutsideColumnMenu)
+      document.removeEventListener('click', handleClickOutsideFilters)
     })
 
     // Watchers
@@ -1608,6 +1830,9 @@ export default {
       sortOrder,
       selectedTestCases,
       selectAll,
+      showStatusFilter,
+      showTypeFilter,
+      showPriorityFilter,
 
       // Export
       exportProgress,
@@ -1650,6 +1875,16 @@ export default {
       clearFilters,
       handleSearch,
       toggleSelectAll,
+      toggleStatusFilter,
+      toggleTypeFilter,
+      togglePriorityFilter,
+      setStatusFilter,
+      setTypeFilter,
+      setPriorityFilter,
+      getStatusFilterLabel,
+      getTypeFilterLabel,
+      getPriorityFilterLabel,
+      handleClickOutsideFilters,
       setSort,
       goToPage,
       previousPage,
@@ -2024,6 +2259,89 @@ export default {
 .filter-select:focus {
   outline: none;
   border-color: #1a365d;
+}
+
+/* Filter Icon Buttons */
+.filter-icon-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.filter-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: white;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 40px;
+  height: 40px;
+}
+
+.filter-icon-btn:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.filter-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.filter-icon-btn .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: white;
+  color: #374151;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-option:hover {
+  background: #f9fafb;
+}
+
+.filter-option.active {
+  background: #e6f2ff;
+  color: #1a365d;
+  font-weight: 500;
+}
+
+.filter-option .material-symbols-outlined {
+  font-size: 18px;
+  color: #6b7280;
+}
+
+.filter-option.active .material-symbols-outlined {
+  color: #1a365d;
 }
 
 .clear-filters {

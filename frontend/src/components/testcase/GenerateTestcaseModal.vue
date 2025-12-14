@@ -18,7 +18,7 @@
             <div class="selection-header">
               <div class="selection-info">
                 <span class="selected-count">{{ selectedRequirements.length }} selected</span>
-                <span class="total-count">{{ requirements.length }} total</span>
+                <span class="total-count">{{ filteredRequirements.length }} of {{ requirements.length }} total</span>
               </div>
               <div class="selection-actions">
                 <button
@@ -32,9 +32,29 @@
               </div>
             </div>
 
+            <!-- Search Box -->
+            <div class="search-box">
+              <span class="material-symbols-outlined search-icon">search</span>
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="Search requirements by name or goal..."
+                class="search-input"
+                @input="handleSearch"
+              />
+              <button
+                v-if="searchQuery"
+                class="clear-search-btn"
+                @click="clearSearch"
+                title="Clear search"
+              >
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
             <div class="selection-list">
               <div
-                v-for="requirement in requirements"
+                v-for="requirement in filteredRequirements"
                 :key="getRequirementId(requirement)"
                 class="selection-item"
                 :class="{ selected: isRequirementSelected(requirement) }"
@@ -48,16 +68,6 @@
                 <div class="item-content">
                   <h4 class="item-title">{{ requirement.name }}</h4>
                   <p class="item-description">{{ requirement.goal }}</p>
-                  <div class="item-meta">
-                    <span class="meta-tag type">{{ requirement.type || 'Functional' }}</span>
-                    <span
-                      v-if="requirement.priority"
-                      class="meta-tag priority"
-                      :class="requirement.priority"
-                    >
-                      {{ requirement.priority }}
-                    </span>
-                  </div>
                 </div>
               </div>
 
@@ -65,6 +75,11 @@
                 <span class="material-symbols-outlined">list_alt</span>
                 <p>No requirements available for this version</p>
                 <p class="empty-hint">Please create requirements first</p>
+              </div>
+              <div v-else-if="filteredRequirements.length === 0" class="empty-selection">
+                <span class="material-symbols-outlined">search_off</span>
+                <p>No requirements found matching "{{ searchQuery }}"</p>
+                <p class="empty-hint">Try a different search term</p>
               </div>
             </div>
           </div>
@@ -395,6 +410,7 @@ export default {
     const hasUnsavedChanges = ref(false)
     const confirmedCancelAction = ref(null)
     const hasDraft = ref(false)
+    const searchQuery = ref('')
 
     // Configuration
     const configuration = ref({
@@ -451,6 +467,38 @@ export default {
       return String(req._id || req.id || req.requirement_id || '')
     }
 
+    // Filtered requirements based on search query
+    const filteredRequirements = computed(() => {
+      if (!searchQuery.value.trim()) {
+        return props.requirements || []
+      }
+
+      const query = searchQuery.value.toLowerCase().trim()
+      return (props.requirements || []).filter((req) => {
+        const name = (req.name || '').toLowerCase()
+        const goal = (req.goal || '').toLowerCase()
+        const type = (req.type || '').toLowerCase()
+        const priority = (req.priority || '').toLowerCase()
+        
+        return (
+          name.includes(query) ||
+          goal.includes(query) ||
+          type.includes(query) ||
+          priority.includes(query)
+        )
+      })
+    })
+
+    // Handle search input
+    const handleSearch = () => {
+      // Search is handled by computed property
+    }
+
+    // Clear search
+    const clearSearch = () => {
+      searchQuery.value = ''
+    }
+
     // Check if requirement is selected
     const isRequirementSelected = (requirement) => {
       const reqId = getRequirementId(requirement)
@@ -460,9 +508,19 @@ export default {
 
     // Methods
     const selectAll = () => {
-      selectedRequirements.value = props.requirements
+      // Select all filtered requirements (or all if no search)
+      const requirementsToSelect = filteredRequirements.value.length > 0 
+        ? filteredRequirements.value 
+        : props.requirements
+      
+      const newSelectedIds = requirementsToSelect
         .map((req) => getRequirementId(req))
         .filter((id) => id && id !== '')
+      
+      // Merge with existing selections to avoid deselecting items not in current filter
+      const existingIds = new Set(selectedRequirements.value)
+      newSelectedIds.forEach(id => existingIds.add(id))
+      selectedRequirements.value = Array.from(existingIds)
     }
 
     const clearSelection = () => {
@@ -870,11 +928,15 @@ export default {
       testTypeDistribution,
       generationProgress,
       hasDraft,
+      searchQuery,
+      filteredRequirements,
       getRequirementId,
       isRequirementSelected,
       selectAll,
       clearSelection,
       toggleRequirement,
+      handleSearch,
+      clearSearch,
       toggleDetail,
       toggleAllDetails,
       formatTestCaseTitle,
@@ -900,22 +962,45 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 1rem;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .modal-content.large {
   background: white;
-  border-radius: 12px;
+  border-radius: 16px;
   width: 100%;
   max-width: 900px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .modal-content.medium {
@@ -933,39 +1018,47 @@ export default {
 }
 
 .modal-header {
-  padding: 1.5rem 2rem;
+  padding: 1.75rem 2rem;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #f8fafc;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
   position: sticky;
   top: 0;
   z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .modal-header h2 {
   font-size: 1.5rem;
-  font-weight: 600;
-  color: #1e293b;
+  font-weight: 700;
+  color: #1a365d;
   margin: 0;
+  letter-spacing: -0.02em;
 }
 
 .btn-close {
   padding: 0.5rem;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s ease;
 }
 
 .btn-close:hover {
-  background: #e2e8f0;
-  color: #475569;
+  background: #f1f5f9;
+  color: #1a365d;
+  transform: scale(1.1);
+}
+
+.btn-close:active {
+  transform: scale(0.95);
 }
 
 .modal-body {
@@ -974,15 +1067,28 @@ export default {
 
 .section-title {
   font-size: 1.25rem;
-  font-weight: 600;
-  color: #1e293b;
+  font-weight: 700;
+  color: #1a365d;
   margin-bottom: 0.5rem;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-title::before {
+  content: '';
+  width: 4px;
+  height: 1.25rem;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
+  border-radius: 2px;
 }
 
 .section-subtitle {
   color: #64748b;
   margin-bottom: 1.5rem;
   font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .selection-section,
@@ -1084,7 +1190,7 @@ export default {
 
 .preview-item {
   border-bottom: 1px solid #f1f5f9;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
 }
 
 .preview-item:last-child {
@@ -1093,12 +1199,13 @@ export default {
 
 .preview-item:hover {
   background: #f8fafc;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
 .preview-main {
   padding: 1.5rem;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
 }
 
 .preview-main:hover {
@@ -1114,7 +1221,7 @@ export default {
 
 .preview-title {
   font-weight: 600;
-  color: #1e293b;
+  color: #1a365d;
   margin: 0;
   flex: 1;
   font-size: 1rem;
@@ -1130,7 +1237,12 @@ export default {
 .expand-icon {
   color: #64748b;
   font-size: 1.25rem;
-  transition: transform 0.2s;
+  transition: transform 0.2s ease;
+}
+
+.preview-main:hover .expand-icon {
+  color: #1a365d;
+  transform: scale(1.1);
 }
 
 .preview-meta {
@@ -1262,16 +1374,22 @@ export default {
 /* Selection styles (keep existing) */
 .selection-container {
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s ease;
+}
+
+.selection-container:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
 }
 
 .selection-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  background: #f8fafc;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
   border-bottom: 1px solid #e2e8f0;
 }
 
@@ -1297,6 +1415,81 @@ export default {
   font-size: 0.75rem;
 }
 
+/* Search Box */
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.search-box:focus-within {
+  background: #f8fafc;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.search-icon {
+  position: absolute;
+  left: 1.25rem;
+  color: #9ca3af;
+  font-size: 1.25rem;
+  pointer-events: none;
+  transition: color 0.2s ease;
+}
+
+.search-box:focus-within .search-icon {
+  color: #1a365d;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.625rem 2.5rem 0.625rem 2.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #374151;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+}
+
+.search-input::placeholder {
+  color: #9ca3af;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #1a365d;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 1.25rem;
+  padding: 0.25rem;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.clear-search-btn:hover {
+  background: #f1f5f9;
+  color: #1a365d;
+}
+
+.clear-search-btn .material-symbols-outlined {
+  font-size: 1.125rem;
+}
+
 .selection-list {
   max-height: 300px;
   overflow-y: auto;
@@ -1306,23 +1499,66 @@ export default {
   display: flex;
   align-items: flex-start;
   gap: 1rem;
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem;
   border-bottom: 1px solid #f1f5f9;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.selection-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
+  transition: width 0.2s ease;
 }
 
 .selection-item:hover {
   background: #f8fafc;
+  transform: translateX(2px);
+}
+
+.selection-item:hover::before {
+  width: 3px;
 }
 
 .selection-item.selected {
-  background: #eff6ff;
+  background: linear-gradient(90deg, #eff6ff 0%, #f0f9ff 100%);
   border-left: 3px solid #1a365d;
+}
+
+.selection-item.selected::before {
+  width: 3px;
+}
+
+.selection-item.selected:hover {
+  background: linear-gradient(90deg, #dbeafe 0%, #e0f2fe 100%);
 }
 
 .selection-item:last-child {
   border-bottom: none;
+}
+
+.selection-item input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  cursor: pointer;
+  accent-color: #1a365d;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.selection-item input[type="checkbox"]:hover {
+  transform: scale(1.1);
+}
+
+.selection-item input[type="checkbox"]:checked {
+  transform: scale(1.05);
 }
 
 .item-content {
@@ -1331,15 +1567,21 @@ export default {
 
 .item-title {
   font-weight: 600;
-  color: #1e293b;
+  color: #1a365d;
   margin-bottom: 0.5rem;
   font-size: 1rem;
+  line-height: 1.4;
+  transition: color 0.2s ease;
+}
+
+.selection-item:hover .item-title {
+  color: #1a365d;
 }
 
 .item-description {
   color: #64748b;
   font-size: 0.875rem;
-  line-height: 1.4;
+  line-height: 1.5;
   margin-bottom: 0.75rem;
 }
 
@@ -1350,12 +1592,21 @@ export default {
 }
 
 .meta-tag {
-  padding: 0.25rem 0.5rem;
+  padding: 0.375rem 0.75rem;
   background: #e2e8f0;
   color: #475569;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.meta-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .meta-tag.priority.critical {
@@ -1388,6 +1639,13 @@ export default {
   font-size: 3rem;
   margin-bottom: 1rem;
   opacity: 0.5;
+  color: #94a3b8;
+}
+
+.empty-hint {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin-top: 0.5rem;
 }
 
 .empty-hint {
@@ -1410,18 +1668,24 @@ export default {
 }
 
 .form-select {
-  padding: 0.75rem;
+  padding: 0.75rem 1rem;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.875rem;
   background: white;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.form-select:hover {
+  border-color: #9ca3af;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .form-select:focus {
   outline: none;
   border-color: #1a365d;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
 }
 
 /* Action Section */
@@ -1460,17 +1724,26 @@ export default {
   background: #1a365d;
   border-color: #1a365d;
   color: white;
+  box-shadow: 0 2px 4px rgba(26, 54, 93, 0.2);
 }
 
 .btn-primary:hover:not(:disabled) {
   background: #1f3b62;
   border-color: #1f3b62;
+  box-shadow: 0 4px 8px rgba(26, 54, 93, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(26, 54, 93, 0.2);
 }
 
 .btn-primary:disabled {
   background: #9ca3af;
   border-color: #9ca3af;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn-secondary {
@@ -1482,6 +1755,12 @@ export default {
 .btn-secondary:hover:not(:disabled) {
   background: #f9fafb;
   border-color: #9ca3b8;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .btn-secondary:disabled {
@@ -1524,10 +1803,12 @@ export default {
   right: 0;
   bottom: 0;
   background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 20;
+  animation: fadeIn 0.2s ease-out;
 }
 
 .loading-content {
@@ -1537,13 +1818,15 @@ export default {
 }
 
 .loading-content h3 {
-  color: #1e293b;
+  color: #1a365d;
   margin-bottom: 0.5rem;
+  font-weight: 600;
 }
 
 .loading-content p {
   color: #64748b;
   margin-bottom: 1.5rem;
+  line-height: 1.5;
 }
 
 .generation-progress {
@@ -1554,21 +1837,24 @@ export default {
 
 .progress-bar {
   width: 100%;
-  height: 8px;
+  height: 10px;
   background: #e2e8f0;
-  border-radius: 4px;
+  border-radius: 8px;
   overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .progress-fill {
   height: 100%;
-  background: #1a365d;
+  background: linear-gradient(90deg, #1a365d 0%, #2d4a7c 100%);
   transition: width 0.3s ease;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(26, 54, 93, 0.3);
 }
 
 .progress-text {
   font-size: 0.875rem;
-  color: #64748b;
+  color: #1a365d;
   font-weight: 600;
 }
 

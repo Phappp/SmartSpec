@@ -193,7 +193,7 @@ export class TestcaseExportService {
             });
 
             this.applyStatusStyle(row.getCell('status'), testCase.status);
-            this.applyPriorityStyle(row.getCell('priority'), testCase.priority);
+            // Removed priority color styling
 
             // Alternate row coloring
             if (index % 2 === 0) {
@@ -842,9 +842,7 @@ export class TestcaseExportService {
             if (fields.includes('status')) {
                 this.applyStatusStyle(row.getCell('status'), testCase.status);
             }
-            if (fields.includes('test_priority')) {
-                this.applyPriorityStyle(row.getCell('test_priority'), testCase.priority);
-            }
+            // Removed priority color styling
 
             // Alternate row coloring
             if (index % 2 === 0) {

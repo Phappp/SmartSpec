@@ -122,16 +122,84 @@
                   class="search-input"
                 />
               </div>
-              <select v-model="languageFilter" class="filter-select">
-                <option value="">All Languages</option>
-                <option value="vi-VN">Vietnamese</option>
-                <option value="en-US">English</option>
-              </select>
-              <select v-model="sortBy" class="filter-select">
-                <option value="updatedAt">Last Updated</option>
-                <option value="createdAt">Date Created</option>
-                <option value="name">Name</option>
-              </select>
+              <div class="filter-icon-wrapper">
+                <button 
+                  class="filter-icon-btn" 
+                  @click.stop="toggleLanguageFilter"
+                  :title="getLanguageFilterLabel()"
+                >
+                  <span class="material-symbols-outlined">language</span>
+                </button>
+                <div 
+                  v-if="showLanguageFilter" 
+                  class="filter-dropdown-menu"
+                  @click.stop
+                >
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: languageFilter === '' }"
+                    @click="setLanguageFilter('')"
+                  >
+                    <span class="material-symbols-outlined">public</span>
+                    All Languages
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: languageFilter === 'vi-VN' }"
+                    @click="setLanguageFilter('vi-VN')"
+                  >
+                    <span class="material-symbols-outlined">flag</span>
+                    Vietnamese
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: languageFilter === 'en-US' }"
+                    @click="setLanguageFilter('en-US')"
+                  >
+                    <span class="material-symbols-outlined">flag</span>
+                    English
+                  </button>
+                </div>
+              </div>
+              <div class="filter-icon-wrapper">
+                <button 
+                  class="filter-icon-btn" 
+                  @click.stop="toggleSortFilter"
+                  :title="getSortFilterLabel()"
+                >
+                  <span class="material-symbols-outlined">sort</span>
+                </button>
+                <div 
+                  v-if="showSortFilter" 
+                  class="filter-dropdown-menu"
+                  @click.stop
+                >
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: sortBy === 'updatedAt' }"
+                    @click="setSortBy('updatedAt')"
+                  >
+                    <span class="material-symbols-outlined">schedule</span>
+                    Last Updated
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: sortBy === 'createdAt' }"
+                    @click="setSortBy('createdAt')"
+                  >
+                    <span class="material-symbols-outlined">calendar_today</span>
+                    Date Created
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: sortBy === 'name' }"
+                    @click="setSortBy('name')"
+                  >
+                    <span class="material-symbols-outlined">text_fields</span>
+                    Name
+                  </button>
+                </div>
+              </div>
             </div>
             <div class="filter-stats">
               <span class="stat-text">{{ filteredProjects.length }} projects found</span>
@@ -397,6 +465,8 @@ export default {
       searchQuery: '',
       languageFilter: '',
       sortBy: 'updatedAt',
+      showLanguageFilter: false,
+      showSortFilter: false,
       isNotificationsVisible: false,
       myInvitations: [],
       sentInvitations: [],
@@ -414,6 +484,7 @@ export default {
   mounted() {
     this.checkMobile()
     window.addEventListener('resize', this.checkMobile)
+    document.addEventListener('click', this.handleClickOutside)
 
     socket.on('notification', (data) => {
       console.log('📩 Realtime notification received:', data)
@@ -487,6 +558,7 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.checkMobile)
+    document.removeEventListener('click', this.handleClickOutside)
     if (socket) {
       socket.off('notification')
       console.log('🧹 Socket listener removed on unmount')
@@ -508,6 +580,41 @@ export default {
   },
 
   methods: {
+    // Filter dropdown methods
+    toggleLanguageFilter() {
+      this.showLanguageFilter = !this.showLanguageFilter
+      this.showSortFilter = false
+    },
+    toggleSortFilter() {
+      this.showSortFilter = !this.showSortFilter
+      this.showLanguageFilter = false
+    },
+    setLanguageFilter(value) {
+      this.languageFilter = value
+      this.showLanguageFilter = false
+    },
+    setSortBy(value) {
+      this.sortBy = value
+      this.showSortFilter = false
+    },
+    getLanguageFilterLabel() {
+      if (this.languageFilter === '') return 'All Languages'
+      return this.languageLabel
+    },
+    getSortFilterLabel() {
+      const labels = {
+        updatedAt: 'Last Updated',
+        createdAt: 'Date Created',
+        name: 'Name',
+      }
+      return labels[this.sortBy] || 'Sort'
+    },
+    handleClickOutside(event) {
+      if (!event.target.closest('.filter-icon-wrapper')) {
+        this.showLanguageFilter = false
+        this.showSortFilter = false
+      }
+    },
     // Multi-select methods
     toggleMultiSelectMode() {
       this.isMultiSelectMode = !this.isMultiSelectMode
@@ -1454,6 +1561,84 @@ export default {
 .filter-select:focus {
   outline: none;
   border-color: #1a365d;
+}
+
+/* Filter Icon Buttons */
+.filter-icon-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.filter-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 40px;
+  height: 40px;
+}
+
+.filter-icon-btn:hover {
+  background: #f9fafb;
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.filter-icon-btn .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: white;
+  color: #374151;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-option:hover {
+  background: #f9fafb;
+}
+
+.filter-option.active {
+  background: #e6f2ff;
+  color: #1a365d;
+  font-weight: 500;
+}
+
+.filter-option .material-symbols-outlined {
+  font-size: 18px;
+  color: #6b7280;
+}
+
+.filter-option.active .material-symbols-outlined {
+  color: #1a365d;
 }
 
 /* Multi-select Button */

@@ -103,16 +103,86 @@
           </div>
           <div class="toolbar-right">
             <div class="filter-options">
-              <select v-model="roleFilter" class="filter-select">
-                <option value="">All Roles</option>
-                <option v-for="role in availableRoles" :key="role" :value="role">{{ role }}</option>
-              </select>
-              <select v-model="priorityFilter" class="filter-select">
-                <option value="">All Priorities</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
+              <div class="filter-icon-wrapper">
+                <button 
+                  class="filter-icon-btn" 
+                  @click.stop="toggleRoleFilter"
+                  :title="getRoleFilterLabel()"
+                >
+                  <span class="material-symbols-outlined">groups</span>
+                </button>
+                <div 
+                  v-if="showRoleFilter" 
+                  class="filter-dropdown-menu"
+                  @click.stop
+                >
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: roleFilter === '' }"
+                    @click="setRoleFilter('')"
+                  >
+                    <span class="material-symbols-outlined">filter_alt_off</span>
+                    All Roles
+                  </button>
+                  <button 
+                    v-for="role in availableRoles" 
+                    :key="role"
+                    class="filter-option" 
+                    :class="{ active: roleFilter === role }"
+                    @click="setRoleFilter(role)"
+                  >
+                    <span class="material-symbols-outlined">person</span>
+                    {{ role }}
+                  </button>
+                </div>
+              </div>
+              <div class="filter-icon-wrapper">
+                <button 
+                  class="filter-icon-btn" 
+                  @click.stop="togglePriorityFilter"
+                  :title="getPriorityFilterLabel()"
+                >
+                  <span class="material-symbols-outlined">priority_high</span>
+                </button>
+                <div 
+                  v-if="showPriorityFilter" 
+                  class="filter-dropdown-menu"
+                  @click.stop
+                >
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: priorityFilter === '' }"
+                    @click="setPriorityFilter('')"
+                  >
+                    <span class="material-symbols-outlined">filter_alt_off</span>
+                    All Priorities
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: priorityFilter === 'high' }"
+                    @click="setPriorityFilter('high')"
+                  >
+                    <span class="material-symbols-outlined">error</span>
+                    High
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: priorityFilter === 'medium' }"
+                    @click="setPriorityFilter('medium')"
+                  >
+                    <span class="material-symbols-outlined">remove</span>
+                    Medium
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: priorityFilter === 'low' }"
+                    @click="setPriorityFilter('low')"
+                  >
+                    <span class="material-symbols-outlined">arrow_downward</span>
+                    Low
+                  </button>
+                </div>
+              </div>
             </div>
             <!-- View Mode Selector -->
             <div class="view-mode-selector">
@@ -1230,6 +1300,8 @@ export default {
       searchQuery: '',
       roleFilter: '',
       priorityFilter: '',
+      showRoleFilter: false,
+      showPriorityFilter: false,
       viewMode: this.loadViewMode(), // 'table', 'grouped', 'grid', 'list', 'compact'
 
       // Table view states
@@ -1786,6 +1858,37 @@ export default {
         this.showColumnMenu = false
       }
     },
+    // Filter dropdown methods
+    toggleRoleFilter() {
+      this.showRoleFilter = !this.showRoleFilter
+      this.showPriorityFilter = false
+    },
+    togglePriorityFilter() {
+      this.showPriorityFilter = !this.showPriorityFilter
+      this.showRoleFilter = false
+    },
+    setRoleFilter(value) {
+      this.roleFilter = value
+      this.showRoleFilter = false
+    },
+    setPriorityFilter(value) {
+      this.priorityFilter = value
+      this.showPriorityFilter = false
+    },
+    getRoleFilterLabel() {
+      if (this.roleFilter === '') return 'All Roles'
+      return this.roleFilter
+    },
+    getPriorityFilterLabel() {
+      if (this.priorityFilter === '') return 'All Priorities'
+      return this.priorityFilter.charAt(0).toUpperCase() + this.priorityFilter.slice(1)
+    },
+    handleClickOutsideFilters(event) {
+      if (!event.target.closest('.filter-icon-wrapper')) {
+        this.showRoleFilter = false
+        this.showPriorityFilter = false
+      }
+    },
     // Bulk operations
     async bulkUpdateRole() {
       if (this.selectedUseCases.length === 0) {
@@ -1998,10 +2101,13 @@ export default {
   mounted() {
     // Add click outside listener for column menu
     document.addEventListener('click', this.handleClickOutsideColumnMenu)
+    // Add click outside listener for filter dropdowns
+    document.addEventListener('click', this.handleClickOutsideFilters)
   },
   beforeUnmount() {
     // Remove click outside listener
     document.removeEventListener('click', this.handleClickOutsideColumnMenu)
+    document.removeEventListener('click', this.handleClickOutsideFilters)
   },
 
   watch: {
@@ -2291,6 +2397,84 @@ export default {
   font-size: 0.875rem;
   background: white;
   cursor: pointer;
+}
+
+/* Filter Icon Buttons */
+.filter-icon-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.filter-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 40px;
+  height: 40px;
+}
+
+.filter-icon-btn:hover {
+  background: #f9fafb;
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.filter-icon-btn .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: white;
+  color: #374151;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-option:hover {
+  background: #f9fafb;
+}
+
+.filter-option.active {
+  background: #e6f2ff;
+  color: #1a365d;
+  font-weight: 500;
+}
+
+.filter-option .material-symbols-outlined {
+  font-size: 18px;
+  color: #6b7280;
+}
+
+.filter-option.active .material-symbols-outlined {
+  color: #1a365d;
 }
 
 /* Use Case Groups */
