@@ -162,7 +162,7 @@ TRẢ VỀ JSON:
   "estimated_count": ${isShortText ? '5' : '94'},
   "summary": "${isShortText ? 'Hệ thống với các chức năng cơ bản được đề cập trong text' : 'Hệ thống quản lý với 5 module chính: User Management, Order Processing, Product Catalog, Payment Gateway, Report Generation'}",
   "estimated_batches": ${isShortText ? '1' : '2'},
-  "reasoning": "${isShortText ? 'Text ngắn, chỉ estimate các use cases liên quan trực tiếp' : 'Dựa trên số lượng chức năng và độ phức tạp, ước tính sẽ có khoảng 94 usecases được tạo ra, chia thành 2 batch (50 usecases/batch)'}"
+  "reasoning": "${isShortText ? 'Text ngắn, chỉ estimate các use cases liên quan trực tiếp' : 'Dựa trên số lượng chức năng và độ phức tạp, ước tính sẽ có khoảng 94 usecases được tạo ra, chia thành nhiều batch (15 usecases/batch)'}"
 }
 
 QUAN TRỌNG:
@@ -378,7 +378,7 @@ RETURN JSON:
   "estimated_count": ${isShortText ? '5' : '94'},
   "summary": "${isShortText ? 'System with basic functions mentioned in the text' : 'Management system with 5 main modules: User Management, Order Processing, Product Catalog, Payment Gateway, Report Generation'}",
   "estimated_batches": ${isShortText ? '1' : '2'},
-  "reasoning": "${isShortText ? 'Short text, only estimating directly related use cases' : 'Based on the number of functions and complexity, estimated to generate approximately 94 usecases, divided into 2 batches (50 usecases/batch)'}"
+  "reasoning": "${isShortText ? 'Short text, only estimating directly related use cases' : 'Based on the number of functions and complexity, estimated to generate approximately 94 usecases, divided into multiple batches (15 usecases/batch)'}"
 }
 
 IMPORTANT:
@@ -971,7 +971,7 @@ export class GeminiService {
                     estimated_count = maxAllowed;
                 }
 
-                const estimated_batches = Math.ceil(estimated_count / 50);
+                const estimated_batches = Math.ceil(estimated_count / 15);
 
                 console.log(`✅ [ESTIMATE] Estimated ${estimated_count} use cases (from ${textLength} chars text), ${estimated_batches} batches`);
 
@@ -1000,7 +1000,7 @@ export class GeminiService {
         batchNumber: number,
         totalBatches: number,
         offset: number,
-        batchSize: number = 50,
+        batchSize: number = 15,
         language: string = 'vi-VN',
         modelName?: string,
         userId?: string,

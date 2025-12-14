@@ -80,7 +80,7 @@ export class RequirementService {
     }
 
     /**
-     * ✅ MỚI: Generate and save batches - Generate và lưu usecases theo batch 50
+     * ✅ MỚI: Generate and save batches - Generate và lưu usecases theo batch 15
      */
     private async generateAndSaveBatches(
         versionId: string,
@@ -104,7 +104,7 @@ export class RequirementService {
         if (!version) throw new Error("Version not found");
 
         const previousRequirements = await Usecase.find({ version_id: versionId }).lean();
-        const DEFAULT_BATCH_SIZE = 50;
+        const DEFAULT_BATCH_SIZE = 15;
         const allGeneratedUseCases: any[] = [];
         const invalidUsecasesToRegenerate: Array<{ name: string; errors: string[]; originalData?: any }> = [];
         const { inputSocketService } = await import("../../input/domain/input.socket.service");

@@ -8,7 +8,7 @@ const apiUsageSchema = new Schema({
     },
     provider: {
         type: String,
-        enum: ['gemini', 'openai', 'claude', 'nous', 'qwen', 'deepseek', 'mistral', 'meta', 'allenai', 'google', 'amazon', 'nvidia', 'kwaipilot', 'openrouter'],
+        enum: ['gemini', 'openai', 'claude', 'nous', 'qwen', 'deepseek', 'mistral', 'meta', 'allenai', 'google', 'amazon', 'nvidia', 'kwaipilot', 'openrouter', 'nex-agi', 'arcee-ai', 'tngtech', 'alibaba', 'z-ai', 'moonshotai', 'cognitivecomputations', 'meta-llama'],
         required: true,
     },
     model_name: {

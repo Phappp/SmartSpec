@@ -5,7 +5,7 @@
  * LLM đọc TOKEN, không đọc chữ. Mỗi model có cách tokenize khác nhau.
  */
 
-export type Provider = 'gemini' | 'openai' | 'claude' | 'nous' | 'qwen' | 'deepseek' | 'mistral' | 'meta' | 'allenai' | 'google' | 'amazon' | 'nvidia' | 'kwaipilot' | 'openrouter';
+export type Provider = 'gemini' | 'openai' | 'claude' | 'nous' | 'qwen' | 'deepseek' | 'mistral' | 'meta' | 'allenai' | 'google' | 'amazon' | 'nvidia' | 'kwaipilot' | 'openrouter' | 'nex-agi' | 'arcee-ai' | 'tngtech' | 'alibaba' | 'z-ai' | 'moonshotai' | 'cognitivecomputations' | 'meta-llama';
 export type ModelStrategy = 'truncate' | 'chunk-sliding' | 'compress-long';
 export type ModelCategory = 'agent' | 'worker' | 'specialized';
 
@@ -33,7 +33,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     // =========================
     'nous-hermes-3-405b-instruct': {
         provider: 'nous',
-        modelName: 'nous/hermes-3-405b-instruct',
+        modelName: 'nousresearch/hermes-3-llama-3.1-405b:free',
         category: 'agent',
         contextWindow: 200000,
         strategy: 'compress-long',
@@ -52,8 +52,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
         supportsCompression: true
     },
     'deepseek-r1t-chimera': {
-        provider: 'deepseek',
-        modelName: 'tng/deepseek-r1t-chimera',
+        provider: 'tngtech',
+        modelName: 'tngtech/deepseek-r1t-chimera:free',
         category: 'agent',
         contextWindow: 200000,
         strategy: 'compress-long',
@@ -61,13 +61,103 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
         supportsLongContext: true,
         supportsCompression: true
     },
+    'devstral-2512': {
+        provider: 'mistral',
+        modelName: 'mistralai/devstral-2512:free',
+        category: 'agent',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 3.5,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
+    'deepseek-v3.1-nex-n1': {
+        provider: 'nex-agi',
+        modelName: 'nex-agi/deepseek-v3.1-nex-n1:free',
+        category: 'agent',
+        contextWindow: 200000,
+        strategy: 'compress-long',
+        tokenEstimationRatio: 3.5,
+        supportsLongContext: true,
+        supportsCompression: true
+    },
+    'tng-r1t-chimera': {
+        provider: 'tngtech',
+        modelName: 'tngtech/tng-r1t-chimera:free',
+        category: 'agent',
+        contextWindow: 200000,
+        strategy: 'compress-long',
+        tokenEstimationRatio: 3.5,
+        supportsLongContext: true,
+        supportsCompression: true
+    },
+    'deepseek-r1t2-chimera': {
+        provider: 'tngtech',
+        modelName: 'tngtech/deepseek-r1t2-chimera:free',
+        category: 'agent',
+        contextWindow: 200000,
+        strategy: 'compress-long',
+        tokenEstimationRatio: 3.5,
+        supportsLongContext: true,
+        supportsCompression: true
+    },
+    'olmo-3-32b-think': {
+        provider: 'allenai',
+        modelName: 'allenai/olmo-3-32b-think:free',
+        category: 'agent',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 3.5,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
+    'tongyi-deepresearch-30b-a3b': {
+        provider: 'alibaba',
+        modelName: 'alibaba/tongyi-deepresearch-30b-a3b:free',
+        category: 'agent',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 3.5,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
+    'gpt-oss-120b': {
+        provider: 'openai',
+        modelName: 'openai/gpt-oss-120b:free',
+        category: 'agent',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 3.5,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
+    'kimi-k2': {
+        provider: 'moonshotai',
+        modelName: 'moonshotai/kimi-k2:free',
+        category: 'agent',
+        contextWindow: 200000,
+        strategy: 'compress-long',
+        tokenEstimationRatio: 3.5,
+        supportsLongContext: true,
+        supportsCompression: true
+    },
+    'llama-3.3-70b-instruct': {
+        provider: 'meta-llama',
+        modelName: 'meta-llama/llama-3.3-70b-instruct:free',
+        category: 'agent',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 3.5,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
 
     // =========================
     // ⚙️ WORKER (FREE)
     // =========================
     'gemma-3-4b-free': {
         provider: 'google',
-        modelName: 'google/gemma-3-4b:free',
+        modelName: 'google/gemma-3-4b-it:free',
         category: 'worker',
         contextWindow: 32000,
         strategy: 'truncate',
@@ -77,7 +167,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     },
     'gemma-3-12b-free': {
         provider: 'google',
-        modelName: 'google/gemma-3-12b:free',
+        modelName: 'google/gemma-3-12b-it:free',
         category: 'worker',
         contextWindow: 128000,
         strategy: 'chunk-sliding',
@@ -95,9 +185,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
         supportsLongContext: true,
         supportsCompression: false
     },
-    'mistral-7b-instruct': {
-        provider: 'mistral',
-        modelName: 'mistral/mistral-7b-instruct',
+    'gemma-3n-e2b-it': {
+        provider: 'google',
+        modelName: 'google/gemma-3n-e2b-it:free',
         category: 'worker',
         contextWindow: 32000,
         strategy: 'truncate',
@@ -105,14 +195,64 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
         supportsLongContext: false,
         supportsCompression: false
     },
+    'gemma-3n-e4b-it': {
+        provider: 'google',
+        modelName: 'google/gemma-3n-e4b-it:free',
+        category: 'worker',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
+    'gemini-2.0-flash-exp': {
+        provider: 'google',
+        modelName: 'google/gemini-2.0-flash-exp:free',
+        category: 'worker',
+        contextWindow: 1000000,
+        strategy: 'compress-long',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: true
+    },
+    'mistral-7b-instruct': {
+        provider: 'mistral',
+        modelName: 'mistralai/mistral-7b-instruct:free',
+        category: 'worker',
+        contextWindow: 32000,
+        strategy: 'truncate',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: false,
+        supportsCompression: false
+    },
+    'mistral-small-3.1-24b-instruct': {
+        provider: 'mistral',
+        modelName: 'mistralai/mistral-small-3.1-24b-instruct:free',
+        category: 'worker',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
     'llama-3.2-3b-instruct': {
-        provider: 'meta',
-        modelName: 'meta/llama-3.2-3b-instruct',
+        provider: 'meta-llama',
+        modelName: 'meta-llama/llama-3.2-3b-instruct:free',
         category: 'worker',
         contextWindow: 16384,
         strategy: 'truncate',
         tokenEstimationRatio: 4.0,
         supportsLongContext: false,
+        supportsCompression: false
+    },
+    'kat-coder-pro': {
+        provider: 'kwaipilot',
+        modelName: 'kwaipilot/kat-coder-pro:free',
+        category: 'worker',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
         supportsCompression: false
     },
     'kat-coder-pro-v1': {
@@ -127,7 +267,67 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     },
     'nemotron-nano-9b-v2': {
         provider: 'nvidia',
-        modelName: 'nvidia/nemotron-nano-9b-v2',
+        modelName: 'nvidia/nemotron-nano-9b-v2:free',
+        category: 'worker',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
+    'gpt-oss-20b': {
+        provider: 'openai',
+        modelName: 'openai/gpt-oss-20b:free',
+        category: 'worker',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
+    'glm-4.5-air': {
+        provider: 'z-ai',
+        modelName: 'z-ai/glm-4.5-air:free',
+        category: 'worker',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
+    'qwen3-coder': {
+        provider: 'qwen',
+        modelName: 'qwen/qwen3-coder:free',
+        category: 'worker',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
+    'qwen3-4b': {
+        provider: 'qwen',
+        modelName: 'qwen/qwen3-4b:free',
+        category: 'worker',
+        contextWindow: 32000,
+        strategy: 'truncate',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: false,
+        supportsCompression: false
+    },
+    'dolphin-mistral-24b-venice': {
+        provider: 'cognitivecomputations',
+        modelName: 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free',
+        category: 'worker',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
+    'trinity-mini': {
+        provider: 'arcee-ai',
+        modelName: 'arcee-ai/trinity-mini:free',
         category: 'worker',
         contextWindow: 128000,
         strategy: 'chunk-sliding',
@@ -141,7 +341,17 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     // =========================
     'nemotron-nano-12b-2-vl': {
         provider: 'nvidia',
-        modelName: 'nvidia/nemotron-nano-12b-2-vl',
+        modelName: 'nvidia/nemotron-nano-12b-2-vl:free',
+        category: 'specialized',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
+    'nova-2-lite-v1': {
+        provider: 'amazon',
+        modelName: 'amazon/nova-2-lite-v1:free',
         category: 'specialized',
         contextWindow: 128000,
         strategy: 'chunk-sliding',
@@ -170,7 +380,60 @@ export function validateFreeMode(modelConfig: ModelConfig, isProductionFreeMode:
 }
 
 /**
+ * Extract provider từ modelName (ví dụ: 'google/gemma-3-12b-it:free' → 'google')
+ */
+function extractProviderFromModelName(modelName: string): Provider | null {
+    if (!modelName || !modelName.includes('/')) {
+        return null;
+    }
+
+    const providerPart = modelName.split('/')[0].toLowerCase();
+
+    // Map provider names
+    const providerMap: Record<string, Provider> = {
+        'google': 'google',
+        'mistralai': 'mistral',
+        'mistral': 'mistral',
+        'meta-llama': 'meta-llama',
+        'meta': 'meta-llama',
+        'nousresearch': 'nous',
+        'nous': 'nous',
+        'qwen': 'qwen',
+        'deepseek': 'deepseek',
+        'tngtech': 'tngtech',
+        'tng': 'tngtech',
+        'allenai': 'allenai',
+        'amazon': 'amazon',
+        'nvidia': 'nvidia',
+        'kwaipilot': 'kwaipilot',
+        'openai': 'openai',
+        'alibaba': 'alibaba',
+        'z-ai': 'z-ai',
+        'moonshotai': 'moonshotai',
+        'cognitivecomputations': 'cognitivecomputations',
+        'nex-agi': 'nex-agi',
+        'arcee-ai': 'arcee-ai',
+    };
+
+    return providerMap[providerPart] || null;
+}
+
+/**
+ * Normalize model name để match (bỏ prefix provider và :free)
+ */
+function normalizeModelNameForMatching(modelName: string): string {
+    // Bỏ prefix provider (google/, mistralai/, etc.)
+    let normalized = modelName.split('/').pop() || modelName;
+    // Bỏ :free suffix
+    normalized = normalized.replace(/:free$/, '');
+    // Bỏ -it suffix (instruction-tuned)
+    normalized = normalized.replace(/-it$/, '');
+    return normalized.toLowerCase();
+}
+
+/**
  * Get model config by model name (with fallback)
+ * ✅ CẢI THIỆN: Smart matching với extract provider và normalize name
  */
 export function getModelConfig(modelName: string, provider?: Provider, isProductionFreeMode: boolean = true): ModelConfig {
     // Try exact match first
@@ -180,13 +443,40 @@ export function getModelConfig(modelName: string, provider?: Provider, isProduct
         return config;
     }
 
+    // ✅ MỚI: Extract provider từ modelName nếu không có provider
+    if (!provider) {
+        provider = extractProviderFromModelName(modelName) || undefined;
+    }
+
+    // ✅ MỚI: Try smart matching với normalized names
+    const normalizedInput = normalizeModelNameForMatching(modelName);
+
+    // Tìm trong tất cả models
+    const allModels = Object.entries(MODEL_CONFIGS);
+    for (const [key, config] of allModels) {
+        const normalizedConfig = normalizeModelNameForMatching(config.modelName);
+
+        // Match nếu normalized names giống nhau hoặc gần giống
+        if (normalizedInput === normalizedConfig ||
+            normalizedInput.includes(normalizedConfig) ||
+            normalizedConfig.includes(normalizedInput)) {
+            // Nếu có provider, kiểm tra provider match
+            if (!provider || config.provider === provider) {
+                validateFreeMode(config, isProductionFreeMode);
+                return config;
+            }
+        }
+    }
+
     // Try to match by provider and partial name
     if (provider) {
         const providerModels = Object.values(MODEL_CONFIGS).filter(m => m.provider === provider);
-        const matched = providerModels.find(m =>
-            modelName.toLowerCase().includes(m.modelName.toLowerCase()) ||
-            m.modelName.toLowerCase().includes(modelName.toLowerCase())
-        );
+        const matched = providerModels.find(m => {
+            const normalizedM = normalizeModelNameForMatching(m.modelName);
+            return normalizedInput === normalizedM ||
+                normalizedInput.includes(normalizedM) ||
+                normalizedM.includes(normalizedInput);
+        });
         if (matched) {
             validateFreeMode(matched, isProductionFreeMode);
             return matched;
@@ -201,7 +491,7 @@ export function getModelConfig(modelName: string, provider?: Provider, isProduct
             const config = MODEL_CONFIGS['qwen3-235b-a22b'];
             validateFreeMode(config, isProductionFreeMode);
             return config;
-        } else if (provider === 'deepseek') {
+        } else if (provider === 'deepseek' || provider === 'tngtech') {
             const config = MODEL_CONFIGS['deepseek-r1t-chimera'];
             validateFreeMode(config, isProductionFreeMode);
             return config;
@@ -209,7 +499,7 @@ export function getModelConfig(modelName: string, provider?: Provider, isProduct
             const config = MODEL_CONFIGS['mistral-7b-instruct'];
             validateFreeMode(config, isProductionFreeMode);
             return config;
-        } else if (provider === 'meta') {
+        } else if (provider === 'meta' || provider === 'meta-llama') {
             const config = MODEL_CONFIGS['llama-3.2-3b-instruct'];
             validateFreeMode(config, isProductionFreeMode);
             return config;

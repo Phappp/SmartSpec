@@ -118,176 +118,15 @@
           </div>
         </div>
 
-        <!-- Draft Management -->
-        <div v-if="hasDraft" class="draft-section">
-          <div class="draft-banner">
-            <div class="draft-info">
-              <span class="material-symbols-outlined">draft</span>
-              <div>
-                <h4>Draft Found</h4>
-                <p>You have unsaved test cases from your previous session</p>
-              </div>
-            </div>
-            <div class="draft-actions">
-              <button class="btn btn-secondary" @click="restoreDraft">Restore Draft</button>
-              <button class="btn btn-secondary" @click="discardDraft">Discard</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Preview Section -->
-        <div v-if="previewTestCases.length > 0" class="preview-section">
-          <div class="preview-header-section">
-            <h3 class="section-title">Preview ({{ previewTestCases.length }} test cases)</h3>
-            <div class="preview-actions">
-              <button class="btn btn-sm btn-secondary" @click="toggleAllDetails">
-                <span class="material-symbols-outlined">
-                  {{ showAllDetails ? 'visibility_off' : 'visibility' }}
-                </span>
-                {{ showAllDetails ? 'Hide All' : 'Show All' }}
-              </button>
-              <button class="btn btn-sm btn-secondary" @click="saveDraft">
-                <span class="material-symbols-outlined">save</span>
-                {{ savingDraft ? 'Saving...' : hasUnsavedChanges ? 'Save Draft' : 'Draft Saved' }}
-              </button>
-            </div>
-          </div>
-
-          <div class="preview-container">
-            <div class="preview-stats-bar">
-              <div class="stat-item">
-                <span class="stat-label">Test Types:</span>
-                <span class="stat-value">{{ testTypeDistribution }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Tables Covered:</span>
-                <span class="stat-value">{{ coverageStats.tablesCovered }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Requirements Covered:</span>
-                <span class="stat-value">{{ coverageStats.requirementsCovered }}</span>
-              </div>
-            </div>
-
-            <div class="preview-list">
-              <div v-for="(testcase, index) in previewTestCases" :key="index" class="preview-item">
-                <div class="preview-main" @click="toggleDetail(index)">
-                  <div class="preview-header">
-                    <h4 class="preview-title">{{ formatTestCaseTitle(testcase) }}</h4>
-                    <div class="preview-badges">
-                      <span class="badge type" :class="testcase.test_type">
-                        {{ testcase.test_type }}
-                      </span>
-                      <span class="badge priority" :class="testcase.priority">
-                        {{ testcase.priority }}
-                      </span>
-                      <span class="material-symbols-outlined expand-icon">
-                        {{ expandedDetails.includes(index) ? 'expand_less' : 'expand_more' }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div class="preview-meta">
-                    <span
-                      v-if="testcase.database_tables && testcase.database_tables.length > 0"
-                      class="table-info"
-                    >
-                      <span class="material-symbols-outlined">table</span>
-                      {{ testcase.database_tables.join(', ') }}
-                    </span>
-                    <span v-if="testcase.source_requirement_ids" class="requirement-info">
-                      <span class="material-symbols-outlined">label</span>
-                      {{ testcase.source_requirement_ids.join(', ') }}
-                    </span>
-                  </div>
-                </div>
-
-                <!-- Collapsible Detail Section -->
-                <div v-if="expandedDetails.includes(index)" class="preview-detail">
-                  <div class="detail-section">
-                    <h5>Description</h5>
-                    <p>{{ testcase.description || 'No description provided' }}</p>
-                  </div>
-
-                  <div
-                    v-if="testcase.objectives && testcase.objectives.length > 0"
-                    class="detail-section"
-                  >
-                    <h5>Objectives</h5>
-                    <ul>
-                      <li v-for="(objective, objIndex) in testcase.objectives" :key="objIndex">
-                        {{ objective }}
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div v-if="testcase.steps && testcase.steps.length > 0" class="detail-section">
-                    <h5>Test Steps ({{ testcase.steps.length }})</h5>
-                    <div class="steps-list">
-                      <div
-                        v-for="(step, stepIndex) in testcase.steps"
-                        :key="stepIndex"
-                        class="step-item"
-                      >
-                        <div class="step-number">{{ step.step_number }}</div>
-                        <div class="step-content">
-                          <div class="step-action">{{ step.action }}</div>
-                          <div v-if="step.expected_immediate_result" class="step-expected">
-                            Expected: {{ step.expected_immediate_result }}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div v-if="testcase.expected_results" class="detail-section">
-                    <h5>Expected Results</h5>
-                    <div class="expected-results">
-                      <div
-                        v-if="
-                          testcase.expected_results.ui_level &&
-                          testcase.expected_results.ui_level.length > 0
-                        "
-                      >
-                        <strong>UI Level:</strong>
-                        <ul>
-                          <li
-                            v-for="(uiResult, uiIndex) in testcase.expected_results.ui_level"
-                            :key="uiIndex"
-                          >
-                            {{ uiResult }}
-                          </li>
-                        </ul>
-                      </div>
-                      <div
-                        v-if="
-                          testcase.expected_results.api_level &&
-                          testcase.expected_results.api_level.status_code
-                        "
-                      >
-                        <strong>API Level:</strong> Status
-                        {{ testcase.expected_results.api_level.status_code }}
-                      </div>
-                      <div v-if="testcase.expected_results.business_level">
-                        <strong>Business Level:</strong>
-                        {{ testcase.expected_results.business_level }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <!-- ✅ BỎ: Draft Management và Preview Section - không cần nữa vì save trực tiếp -->
 
         <!-- Actions -->
         <div class="action-section">
           <div class="action-buttons">
-            <button class="btn btn-secondary" @click="handleClose">Cancel</button>
+            <button class="btn btn-secondary" @click="handleClose" :disabled="generating">Cancel</button>
 
             <div class="primary-actions">
               <button
-                v-if="previewTestCases.length === 0"
                 class="btn btn-primary"
                 @click="generateTestCases"
                 :disabled="selectedRequirements.length === 0 || generating"
@@ -295,28 +134,9 @@
                 <span v-if="generating" class="spinner"></span>
                 {{
                   generating
-                    ? 'Generating...'
-                    : `Generate Test Cases (${selectedRequirements.length})`
+                    ? 'Generating & Saving...'
+                    : `Generate & Save Test Cases (${selectedRequirements.length})`
                 }}
-              </button>
-
-              <button
-                v-else
-                class="btn btn-primary"
-                @click.once="confirmGeneration"
-                :disabled="generating || saving"
-              >
-                <span v-if="saving" class="spinner"></span>
-                {{ saving ? 'Saving...' : `Create ${previewTestCases.length} Test Cases` }}
-              </button>
-
-              <button
-                v-if="previewTestCases.length > 0"
-                class="btn btn-secondary"
-                @click="regenerate"
-                :disabled="generating"
-              >
-                Regenerate
               </button>
             </div>
           </div>
@@ -325,46 +145,88 @@
         <!-- Loading Overlay -->
         <div v-if="generating" class="loading-overlay">
           <div class="loading-content">
-            <div class="spinner large"></div>
-            <h3>Generating Test Cases</h3>
-            <p>AI is creating comprehensive test cases based on your selection...</p>
-            <div class="generation-progress">
-              <div class="progress-bar">
-                <div class="progress-fill" :style="{ width: `${generationProgress}%` }"></div>
+            <div class="loading-spinner"></div>
+            <div class="loading-text">
+              <!-- Estimate Phase -->
+              <div v-if="estimateInfo.isEstimating" class="progress-stage">
+                <h4>
+                  <span class="material-symbols-outlined stage-icon">calculate</span>
+                  Estimating Test Cases...
+                </h4>
+                <p class="progress-info">Analyzing your requirements to determine the number of test cases...</p>
               </div>
-              <span class="progress-text">{{ generationProgress }}%</span>
+              
+              <!-- Estimate Received -->
+              <div v-else-if="estimateInfo.estimated_count > 0 && batchProgress.currentBatch === 0" class="progress-stage">
+                <h4>
+                  <span class="material-symbols-outlined stage-icon success">check_circle</span>
+                  Estimated {{ estimateInfo.estimated_count }} Test Cases
+                </h4>
+                <p v-if="estimateInfo.summary" class="progress-info">{{ estimateInfo.summary }}</p>
+                <p class="progress-detail">Preparing to generate {{ estimateInfo.estimated_batches }} batch(es)...</p>
+              </div>
+
+              <!-- Generating Phase -->
+              <div v-else-if="batchProgress.currentBatch > 0 && batchProgress.currentBatch <= batchProgress.totalBatches" class="progress-stage">
+                <h4>
+                  <span class="material-symbols-outlined stage-icon">auto_awesome</span>
+                  <span v-if="batchProgress.testcasesInBatch === 0">
+                    Generating Batch {{ batchProgress.currentBatch }}/{{ batchProgress.totalBatches }}
+                  </span>
+                  <span v-else>
+                    Generated {{ batchProgress.testcasesInBatch }} Test Cases
+                  </span>
+                </h4>
+                <p class="progress-info">
+                  <span v-if="batchProgress.testcasesInBatch === 0">
+                    Generating test cases for batch {{ batchProgress.currentBatch }}...
+                  </span>
+                  <span v-else>
+                    Batch {{ batchProgress.currentBatch }}/{{ batchProgress.totalBatches }} completed
+                  </span>
+                </p>
+                <div class="progress-bar-container">
+                  <div class="progress-bar" :style="{ width: `${(batchProgress.currentBatch / (batchProgress.totalBatches || 1)) * 100}%` }"></div>
+                </div>
+                <p class="progress-detail">
+                  {{ batchProgress.currentBatch }} of {{ batchProgress.totalBatches }} batches 
+                  ({{ estimateInfo.estimated_count || batchProgress.totalCount }} total test cases)
+                </p>
+              </div>
+
+              <!-- Saving Phase -->
+              <div v-else-if="batchProgress.savedCount > 0 && batchProgress.savedCount < batchProgress.totalCount" class="progress-stage">
+                <h4>
+                  <span class="material-symbols-outlined stage-icon">save</span>
+                  Saving {{ batchProgress.savedCount }}/{{ batchProgress.totalCount }} Test Cases
+                </h4>
+                <p class="progress-info">Saving generated test cases to database...</p>
+                <div class="progress-bar-container">
+                  <div class="progress-bar" :style="{ width: `${(batchProgress.savedCount / batchProgress.totalCount) * 100}%` }"></div>
+                </div>
+              </div>
+
+              <!-- Completed Phase -->
+              <div v-else-if="!generating && estimateInfo.estimated_count > 0" class="progress-stage completed">
+                <h4>
+                  <span class="material-symbols-outlined stage-icon success">check_circle</span>
+                  Generation Completed!
+                </h4>
+                <p class="progress-info">Successfully generated and saved {{ estimateInfo.estimated_count }} test cases.</p>
+              </div>
+
+              <!-- Default Loading -->
+              <div v-else class="progress-stage">
+                <h4>Generating...</h4>
+                <p class="progress-info">Processing your requirements...</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Custom Confirmation Modal -->
-    <div v-if="showConfirmModal" class="modal-overlay confirm-overlay">
-      <div class="modal-content medium">
-        <div class="modal-header">
-          <h3>Confirm Action</h3>
-          <button class="btn-close" @click="showConfirmModal = false">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
-        <div class="modal-body">
-          <p>{{ confirmMessage }}</p>
-          <div class="confirm-actions">
-            <!-- ĐÚNG -->
-            <button
-              class="btn btn-secondary"
-              @click="executeCancelAction ? executeCancelAction() : (showConfirmModal = false)"
-            >
-              {{ confirmedCancelAction ? "Don't Save" : 'Cancel' }}
-            </button>
-            <button class="btn btn-primary" @click="executeConfirmedAction">
-              {{ confirmedCancelAction ? 'Save Draft' : 'Confirm' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- ✅ BỎ: Custom Confirmation Modal - không cần nữa -->
   </div>
 </template>
 
@@ -397,20 +259,29 @@ export default {
 
     // State management
     const generating = ref(false)
-    const saving = ref(false)
-    const savingDraft = ref(false)
     const selectedRequirements = ref([])
-    const previewTestCases = ref([])
-    const expandedDetails = ref([])
-    const showAllDetails = ref(false)
     const showConfirmModal = ref(false)
     const confirmMessage = ref('')
     const confirmedAction = ref(null)
     const generationProgress = ref(0)
-    const hasUnsavedChanges = ref(false)
     const confirmedCancelAction = ref(null)
-    const hasDraft = ref(false)
     const searchQuery = ref('')
+    
+    // Estimate and Batch Progress (similar to InputSidebar)
+    const estimateInfo = ref({
+      estimated_count: 0,
+      summary: '',
+      estimated_batches: 0,
+      isEstimating: false
+    })
+    
+    const batchProgress = ref({
+      currentBatch: 0,
+      totalBatches: 0,
+      testcasesInBatch: 0,
+      savedCount: 0,
+      totalCount: 0
+    })
 
     // Configuration
     const configuration = ref({
@@ -426,40 +297,7 @@ export default {
       }
     }, { immediate: true })
 
-    // Draft management
-    const draftKey = computed(() => `testcase_draft_${props.projectId}_${props.versionId}`)
-
-    // Computed properties
-    const coverageStats = computed(() => {
-      const tablesCovered = new Set()
-      const requirementsCovered = new Set()
-
-      previewTestCases.value.forEach((tc) => {
-        if (tc.database_tables) {
-          tc.database_tables.forEach((table) => tablesCovered.add(table))
-        }
-        if (tc.source_requirement_ids) {
-          tc.source_requirement_ids.forEach((reqId) => requirementsCovered.add(reqId))
-        }
-      })
-
-      return {
-        tablesCovered: tablesCovered.size,
-        requirementsCovered: requirementsCovered.size,
-      }
-    })
-
-    const testTypeDistribution = computed(() => {
-      const distribution = {}
-      previewTestCases.value.forEach((tc) => {
-        const type = tc.test_type || 'unknown'
-        distribution[type] = (distribution[type] || 0) + 1
-      })
-
-      return Object.entries(distribution)
-        .map(([type, count]) => `${type} (${count})`)
-        .join(', ')
-    })
+    // ✅ BỎ: Draft management và computed properties không cần thiết
 
     // Helper: Get requirement ID (support both _id and id for backward compatibility)
     const getRequirementId = (req) => {
@@ -540,57 +378,6 @@ export default {
       } else {
         selectedRequirements.value.push(reqId)
       }
-      if (previewTestCases.value.length > 0) {
-        hasUnsavedChanges.value = true
-      }
-    }
-
-    // THAY THẾ - Chỉ watch previewTestCases với logic đơn giản
-    watch(
-      () => previewTestCases.value,
-      (newTestCases, oldTestCases) => {
-        // Chỉ set hasUnsavedChanges = true khi có test cases mới được generate
-        // và không phải đang restore từ draft
-        if (newTestCases.length > 0 && newTestCases !== oldTestCases) {
-          hasUnsavedChanges.value = true
-        }
-      },
-      { deep: true }
-    )
-
-    const toggleDetail = (index) => {
-      const detailIndex = expandedDetails.value.indexOf(index)
-      if (detailIndex > -1) {
-        expandedDetails.value.splice(detailIndex, 1)
-      } else {
-        expandedDetails.value.push(index)
-      }
-    }
-
-    const toggleAllDetails = () => {
-      if (showAllDetails.value) {
-        expandedDetails.value = []
-      } else {
-        expandedDetails.value = previewTestCases.value.map((_, index) => index)
-      }
-      showAllDetails.value = !showAllDetails.value
-    }
-
-    const formatTestCaseTitle = (testcase) => {
-      const requirementIds = testcase.source_requirement_ids || []
-      if (requirementIds.length === 0) {
-        return testcase.title || 'Untitled Test Case'
-      }
-
-      const firstReqId = requirementIds[0]
-      const requirement = props.requirements.find((req) => {
-        const reqId = getRequirementId(req)
-        return reqId === String(firstReqId) || reqId === firstReqId
-      })
-      const requirementName = requirement?.name || 'Unknown Requirement'
-      const baseTitle = testcase.title || 'Test Scenario'
-
-      return `[${firstReqId}] - ${requirementName} - ${baseTitle}`
     }
 
     const generateTestCases = async () => {
@@ -606,7 +393,21 @@ export default {
 
       generating.value = true
       generationProgress.value = 0
-      previewTestCases.value = []
+      
+      // Reset estimate and batch progress
+      estimateInfo.value = {
+        estimated_count: 0,
+        summary: '',
+        estimated_batches: 0,
+        isEstimating: true
+      }
+      batchProgress.value = {
+        currentBatch: 0,
+        totalBatches: 0,
+        testcasesInBatch: 0,
+        savedCount: 0,
+        totalCount: 0
+      }
 
       // Filter out null/undefined/empty values and validate
       const validRequirementIds = selectedRequirements.value
@@ -614,11 +415,11 @@ export default {
 
       if (validRequirementIds.length === 0) {
         toast.error('Please select at least one valid requirement')
+        generating.value = false
         return
       }
 
-      // ✅ DEBUG: Log before generation
-      console.log('🔍 DEBUG - Starting generation with requirements:', {
+      console.log('🔍 Starting test case generation with requirements:', {
         original: selectedRequirements.value,
         filtered: validRequirementIds,
         requirements: props.requirements.map(req => ({
@@ -630,266 +431,132 @@ export default {
         }))
       })
 
-      // Simulate progress updates
-      const progressInterval = setInterval(() => {
-        if (generationProgress.value < 90) {
-          generationProgress.value += 10
+      // Simulate estimate phase (2-3 seconds)
+      setTimeout(() => {
+        if (generating.value) {
+          // Simulate estimate result
+          const estimatedCount = Math.max(10, validRequirementIds.length * 5)
+          const estimatedBatches = Math.ceil(estimatedCount / 20)
+          
+          estimateInfo.value = {
+            estimated_count: estimatedCount,
+            summary: `Estimated ${estimatedCount} test cases from ${validRequirementIds.length} requirement(s)`,
+            estimated_batches: estimatedBatches,
+            isEstimating: false
+          }
+          
+          batchProgress.value.totalBatches = estimatedBatches
+          batchProgress.value.totalCount = estimatedCount
         }
-      }, 500)
+      }, 2000)
+
+      // Simulate batch progress
+      let currentBatch = 0
+      const batchInterval = setInterval(() => {
+        if (!generating.value) {
+          clearInterval(batchInterval)
+          return
+        }
+        
+        if (estimateInfo.value.isEstimating) {
+          return // Wait for estimate
+        }
+        
+        if (currentBatch < estimateInfo.value.estimated_batches) {
+          currentBatch++
+          batchProgress.value.currentBatch = currentBatch
+          batchProgress.value.testcasesInBatch = 0
+          
+          // Simulate testcases in batch after a delay
+          setTimeout(() => {
+            if (generating.value && batchProgress.value.currentBatch === currentBatch) {
+              const batchSize = currentBatch === estimateInfo.value.estimated_batches 
+                ? estimateInfo.value.estimated_count - (currentBatch - 1) * 20
+                : 20
+              batchProgress.value.testcasesInBatch = batchSize
+              batchProgress.value.savedCount = Math.min(
+                currentBatch * 20,
+                estimateInfo.value.estimated_count
+              )
+            }
+          }, 1000)
+        } else {
+          clearInterval(batchInterval)
+        }
+      }, 3000)
 
       try {
+        // ✅ MỚI: Gọi API generate - sẽ tự động estimate, chia batch, và save vào DB
         const response = await testcaseApi.generateTestCases(props.projectId, props.versionId, {
           selectedRequirementIds: validRequirementIds,
           language: configuration.value.language,
           testType: configuration.value.testType,
         })
 
-        clearInterval(progressInterval)
-        generationProgress.value = 100
+        clearInterval(batchInterval)
+        
+        // Update with actual results
+        const savedTestCases = response.data.data || response.data || []
+        const savedCount = savedTestCases.length || 0
+        
+        // Update progress with actual saved count
+        batchProgress.value.savedCount = savedCount
+        batchProgress.value.totalCount = savedCount
+        if (estimateInfo.value.estimated_count === 0) {
+          estimateInfo.value.estimated_count = savedCount
+          estimateInfo.value.estimated_batches = Math.ceil(savedCount / 20)
+        }
+        
+        // Show completion briefly
+        await new Promise(resolve => setTimeout(resolve, 1000))
 
-        // ✅ DEBUG: Log the API response
-        console.log('🔍 DEBUG - Generation API response:', response)
-        console.log('🔍 DEBUG - Raw response data:', response.data)
+        console.log('✅ Test case generation completed:', {
+          savedCount,
+          response: response.data
+        })
 
-        const generatedTestCases = response.data.data || response.data || []
-        console.log('🔍 DEBUG - Generated test cases count:', generatedTestCases.length)
-        console.log(
-          '🔍 DEBUG - Generated test cases:',
-          JSON.parse(JSON.stringify(generatedTestCases))
-        )
-
-        previewTestCases.value = generatedTestCases
-        hasUnsavedChanges.value = true
-
-        if (previewTestCases.value.length === 0) {
-          toast.warning(
-            'No test cases were generated. Please try different requirements or options.'
-          )
+        if (savedCount === 0) {
+          toast.warning('No test cases were generated. Please try different requirements or options.')
         } else {
-          toast.success(`Generated ${previewTestCases.value.length} test cases`)
-          // Auto-expand first item
-          if (previewTestCases.value.length > 0) {
-            expandedDetails.value = [0]
-          }
+          toast.success(`Successfully generated and saved ${savedCount} test cases`)
+          // ✅ Đóng modal và emit event để parent refresh test cases
+          emit('generate', savedTestCases)
+          handleClose()
         }
       } catch (error) {
-        console.error('❌ DEBUG - Error generating test cases:', error)
-        console.error('❌ DEBUG - Error response:', error.response)
-        clearInterval(progressInterval)
+        console.error('❌ Error generating test cases:', error)
+        clearInterval(batchInterval)
         
-        // Sử dụng formatErrorForDisplay để hiển thị lỗi thân thiện
         const { formatErrorForDisplay } = await import('@/utils/errorMessages')
         const errorMessage = formatErrorForDisplay(error, 'Không thể tạo test case. Vui lòng thử lại.')
-
-          toast.error(errorMessage)
-
-        previewTestCases.value = []
-        hasUnsavedChanges.value = false
+        toast.error(errorMessage)
       } finally {
         generating.value = false
         generationProgress.value = 0
-      }
-    }
-
-    const regenerate = () => {
-      previewTestCases.value = []
-      expandedDetails.value = []
-      showAllDetails.value = false
-      hasUnsavedChanges.value = false
-    }
-
-    const saveDraft = async () => {
-      if (previewTestCases.value.length === 0) {
-        toast.error('No test cases to save as draft')
-        return
-      }
-
-      savingDraft.value = true
-      try {
-        const draftData = {
-          testCases: previewTestCases.value,
-          configuration: configuration.value,
-          selectedRequirements: selectedRequirements.value,
-          timestamp: new Date().toISOString(),
-        }
-
-        localStorage.setItem(draftKey.value, JSON.stringify(draftData))
-        hasUnsavedChanges.value = false
-        hasDraft.value = true // ← Thêm dòng này
-        toast.success('Draft saved successfully')
-      } catch (error) {
-        console.error('Error saving draft:', error)
-        toast.error('Failed to save draft')
-      } finally {
-        savingDraft.value = false
-      }
-    }
-
-    const restoreDraft = () => {
-      try {
-        const draft = localStorage.getItem(draftKey.value)
-        if (draft) {
-          const draftData = JSON.parse(draft)
-          previewTestCases.value = draftData.testCases || []
-          configuration.value = draftData.configuration || configuration.value
-          selectedRequirements.value = draftData.selectedRequirements || []
-          hasUnsavedChanges.value = false
-          hasDraft.value = true // ← Thêm dòng này
-          toast.success('Draft restored successfully')
-        }
-      } catch (error) {
-        console.error('Error restoring draft:', error)
-        toast.error('Failed to restore draft')
-      }
-    }
-
-    const discardDraft = () => {
-      showConfirmation(
-        'Are you sure you want to discard the saved draft? This action cannot be undone.',
-        () => {
-          localStorage.removeItem(draftKey.value)
-          hasUnsavedChanges.value = false
-          hasDraft.value = false // ← Cập nhật state
-
-          // Clear preview nếu đang hiển thị draft
-          if (previewTestCases.value.length > 0) {
-            previewTestCases.value = []
-            expandedDetails.value = []
-            showAllDetails.value = false
+        // Reset after a brief delay to show completion
+        setTimeout(() => {
+          estimateInfo.value = {
+            estimated_count: 0,
+            summary: '',
+            estimated_batches: 0,
+            isEstimating: false
           }
-
-          toast.success('Draft discarded')
-        }
-      )
-    }
-
-    const confirmGeneration = () => {
-      // ✅ THÊM: Double click prevention
-      if (saving.value) {
-        console.log('⚠️ confirmGeneration blocked - already saving')
-        return
-      }
-
-      console.log('🔍 DEBUG - confirmGeneration called')
-      showConfirmation(`Are you sure you want to create this test cases?`, executeGeneration)
-    }
-
-    const executeGeneration = async () => {
-      console.log('🔍 DEBUG - executeGeneration CALLED - Check if this logs twice')
-
-      // ✅ THÊM: Double execution prevention
-      if (saving.value) {
-        console.log('⚠️ BLOCKED: Already saving, ignoring duplicate call')
-        return
-      }
-
-      if (previewTestCases.value.length === 0) {
-        toast.error('No test cases to save')
-        return
-      }
-
-      saving.value = true
-      console.log('🔍 DEBUG - Setting saving = true')
-
-      try {
-        console.log('🔍 DEBUG - Calling saveTestCases API...')
-
-        const requestBody = {
-          testCases: previewTestCases.value,
-        }
-
-        const response = await testcaseApi.saveTestCases(
-          props.projectId,
-          props.versionId,
-          requestBody
-        )
-
-        console.log('🔍 DEBUG - saveTestCases API response received')
-        console.log('Response count:', response.data?.count)
-
-        const savedCount = response.data?.count || previewTestCases.value.length
-
-        // Clear draft và reset unsaved changes
-        localStorage.removeItem(draftKey.value)
-        hasUnsavedChanges.value = false
-        hasDraft.value = false
-
-        console.log('✅ DEBUG - Successfully saved:', savedCount, 'test cases')
-
-        toast.success(`Successfully created ${savedCount} test cases`)
-        emit('generate', response.data?.data || previewTestCases.value)
-        handleClose()
-      } catch (error) {
-        console.error('❌ DEBUG - Error in executeGeneration:', error)
-        const { formatErrorForDisplay } = await import('@/utils/errorMessages')
-        const errorMessage = formatErrorForDisplay(error, 'Không thể lưu test case. Vui lòng thử lại.')
-        toast.error(errorMessage)
-      } finally {
-        saving.value = false
-        console.log('🔍 DEBUG - Setting saving = false')
+          batchProgress.value = {
+            currentBatch: 0,
+            totalBatches: 0,
+            testcasesInBatch: 0,
+            savedCount: 0,
+            totalCount: 0
+          }
+        }, 2000)
       }
     }
-    const showConfirmation = (message, confirmAction, cancelAction = null) => {
-      confirmMessage.value = message
-      confirmedAction.value = confirmAction
-      confirmedCancelAction.value = cancelAction
-      showConfirmModal.value = true
-    }
 
-    const executeConfirmedAction = () => {
-      if (confirmedAction.value) {
-        confirmedAction.value()
-      }
-      showConfirmModal.value = false
-      confirmedAction.value = null
-      confirmedCancelAction.value = null
-    }
-
-    // Thêm method mới cho cancel action
-    const executeCancelAction = () => {
-      if (confirmedCancelAction.value) {
-        confirmedCancelAction.value()
-      }
-      showConfirmModal.value = false
-      confirmedAction.value = null
-      confirmedCancelAction.value = null
-    }
-
-    const checkDraft = () => {
-      try {
-        const draft = localStorage.getItem(draftKey.value)
-        if (!draft) {
-          hasDraft.value = false
-          return false
-        }
-
-        const draftData = JSON.parse(draft)
-        hasDraft.value = draftData.testCases && draftData.testCases.length > 0
-        return hasDraft.value
-      } catch (error) {
-        console.error('Error checking draft:', error)
-        hasDraft.value = false
-        return false
-      }
-    }
+    // ✅ BỎ: Các methods không cần thiết nữa (showConfirmation, executeConfirmedAction, executeCancelAction, checkDraft)
 
     const handleClose = () => {
-      if (hasUnsavedChanges.value && previewTestCases.value.length > 0) {
-        showConfirmation(
-          'You have unsaved test cases. Do you want to save them as draft before closing?',
-          () => {
-            saveDraft().finally(() => {
-              emit('close')
-            })
-          },
-          () => {
-            // Thêm dòng này
-            emit('close')
-          }
-        )
-      } else {
-        emit('close')
-      }
+      // ✅ BỎ: Không cần check unsaved changes nữa vì save trực tiếp
+      emit('close')
     }
 
     // Lifecycle
@@ -901,10 +568,7 @@ export default {
           .filter((id) => id && id !== '')
       }
 
-      // Check for existing draft - SỬA THÀNH checkDraft()
-      if (checkDraft()) {
-        toast.info('Draft found for this project')
-      }
+      // ✅ BỎ: Không check draft nữa
     })
 
     onUnmounted(() => {
@@ -915,21 +579,13 @@ export default {
 
     return {
       generating,
-      saving,
-      savingDraft,
       selectedRequirements,
-      previewTestCases,
-      expandedDetails,
-      showAllDetails,
-      showConfirmModal,
-      confirmMessage,
       configuration,
-      coverageStats,
-      testTypeDistribution,
       generationProgress,
-      hasDraft,
       searchQuery,
       filteredRequirements,
+      estimateInfo,
+      batchProgress,
       getRequirementId,
       isRequirementSelected,
       selectAll,
@@ -937,19 +593,8 @@ export default {
       toggleRequirement,
       handleSearch,
       clearSearch,
-      toggleDetail,
-      toggleAllDetails,
-      formatTestCaseTitle,
       generateTestCases,
-      regenerate,
-      saveDraft,
-      restoreDraft,
-      discardDraft,
-      confirmGeneration,
-      executeConfirmedAction,
       handleClose,
-      checkDraft,
-      executeCancelAction,
     }
   },
 }
@@ -1812,9 +1457,12 @@ export default {
 }
 
 .loading-content {
-  text-align: center;
-  max-width: 400px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 500px;
   padding: 2rem;
+  text-align: left;
 }
 
 .loading-content h3 {
@@ -1827,6 +1475,80 @@ export default {
   color: #64748b;
   margin-bottom: 1.5rem;
   line-height: 1.5;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(26, 54, 93, 0.3);
+  border-top: 2px solid #1a365d;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+  margin: 0 auto 1rem;
+}
+
+.loading-text {
+  flex: 1;
+  text-align: left;
+}
+
+.loading-text h4 {
+  margin: 0 0 6px 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1a365d;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stage-icon {
+  font-size: 18px;
+  opacity: 0.9;
+  color: #1a365d;
+}
+
+.stage-icon.success {
+  color: #10b981;
+}
+
+.progress-info {
+  margin: 4px 0;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.progress-detail {
+  margin: 6px 0 0 0;
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 4px;
+  background: rgba(26, 54, 93, 0.1);
+  border-radius: 2px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.progress-bar-container .progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #1a365d 0%, #2d4a7c 100%);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.progress-stage {
+  width: 100%;
+}
+
+.progress-stage.completed h4 {
+  color: #10b981;
 }
 
 .generation-progress {

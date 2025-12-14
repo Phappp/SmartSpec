@@ -1445,6 +1445,13 @@ export default {
 
     async checkIncrementalProcessingStatus() {
       try {
+        // ✅ MỚI: Khôi phục state từ localStorage trước
+        const restored = this.restoreIncrementalState()
+        if (restored) {
+          console.log('✅ Restored incremental state, starting polling...')
+          this.startPolling(this.selectedVersionId, 'incremental')
+        }
+
         const response = await getVersionStatus(this.selectedVersionId)
         const { status, version } = response.data.data
 
@@ -1452,8 +1459,12 @@ export default {
           // QUAN TRỌNG: Chỉ set incremental nếu KHÔNG có retry đang chạy
           if (!this.isRetrying) {
             this.isProcessingIncremental = true
+            this.saveIncrementalState() // ✅ Lưu state
             this.startPolling(this.selectedVersionId, 'incremental')
           }
+        } else if (status !== 'processing') {
+          // ✅ Nếu không còn processing, xóa state đã lưu
+          this.clearIncrementalState()
         }
       } catch (error) {
         console.error('Error checking processing status:', error)
@@ -1466,6 +1477,7 @@ export default {
       this.isProcessingIncremental = true
       this.isProcessingFailed = false
       this.showIncrementalButton = false
+      this.saveIncrementalState() // ✅ Lưu state khi bắt đầu
 
       try {
         const response = await startIncrementalAnalysis(
@@ -1556,11 +1568,19 @@ export default {
 
           if (mode === 'retry') {
             this.saveRetryState()
+          } else if (mode === 'incremental') {
+            // ✅ Lưu state khi đang polling
+            this.saveIncrementalState()
           }
 
           if (status !== 'processing') {
             this.stopPolling()
-            if (mode === 'retry') this.clearRetryState()
+            if (mode === 'retry') {
+              this.clearRetryState()
+            } else if (mode === 'incremental') {
+              // ✅ Xóa state khi không còn processing
+              this.clearIncrementalState()
+            }
 
             if (status === 'completed' || status === 'has_conflicts') {
               this.handleProcessingSuccess(mode)
@@ -1612,6 +1632,59 @@ export default {
       localStorage.removeItem(`retry_${this.project._id}`)
     },
 
+    saveIncrementalState() {
+      const incrementalState = {
+        projectId: this.project._id,
+        versionId: this.selectedVersionId,
+        isProcessing: this.isProcessingIncremental,
+        estimateInfo: { ...this.estimateInfo },
+        batchProgress: { ...this.batchProgress },
+        timestamp: new Date().getTime(),
+        type: 'incremental',
+      }
+      localStorage.setItem(`incremental_${this.project._id}`, JSON.stringify(incrementalState))
+      console.log('💾 Saved incremental state to localStorage:', incrementalState)
+    },
+
+    clearIncrementalState() {
+      localStorage.removeItem(`incremental_${this.project._id}`)
+      console.log('🗑️ Cleared incremental state from localStorage')
+    },
+
+    restoreIncrementalState() {
+      try {
+        const savedState = localStorage.getItem(`incremental_${this.project._id}`)
+        if (!savedState) return false
+
+        const state = JSON.parse(savedState)
+        
+        // Chỉ restore nếu cùng project và version
+        if (state.projectId === this.project._id && state.versionId === this.selectedVersionId) {
+          // Kiểm tra xem state có còn hợp lệ không (không quá 1 giờ)
+          const now = new Date().getTime()
+          const stateAge = now - state.timestamp
+          const MAX_AGE = 60 * 60 * 1000 // 1 giờ
+
+          if (stateAge < MAX_AGE && state.isProcessing) {
+            console.log('🔄 Restoring incremental state from localStorage:', state)
+            this.isProcessingIncremental = state.isProcessing
+            this.estimateInfo = { ...state.estimateInfo }
+            this.batchProgress = { ...state.batchProgress }
+            return true
+          } else {
+            // State quá cũ, xóa đi
+            this.clearIncrementalState()
+            return false
+          }
+        }
+        return false
+      } catch (error) {
+        console.error('Error restoring incremental state:', error)
+        this.clearIncrementalState()
+        return false
+      }
+    },
+
     cleanupPolling() {
       if (this.pollingInterval) {
         clearInterval(this.pollingInterval)
@@ -1639,6 +1712,11 @@ export default {
       this.stopPolling()
       this.isProcessingFailed = false // Reset failed state
 
+      // ✅ Xóa state khi hoàn thành
+      if (mode === 'incremental') {
+        this.clearIncrementalState()
+      }
+
       const fetchSuccess = await this.fetchProjectData(this.project._id)
       const currentVersion = this.versions.find((v) => v._id === this.selectedVersionId)
       const finalStatus = currentVersion ? currentVersion.status : 'completed'
@@ -1659,6 +1737,8 @@ export default {
       if (mode === 'incremental') {
         this.isProcessingIncremental = false
         this.isProcessingFailed = true
+        // ✅ Xóa state khi failed
+        this.clearIncrementalState()
       } else {
         this.isRetrying = false
         this.isProcessingFailed = false
@@ -1674,6 +1754,8 @@ export default {
     handleIncrementalError(message) {
       this.isProcessingIncremental = false
       this.showIncrementalButton = true
+      // ✅ Xóa state khi có lỗi
+      this.clearIncrementalState()
       this.toast.error(message)
     },
 
@@ -1931,6 +2013,9 @@ export default {
         totalCount: event.estimate.estimated_count
       }
 
+      // ✅ Lưu state khi nhận estimate
+      this.saveIncrementalState()
+
       // Hiển thị toast với estimate
       this.toast.info(`Estimated ${event.estimate.estimated_count} use cases will be generated (${event.estimate.estimated_batches} batches)`)
     },
@@ -1968,6 +2053,11 @@ export default {
         }
       }
 
+      // ✅ Lưu state mỗi khi có progress update
+      if (event.isProcessing) {
+        this.saveIncrementalState()
+      }
+
       console.log(`🔄 Updated loading state from realtime: ${event.isProcessing ? 'processing' : 'completed'}`)
 
       // ✅ MỚI: Refresh usecases ngay khi nhận progress update (trong lúc processing)
@@ -1987,6 +2077,8 @@ export default {
       if (!event.isProcessing) {
         console.log('✅ Incremental analysis completed via realtime, refreshing data...')
         console.log(`📊 Current usecases count before refresh: ${this.useCases.length}`)
+        // ✅ Xóa state khi hoàn thành
+        this.clearIncrementalState()
         if (this.incrementalFetchTimeout) {
           clearTimeout(this.incrementalFetchTimeout)
         }

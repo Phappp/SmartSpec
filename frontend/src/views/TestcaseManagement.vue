@@ -1233,25 +1233,21 @@ export default {
       return requirement?.name || 'Unknown Requirement'
     }
 
-    const handleGenerateTestCases = async (generatedTestCases) => {
-      if (!project.value._id || !selectedVersionId.value) {
-        toast.error('Project and version must be selected')
-        return
-      }
-
-      try {
-        // ✅ ĐÃ SỬA: Gửi nguyên bản, không format lại title
-        await testcaseApi.saveTestCases(project.value._id, selectedVersionId.value, {
-          testCases: generatedTestCases, // Dùng trực tiếp không format
-        })
-
-        showGenerateModal.value = false
-        await loadTestCases()
-      } catch (error) {
-        console.error('Error saving generated test cases:', error)
-        const { formatErrorForDisplay } = require('@/utils/errorMessages')
-        const errorMessage = formatErrorForDisplay(error, 'An error occurred')
-        toast.error(`Failed to save test cases: ${errorMessage}`)
+    const handleGenerateTestCases = async (savedTestCases) => {
+      // ✅ MỚI: Test cases đã được save vào DB từ backend, chỉ cần refresh
+      console.log('✅ Test cases generation completed, refreshing list...')
+      
+      // Đóng modal trước khi refresh để UX mượt hơn
+      showGenerateModal.value = false
+      
+      // Refresh test cases list (đã có loading state trong loadTestCases)
+      await loadTestCases()
+      
+      // Toast đã được hiển thị trong modal, không cần hiển thị lại
+      // Chỉ log để debug
+      const count = savedTestCases?.length || 0
+      if (count > 0) {
+        console.log(`✅ Refreshed ${count} new test cases`)
       }
     }
 

@@ -72,7 +72,7 @@ export class ApiKeyServiceImpl implements ApiKeyService {
       throw new Error("API Key already exists");
     }
     // Validate provider - hỗ trợ tất cả providers trong schema
-    const validProviders = ['gemini', 'openai', 'claude', 'nous', 'qwen', 'deepseek', 'mistral', 'meta', 'allenai', 'google', 'amazon', 'nvidia', 'kwaipilot', 'openrouter'];
+    const validProviders = ['gemini', 'openai', 'claude', 'nous', 'qwen', 'deepseek', 'mistral', 'meta', 'allenai', 'google', 'amazon', 'nvidia', 'kwaipilot', 'openrouter', 'nex-agi', 'arcee-ai', 'tngtech', 'alibaba', 'z-ai', 'moonshotai', 'cognitivecomputations', 'meta-llama'];
     if (!validProviders.includes(provider)) {
       throw new Error(
         `Provider must be one of: ${validProviders.join(', ')}`

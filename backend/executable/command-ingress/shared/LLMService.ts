@@ -48,8 +48,20 @@ export class LLMService {
         let targetProvider: Provider | undefined = provider;
         let targetModelName = modelName;
 
-        // Nếu có modelName, lấy config để xác định provider
-        if (modelName) {
+        // ✅ CẢI THIỆN: Nếu modelName có format OpenRouter (có / và :free), ưu tiên OpenRouter ngay
+        const isOpenRouterFormat = modelName && modelName.includes('/') && (modelName.includes(':free') || !isProductionFreeMode);
+
+        if (isOpenRouterFormat) {
+            // Kiểm tra có OpenRouter keys không
+            const openRouterKeys = await this.apiKeyService.getAllActiveKeys('openrouter');
+            if (openRouterKeys && openRouterKeys.length > 0) {
+                targetProvider = 'openrouter';
+                targetModelName = modelName; // Dùng modelName gốc cho OpenRouter
+            }
+        }
+
+        // Nếu có modelName, lấy config để xác định provider (nếu chưa có)
+        if (modelName && !targetProvider) {
             const modelConfig = getModelConfig(modelName, provider, isProductionFreeMode);
             targetProvider = modelConfig.provider;
             targetModelName = modelConfig.modelName;
@@ -74,6 +86,9 @@ export class LLMService {
                     keys = openRouterKeys;
                     // Nếu có modelName, dùng modelName đó với OpenRouter
                     if (!targetModelName && modelName) {
+                        targetModelName = modelName;
+                    } else if (modelName && modelName.includes('/')) {
+                        // Nếu modelName đã có format OpenRouter, dùng nó
                         targetModelName = modelName;
                     }
                 }
@@ -162,17 +177,143 @@ export class LLMService {
 
                 console.error(`❌ ${targetProvider} API call failed with key ${key.key_value.slice(0, 12)}...:`, err.message);
 
+                // ✅ MỚI: Xử lý rate limit - tự động chuyển model/provider
+                const isRateLimit = err.status === 429 || err.status === 503 ||
+                    (err.message && (
+                        err.message.toLowerCase().includes('rate limit') ||
+                        err.message.toLowerCase().includes('free-models-per-day') ||
+                        err.message.toLowerCase().includes('too many requests')
+                    ));
+
+                if (isRateLimit) {
+                    console.warn(`⚠️ [RATE LIMIT] Key ${key.key_value.slice(0, 12)}... bị rate limit: ${err.message}`);
+
+                    // ✅ ƯU TIÊN: Nếu là OpenRouter, thử key tiếp theo trước
+                    if (targetProvider === 'openrouter') {
+                        // Kiểm tra xem còn key nào khác không
+                        const currentKeyIndex = keys.indexOf(key);
+                        const remainingKeys = keys.slice(currentKeyIndex + 1);
+
+                        if (remainingKeys.length > 0) {
+                            console.log(`🔄 [RATE LIMIT] Còn ${remainingKeys.length} key(s) OpenRouter. Tiếp tục thử key tiếp theo...`);
+                            continue; // Thử key tiếp theo trong vòng lặp
+                        }
+
+                        // Tất cả keys đều rate limit, thử các model khác với key đầu tiên
+                        console.warn(`⚠️ [RATE LIMIT] Tất cả ${keys.length} key(s) OpenRouter đều bị rate limit. Thử model khác...`);
+
+                        if (effectiveModelName?.includes(':free')) {
+                            // Thử các free models khác trên OpenRouter (dùng model names hợp lệ từ MODEL_CONFIGS)
+                            const alternativeFreeModels = [
+                                'google/gemma-3-4b-it:free',      // ✅ Đúng format
+                                'google/gemma-3-12b-it:free',     // ✅ Đúng format
+                                'google/gemma-3-27b-it:free',     // ✅ Đúng format
+                                'mistralai/mistral-7b-instruct:free',  // ✅ Đúng prefix mistralai/
+                                'meta-llama/llama-3.2-3b-instruct:free',  // ✅ Đúng prefix meta-llama/
+                                'google/gemini-2.0-flash-exp:free',  // ✅ Alternative Google model
+                                'kwaipilot/kat-coder-pro:free'    // ✅ Alternative worker model
+                            ];
+
+                            for (const altModel of alternativeFreeModels) {
+                                if (altModel === effectiveModelName) continue; // Đã thử rồi
+
+                                try {
+                                    console.log(`🔄 [RATE LIMIT] Thử model ${altModel} với key đầu tiên...`);
+                                    const altResponse = await this.callOpenRouterAPI(keys[0].key_value, altModel, prompt);
+
+                                    const altResponseTime = Date.now() - startTime;
+                                    await logApiUsage({
+                                        api_key_id: keys[0]._id.toString(),
+                                        provider: targetProvider,
+                                        model_name: altModel,
+                                        user_id: userId,
+                                        project_id: projectId,
+                                        request_type: 'text',
+                                        endpoint: endpoint,
+                                        prompt_tokens: altResponse.tokens?.prompt_tokens || 0,
+                                        completion_tokens: altResponse.tokens?.completion_tokens || 0,
+                                        total_tokens: altResponse.tokens?.total_tokens || 0,
+                                        status: 'success',
+                                        status_code: 200,
+                                        response_time: altResponseTime,
+                                    }).catch(err => console.error('Failed to log API usage:', err));
+
+                                    console.log(`✅ [RATE LIMIT] Model ${altModel} thành công!`);
+                                    return altResponse;
+                                } catch (altErr: any) {
+                                    const isAltRateLimit = altErr.message?.toLowerCase().includes('rate limit') ||
+                                        altErr.message?.toLowerCase().includes('free-models-per-day');
+                                    if (isAltRateLimit) {
+                                        console.warn(`⚠️ [RATE LIMIT] Model ${altModel} cũng bị rate limit:`, altErr.message);
+                                    } else {
+                                        console.warn(`⚠️ [RATE LIMIT] Model ${altModel} thất bại:`, altErr.message);
+                                    }
+                                    continue;
+                                }
+                            }
+                        }
+
+                        // Nếu tất cả free models đều fail, thử chuyển sang provider khác
+                        console.warn(`⚠️ [RATE LIMIT] Tất cả models OpenRouter đều fail. Chuyển sang provider khác...`);
+                        const fallbackProvider = await this.findAvailableProvider(['openrouter']); // Loại trừ openrouter
+                        if (fallbackProvider) {
+                            try {
+                                const fallbackKeys = await this.apiKeyService.getAllActiveKeys(fallbackProvider);
+                                if (fallbackKeys && fallbackKeys.length > 0) {
+                                    const fallbackKey = fallbackKeys[0];
+                                    const fallbackModel = fallbackKey.model_name || this.getDefaultModel(fallbackProvider);
+                                    console.log(`🔄 [RATE LIMIT] Chuyển sang ${fallbackProvider} với model ${fallbackModel}`);
+
+                                    let fallbackResponse: LLMResponse;
+                                    if (fallbackProvider === 'gemini') {
+                                        fallbackResponse = await this.callGeminiAPI(fallbackKey.key_value, fallbackModel, prompt);
+                                    } else if (fallbackProvider === 'openai') {
+                                        fallbackResponse = await this.callOpenAIAPI(fallbackKey.key_value, fallbackModel, prompt);
+                                    } else if (fallbackProvider === 'claude') {
+                                        fallbackResponse = await this.callClaudeAPI(fallbackKey.key_value, fallbackModel, prompt);
+                                    } else {
+                                        continue; // Không hỗ trợ provider này
+                                    }
+
+                                    const fallbackResponseTime = Date.now() - startTime;
+                                    await logApiUsage({
+                                        api_key_id: fallbackKey._id.toString(),
+                                        provider: fallbackProvider,
+                                        model_name: fallbackModel,
+                                        user_id: userId,
+                                        project_id: projectId,
+                                        request_type: 'text',
+                                        endpoint: endpoint,
+                                        prompt_tokens: fallbackResponse.tokens?.prompt_tokens || 0,
+                                        completion_tokens: fallbackResponse.tokens?.completion_tokens || 0,
+                                        total_tokens: fallbackResponse.tokens?.total_tokens || 0,
+                                        status: 'success',
+                                        status_code: 200,
+                                        response_time: fallbackResponseTime,
+                                    }).catch(err => console.error('Failed to log API usage:', err));
+
+                                    console.log(`✅ [RATE LIMIT] Provider ${fallbackProvider} thành công!`);
+                                    return fallbackResponse;
+                                }
+                            } catch (fallbackErr: any) {
+                                console.warn(`⚠️ [RATE LIMIT] Provider ${fallbackProvider} cũng thất bại:`, fallbackErr.message);
+                            }
+                        }
+                    }
+                }
+
                 // Nếu là lỗi model không hợp lệ, thử fallback model
                 if (err.message && (err.message.includes('not a valid model') || err.message.includes('model ID'))) {
                     console.warn(`⚠️ Model ${effectiveModelName} không hợp lệ. Thử fallback model...`);
 
-                    // Thử fallback models cho OpenRouter
+                    // Thử fallback models cho OpenRouter (dùng model names hợp lệ từ MODEL_CONFIGS)
                     if (targetProvider === 'openrouter') {
                         const fallbackModels = [
-                            'google/gemma-3-12b:free',
-                            'google/gemma-3-4b:free',
-                            'mistral/mistral-7b-instruct',
-                            'meta/llama-3.2-3b-instruct'
+                            'google/gemma-3-12b-it:free',      // ✅ Đúng format
+                            'google/gemma-3-4b-it:free',        // ✅ Đúng format
+                            'google/gemma-3-27b-it:free',       // ✅ Đúng format
+                            'mistralai/mistral-7b-instruct:free',  // ✅ Đúng prefix mistralai/
+                            'meta-llama/llama-3.2-3b-instruct:free'  // ✅ Đúng prefix meta-llama/
                         ];
 
                         for (const fallbackModel of fallbackModels) {
@@ -212,7 +353,7 @@ export class LLMService {
                 }
 
                 // Nếu là lỗi không phải rate limit, tiếp tục thử key tiếp theo
-                if (err.status !== 429 && err.status !== 503) {
+                if (!isRateLimit) {
                     continue;
                 }
             }
@@ -429,10 +570,12 @@ export class LLMService {
 
     /**
      * Tìm provider có keys available
+     * @param excludeProviders - Danh sách providers cần loại trừ
      */
-    private async findAvailableProvider(): Promise<Provider | null> {
+    private async findAvailableProvider(excludeProviders: Provider[] = []): Promise<Provider | null> {
         const providers: Provider[] = ['openrouter', 'gemini', 'google', 'mistral', 'meta', 'openai', 'claude'];
         for (const p of providers) {
+            if (excludeProviders.includes(p)) continue; // Bỏ qua providers bị loại trừ
             const keys = await this.apiKeyService.getAllActiveKeys(p);
             if (keys && keys.length > 0) {
                 return p;
@@ -449,19 +592,27 @@ export class LLMService {
             'gemini': 'gemini-2.0-flash-001',
             'openai': 'gpt-4o',
             'claude': 'claude-3-5-sonnet',
-            'openrouter': 'google/gemma-3-12b:free', // Đổi sang model ổn định hơn
-            'nous': 'nous/hermes-3-405b-instruct',
+            'openrouter': 'google/gemma-3-12b-it:free',
+            'nous': 'nousresearch/hermes-3-llama-3.1-405b:free',
             'qwen': 'qwen/qwen3-235b-a22b',
-            'deepseek': 'tng/deepseek-r1t-chimera',
-            'mistral': 'mistral/mistral-7b-instruct',
-            'meta': 'meta/llama-3.2-3b-instruct',
-            'google': 'google/gemma-3-27b-it:free', // Đổi sang model ổn định hơn
-            'nvidia': 'nvidia/nemotron-nano-9b-v2',
-            'kwaipilot': 'kwaipilot/kat-coder-pro-v1',
-            'allenai': 'olmo-3-32b-think',
-            'amazon': 'nova-2-lite',
+            'deepseek': 'tngtech/deepseek-r1t-chimera:free',
+            'mistral': 'mistralai/mistral-7b-instruct:free',
+            'meta': 'meta-llama/llama-3.2-3b-instruct:free',
+            'meta-llama': 'meta-llama/llama-3.2-3b-instruct:free',
+            'google': 'google/gemma-3-27b-it:free',
+            'nvidia': 'nvidia/nemotron-nano-9b-v2:free',
+            'kwaipilot': 'kwaipilot/kat-coder-pro:free',
+            'allenai': 'allenai/olmo-3-32b-think:free',
+            'amazon': 'amazon/nova-2-lite-v1:free',
+            'nex-agi': 'nex-agi/deepseek-v3.1-nex-n1:free',
+            'arcee-ai': 'arcee-ai/trinity-mini:free',
+            'tngtech': 'tngtech/deepseek-r1t-chimera:free',
+            'alibaba': 'alibaba/tongyi-deepresearch-30b-a3b:free',
+            'z-ai': 'z-ai/glm-4.5-air:free',
+            'moonshotai': 'moonshotai/kimi-k2:free',
+            'cognitivecomputations': 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free',
         };
-        return defaults[provider] || 'google/gemma-3-12b:free'; // Đổi sang model ổn định hơn
+        return defaults[provider] || 'google/gemma-3-12b-it:free';
     }
 
     /**

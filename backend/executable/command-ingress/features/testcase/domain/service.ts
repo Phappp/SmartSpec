@@ -134,22 +134,126 @@ export class TestcaseService {
 
         console.log(`📊 Processing ${requirementsToProcess.length} requirements with ${databaseSchema.tables?.length || 0} tables`);
 
-        // XỬ LÝ LOGIC KHI testType = "all"
-        let generatedTestCases: any[];
-        if (testType === 'all') {
-            generatedTestCases = await this.generateAllTestTypes(
-                requirementsToProcess,
-                databaseSchema,
-                language
-            );
-        } else {
-            // Generate với testType cụ thể
-            generatedTestCases = await this.testcaseGeminiService.generateTestCases(
-                requirementsToProcess,
-                databaseSchema,
-                language,
-                testType
-            );
+        // ✅ MỚI: Estimate số lượng test cases trước
+        console.log(`📊 [ESTIMATE PHASE] Estimating test cases count...`);
+        const estimate = await this.testcaseGeminiService.estimateTestCasesCount(
+            requirementsToProcess,
+            testType,
+            language,
+            undefined, // modelName
+            userId,
+            projectId
+        );
+        console.log(`✅ [ESTIMATE PHASE] Estimated ${estimate.estimated_count} test cases, ${estimate.estimated_batches} batches`);
+
+        // ✅ MỚI: Generate và save từng batch
+        const BATCH_SIZE = 20;
+        const estimatedBatches = estimate.estimated_batches;
+        const estimatedCount = estimate.estimated_count;
+        let totalSaved = 0;
+        let allGeneratedTestCases: any[] = [];
+
+        // Generate và save từng batch
+        for (let batchNumber = 1; batchNumber <= estimatedBatches; batchNumber++) {
+            try {
+                const offset = (batchNumber - 1) * BATCH_SIZE;
+                const remaining = estimatedCount - totalSaved;
+                const currentBatchSize = Math.min(BATCH_SIZE, remaining);
+
+                if (remaining <= 0) {
+                    console.log(`⏩ [BATCH ${batchNumber}/${estimatedBatches}] Already reached estimated count (${estimatedCount}). Stopping.`);
+                    break;
+                }
+
+                console.log(`📦 [BATCH ${batchNumber}/${estimatedBatches}] Generating test cases ${offset + 1} to ${offset + currentBatchSize} (estimated total: ${estimatedCount})...`);
+
+                // Generate batch
+                let batchTestCases: any[];
+                if (testType === 'all') {
+                    // Với testType = "all", generate từng requirement với tất cả test types
+                    batchTestCases = await this.generateBatchForAllTypes(
+                        requirementsToProcess,
+                        databaseSchema,
+                        language,
+                        batchNumber,
+                        estimatedBatches,
+                        offset,
+                        currentBatchSize,
+                        estimatedCount,
+                        userId,
+                        projectId
+                    );
+                } else {
+                    // Generate với testType cụ thể
+                    batchTestCases = await this.testcaseGeminiService.generateTestCasesBatch(
+                        requirementsToProcess,
+                        databaseSchema,
+                        batchNumber,
+                        estimatedBatches,
+                        offset,
+                        currentBatchSize,
+                        language,
+                        testType,
+                        estimatedCount,
+                        undefined, // modelName
+                        userId,
+                        projectId
+                    );
+                }
+
+                if (batchTestCases.length === 0) {
+                    console.log(`⏩ [BATCH ${batchNumber}/${estimatedBatches}] No more test cases to generate. Stopping.`);
+                    break;
+                }
+
+                // Giới hạn số lượng dựa trên estimate
+                const remainingToGenerate = estimatedCount - totalSaved;
+                const testCasesToProcess = batchTestCases.slice(0, remainingToGenerate);
+                if (testCasesToProcess.length < batchTestCases.length) {
+                    console.warn(`⚠️ [BATCH ${batchNumber}/${estimatedBatches}] Generated ${batchTestCases.length} test cases, but only ${remainingToGenerate} remaining to reach estimate (${estimatedCount}). Limiting to ${testCasesToProcess.length}.`);
+                }
+
+                // Save batch ngay vào DB
+                if (testCasesToProcess.length > 0) {
+                    try {
+                        console.log(`💾 [BATCH ${batchNumber}/${estimatedBatches}] Attempting to save ${testCasesToProcess.length} test cases...`);
+
+                        // Validate và filter test cases hợp lệ
+                        const validTestCases = this.validateTestCases(testCasesToProcess, requirementsToProcess);
+                        
+                        if (validTestCases.length === 0) {
+                            console.warn(`⚠️ [BATCH ${batchNumber}/${estimatedBatches}] All ${testCasesToProcess.length} test cases failed validation. Skipping batch.`);
+                            continue;
+                        }
+
+                        // Save vào DB
+                        const savedTestCases = await this.saveTestCasesBatch(
+                            projectId,
+                            versionId,
+                            validTestCases,
+                            userId
+                        );
+
+                        totalSaved += savedTestCases.length;
+                        allGeneratedTestCases.push(...savedTestCases);
+
+                        console.log(`✅ [BATCH ${batchNumber}/${estimatedBatches}] Successfully saved ${savedTestCases.length} test cases (total saved: ${totalSaved})`);
+
+                        // Delay giữa các batch
+                        if (batchNumber < estimatedBatches) {
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                        }
+                    } catch (err: any) {
+                        console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Error saving test cases:`, err.message);
+                        // Tiếp tục với batch tiếp theo thay vì throw error
+                        continue;
+                    }
+                }
+            } catch (error: any) {
+                console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Error:`, error.message);
+                // Tiếp tục với batch tiếp theo thay vì throw error
+                continue;
+            }
         }
 
         // ✅ Ghi log cho generate testcase
@@ -168,11 +272,13 @@ export class TestcaseService {
                 performed_by_ai: true,
                 details: {
                     after: {
-                        count: generatedTestCases.length,
+                        count: totalSaved,
                         test_type: testType,
-                        requirement_count: requirementsToProcess.length
+                        requirement_count: requirementsToProcess.length,
+                        estimated_count: estimate.estimated_count,
+                        actual_count: totalSaved
                     },
-                    message: `${username} generated ${generatedTestCases.length} test cases from ${requirementsToProcess.length} requirement(s) (type: ${testType})`
+                    message: `${username} generated and saved ${totalSaved} test cases from ${requirementsToProcess.length} requirement(s) (type: ${testType}, estimated: ${estimate.estimated_count})`
                 }
             });
         } catch (logError) {
@@ -180,7 +286,235 @@ export class TestcaseService {
             // Không throw error để không ảnh hưởng đến flow chính
         }
 
-        return generatedTestCases;
+        return allGeneratedTestCases;
+    }
+
+    /**
+     * ✅ MỚI: Generate batch cho testType = "all" (tất cả các loại test)
+     */
+    private async generateBatchForAllTypes(
+        requirements: any[],
+        databaseSchema: any,
+        language: string,
+        batchNumber: number,
+        totalBatches: number,
+        offset: number,
+        batchSize: number,
+        estimatedTotal: number,
+        userId: string,
+        projectId: string
+    ): Promise<any[]> {
+        const testTypes = ['integration', 'api', 'ui', 'performance', 'security'];
+        const allTestCases: any[] = [];
+        
+        // Tính toán số lượng test cases cần generate cho batch này
+        const testCasesPerType = Math.ceil(batchSize / testTypes.length);
+        let generatedCount = 0;
+        
+        for (const testType of testTypes) {
+            if (generatedCount >= batchSize) break;
+            
+            const remaining = batchSize - generatedCount;
+            const currentBatchSize = Math.min(testCasesPerType, remaining);
+            
+            try {
+                const batchTestCases = await this.testcaseGeminiService.generateTestCasesBatch(
+                    requirements,
+                    databaseSchema,
+                    batchNumber,
+                    totalBatches,
+                    offset + generatedCount,
+                    currentBatchSize,
+                    language,
+                    testType,
+                    estimatedTotal,
+                    undefined,
+                    userId,
+                    projectId
+                );
+                
+                allTestCases.push(...batchTestCases);
+                generatedCount += batchTestCases.length;
+                
+                // Delay giữa các test types
+                await new Promise(resolve => setTimeout(resolve, 300));
+            } catch (error) {
+                console.error(`❌ Error generating ${testType} tests in batch ${batchNumber}:`, error);
+                // Tiếp tục với test type tiếp theo
+                continue;
+            }
+        }
+        
+        return allTestCases;
+    }
+
+    /**
+     * ✅ MỚI: Validate test cases
+     */
+    private validateTestCases(testCases: any[], requirements: any[]): any[] {
+        const validTestCases: any[] = [];
+        const invalidTestCases: Array<{ index: number; errors: string[] }> = [];
+
+        testCases.forEach((tc, index) => {
+            const errors: string[] = [];
+
+            // Validate required fields
+            if (!tc.title || typeof tc.title !== 'string' || tc.title.trim() === '') {
+                errors.push('missing or invalid title');
+            }
+            if (!tc.description || typeof tc.description !== 'string' || tc.description.trim() === '') {
+                errors.push('missing or invalid description');
+            }
+            if (!tc.test_type || !['integration', 'api', 'ui', 'performance', 'security'].includes(tc.test_type)) {
+                errors.push('missing or invalid test_type');
+            }
+            if (!tc.priority || !['low', 'medium', 'high', 'critical'].includes(tc.priority)) {
+                errors.push('missing or invalid priority');
+            }
+            if (!tc.steps || !Array.isArray(tc.steps) || tc.steps.length === 0) {
+                errors.push('missing or invalid steps');
+            }
+            if (!tc.source_requirement_ids || !Array.isArray(tc.source_requirement_ids) || tc.source_requirement_ids.length === 0) {
+                errors.push('missing or invalid source_requirement_ids');
+            }
+
+            // Validate steps
+            if (tc.steps && Array.isArray(tc.steps)) {
+                tc.steps.forEach((step: any, stepIndex: number) => {
+                    if (!step.step_number || typeof step.step_number !== 'number') {
+                        errors.push(`step ${stepIndex + 1}: missing step_number`);
+                    }
+                    if (!step.action || typeof step.action !== 'string' || step.action.trim() === '') {
+                        errors.push(`step ${stepIndex + 1}: missing action`);
+                    }
+                    if (!step.expected_immediate_result || typeof step.expected_immediate_result !== 'string') {
+                        errors.push(`step ${stepIndex + 1}: missing expected_immediate_result`);
+                    }
+                });
+            }
+
+            if (errors.length > 0) {
+                invalidTestCases.push({ index, errors });
+                console.warn(`⚠️ Skipping invalid test case ${index + 1} ("${tc.title || 'unnamed'}"): ${errors.join(', ')}`);
+            } else {
+                validTestCases.push(tc);
+            }
+        });
+
+        if (invalidTestCases.length > 0) {
+            console.warn(`⚠️ Skipped ${invalidTestCases.length} invalid test case(s), proceeding with ${validTestCases.length} valid test case(s)`);
+        }
+
+        return validTestCases;
+    }
+
+    /**
+     * ✅ MỚI: Save một batch test cases vào DB
+     */
+    private async saveTestCasesBatch(
+        projectId: string,
+        versionId: string,
+        testCases: any[],
+        createdBy: string
+    ): Promise<any[]> {
+        if (testCases.length === 0) {
+            return [];
+        }
+
+        try {
+            const testCasesToSave = testCases.map(testCase => {
+                // XÓA id nếu có để MongoDB tự generate _id
+                const { id, ...cleanTestCase } = testCase;
+
+                return {
+                    project_id: projectId,
+                    version_id: versionId,
+                    created_by: createdBy,
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                    ...cleanTestCase
+                };
+            });
+
+            let result: any[] = [];
+            let insertedCount = 0;
+
+            try {
+                result = await Testcase.insertMany(testCasesToSave, { ordered: false });
+                insertedCount = result.length;
+            } catch (bulkError: any) {
+                // Nếu có BulkWriteError, có thể một số documents đã được insert
+                if (bulkError.name === 'BulkWriteError' && bulkError.result) {
+                    insertedCount = bulkError.result.insertedCount || 0;
+                    const writeErrors = bulkError.result.writeErrors || [];
+                    console.error(`❌ BulkWriteError: ${insertedCount}/${testCasesToSave.length} inserted`);
+                    console.error(`❌ Write errors:`, writeErrors.map((e: any) => ({
+                        index: e.index,
+                        code: e.code,
+                        errmsg: e.errmsg
+                    })));
+
+                    // Nếu không có document nào được insert, throw error
+                    if (insertedCount === 0) {
+                        throw new Error(`All ${testCasesToSave.length} test cases failed to insert. First error: ${writeErrors[0]?.errmsg || bulkError.message}`);
+                    }
+
+                    // Lấy các documents đã insert thành công
+                    result = [];
+                    for (let i = 0; i < insertedCount; i++) {
+                        if (bulkError.result.insertedIds && bulkError.result.insertedIds[i]) {
+                            const insertedDoc = await Testcase.findById(bulkError.result.insertedIds[i]);
+                            if (insertedDoc) result.push(insertedDoc);
+                        }
+                    }
+                } else {
+                    throw bulkError;
+                }
+            }
+
+            // Verify số lượng đã insert
+            if (insertedCount === 0) {
+                console.error(`❌ CRITICAL: insertMany returned 0 documents!`);
+                // Thử insert từng document để xem document nào fail
+                const individualResults: any[] = [];
+                const individualErrors: any[] = [];
+
+                for (let i = 0; i < testCasesToSave.length; i++) {
+                    try {
+                        const doc = new Testcase(testCasesToSave[i]);
+                        await doc.validate();
+                        const saved = await doc.save();
+                        individualResults.push(saved);
+                    } catch (individualError: any) {
+                        individualErrors.push({ index: i, title: testCasesToSave[i].title, error: individualError.message });
+                        console.error(`❌ Document ${i + 1} ("${testCasesToSave[i].title}") failed:`, individualError.message);
+                    }
+                }
+
+                if (individualResults.length > 0) {
+                    insertedCount = individualResults.length;
+                    result = individualResults;
+                    console.log(`✅ Successfully inserted ${insertedCount} test cases individually (${individualErrors.length} failed)`);
+                } else {
+                    throw new Error(`All ${testCasesToSave.length} test cases failed validation. Errors: ${individualErrors.map(e => `${e.title}: ${e.error}`).join('; ')}`);
+                }
+            }
+
+            console.log(`✅ Successfully inserted ${insertedCount} test cases into database`);
+
+            // Verify bằng cách query lại
+            const verifyCount = await Testcase.countDocuments({ version_id: versionId });
+            console.log(`✅ Total test cases in database for version ${versionId}: ${verifyCount}`);
+
+            if (insertedCount < testCasesToSave.length) {
+                console.warn(`⚠️ Only inserted ${insertedCount}/${testCasesToSave.length} test cases. Some may have been skipped.`);
+            }
+
+            return result;
+        } catch (error: any) {
+            console.error(`❌ Error saving test cases batch:`, error.message);
+            throw error;
+        }
     }
 
     private async generateAllTestTypes(requirements: any[], databaseSchema: any, language: string): Promise<any[]> {

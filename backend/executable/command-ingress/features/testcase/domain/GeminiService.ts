@@ -5,6 +5,36 @@ import { LLMService } from "../../../shared/LLMService";
 // PROMPTS cho test case generation với Enterprise standard
 const testcasePrompts = {
     'vi-VN': {
+        estimateTestCasesCount: (requirementsJson: string, testType: string) => {
+            const isShort = requirementsJson.length < 500;
+            return `
+BẠN LÀ CHUYÊN GIA KIỂM THỬ PHẦN MỀM. Nhiệm vụ của bạn là ƯỚC TÍNH số lượng test cases cần thiết để kiểm thử đầy đủ các use cases được cung cấp.
+
+DANH SÁCH USE CASES:
+${requirementsJson}
+
+LOẠI KIỂM THỬ: ${testType}
+
+**QUY TẮC ƯỚC TÍNH:**
+- Use case đơn giản (CRUD cơ bản): 4-6 test cases
+- Use case phức tạp (workflow nhiều bước): 8-12 test cases
+- Use case cực kỳ phức tạp (integration phức tạp): 15-20 test cases
+- Nếu testType = "all": nhân số lượng với 5 (vì có 5 loại test: integration, api, ui, performance, security)
+
+**TRẢ VỀ CHỈ JSON OBJECT:**
+{
+  "estimated_count": ${isShort ? '10' : '50'},
+  "estimated_batches": ${isShort ? '1' : '3'},
+  "summary": "Tóm tắt ngắn gọn về các use cases và số lượng test cases ước tính",
+  "reasoning": "Lý do ước tính số lượng test cases"
+}
+
+**QUAN TRỌNG:**
+- estimated_count phải là số nguyên dương
+- estimated_batches = Math.ceil(estimated_count / 20) (mỗi batch 20 test cases)
+- Trả về CHỈ JSON, không có markdown, không có code fence
+`;
+        },
         testcaseDesign: (requirementsJson: string, databaseSchemaJson: string, testType: string = 'integration') => `
 BẠN LÀ MỘT CHUYÊN GIA KIỂM THỬ PHẦN MỀM ĐẲNG CẤP THẾ GIỚI, chuyên tạo ra các test case toàn diện và hiệu quả từ yêu cầu nghiệp vụ và thiết kế database.
 
@@ -220,6 +250,36 @@ LOẠI KIỂM THỬ YÊU CẦU: ${testType}
 `
     },
     'en-US': {
+        estimateTestCasesCount: (requirementsJson: string, testType: string) => {
+            const isShort = requirementsJson.length < 500;
+            return `
+YOU ARE A SOFTWARE TESTING EXPERT. Your task is to ESTIMATE the number of test cases needed to fully test the provided use cases.
+
+USE CASE LIST:
+${requirementsJson}
+
+TEST TYPE: ${testType}
+
+**ESTIMATION RULES:**
+- Simple use case (basic CRUD): 4-6 test cases
+- Complex use case (multi-step workflow): 8-12 test cases
+- Highly complex use case (complex integration): 15-20 test cases
+- If testType = "all": multiply count by 5 (5 test types: integration, api, ui, performance, security)
+
+**RETURN ONLY JSON OBJECT:**
+{
+  "estimated_count": ${isShort ? '10' : '50'},
+  "estimated_batches": ${isShort ? '1' : '3'},
+  "summary": "Brief summary of use cases and estimated test case count",
+  "reasoning": "Reasoning for estimated test case count"
+}
+
+**IMPORTANT:**
+- estimated_count must be a positive integer
+- estimated_batches = Math.ceil(estimated_count / 20) (20 test cases per batch)
+- Return ONLY JSON, no markdown, no code fence
+`;
+        },
         testcaseDesign: (requirementsJson: string, databaseSchemaJson: string, testType: string = 'integration') => `
 YOU ARE A WORLD-CLASS SOFTWARE TESTING EXPERT, specializing in creating comprehensive and effective test cases from business requirements and database design.
 
@@ -443,6 +503,206 @@ export class TestcaseGeminiService {
     // Configuration
     private readonly BATCH_SIZE = 3;
     private readonly MAX_RESPONSE_LENGTH = 15000;
+    private readonly TESTCASE_BATCH_SIZE = 20; // Batch size cho test case generation
+
+    /**
+     * ✅ MỚI: Estimate số lượng test cases cần generate
+     */
+    async estimateTestCasesCount(
+        requirements: any[],
+        testType: string,
+        language: string = 'vi-VN',
+        modelName?: string,
+        userId?: string,
+        projectId?: string
+    ): Promise<{
+        estimated_count: number;
+        summary: string;
+        estimated_batches: number;
+        reasoning?: string;
+    }> {
+        const requirementsJson = JSON.stringify(requirements, null, 2);
+        const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+        const prompt = testcasePrompts[lang].estimateTestCasesCount(requirementsJson, testType);
+
+        // ✅ Sử dụng LLMService để lấy recommended model
+        const effectiveModelName = modelName || await this.llmService.getRecommendedModel();
+
+        try {
+            console.log(`📊 [ESTIMATE] Estimating test cases count for ${requirements.length} requirements, testType: ${testType}`);
+
+            const response = await this.llmService.callLLM({
+                prompt: prompt,
+                modelName: effectiveModelName,
+                userId: userId,
+                projectId: projectId,
+                endpoint: 'estimateTestCasesCount',
+                isProductionFreeMode: true
+            });
+
+            let text: string = response.text || "{}";
+            text = this.cleanJsonString(text);
+
+            // Parse JSON
+            let parsed: any = null;
+            try {
+                parsed = JSON.parse(text);
+            } catch (parseError: any) {
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    try {
+                        parsed = JSON.parse(jsonMatch[0]);
+                    } catch (e) {
+                        console.error(`❌ [ESTIMATE] Failed to parse JSON: ${parseError.message}`);
+                        throw new Error(`Invalid JSON format: ${parseError.message}`);
+                    }
+                } else {
+                    throw new Error("No JSON object found in response");
+                }
+            }
+
+            // Validate
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const estimate = parsed as any;
+
+                if (typeof estimate.estimated_count !== 'number' || estimate.estimated_count < 1) {
+                    console.error(`❌ [ESTIMATE] Invalid estimated_count: ${estimate.estimated_count}`);
+                    throw new Error(`Invalid estimated_count: must be a positive number, got ${estimate.estimated_count}`);
+                }
+
+                let estimated_count = Math.max(1, Math.floor(estimate.estimated_count || 1));
+                const estimated_batches = Math.ceil(estimated_count / this.TESTCASE_BATCH_SIZE);
+
+                console.log(`✅ [ESTIMATE] Estimated ${estimated_count} test cases, ${estimated_batches} batches (batch size: ${this.TESTCASE_BATCH_SIZE})`);
+
+                return {
+                    estimated_count,
+                    estimated_batches,
+                    summary: estimate.summary || `Estimated ${estimated_count} test cases for ${requirements.length} requirements`,
+                    reasoning: estimate.reasoning
+                };
+            } else {
+                throw new Error("Invalid response format: expected JSON object");
+            }
+        } catch (error: any) {
+            console.error(`❌ [ESTIMATE] Error estimating test cases:`, error);
+            // Fallback estimate
+            const fallbackCount = requirements.length * (testType === 'all' ? 25 : 5); // 5 test cases per requirement, or 25 if all types
+            const fallbackBatches = Math.ceil(fallbackCount / this.TESTCASE_BATCH_SIZE);
+            console.warn(`⚠️ [ESTIMATE] Using fallback estimate: ${fallbackCount} test cases, ${fallbackBatches} batches`);
+            return {
+                estimated_count: fallbackCount,
+                estimated_batches: fallbackBatches,
+                summary: `Fallback estimate: ${fallbackCount} test cases`,
+                reasoning: "Fallback estimate due to estimation error"
+            };
+        }
+    }
+
+    /**
+     * ✅ MỚI: Generate test cases theo batch với offset và batchSize
+     */
+    async generateTestCasesBatch(
+        requirements: any[],
+        databaseSchema: any,
+        batchNumber: number,
+        totalBatches: number,
+        offset: number,
+        batchSize: number,
+        language: string = 'vi-VN',
+        testType: string = 'integration',
+        estimatedTotal?: number,
+        modelName?: string,
+        userId?: string,
+        projectId?: string
+    ): Promise<any[]> {
+        try {
+            console.log(`📦 [BATCH ${batchNumber}/${totalBatches}] Generating test cases ${offset + 1} to ${offset + batchSize} (estimated total: ${estimatedTotal || 'unknown'})...`);
+
+            // Tạo prompt cho batch này
+            const requirementsJson = JSON.stringify(requirements, null, 2);
+            const databaseSchemaJson = JSON.stringify(databaseSchema, null, 2);
+            const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+
+            // Sử dụng prompt hiện tại nhưng thêm thông tin batch
+            const basePrompt = testcasePrompts[lang].testcaseDesign(requirementsJson, databaseSchemaJson, testType);
+            const batchPrompt = `${basePrompt}
+
+**BATCH INFORMATION:**
+- Batch number: ${batchNumber}/${totalBatches}
+- Start from test case number: ${offset + 1}
+- Number of test cases to generate in this batch: ${batchSize}
+${estimatedTotal ? `- **TOTAL ESTIMATED TEST CASES: ${estimatedTotal}** - DO NOT generate more than this!` : ''}
+
+**REQUIREMENTS:**
+- Generate exactly ${batchSize} test cases (or fewer if content is exhausted)
+${estimatedTotal ? `- **IMPORTANT**: Total estimated test cases is ${estimatedTotal}. Currently generated ${offset} test cases. Only generate maximum ${estimatedTotal - offset} test cases in this batch.` : ''}
+- Start from test case number ${offset + 1}
+- DO NOT repeat test cases already generated in previous batches
+- Each test case must have complete information
+
+**IMPORTANT:**
+- Return ONLY JSON object with "testcases" array, no markdown, no code fence
+- If content is exhausted → return empty array []
+`;
+
+            // ✅ Sử dụng LLMService để lấy recommended model
+            const effectiveModelName = modelName || await this.llmService.getRecommendedModel();
+
+            const response = await this.llmService.callLLM({
+                prompt: batchPrompt,
+                modelName: effectiveModelName,
+                userId: userId,
+                projectId: projectId,
+                endpoint: 'generateTestCasesBatch',
+                isProductionFreeMode: true
+            });
+
+            let responseText: string = response.text || "{}";
+            responseText = this.cleanJsonString(responseText);
+
+            // Parse JSON
+            let parsed: any = null;
+            try {
+                parsed = JSON.parse(responseText);
+            } catch (parseError: any) {
+                const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    try {
+                        parsed = JSON.parse(jsonMatch[0]);
+                    } catch (e) {
+                        console.error(`❌ [BATCH ${batchNumber}/${totalBatches}] Failed to parse JSON: ${parseError.message}`);
+                        throw new Error(`Invalid JSON format: ${parseError.message}`);
+                    }
+                } else {
+                    throw new Error("No JSON object found in response");
+                }
+            }
+
+            let testCases = parsed.testcases || [];
+            if (!Array.isArray(testCases)) {
+                testCases = [];
+            }
+
+            // ✅ FIX: Giới hạn số lượng test cases dựa trên estimate
+            if (estimatedTotal && estimatedTotal > 0) {
+                const maxAllowed = estimatedTotal - offset;
+                if (testCases.length > maxAllowed) {
+                    console.warn(`⚠️ [BATCH ${batchNumber}/${totalBatches}] LLM generated ${testCases.length} test cases, but estimate (${estimatedTotal}) allows only ${maxAllowed} (offset: ${offset}). Limiting to ${maxAllowed}.`);
+                    testCases = testCases.slice(0, maxAllowed);
+                }
+            }
+
+            // Normalize test cases
+            const normalized = this.standardizeTestCases(testCases, requirements, databaseSchema);
+            console.log(`✅ [BATCH ${batchNumber}/${totalBatches}] Generated ${normalized.length} test cases${estimatedTotal ? ` (estimated total: ${estimatedTotal}, remaining: ${estimatedTotal - offset - normalized.length})` : ''}`);
+
+            return normalized;
+        } catch (err: any) {
+            console.error(`❌ [BATCH ${batchNumber}/${totalBatches}] LLM call failed:`, err?.message || err);
+            throw err;
+        }
+    }
 
     /**
      * Generate enterprise test cases from requirements and database schema
@@ -1077,5 +1337,24 @@ export class TestcaseGeminiService {
         }
 
         return repaired;
+    }
+
+    /**
+     * Clean JSON string by removing markdown code fences
+     */
+    private cleanJsonString(text: string): string {
+        if (!text || typeof text !== 'string') return '{}';
+
+        const trimmed = text.trim();
+
+        // Remove markdown code fences (```json ... ``` or ``` ... ```)
+        const codeFencePattern = /```(?:json)?\s*([\s\S]*?)\s*```/g;
+        const codeFenceMatch = codeFencePattern.exec(trimmed);
+        if (codeFenceMatch) {
+            return codeFenceMatch[1].trim();
+        }
+
+        // If no code fence, return trimmed text
+        return trimmed;
     }
 }

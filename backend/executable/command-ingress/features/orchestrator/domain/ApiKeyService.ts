@@ -1,6 +1,8 @@
 import ApiKey from "../../../../../internal/model/api_key";
+import { Provider } from "../../../shared/tokenManager";
 
-export type Provider = "gemini" | "openai" | "claude" | "nous" | "qwen" | "deepseek" | "mistral" | "meta" | "allenai" | "google" | "amazon" | "nvidia" | "kwaipilot" | "openrouter";
+// Re-export Provider để tương thích với code cũ
+export type { Provider };
 
 export class ApiKeyService {
   /**
