@@ -123,106 +123,20 @@
         <!-- Actions -->
         <div class="action-section">
           <div class="action-buttons">
-            <button class="btn btn-secondary" @click="handleClose" :disabled="generating">Cancel</button>
+            <button class="btn btn-secondary" @click="handleClose">Cancel</button>
 
             <div class="primary-actions">
               <button
                 class="btn btn-primary"
                 @click="generateTestCases"
-                :disabled="selectedRequirements.length === 0 || generating"
+                :disabled="selectedRequirements.length === 0"
               >
-                <span v-if="generating" class="spinner"></span>
-                {{
-                  generating
-                    ? 'Generating & Saving...'
-                    : `Generate & Save Test Cases (${selectedRequirements.length})`
-                }}
+                Generate & Save Test Cases ({{ selectedRequirements.length }})
               </button>
             </div>
           </div>
         </div>
 
-        <!-- Loading Overlay -->
-        <div v-if="generating" class="loading-overlay">
-          <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <div class="loading-text">
-              <!-- Estimate Phase -->
-              <div v-if="estimateInfo.isEstimating" class="progress-stage">
-                <h4>
-                  <span class="material-symbols-outlined stage-icon">calculate</span>
-                  Estimating Test Cases...
-                </h4>
-                <p class="progress-info">Analyzing your requirements to determine the number of test cases...</p>
-              </div>
-              
-              <!-- Estimate Received -->
-              <div v-else-if="estimateInfo.estimated_count > 0 && batchProgress.currentBatch === 0" class="progress-stage">
-                <h4>
-                  <span class="material-symbols-outlined stage-icon success">check_circle</span>
-                  Estimated {{ estimateInfo.estimated_count }} Test Cases
-                </h4>
-                <p v-if="estimateInfo.summary" class="progress-info">{{ estimateInfo.summary }}</p>
-                <p class="progress-detail">Preparing to generate {{ estimateInfo.estimated_batches }} batch(es)...</p>
-              </div>
-
-              <!-- Generating Phase -->
-              <div v-else-if="batchProgress.currentBatch > 0 && batchProgress.currentBatch <= batchProgress.totalBatches" class="progress-stage">
-                <h4>
-                  <span class="material-symbols-outlined stage-icon">auto_awesome</span>
-                  <span v-if="batchProgress.testcasesInBatch === 0">
-                    Generating Batch {{ batchProgress.currentBatch }}/{{ batchProgress.totalBatches }}
-                  </span>
-                  <span v-else>
-                    Generated {{ batchProgress.testcasesInBatch }} Test Cases
-                  </span>
-                </h4>
-                <p class="progress-info">
-                  <span v-if="batchProgress.testcasesInBatch === 0">
-                    Generating test cases for batch {{ batchProgress.currentBatch }}...
-                  </span>
-                  <span v-else>
-                    Batch {{ batchProgress.currentBatch }}/{{ batchProgress.totalBatches }} completed
-                  </span>
-                </p>
-                <div class="progress-bar-container">
-                  <div class="progress-bar" :style="{ width: `${(batchProgress.currentBatch / (batchProgress.totalBatches || 1)) * 100}%` }"></div>
-                </div>
-                <p class="progress-detail">
-                  {{ batchProgress.currentBatch }} of {{ batchProgress.totalBatches }} batches 
-                  ({{ estimateInfo.estimated_count || batchProgress.totalCount }} total test cases)
-                </p>
-              </div>
-
-              <!-- Saving Phase -->
-              <div v-else-if="batchProgress.savedCount > 0 && batchProgress.savedCount < batchProgress.totalCount" class="progress-stage">
-                <h4>
-                  <span class="material-symbols-outlined stage-icon">save</span>
-                  Saving {{ batchProgress.savedCount }}/{{ batchProgress.totalCount }} Test Cases
-                </h4>
-                <p class="progress-info">Saving generated test cases to database...</p>
-                <div class="progress-bar-container">
-                  <div class="progress-bar" :style="{ width: `${(batchProgress.savedCount / batchProgress.totalCount) * 100}%` }"></div>
-                </div>
-              </div>
-
-              <!-- Completed Phase -->
-              <div v-else-if="!generating && estimateInfo.estimated_count > 0" class="progress-stage completed">
-                <h4>
-                  <span class="material-symbols-outlined stage-icon success">check_circle</span>
-                  Generation Completed!
-                </h4>
-                <p class="progress-info">Successfully generated and saved {{ estimateInfo.estimated_count }} test cases.</p>
-              </div>
-
-              <!-- Default Loading -->
-              <div v-else class="progress-stage">
-                <h4>Generating...</h4>
-                <p class="progress-info">Processing your requirements...</p>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -258,30 +172,8 @@ export default {
     const toast = useToast()
 
     // State management
-    const generating = ref(false)
     const selectedRequirements = ref([])
-    const showConfirmModal = ref(false)
-    const confirmMessage = ref('')
-    const confirmedAction = ref(null)
-    const generationProgress = ref(0)
-    const confirmedCancelAction = ref(null)
     const searchQuery = ref('')
-    
-    // Estimate and Batch Progress (similar to InputSidebar)
-    const estimateInfo = ref({
-      estimated_count: 0,
-      summary: '',
-      estimated_batches: 0,
-      isEstimating: false
-    })
-    
-    const batchProgress = ref({
-      currentBatch: 0,
-      totalBatches: 0,
-      testcasesInBatch: 0,
-      savedCount: 0,
-      totalCount: 0
-    })
 
     // Configuration
     const configuration = ref({
@@ -391,31 +283,17 @@ export default {
         return
       }
 
-      generating.value = true
-      generationProgress.value = 0
-      
-      // Reset estimate and batch progress
-      estimateInfo.value = {
-        estimated_count: 0,
-        summary: '',
-        estimated_batches: 0,
-        isEstimating: true
-      }
-      batchProgress.value = {
-        currentBatch: 0,
-        totalBatches: 0,
-        testcasesInBatch: 0,
-        savedCount: 0,
-        totalCount: 0
-      }
-
       // Filter out null/undefined/empty values and validate
       const validRequirementIds = selectedRequirements.value
         .filter((id) => id != null && id !== '' && String(id).trim() !== '' && String(id).toLowerCase() !== 'null' && String(id).toLowerCase() !== 'undefined')
 
       if (validRequirementIds.length === 0) {
         toast.error('Please select at least one valid requirement')
-        generating.value = false
+        return
+      }
+
+      if (!props.projectId || !props.versionId) {
+        toast.error('Project and version must be selected')
         return
       }
 
@@ -431,84 +309,19 @@ export default {
         }))
       })
 
-      // Simulate estimate phase (2-3 seconds)
-      setTimeout(() => {
-        if (generating.value) {
-          // Simulate estimate result
-          const estimatedCount = Math.max(10, validRequirementIds.length * 5)
-          const estimatedBatches = Math.ceil(estimatedCount / 20)
-          
-          estimateInfo.value = {
-            estimated_count: estimatedCount,
-            summary: `Estimated ${estimatedCount} test cases from ${validRequirementIds.length} requirement(s)`,
-            estimated_batches: estimatedBatches,
-            isEstimating: false
-          }
-          
-          batchProgress.value.totalBatches = estimatedBatches
-          batchProgress.value.totalCount = estimatedCount
-        }
-      }, 2000)
+      // Đóng modal ngay lập tức
+      handleClose()
 
-      // Simulate batch progress
-      let currentBatch = 0
-      const batchInterval = setInterval(() => {
-        if (!generating.value) {
-          clearInterval(batchInterval)
-          return
-        }
-        
-        if (estimateInfo.value.isEstimating) {
-          return // Wait for estimate
-        }
-        
-        if (currentBatch < estimateInfo.value.estimated_batches) {
-          currentBatch++
-          batchProgress.value.currentBatch = currentBatch
-          batchProgress.value.testcasesInBatch = 0
-          
-          // Simulate testcases in batch after a delay
-          setTimeout(() => {
-            if (generating.value && batchProgress.value.currentBatch === currentBatch) {
-              const batchSize = currentBatch === estimateInfo.value.estimated_batches 
-                ? estimateInfo.value.estimated_count - (currentBatch - 1) * 20
-                : 20
-              batchProgress.value.testcasesInBatch = batchSize
-              batchProgress.value.savedCount = Math.min(
-                currentBatch * 20,
-                estimateInfo.value.estimated_count
-              )
-            }
-          }, 1000)
-        } else {
-          clearInterval(batchInterval)
-        }
-      }, 3000)
-
+      // Gọi API generate trong background - progress sẽ hiển thị qua socket events trong ProjectLayout
       try {
-        // ✅ MỚI: Gọi API generate - sẽ tự động estimate, chia batch, và save vào DB
         const response = await testcaseApi.generateTestCases(props.projectId, props.versionId, {
           selectedRequirementIds: validRequirementIds,
           language: configuration.value.language,
           testType: configuration.value.testType,
         })
 
-        clearInterval(batchInterval)
-        
-        // Update with actual results
         const savedTestCases = response.data.data || response.data || []
         const savedCount = savedTestCases.length || 0
-        
-        // Update progress with actual saved count
-        batchProgress.value.savedCount = savedCount
-        batchProgress.value.totalCount = savedCount
-        if (estimateInfo.value.estimated_count === 0) {
-          estimateInfo.value.estimated_count = savedCount
-          estimateInfo.value.estimated_batches = Math.ceil(savedCount / 20)
-        }
-        
-        // Show completion briefly
-        await new Promise(resolve => setTimeout(resolve, 1000))
 
         console.log('✅ Test case generation completed:', {
           savedCount,
@@ -519,36 +332,15 @@ export default {
           toast.warning('No test cases were generated. Please try different requirements or options.')
         } else {
           toast.success(`Successfully generated and saved ${savedCount} test cases`)
-          // ✅ Đóng modal và emit event để parent refresh test cases
+          // Emit event để parent refresh test cases
           emit('generate', savedTestCases)
-          handleClose()
         }
       } catch (error) {
         console.error('❌ Error generating test cases:', error)
-        clearInterval(batchInterval)
         
         const { formatErrorForDisplay } = await import('@/utils/errorMessages')
         const errorMessage = formatErrorForDisplay(error, 'Không thể tạo test case. Vui lòng thử lại.')
         toast.error(errorMessage)
-      } finally {
-        generating.value = false
-        generationProgress.value = 0
-        // Reset after a brief delay to show completion
-        setTimeout(() => {
-          estimateInfo.value = {
-            estimated_count: 0,
-            summary: '',
-            estimated_batches: 0,
-            isEstimating: false
-          }
-          batchProgress.value = {
-            currentBatch: 0,
-            totalBatches: 0,
-            testcasesInBatch: 0,
-            savedCount: 0,
-            totalCount: 0
-          }
-        }, 2000)
       }
     }
 
@@ -578,14 +370,10 @@ export default {
     })
 
     return {
-      generating,
       selectedRequirements,
       configuration,
-      generationProgress,
       searchQuery,
       filteredRequirements,
-      estimateInfo,
-      batchProgress,
       getRequirementId,
       isRequirementSelected,
       selectAll,
@@ -1441,115 +1229,6 @@ export default {
   }
 }
 
-.loading-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 20;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.loading-content {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  max-width: 500px;
-  padding: 2rem;
-  text-align: left;
-}
-
-.loading-content h3 {
-  color: #1a365d;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-}
-
-.loading-content p {
-  color: #64748b;
-  margin-bottom: 1.5rem;
-  line-height: 1.5;
-}
-
-.loading-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(26, 54, 93, 0.3);
-  border-top: 2px solid #1a365d;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  flex-shrink: 0;
-  margin: 0 auto 1rem;
-}
-
-.loading-text {
-  flex: 1;
-  text-align: left;
-}
-
-.loading-text h4 {
-  margin: 0 0 6px 0;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #1a365d;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.stage-icon {
-  font-size: 18px;
-  opacity: 0.9;
-  color: #1a365d;
-}
-
-.stage-icon.success {
-  color: #10b981;
-}
-
-.progress-info {
-  margin: 4px 0;
-  color: #64748b;
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.5;
-}
-
-.progress-detail {
-  margin: 6px 0 0 0;
-  color: #94a3b8;
-  font-size: 0.75rem;
-}
-
-.progress-bar-container {
-  width: 100%;
-  height: 4px;
-  background: rgba(26, 54, 93, 0.1);
-  border-radius: 2px;
-  margin: 8px 0;
-  overflow: hidden;
-}
-
-.progress-bar-container .progress-bar {
-  height: 100%;
-  background: linear-gradient(90deg, #1a365d 0%, #2d4a7c 100%);
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.progress-stage {
-  width: 100%;
-}
-
-.progress-stage.completed h4 {
-  color: #10b981;
-}
 
 .generation-progress {
   display: flex;

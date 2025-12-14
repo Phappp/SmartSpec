@@ -8,6 +8,7 @@ import {PreviewChangeDto} from "../../version/adapter/preview.dto";
 import { ServiceResponse, ResponseStatus } from '../../../services/serviceResponse';
 import Version from "../../../../../internal/model/version";
 import User from "../../../../../internal/model/user";
+import { databaseSocketService } from "./database.socket.service";
 
 export class DatabaseCoreService {
     private geminiService: DatabaseGeminiService;
@@ -51,6 +52,12 @@ export class DatabaseCoreService {
             payload.versionId = version._id.toString(); // update versionId
             versionId = version._id.toString();
         }
+
+        // Emit start event
+        if (databaseSocketService && projectId && versionId && userId) {
+            databaseSocketService.emitProgress(projectId, versionId, userId, 10, 'generating', true);
+        }
+
         const databaseSchema = await this.geminiService.generateDatabaseSchema(requirements, 'vi-VN');
 
         // Validate generated schema
@@ -99,6 +106,12 @@ export class DatabaseCoreService {
             message: `${username} generated database ${newDatabase.name} for version ${version.version_number}`
             }
         });
+
+        // Emit completion event
+        if (databaseSocketService && projectId && versionId && userId) {
+            databaseSocketService.emitProgress(projectId, versionId, userId, 100, 'completed', false);
+        }
+
         return newDatabase;
     }
 

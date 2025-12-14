@@ -1,29 +1,5 @@
 <template>
   <div class="database-management-view">
-    <ProjectHeader
-      :project="project"
-      :versions="versions"
-      :selected-version-id="selectedVersionId"
-      :active-users="activeUsers"
-      @version-selected="handleVersionSelect"
-      @go-back="goBack"
-    />
-
-    <!-- Navigation Tabs -->
-    <div class="navigation-tabs">
-      <button class="tab-button" @click="navigateToUsecase">
-        <span class="material-symbols-outlined">list_alt</span>
-        Use Cases
-      </button>
-      <button class="tab-button" @click="navigateToOutput">
-        <span class="material-symbols-outlined">output</span>
-        Output
-      </button>
-      <button class="tab-button active">
-        <span class="material-symbols-outlined">storage</span>
-        Database
-      </button>
-    </div>
 
     <div class="database-content">
       <!-- Loading State -->
@@ -310,7 +286,6 @@ import {
   validateTableStructure,
 } from '@/api/project'
 import { useToast } from 'vue-toastification'
-import ProjectHeader from '@/components/ProjectHeader.vue'
 import DatabaseStats from '@/components/database/DatabaseStats.vue'
 import DatabaseDiagram from '@/components/database/DatabaseDiagram/DatabaseDiagram.vue'
 import DatabaseList from '@/components/database/DatabaseList.vue'
@@ -332,7 +307,6 @@ import { socket } from '@/utils/socket'
 export default {
   name: 'DatabaseManagement',
   components: {
-    ProjectHeader,
     DatabaseStats,
     DatabaseDiagram,
     DatabaseList,
@@ -468,7 +442,7 @@ export default {
       })
     },
 
-    navigateToOutput() {
+    navigateToLog() {
       this.$router.push({
         name: 'OutputManagement',
         params: { id: this.project._id },
@@ -2142,39 +2116,4 @@ export default {
   align-items: center;
 }
 
-/* Navigation Tabs */
-.navigation-tabs {
-  display: flex;
-  background: white;
-  border-bottom: 1px solid var(--border-color);
-  padding: 0 2rem;
-}
-
-.tab-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tab-button:hover {
-  color: #1a365d;
-  background: var(--background-color);
-}
-
-.tab-button.active {
-  color: #1a365d;
-  border-bottom-color: #1a365d;
-}
-
-.tab-button .material-symbols-outlined {
-  font-size: 20px;
-}
 </style>

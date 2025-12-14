@@ -29,6 +29,9 @@ export interface LLMCallOptions {
 export class LLMService {
     private apiKeyService = new ApiKeyService();
 
+    // ✅ Key rotation: Track counter per provider để round-robin
+    private keyRotationCounters: Map<string, number> = new Map();
+
     /**
      * Gọi LLM API - tự động chọn provider và model phù hợp
      * Ưu tiên OpenRouter nếu có, sau đó auto-detect từ modelName hoặc keys có sẵn
@@ -109,15 +112,21 @@ export class LLMService {
             }
         }
 
+        // ✅ KEY ROTATION: Rotate keys để phân bổ load
+        // Nếu có nhiều keys, bắt đầu từ key khác nhau cho mỗi request
+        const rotatedKeys = this.rotateKeys(keys, targetProvider);
+
         // Thử từng key cho đến khi thành công
         let lastError: any;
-        for (const key of keys) {
+        for (const key of rotatedKeys) {
             const startTime = Date.now();
             // Tính toán effectiveModelName trước try block để có thể dùng trong catch
             const effectiveModelName = targetModelName || key.model_name || this.getDefaultModel(targetProvider);
 
             try {
-                console.log(`🔑 Trying ${targetProvider} key: ${key.key_value.slice(0, 12)}... (model: ${effectiveModelName})`);
+                const keyIndex = rotatedKeys.indexOf(key) + 1;
+                const totalKeys = rotatedKeys.length;
+                console.log(`🔑 [${keyIndex}/${totalKeys}] Trying ${targetProvider} key: ${key.key_value.slice(0, 12)}... (model: ${effectiveModelName})`);
 
                 let response: LLMResponse;
 
@@ -613,6 +622,42 @@ export class LLMService {
             'cognitivecomputations': 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free',
         };
         return defaults[provider] || 'google/gemma-3-12b-it:free';
+    }
+
+    /**
+     * ✅ KEY ROTATION: Rotate keys để phân bổ load giữa các requests
+     * Round-robin mechanism để mỗi request dùng key khác nhau
+     * 
+     * @param keys - Danh sách keys
+     * @param provider - Provider name để track rotation
+     * @returns Rotated keys array (key đầu tiên được rotate)
+     */
+    private rotateKeys<T extends { _id: string }>(keys: T[], provider: string): T[] {
+        if (!keys || keys.length === 0) {
+            return keys;
+        }
+
+        // Nếu chỉ có 1 key, không cần rotate
+        if (keys.length === 1) {
+            return keys;
+        }
+
+        // Lấy counter hiện tại cho provider này
+        const currentCounter = this.keyRotationCounters.get(provider) || 0;
+
+        // Tăng counter và wrap around
+        const nextCounter = (currentCounter + 1) % keys.length;
+        this.keyRotationCounters.set(provider, nextCounter);
+
+        // Rotate array: đưa key tại index `nextCounter` lên đầu
+        const rotatedKeys = [
+            ...keys.slice(nextCounter),
+            ...keys.slice(0, nextCounter)
+        ];
+
+        console.log(`🔄 [KEY ROTATION] ${provider}: Using key ${nextCounter + 1}/${keys.length} (${rotatedKeys[0]._id.slice(0, 8)}...)`);
+
+        return rotatedKeys;
     }
 
     /**

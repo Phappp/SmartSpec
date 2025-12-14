@@ -9,6 +9,7 @@ import { LogService } from '../../../log/domain/service';
 import Project from '../../../../../../internal/model/project';
 import User from '../../../../../../internal/model/user';
 import sharp from 'sharp';
+import { umlSocketService } from '../../domain/uml.socket.service';
 
 export class ActivityDiagramService {
   private core = new ActivityCoreService();
@@ -62,6 +63,11 @@ export class ActivityDiagramService {
       throw new Error(`Không tìm thấy requirement theo id: ${requirementId}. Available usecases: ${availableUsecases.length}`);
     }
 
+    // Emit start event
+    if (umlSocketService && version.project_id && versionId && userId) {
+      umlSocketService.emitProgress(version.project_id.toString(), versionId, userId, 'activity', 10, 'generating', true);
+    }
+
     const generated = await this.ai.generateFromUseCase([requirement], language);
     const name = generated?.name || `${requirement.name || 'Usecase'} - Activity`;
     const lanes = generated.lanes;
@@ -94,6 +100,11 @@ export class ActivityDiagramService {
       );
     }
 
+    // Emit completion event
+    if (umlSocketService && version.project_id && versionId && userId) {
+      umlSocketService.emitProgress(version.project_id.toString(), versionId, userId, 'activity', 100, 'completed', false);
+    }
+
     return newDiagram;
   }
 
@@ -107,6 +118,11 @@ export class ActivityDiagramService {
       "role.name": { $regex: new RegExp(`^${actor}$`, 'i') }
     }).lean();
     if (!requirements.length) throw new Error('Không có requirement nào cho actor này');
+
+    // Emit start event
+    if (umlSocketService && version.project_id && versionId && userId) {
+      umlSocketService.emitProgress(version.project_id.toString(), versionId, userId, 'activity', 10, 'generating', true);
+    }
 
     const generated = await this.ai.generateFromUseCase(requirements, language);
     const name = generated?.name || `${actor} - Activity`;
@@ -138,6 +154,11 @@ export class ActivityDiagramService {
           after_snapshot: newDiagram.toObject()
         }
       );
+    }
+
+    // Emit completion event
+    if (umlSocketService && version.project_id && versionId && userId) {
+      umlSocketService.emitProgress(version.project_id.toString(), versionId, userId, 'activity', 100, 'completed', false);
     }
 
     // ✅ Ghi log cho generate activity diagram from actor

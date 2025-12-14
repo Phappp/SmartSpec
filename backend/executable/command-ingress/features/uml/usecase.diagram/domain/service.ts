@@ -14,6 +14,7 @@ import { LogService } from "../../../log/domain/service";
 import Version from "../../../../../../internal/model/version";
 import User from "../../../../../../internal/model/user";
 import mongoose from "mongoose";
+import { umlSocketService } from "../../domain/uml.socket.service";
 export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
   private geminiService: UsecaseDiagramGeminiService;
   private versionService = new VersionService();
@@ -41,6 +42,11 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     }
     if (!projectId) {
       throw new Error("Missing required field: 'projectId' is required.");
+    }
+
+    // Emit start event
+    if (umlSocketService && projectId && versionId && userId) {
+      umlSocketService.emitProgress(projectId, versionId, userId, 'usecase', 10, 'generating', true);
     }
 
     const geminiDiagramData = await this.geminiService.generateUsecaseDiagram(
@@ -113,6 +119,11 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       }
     } catch (logError) {
       console.error("❌ Error logging usecase diagram generation:", logError);
+    }
+
+    // Emit completion event
+    if (umlSocketService && projectId && versionId && userId) {
+      umlSocketService.emitProgress(projectId, versionId, userId, 'usecase', 100, 'completed', false);
     }
 
     return savedDocument.toObject({ getters: true }) as UseCaseDiagramResponse;

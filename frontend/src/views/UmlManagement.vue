@@ -1,31 +1,5 @@
 <template>
   <div class="uml-management-view">
-    <ProjectHeader
-      :project="project"
-      :versions="versions"
-      :selected-version-id="selectedVersionId"
-      :active-users="activeUsers"
-      @version-selected="handleVersionSelect"
-      @go-back="goBack"
-      @show-sharing="showSharingModal = true"
-    />
-
-    <!-- Navigation Tabs -->
-    <div class="navigation-tabs">
-      <button class="tab-button" @click="navigateToUsecase">
-        <span class="material-symbols-outlined">list_alt</span>
-        Use Cases
-      </button>
-      <button class="tab-button" @click="navigateToOutput">
-        <span class="material-symbols-outlined">output</span>
-        Output
-      </button>
-      <button class="tab-button active">
-        <span class="material-symbols-outlined">schema</span>
-        UML Diagrams
-      </button>
-    </div>
-
     <div class="uml-content">
       <!-- Header với Actions -->
       <div class="content-header">
@@ -982,7 +956,6 @@ import {
 
 import { getSequenceDiagrams, getSequenceDiagramById, generateSequenceDiagram, deleteSequenceDiagram } from '@/api/sqd'
 import { useToast } from 'vue-toastification'
-import ProjectHeader from '@/components/ProjectHeader.vue'
 import ProjectSharingModal from '@/components/ProjectSharingModal.vue'
 import UCDRenderer from '@/components/uml/usecase_diagram/UCDRenderer.vue'
 import ActivityDiagramRenderer from '@/components/uml/activity_diagram/ActivityDiagramRenderer.vue'
@@ -1000,7 +973,6 @@ import { socket } from '@/utils/socket'
 export default {
   name: 'UmlManagement',
   components: {
-    ProjectHeader,
     ProjectSharingModal,
     UCDRenderer,
     ActivityDiagramRenderer,
@@ -2824,36 +2796,6 @@ export default {
 }
 
 /* Navigation Tabs */
-.navigation-tabs {
-  display: flex;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 0 2rem;
-}
-
-.tab-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: #6b7280;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tab-button:hover {
-  color: #1a365d;
-  background: #f9fafb;
-}
-
-.tab-button.active {
-  color: #1a365d;
-  border-bottom-color: #1a365d;
-}
 
 /* Diagrams Display */
 .diagrams-display {
@@ -3581,14 +3523,6 @@ export default {
     min-width: 120px;
   }
 
-  .navigation-tabs {
-    flex-direction: column;
-    padding: 0;
-  }
-
-  .tab-button {
-    justify-content: center;
-  }
 
   .section-header {
     flex-direction: column;

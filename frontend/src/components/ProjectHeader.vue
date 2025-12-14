@@ -101,18 +101,6 @@
           </button> -->
         </div>
 
-        <!-- Progress Indicator -->
-        <!-- <div v-if="isRetrying" class="progress-indicator">
-          <div class="progress-header">
-            <span class="stage-name">{{ currentStage }}</span>
-            <span class="progress-percentage">{{ processingProgress }}%</span>
-          </div>
-          <div class="progress-bar">
-            <div class="progress-fill" :style="{ width: processingProgress + '%' }"></div>
-          </div>
-          <div class="stage-description">{{ getStageDescription(currentStage) }}</div>
-        </div> -->
-
         <!-- Active Users Indicator -->
         <div class="active-users-indicator" ref="activeUsersIndicator">
           <div class="active-users-trigger" @click="toggleActiveUsers">
@@ -191,7 +179,7 @@ import {
   filterApprovedVersions,
   isOwner as checkIsOwner,
 } from '@/utils/versionSync'
-import { rollbackVersion, setCurrentVersion, getVersionsByProject } from '@/api/version'
+import { rollbackVersion, setCurrentVersion } from '@/api/version'
 export default {
   name: 'ProjectHeaderModern',
   props: {
@@ -229,8 +217,10 @@ export default {
     // Lọc bỏ version tạm thời, chỉ hiển thị version đã được approve
     // Deduplicate theo version_number (ưu tiên version mới nhất hoặc current version)
     approvedVersions() {
+      // Đảm bảo versions là array
+      const versions = Array.isArray(this.versions) ? this.versions : []
       const currentVersionId = this.project?.current_version?._id || this.project?.current_version
-      return filterApprovedVersions(this.versions, currentVersionId)
+      return filterApprovedVersions(versions, currentVersionId)
     },
     hasFailedVersion() {
       return this.approvedVersions.some((version) => version.status === 'failed')
@@ -273,6 +263,13 @@ export default {
     currentVersion() {
       return this.approvedVersions.find((v) => v._id === this.selectedVersionId) || null
     },
+    selectedVersionId() {
+      // Lấy từ props, attrs, hoặc project
+      return this.$attrs.selectedVersionId || 
+             this.$props.selectedVersionId || 
+             this.project?.current_version?._id ||
+             this.project?.current_version
+    },
   },
   watch: {
     selectedVersionId: {
@@ -289,53 +286,8 @@ export default {
       },
       immediate: true,
     },
-    selectedVersionId: {
-      handler(newVal, oldVal) {
-        if (!this.isComponentMounted) return
-
-        if (newVal !== oldVal) {
-          this.$nextTick(() => {
-            if (this.isComponentMounted) {
-              this.$forceUpdate()
-            }
-          })
-        }
-      },
-      immediate: true,
-    },
-    // Thêm watch cho project để fetch versions khi project thay đổi
-    project: {
-      handler(newProject) {
-        if (newProject && newProject._id) {
-          this.fetchVersions()
-        }
-      },
-      immediate: true,
-      deep: true,
-    },
   },
   methods: {
-    async fetchVersions() {
-      if (!this.project?._id) return
-
-      this.isLoadingVersions = true
-      try {
-        const response = await getVersionsByProject(this.project._id)
-        this.versions = response.data || []
-        console.log('✅ Fetched versions:', this.versions.length)
-
-        // Nếu chưa có selectedVersionId, chọn version đầu tiên
-        if (!this.selectedVersionId && this.approvedVersions.length > 0) {
-          const defaultVersion = this.approvedVersions[0]
-          this.$emit('version-selected', defaultVersion._id)
-        }
-      } catch (error) {
-        console.error('❌ Failed to fetch versions:', error)
-        this.versions = []
-      } finally {
-        this.isLoadingVersions = false
-      }
-    },
     toggleDescription() {
       this.showDescription = !this.showDescription
     },
@@ -416,9 +368,6 @@ export default {
 
           // Đóng dropdown
           this.isOpen = false
-
-          // Fetch lại danh sách versions
-          await this.fetchVersions()
 
           // Backend đã tự động set current_version về parent, chỉ cần refresh
           // Emit event để component cha cập nhật
@@ -565,6 +514,7 @@ export default {
     window.addEventListener('resize', this.handleResize)
     document.addEventListener('touchstart', this.handleTouchStart, { passive: false })
 
+
     console.log('✅ ProjectHeaderModern mounted successfully')
   },
   beforeUnmount() {
@@ -574,6 +524,7 @@ export default {
     document.removeEventListener('click', this.handleClickOutside)
     window.removeEventListener('resize', this.handleResize)
     document.removeEventListener('touchstart', this.handleTouchStart)
+    
 
     console.log('✅ ProjectHeaderModern unmounted cleanly')
   },
@@ -941,56 +892,6 @@ export default {
   cursor: not-allowed;
 }
 
-/* Progress Indicator */
-.progress-indicator {
-  background: white;
-  border: 1px solid #e1e5e9;
-  border-radius: 12px;
-  padding: 16px;
-  min-width: 280px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.progress-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.stage-name {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #1a365d;
-}
-
-.progress-percentage {
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #1a365d;
-}
-
-.progress-bar {
-  width: 100%;
-  height: 8px;
-  background: #e2e8f0;
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #1a365d, #2c5282);
-  border-radius: 4px;
-  transition: width 0.5s ease-in-out;
-}
-
-.stage-description {
-  font-size: 0.75rem;
-  color: #8a94a6;
-  font-style: italic;
-}
 
 /* Active Users Indicator */
 .active-users-indicator {
@@ -1292,7 +1193,6 @@ export default {
   }
 
   .version-control,
-  .progress-indicator,
   .active-users-indicator {
     flex: 1;
     min-width: auto;
@@ -1321,7 +1221,6 @@ export default {
   }
 
   .version-control,
-  .progress-indicator,
   .active-users-indicator {
     width: 30%;
   }
@@ -1489,7 +1388,6 @@ export default {
     position: relative;
   }
   .version-control,
-  .progress-indicator,
   .active-users-indicator,
   .members-btn {
     max-width: calc(30% - 2px);

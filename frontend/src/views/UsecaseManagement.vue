@@ -1,31 +1,6 @@
 <template>
   <div class="project-detail-view">
     <div class="project-detail-view">
-      <ProjectHeader
-        :project="project"
-        :versions="versions"
-        :selected-version-id="selectedVersionId"
-        :is-retrying="effectiveProcessingState.isRetrying"
-        :active-users="activeUsers"
-        @version-selected="handleVersionSelect"
-        @version-rollback-completed="handleVersionRollbackCompleted"
-        @retry-analysis="handleRetry"
-        @go-back="goBack"
-        @show-sharing="showSharingModal = true"
-        @activeUsersUpdate="handleActiveUsersUpdate"
-      />
-
-      <!-- Navigation Tabs -->
-      <div class="navigation-tabs">
-        <button class="tab-button active" @click="navigateToUsecase">
-          <span class="material-symbols-outlined">list_alt</span>
-          Use Cases Management
-        </button>
-        <button class="tab-button" @click="navigateToOutput">
-          <span class="material-symbols-outlined">output</span>
-          Output Management
-        </button>
-      </div>
 
       <!-- Conflict Resolution Section -->
       <HandleConflict
@@ -131,7 +106,6 @@ import {
 } from '@/api/project'
 import { useToast } from 'vue-toastification'
 import AppModal from '@/components/AppModal.vue'
-import ProjectHeader from '@/components/ProjectHeader.vue'
 import UseCaseMainContent from '@/components/usecase/UseCaseMainContent.vue'
 import InputSidebar from '@/components/usecase/InputSidebar.vue'
 import HandleConflict from '@/components/usecase/HandleConflict.vue'
@@ -150,7 +124,6 @@ export default {
   name: 'ProjectDetailView',
   components: {
     AppModal,
-    ProjectHeader,
     UseCaseMainContent,
     InputSidebar,
     HandleConflict,
@@ -811,7 +784,7 @@ export default {
       // Đã ở trang usecase management
     },
 
-    navigateToOutput() {
+    navigateToLog() {
       this.$router.push({
         name: 'OutputManagement',
         params: { id: this.project._id },
@@ -2209,44 +2182,5 @@ export default {
   flex: 1;
   min-width: 0; /* Cho phép flex container co lại */
   overflow-x: hidden; /* Ẩn thanh cuộn ngang */
-}
-/* Navigation Tabs */
-.navigation-tabs {
-  display: flex;
-  background: white;
-  border-bottom: 1px solid var(--border-color);
-  padding: 0 2rem;
-}
-
-.tab-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tab-button:hover {
-  color: #1a365d;
-  background: var(--background-color);
-}
-
-.tab-button.active {
-  color: #1a365d;
-  border-bottom-color: #1a365d;
-}
-
-.tab-button .material-symbols-outlined {
-  font-size: 20px;
-}
-
-.tab-button .material-symbols-outlined {
-  font-size: 20px;
 }
 </style>

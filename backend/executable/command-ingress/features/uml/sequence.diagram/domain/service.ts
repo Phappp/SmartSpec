@@ -14,6 +14,7 @@ import SequenceDiagram from "../../../../../../internal/model/sequence_diagram";
 import { VersionService } from "../../../version/domain/service";
 import { LogService } from "../../../log/domain/service";
 import User from "../../../../../../internal/model/user";
+import { umlSocketService } from "../../domain/uml.socket.service";
 export class SequenceDiagramServiceImpl implements SequenceDiagramService {
   private geminiService: SequenceDiagramGeminiService;
   private versionService = new VersionService();
@@ -62,6 +63,11 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
       );
     }
     // --- Kết thúc Thay đổi ---
+
+    // Emit start event
+    if (umlSocketService && projectId && versionId && userId) {
+      umlSocketService.emitProgress(projectId, versionId, userId, 'sequence', 10, 'generating', true);
+    }
 
     // 1. Gọi Gemini Service
     // (Payload giờ đã đúng 100% với những gì GeminiService mong đợi)
@@ -142,6 +148,11 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
       });
     } catch (logError) {
       console.error("❌ Error logging sequence diagram generation:", logError);
+    }
+
+    // Emit completion event
+    if (umlSocketService && projectId && versionId && userId) {
+      umlSocketService.emitProgress(projectId, versionId, userId, 'sequence', 100, 'completed', false);
     }
 
     return savedDocument.toObject({ getters: true }) as SequenceDiagramResponse;

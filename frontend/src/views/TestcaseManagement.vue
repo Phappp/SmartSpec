@@ -1,30 +1,5 @@
 <template>
   <div class="testcase-management-view">
-    <ProjectHeader
-      :project="project"
-      :versions="versions"
-      :selected-version-id="selectedVersionId"
-      :active-users="activeUsers"
-      @version-selected="handleVersionSelect"
-      @go-back="goBack"
-      @show-sharing="showSharingModal = true"
-    />
-
-    <!-- Navigation Tabs -->
-    <div class="navigation-tabs">
-      <button class="tab-button" @click="navigateToUsecase">
-        <span class="material-symbols-outlined">list_alt</span>
-        Use Cases
-      </button>
-      <button class="tab-button" @click="navigateToOutput">
-        <span class="material-symbols-outlined">output</span>
-        Output
-      </button>
-      <button class="tab-button active">
-        <span class="material-symbols-outlined">play_arrow</span>
-        Test Cases
-      </button>
-    </div>
 
     <div class="testcase-content">
       <!-- Action Header -->
@@ -749,7 +724,6 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'vue-toastification'
-import ProjectHeader from '@/components/ProjectHeader.vue'
 import GenerateTestcaseModal from '@/components/testcase/GenerateTestcaseModal.vue'
 import TestcaseFormModal from '@/components/testcase/TestcaseFormModal.vue'
 import TestcaseDetailModal from '@/components/testcase/TestcaseDetailModal.vue'
@@ -773,7 +747,6 @@ import { socket } from '@/utils/socket'
 export default {
   name: 'TestcaseManagement',
   components: {
-    ProjectHeader,
     GenerateTestcaseModal,
     TestcaseFormModal,
     TestcaseDetailModal,
@@ -1657,7 +1630,7 @@ export default {
       }
     }
 
-    const navigateToOutput = () => {
+    const navigateToLog = () => {
       if (project.value._id) {
         router.push({ name: 'OutputManagement', params: { id: project.value._id } })
       }
@@ -1855,7 +1828,7 @@ export default {
       // Methods
       handleVersionSelect,
       navigateToUsecase,
-      navigateToOutput,
+      navigateToLog,
       goBack,
       handleGenerateTestCases,
       handleSaveTestcase,
@@ -1933,36 +1906,6 @@ export default {
   background: var(--background-color);
 }
 
-.navigation-tabs {
-  display: flex;
-  background: white;
-  border-bottom: 1px solid var(--border-color);
-  padding: 0 2rem;
-}
-
-.tab-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tab-button:hover {
-  color: #1a365d;
-  background: var(--background-color);
-}
-
-.tab-button.active {
-  color: #1a365d;
-  border-bottom-color: #1a365d;
-}
 
 .testcase-content {
   padding: 2rem;

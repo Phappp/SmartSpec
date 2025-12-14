@@ -1,83 +1,12 @@
 <template>
-  <div class="output-management-view">
-    <ProjectHeader
-      :project="project"
-      :versions="versions"
-      :selected-version-id="selectedVersionId"
-      :is-retrying="isRetrying"
-      :active-users="activeUsers"
-      @version-selected="handleVersionSelect"
-      @retry-analysis="handleRetry"
-      @go-back="goBack"
-    />
+  <div class="log-management-view">
 
-    <!-- Navigation Tabs -->
-    <div class="navigation-tabs">
-      <button class="tab-button" @click="navigateToUsecase">
-        <span class="material-symbols-outlined">list_alt</span>
-        Use Cases Management
-      </button>
-      <button class="tab-button active" @click="navigateToOutput">
-        <span class="material-symbols-outlined">output</span>
-        Output Management
-      </button>
-    </div>
-
-    <!-- Output Management Content -->
-    <div class="output-content">
-      <!-- <div class="output-header">
-        <h2>Output Management</h2>
-        <p class="subtitle">
-          Manage test cases, database schemas, and UML diagrams for your project
-        </p>
-      </div> -->
-
+    <!-- Log Management Content -->
+    <div class="log-content">
       <!-- Main Content -->
       <div class="main-content">
-        <!-- Output Cards Grid -->
-        <div class="output-cards-grid">
-          <!-- Test Case Management Card -->
-          <div class="output-card" @click="navigateToTestcase">
-            <div class="card-icon testcase">
-              <span class="material-symbols-outlined">play_arrow</span>
-            </div>
-            <div class="card-content">
-              <h3>Test Case Management</h3>
-              <p>Create, manage and execute test cases for your use cases</p>
-            </div>
-            <div class="card-arrow">
-              <span class="material-symbols-outlined">arrow_forward</span>
-            </div>
-          </div>
-
-          <!-- Database Management Card -->
-          <div class="output-card" @click="navigateToDatabase">
-            <div class="card-icon database">
-              <span class="material-symbols-outlined">storage</span>
-            </div>
-            <div class="card-content">
-              <h3>Database Management</h3>
-              <p>Design and manage database schemas and relationships</p>
-            </div>
-            <div class="card-arrow">
-              <span class="material-symbols-outlined">arrow_forward</span>
-            </div>
-          </div>
-
-          <!-- UML Management Card -->
-          <div class="output-card" @click="navigateToUml">
-            <div class="card-icon uml">
-              <span class="material-symbols-outlined">schema</span>
-            </div>
-            <div class="card-content">
-              <h3>UML Diagram Management</h3>
-              <p>Create and manage UML diagrams for system design</p>
-            </div>
-            <div class="card-arrow">
-              <span class="material-symbols-outlined">arrow_forward</span>
-            </div>
-          </div>
-        </div>
+        <!-- Log Cards Grid -->
+        
 
         <!-- Enhanced Activity Logs Section -->
         <div class="activity-logs-section">
@@ -450,7 +379,6 @@ import { getTestStatistics } from '@/api/testcase'
 import { getDatabasesByVersion } from '@/api/project'
 import { getProjectLogs } from '@/api/output'
 import { useToast } from 'vue-toastification'
-import ProjectHeader from '@/components/ProjectHeader.vue'
 import { useActiveMembers } from '@/utils/useActiveMembers'
 import {
   saveSelectedVersion,
@@ -464,7 +392,6 @@ import { socket } from '@/utils/socket'
 export default {
   name: 'OutputManagement',
   components: {
-    ProjectHeader,
   },
   setup() {
     const { activeUsers, initSocketConnection, cleanupSocketConnection } = useActiveMembers()
@@ -710,7 +637,7 @@ export default {
         }
 
         await this.fetchProjectData(projectId)
-        await this.loadOutputStats()
+        await this.loadLogStats()
         await this.loadRecentActivities()
 
         this.initSocketConnection(projectId)
@@ -760,7 +687,7 @@ export default {
       }
     },
 
-    async loadOutputStats() {
+    async loadLogStats() {
       try {
         const projectId = this.$route.params.id
         const versionId = this.selectedVersionId
@@ -803,7 +730,7 @@ export default {
           }
         }
       } catch (err) {
-        console.error('Error loading output stats:', err)
+        console.error('Error loading log stats:', err)
       }
     },
 
@@ -1234,7 +1161,7 @@ export default {
         console.log('📡 Emitted VERSION_SWITCHED socket event')
       }
       
-      this.loadOutputStats()
+      this.loadLogStats()
     },
 
     /**
@@ -1290,8 +1217,8 @@ export default {
         // Lưu vào localStorage để đồng bộ với các trang khác
         saveSelectedVersion(this.project._id, versionId)
 
-        // Refresh output stats với version mới
-        this.loadOutputStats()
+        // Refresh log stats với version mới
+        this.loadLogStats()
 
         // Thông báo cho user
         this.toast.success(`Switched to approved version: ${newVersion || versionId}`)
@@ -1346,7 +1273,7 @@ export default {
       if (event.projectId !== this.project._id) return
       this.selectedVersionId = event.toVersionId
       saveSelectedVersion(this.project._id, event.toVersionId)
-      this.loadOutputStats()
+      this.loadLogStats()
       const version = this.versions.find((v) => v._id === event.toVersionId)
       if (version) {
         this.toast.info(`Version switched to: ${version.version_number || event.toVersionId}`)
@@ -1363,7 +1290,7 @@ export default {
         }
         this.selectedVersionId = event.version._id
         saveSelectedVersion(this.project._id, event.version._id)
-        this.loadOutputStats()
+        this.loadLogStats()
         this.toast.info(`New version created: ${event.version.version_number || event.version._id}`)
       }
     },
@@ -1380,14 +1307,14 @@ export default {
   flex-direction: column;
 }
 
-.output-content {
+.log-content {
   flex: 1;
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
 }
 
-.output-header {
+.log-header {
   text-align: center;
   margin-bottom: 40px;
 }
@@ -1414,7 +1341,7 @@ export default {
   margin-bottom: 40px;
 }
 
-.output-card {
+.log-card {
   background: white;
   border-radius: 12px;
   padding: 24px;
@@ -1427,7 +1354,7 @@ export default {
   transition: all 0.3s ease;
 }
 
-.output-card:hover {
+.log-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(26, 54, 93, 0.15);
   border-color: #1a365d;
@@ -1483,7 +1410,7 @@ export default {
   transition: color 0.3s ease;
 }
 
-.output-card:hover .card-arrow .material-symbols-outlined {
+.log-card:hover .card-arrow .material-symbols-outlined {
   color: #1a365d;
 }
 
@@ -2298,45 +2225,6 @@ export default {
   cursor: pointer;
 }
 
-/* Navigation Tabs */
-.navigation-tabs {
-  display: flex;
-  background: white;
-  border-bottom: 1px solid var(--border-color);
-  padding: 0 2rem;
-}
-
-.tab-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tab-button:hover {
-  color: #1a365d;
-  background: var(--background-color);
-}
-
-.tab-button.active {
-  color: #1a365d;
-  border-bottom-color: #1a365d;
-}
-
-.tab-button .material-symbols-outlined {
-  font-size: 20px;
-}
-
-.tab-button .material-symbols-outlined {
-  font-size: 20px;
-}
 
 .retry-button {
   padding: 6px 12px;
@@ -2428,11 +2316,8 @@ export default {
     justify-content: center;
   }
 
-  .navigation-tabs {
-    flex-direction: column;
-  }
 
-  .output-header h2 {
+  .log-header h2 {
     font-size: 2rem;
   }
 }

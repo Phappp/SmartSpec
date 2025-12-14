@@ -9,6 +9,7 @@ import { TestcaseGeminiService } from "./GeminiService";
 import { VersionService } from "../../version/domain/service";
 import { LogService } from "../../log/domain/service";
 import { PreviewChangeDto } from "../../version/adapter/preview.dto";
+import { testcaseSocketService } from "./testcase.socket.service";
 
 export class TestcaseService {
     private testcaseGeminiService = new TestcaseGeminiService();
@@ -136,6 +137,19 @@ export class TestcaseService {
 
         // ✅ MỚI: Estimate số lượng test cases trước
         console.log(`📊 [ESTIMATE PHASE] Estimating test cases count...`);
+        
+        // Emit estimating stage
+        if (testcaseSocketService && projectId && versionId && userId) {
+            testcaseSocketService.emitProgress(
+                projectId,
+                versionId,
+                userId,
+                10,
+                'estimating',
+                true
+            );
+        }
+        
         const estimate = await this.testcaseGeminiService.estimateTestCasesCount(
             requirementsToProcess,
             testType,
@@ -145,6 +159,11 @@ export class TestcaseService {
             projectId
         );
         console.log(`✅ [ESTIMATE PHASE] Estimated ${estimate.estimated_count} test cases, ${estimate.estimated_batches} batches`);
+        
+        // Emit estimate received
+        if (testcaseSocketService && projectId && versionId && userId) {
+            testcaseSocketService.emitEstimateReceived(projectId, versionId, userId, estimate);
+        }
 
         // ✅ MỚI: Generate và save từng batch
         const BATCH_SIZE = 20;
@@ -166,6 +185,26 @@ export class TestcaseService {
                 }
 
                 console.log(`📦 [BATCH ${batchNumber}/${estimatedBatches}] Generating test cases ${offset + 1} to ${offset + currentBatchSize} (estimated total: ${estimatedCount})...`);
+
+                // Emit batch start progress
+                if (testcaseSocketService && projectId && versionId && userId) {
+                    const batchProgress = Math.floor((batchNumber / estimatedBatches) * 80) + 10; // 10-90%
+                    testcaseSocketService.emitProgress(
+                        projectId,
+                        versionId,
+                        userId,
+                        batchProgress,
+                        'generating',
+                        true,
+                        {
+                            currentBatch: batchNumber,
+                            totalBatches: estimatedBatches,
+                            testcasesInBatch: 0,
+                            savedCount: totalSaved,
+                            totalCount: estimatedCount
+                        }
+                    );
+                }
 
                 // Generate batch
                 let batchTestCases: any[];
@@ -238,6 +277,26 @@ export class TestcaseService {
                         allGeneratedTestCases.push(...savedTestCases);
 
                         console.log(`✅ [BATCH ${batchNumber}/${estimatedBatches}] Successfully saved ${savedTestCases.length} test cases (total saved: ${totalSaved})`);
+                        
+                        // Emit batch saved progress
+                        if (testcaseSocketService && projectId && versionId && userId) {
+                            const batchProgress = Math.floor((batchNumber / estimatedBatches) * 80) + 10; // 10-90%
+                            testcaseSocketService.emitProgress(
+                                projectId,
+                                versionId,
+                                userId,
+                                batchProgress,
+                                'generating',
+                                true,
+                                {
+                                    currentBatch: batchNumber,
+                                    totalBatches: estimatedBatches,
+                                    testcasesInBatch: savedTestCases.length,
+                                    savedCount: totalSaved,
+                                    totalCount: estimatedCount
+                                }
+                            );
+                        }
 
                         // Delay giữa các batch
                         if (batchNumber < estimatedBatches) {
@@ -284,6 +343,25 @@ export class TestcaseService {
         } catch (logError) {
             console.error("❌ Error logging testcase generation:", logError);
             // Không throw error để không ảnh hưởng đến flow chính
+        }
+
+        // Emit completion
+        if (testcaseSocketService && projectId && versionId && userId) {
+            testcaseSocketService.emitProgress(
+                projectId,
+                versionId,
+                userId,
+                100,
+                'completed',
+                false,
+                {
+                    currentBatch: estimatedBatches,
+                    totalBatches: estimatedBatches,
+                    testcasesInBatch: 0,
+                    savedCount: totalSaved,
+                    totalCount: totalSaved
+                }
+            );
         }
 
         return allGeneratedTestCases;
