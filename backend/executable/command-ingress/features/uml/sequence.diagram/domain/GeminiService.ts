@@ -1,6 +1,7 @@
 // services/SequenceDiagramGeminiService.ts
 
 import { ApiKeyService } from "../../../orchestrator/domain/ApiKeyService";
+import { LLMService } from "../../../../shared/LLMService";
 import { ObjectId } from "mongodb";
 // <-- THAY ĐỔI: Import payload mới, giả sử bạn đã cập nhật file types.ts
 import { GenerateSequenceDiagramPayload } from "../types";
@@ -202,6 +203,7 @@ Please parse this JSON object carefully and return the CORRECT one.
 
 export class SequenceDiagramGeminiService {
   private apiKeyService = new ApiKeyService();
+  private llmService = new LLMService(); // ✅ Sử dụng LLMService
 
   /**
    * Tạo JSON cho sequence diagram từ *một* Usecase cụ thể (context)
@@ -643,113 +645,27 @@ export class SequenceDiagramGeminiService {
   }
 
   /**
-   * Một hàm chung để gửi prompt tới Gemini
+   * ✅ CẬP NHẬT: Sử dụng LLMService thay vì hardcode Gemini
    */
   private async generateJsonContent(prompt: string, userId?: string, projectId?: string): Promise<string> {
-    const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-    if (!keys || keys.length === 0) {
-      throw new Error("No active Gemini API key found.");
+    // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
+    const modelName = await this.llmService.getRecommendedModel();
+
+    try {
+      const response = await this.llmService.callLLM({
+        prompt: prompt,
+        modelName: modelName,
+        userId: userId,
+        projectId: projectId,
+        endpoint: 'generateSequenceDiagram',
+        isProductionFreeMode: true
+      });
+
+      return this.cleanJsonString(response.text);
+    } catch (err: any) {
+      console.error('❌ LLM call failed for sequence diagram:', err.message);
+      throw err;
     }
-
-    let lastError: any;
-    for (const k of keys) {
-      const startTime = Date.now();
-      try {
-        console.log(
-          `🔑 Trying Gemini key for diagram content: ${k.key_value.slice(
-            0,
-            12
-          )}...`
-        );
-
-        const { GoogleGenerativeAI } = await import("@google/generative-ai");
-        const client = new GoogleGenerativeAI(k.key_value);
-        const model = client.getGenerativeModel({
-          model: k.model_name,
-        });
-
-        const resp: any = await model.generateContent({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-        });
-
-        const responseTime = Date.now() - startTime;
-        const { logApiUsage, extractGeminiTokens } = await import("../../../../features/stats/domain/apiUsageLogger");
-        const tokens = extractGeminiTokens(resp);
-
-        logApiUsage({
-          api_key_id: k._id.toString(),
-          provider: 'gemini',
-          model_name: k.model_name || 'gemini-2.0-flash-001',
-          user_id: userId,
-          project_id: projectId,
-          request_type: 'text',
-          endpoint: 'generateSequenceDiagram',
-          ...tokens,
-          status: 'success',
-          status_code: 200,
-          response_time: responseTime,
-        }).catch(err => console.error('Failed to log API usage:', err));
-
-        const text: string = resp?.response?.text?.() || "";
-
-        return this.cleanJsonString(text);
-      } catch (err: any) {
-        const responseTime = Date.now() - startTime;
-        
-        // Phân tích lỗi API key
-        const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../../shared/apiKeyErrorHandler");
-        const errorInfo = analyzeApiKeyError(err);
-        lastError = err;
-        
-        console.error(
-          `❌ Gemini key ${k._id} failed during diagram content generation:`,
-          err?.message || err,
-          `[${errorInfo.type}]`
-        );
-
-        const { logApiUsage } = await import("../../../../features/stats/domain/apiUsageLogger");
-        logApiUsage({
-          api_key_id: k._id.toString(),
-          provider: 'gemini',
-          model_name: k.model_name || 'gemini-2.0-flash-001',
-          user_id: userId,
-          project_id: projectId,
-          request_type: 'text',
-          endpoint: 'generateSequenceDiagram',
-          status: 'failed',
-          status_code: err.status || err.statusCode || 500,
-          error_message: err.message || 'Unknown error',
-          error_type: errorInfo.type,
-          response_time: responseTime,
-        }).catch(logErr => console.error('Failed to log API usage:', logErr));
-
-        // Disable key nếu cần (invalid, unauthorized)
-        if (errorInfo.shouldDisableKey) {
-          try {
-            await this.apiKeyService.disableKey(k._id);
-            console.warn(`⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
-          } catch {
-            /* Bỏ qua lỗi khi disable key */
-          }
-        }
-
-        // Nếu là lỗi không retryable (quota, invalid key), không thử key tiếp theo
-        if (!errorInfo.retryable && errorInfo.type !== ApiKeyErrorType.RATE_LIMIT) {
-          const { ApiKeyError } = await import("../../../../shared/apiKeyErrorHandler");
-          throw new ApiKeyError(err, 'vi');
-        }
-        
-        continue;
-      }
-    }
-
-    // Nếu tất cả các key đều thất bại
-    if (lastError) {
-      const { ApiKeyError } = await import("../../../../shared/apiKeyErrorHandler");
-      throw new ApiKeyError(lastError, 'vi');
-    }
-    
-    throw new Error("All Gemini API keys failed during diagram content generation.");
   }
 
   /**

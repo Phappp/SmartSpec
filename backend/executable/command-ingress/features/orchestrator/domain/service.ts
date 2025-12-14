@@ -9,6 +9,7 @@ import { UtilService } from "./UtilService";
 import { inputSocketService } from '../../input/domain/input.socket.service';
 import { VersionService } from "../../../features/version/domain/service";
 import { PreviewChangeDto } from "../../../features/version/adapter/preview.dto";
+import { LLMService } from "../../../shared/LLMService";
 
 export class OrchestratorService {
     private inputService = new InputService();
@@ -16,6 +17,7 @@ export class OrchestratorService {
     private requirementService = new RequirementService();
     private util = new UtilService();
     private versionService = new VersionService();
+    private llmService = new LLMService(); // ✅ Thêm LLMService để lấy recommended model
 
     async run(
         projectId: string,
@@ -255,9 +257,8 @@ export class OrchestratorService {
         );
 
         try {
-            // ✅ MỚI: Lấy model name từ API keys để truyền vào finalize
-            const keys = await this.gemini['apiKeyService'].getAllActiveKeys("gemini");
-            const modelName = keys && keys.length > 0 ? (keys[0].model_name || 'gemini-2.0-flash') : 'gemini-2.0-flash';
+            // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
+            const modelName = await this.llmService.getRecommendedModel();
 
             const result = await this.requirementService.finalize(
                 versionId,

@@ -1,5 +1,6 @@
 // DatabaseGeminiService.ts
 import { ApiKeyService } from "../../orchestrator/domain/ApiKeyService";
+import { LLMService } from "../../../shared/LLMService";
 
 // PROMPTS cho database design
 const databasePrompts = {
@@ -476,6 +477,7 @@ Infer necessary tables from the provided use cases and strictly apply all design
 
 export class DatabaseGeminiService {
   private apiKeyService = new ApiKeyService();
+  private llmService = new LLMService();
 
   // config
   private readonly DB_GEN_BATCH_SIZE = 10;
@@ -1669,113 +1671,29 @@ export class DatabaseGeminiService {
    * Một hàm chung để gửi prompt tới Gemini và trả về kết quả dạng chuỗi JSON đã được làm sạch.
    */
   private async generateJsonContent(prompt: string, userId?: string, projectId?: string): Promise<string> {
-    const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-    if (!keys || keys.length === 0) {
-      throw new Error("No active Gemini API key found.");
+    // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
+    const modelName = await this.llmService.getRecommendedModel();
+
+    try {
+      console.log(`🔑 Calling LLM for database content with model: ${modelName}`);
+
+      const response = await this.llmService.callLLM({
+        prompt: prompt,
+        modelName: modelName,
+        userId: userId,
+        projectId: projectId,
+        endpoint: 'generateDatabase',
+        isProductionFreeMode: true
+      });
+
+      const text: string = response.text || "";
+
+      // Trả về ngay sau khi thành công
+      return this.cleanJsonStringDatabase(text);
+    } catch (err: any) {
+      console.error(`❌ LLM call failed during database content generation:`, err?.message || err);
+      throw err;
     }
-
-    let lastError: any;
-    for (const k of keys) {
-      const startTime = Date.now();
-      try {
-        console.log(
-          `🔑 Trying Gemini key for database content: ${k.key_value.slice(
-            0,
-            12
-          )}...`
-        );
-        const { GoogleGenerativeAI } = await import("@google/generative-ai");
-        const client = new GoogleGenerativeAI(k.key_value);
-        const modelName = k.model_name || 'gemini-2.0-flash-001';
-        const model = client.getGenerativeModel({
-          model: modelName,
-        });
-
-        const resp: any = await model.generateContent({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-        });
-
-        const responseTime = Date.now() - startTime;
-        const { logApiUsage, extractGeminiTokens } = await import("../../stats/domain/apiUsageLogger");
-        const tokens = extractGeminiTokens(resp);
-
-        logApiUsage({
-          api_key_id: k._id.toString(),
-          provider: 'gemini',
-          model_name: modelName,
-          user_id: userId,
-          project_id: projectId,
-          request_type: 'text',
-          endpoint: 'generateDatabase',
-          ...tokens,
-          status: 'success',
-          status_code: 200,
-          response_time: responseTime,
-        }).catch(err => console.error('Failed to log API usage:', err));
-
-        const text: string = resp?.response?.text?.() || "";
-
-        // Trả về ngay sau khi thành công
-        return this.cleanJsonStringDatabase(text);
-      } catch (err: any) {
-        const responseTime = Date.now() - startTime;
-
-        // Phân tích lỗi API key
-        const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../shared/apiKeyErrorHandler");
-        const errorInfo = analyzeApiKeyError(err);
-        lastError = err;
-
-        console.error(
-          `❌ Gemini key ${k._id} failed during database content generation:`,
-          err?.message || err,
-          `[${errorInfo.type}]`
-        );
-
-        const { logApiUsage } = await import("../../stats/domain/apiUsageLogger");
-        const modelName = k.model_name || 'gemini-2.0-flash-001';
-        logApiUsage({
-          api_key_id: k._id.toString(),
-          provider: 'gemini',
-          model_name: modelName,
-          user_id: userId,
-          project_id: projectId,
-          request_type: 'text',
-          endpoint: 'generateDatabase',
-          status: 'failed',
-          status_code: err.status || err.statusCode || 500,
-          error_message: err.message || 'Unknown error',
-          error_type: errorInfo.type,
-          response_time: responseTime,
-        }).catch(logErr => console.error('Failed to log API usage:', logErr));
-
-        // Disable key nếu cần (invalid, unauthorized)
-        if (errorInfo.shouldDisableKey) {
-          try {
-            await this.apiKeyService.disableKey(k._id);
-            console.warn(`⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
-          } catch {
-            /* Bỏ qua lỗi khi disable key */
-          }
-        }
-
-        // Nếu là lỗi không retryable (quota, invalid key), không thử key tiếp theo
-        if (!errorInfo.retryable && errorInfo.type !== ApiKeyErrorType.RATE_LIMIT) {
-          const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
-          throw new ApiKeyError(err, 'vi');
-        }
-
-        // Thử key tiếp theo
-        continue;
-      }
-    }
-
-    // Nếu tất cả các key đều thất bại
-    if (lastError) {
-      const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
-      throw new ApiKeyError(lastError, 'vi');
-    }
-
-    throw new Error("All Gemini API keys failed during database content generation.");
   }
 
   /**

@@ -2,8 +2,8 @@ import { InferSchemaType, model, Schema } from 'mongoose';
 
 const apiKeySchema = new Schema({
     key_value: { type: String, required: true },
-    provider: { type: String, enum: ['gemini', 'openai', 'claude'], required: true },
-    model_name: { type: String, default: '' },      
+    provider: { type: String, enum: ['gemini', 'openai', 'claude', 'nous', 'qwen', 'deepseek', 'mistral', 'meta', 'allenai', 'google', 'amazon', 'nvidia', 'kwaipilot', 'openrouter'], required: true },
+    model_name: { type: String, default: '' },
     is_active: { type: Boolean, default: true },
     created_by: { type: Schema.Types.ObjectId, ref: 'users' },
     // Các field mới cho quản lý nâng cao

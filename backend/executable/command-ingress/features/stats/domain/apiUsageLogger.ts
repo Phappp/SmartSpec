@@ -1,8 +1,9 @@
 import ApiUsage from '../../../../../internal/model/api_usage';
+import { Provider } from '../../../shared/tokenManager';
 
 interface LogApiUsageParams {
   api_key_id: string;
-  provider: 'gemini' | 'openai' | 'claude';
+  provider: Provider;
   model_name?: string;
   user_id?: string;
   project_id?: string;

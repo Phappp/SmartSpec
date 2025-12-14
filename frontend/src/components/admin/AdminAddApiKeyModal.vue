@@ -40,11 +40,31 @@
                 <label>Nhà cung cấp *</label>
                 <select v-model="formData.provider" class="form-input">
                   <option value="">Chọn nhà cung cấp</option>
-                  <option value="gemini">Google Gemini</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="claude">Anthropic Claude</option>
+                  <optgroup label="Chính thức">
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="claude">Anthropic Claude</option>
+                  </optgroup>
+                  <optgroup label="OpenRouter (Hỗ trợ nhiều model)">
+                    <option value="openrouter">OpenRouter (Universal)</option>
+                  </optgroup>
+                  <optgroup label="Open Source Models">
+                    <option value="nous">Nous</option>
+                    <option value="qwen">Qwen</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="mistral">Mistral</option>
+                    <option value="meta">Meta (Llama)</option>
+                    <option value="allenai">AllenAI (Olmo)</option>
+                    <option value="google">Google (Gemma)</option>
+                    <option value="nvidia">NVIDIA (Nemotron)</option>
+                    <option value="kwaipilot">Kwaipilot</option>
+                    <option value="amazon">Amazon (Nova)</option>
+                  </optgroup>
                 </select>
                 <span class="error-message" v-if="errors.provider">{{ errors.provider }}</span>
+                <span class="help-text" v-if="formData.provider === 'openrouter'">
+                  💡 OpenRouter cho phép sử dụng 1 key để truy cập nhiều model khác nhau
+                </span>
               </div>
 
               <div class="form-group">

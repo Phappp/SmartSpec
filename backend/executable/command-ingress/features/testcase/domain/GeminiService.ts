@@ -1,5 +1,6 @@
 // TestcaseGeminiService.ts
 import { ApiKeyService } from "../../orchestrator/domain/ApiKeyService";
+import { LLMService } from "../../../shared/LLMService";
 
 // PROMPTS cho test case generation với Enterprise standard
 const testcasePrompts = {
@@ -437,6 +438,7 @@ REQUIRED TEST TYPE: ${testType}
 
 export class TestcaseGeminiService {
     private apiKeyService = new ApiKeyService();
+    private llmService = new LLMService();;
 
     // Configuration
     private readonly BATCH_SIZE = 3;
@@ -485,7 +487,7 @@ export class TestcaseGeminiService {
         for (const testType of testTypes) {
             try {
                 const prompt = this.createMixedPrompt(requirement, databaseSchema, testType, language);
-                
+
                 // ✅ MỚI: Token analysis trước khi gọi LLM
                 const { getModelConfig, estimateTokens, determineStrategy, logTokenInfo } = await import("../../../shared/tokenManager");
                 const keys = await this.apiKeyService.getAllActiveKeys("gemini");
@@ -493,7 +495,7 @@ export class TestcaseGeminiService {
                     const modelConfig = getModelConfig(keys[0].model_name || 'gemini-2.0-flash', 'gemini');
                     logTokenInfo(prompt, modelConfig, `[Testcase ${testType}]`);
                 }
-                
+
                 const response = await this.callGeminiAPI(prompt);
 
                 if (response) {
@@ -956,103 +958,30 @@ export class TestcaseGeminiService {
     }
 
     /**
-     * Call Gemini API
+     * Call LLM API (auto-detect provider, ưu tiên OpenRouter)
      */
     private async callGeminiAPI(prompt: string, userId?: string, projectId?: string): Promise<string> {
-        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-        if (!keys || keys.length === 0) {
-            throw new Error("No active Gemini API keys found");
+        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
+        const modelName = await this.llmService.getRecommendedModel();
+
+        try {
+            console.log(`🔑 Calling LLM for testcase generation with model: ${modelName}`);
+
+            const response = await this.llmService.callLLM({
+                prompt: prompt,
+                modelName: modelName,
+                userId: userId,
+                projectId: projectId,
+                endpoint: 'generateTestcase',
+                isProductionFreeMode: true
+            });
+
+            const text = response.text || "";
+            return this.cleanJSONResponse(text);
+        } catch (error: any) {
+            console.error(`❌ LLM call failed for testcase generation:`, error?.message || error);
+            throw error;
         }
-
-        let lastError: any;
-
-        for (const key of keys) {
-            const startTime = Date.now();
-            try {
-                console.log(`🔑 Trying Gemini key: ${key.key_value.slice(0, 12)}...`);
-                const { GoogleGenerativeAI } = await import("@google/generative-ai");
-                const client = new GoogleGenerativeAI(key.key_value);
-                const modelName = key.model_name || 'gemini-2.0-flash-001';
-                const model = client.getGenerativeModel({ model: modelName });
-
-                const response = await model.generateContent({
-                    contents: [{ role: "user", parts: [{ text: prompt }] }],
-                });
-
-                const responseTime = Date.now() - startTime;
-                const { logApiUsage, extractGeminiTokens } = await import("../../stats/domain/apiUsageLogger");
-                const tokens = extractGeminiTokens(response);
-
-                logApiUsage({
-                    api_key_id: key._id.toString(),
-                    provider: 'gemini',
-                    model_name: modelName,
-                    user_id: userId,
-                    project_id: projectId,
-                    request_type: 'text',
-                    endpoint: 'generateTestcase',
-                    ...tokens,
-                    status: 'success',
-                    status_code: 200,
-                    response_time: responseTime,
-                }).catch(err => console.error('Failed to log API usage:', err));
-
-                const text = response?.response?.text() || "";
-                return this.cleanJSONResponse(text);
-
-            } catch (error: any) {
-                const responseTime = Date.now() - startTime;
-
-                // Phân tích lỗi API key
-                const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../shared/apiKeyErrorHandler");
-                const errorInfo = analyzeApiKeyError(error);
-                lastError = error;
-
-                console.error(`❌ Gemini key ${key._id} failed:`, error.message, `[${errorInfo.type}]`);
-
-                const { logApiUsage } = await import("../../stats/domain/apiUsageLogger");
-                const modelName = key.model_name || 'gemini-2.0-flash-001';
-                logApiUsage({
-                    api_key_id: key._id.toString(),
-                    provider: 'gemini',
-                    model_name: modelName,
-                    user_id: userId,
-                    project_id: projectId,
-                    request_type: 'text',
-                    endpoint: 'generateTestcase',
-                    status: 'failed',
-                    status_code: error.status || error.statusCode || 500,
-                    error_message: error.message || 'Unknown error',
-                    error_type: errorInfo.type,
-                    response_time: responseTime,
-                }).catch(logErr => console.error('Failed to log API usage:', logErr));
-
-                // Disable key nếu cần (invalid, unauthorized)
-                if (errorInfo.shouldDisableKey) {
-                    try {
-                        await this.apiKeyService.disableKey(key._id);
-                        console.warn(`⚠️ Disabled ${errorInfo.type} key: ${key._id}`);
-                    } catch {
-                        // Ignore disable errors
-                    }
-                }
-
-                // Nếu là lỗi không retryable (quota, invalid key), không thử key tiếp theo
-                if (!errorInfo.retryable && errorInfo.type !== ApiKeyErrorType.RATE_LIMIT) {
-                    // Tạo ApiKeyError để throw
-                    const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
-                    throw new ApiKeyError(error, 'vi');
-                }
-            }
-        }
-
-        // Nếu tất cả key đều fail, throw error với thông tin chi tiết
-        if (lastError) {
-            const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
-            throw new ApiKeyError(lastError, 'vi');
-        }
-
-        throw new Error("No active Gemini API keys found");
     }
 
     /**

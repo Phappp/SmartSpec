@@ -71,13 +71,11 @@ export class ApiKeyServiceImpl implements ApiKeyService {
     if (keyExists) {
       throw new Error("API Key already exists");
     }
-    if (
-      provider !== "gemini" &&
-      provider !== "openai" &&
-      provider !== "claude"
-    ) {
+    // Validate provider - hỗ trợ tất cả providers trong schema
+    const validProviders = ['gemini', 'openai', 'claude', 'nous', 'qwen', 'deepseek', 'mistral', 'meta', 'allenai', 'google', 'amazon', 'nvidia', 'kwaipilot', 'openrouter'];
+    if (!validProviders.includes(provider)) {
       throw new Error(
-        "Provider must be one of 'gemini', 'openai', or 'claude'"
+        `Provider must be one of: ${validProviders.join(', ')}`
       );
     }
     const newKey = new Key({

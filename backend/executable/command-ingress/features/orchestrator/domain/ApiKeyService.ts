@@ -1,6 +1,6 @@
 import ApiKey from "../../../../../internal/model/api_key";
 
-export type Provider = "gemini" | "openai" | "claude";
+export type Provider = "gemini" | "openai" | "claude" | "nous" | "qwen" | "deepseek" | "mistral" | "meta" | "allenai" | "google" | "amazon" | "nvidia" | "kwaipilot" | "openrouter";
 
 export class ApiKeyService {
   /**

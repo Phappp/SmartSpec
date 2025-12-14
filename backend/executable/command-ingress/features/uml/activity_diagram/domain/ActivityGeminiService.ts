@@ -1,5 +1,6 @@
 import { ActivityEdge, ActivityNode, ActivityLane, ActivityDiagramDTO } from './interfaces';
 import { ApiKeyService } from '../../../orchestrator/domain/ApiKeyService';
+import { LLMService } from '../../../../shared/LLMService';
 import { Types } from 'mongoose';
 
 const prompts = {
@@ -62,94 +63,27 @@ OUTPUT: Return ONLY JSON object, NO markdown/code blocks. Structure:
 
 export class ActivityGeminiService {
   private apiKeyService = new ApiKeyService();
+  private llmService = new LLMService(); // ✅ Sử dụng LLMService
 
   private async callGemini(prompt: string, userId?: string, projectId?: string): Promise<string> {
-    const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-    let lastError: any;
+    // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
+    const modelName = await this.llmService.getRecommendedModel();
 
-    for (const k of keys) {
-      const startTime = Date.now();
-      try {
-        const { GoogleGenerativeAI } = await import("@google/generative-ai");
-        const client = new GoogleGenerativeAI(k.key_value);
-        const modelName = k.model_name || 'gemini-2.0-flash-001';
-        const model = client.getGenerativeModel({ model: modelName });
+    try {
+      const response = await this.llmService.callLLM({
+        prompt: prompt,
+        modelName: modelName,
+        userId: userId,
+        projectId: projectId,
+        endpoint: 'generateActivityDiagram',
+        isProductionFreeMode: true
+      });
 
-        const resp: any = await model.generateContent({
-          contents: [{ role: "user", parts: [{ text: prompt }] }]
-        });
-
-        const responseTime = Date.now() - startTime;
-        const { logApiUsage, extractGeminiTokens } = await import("../../../../features/stats/domain/apiUsageLogger");
-        const tokens = extractGeminiTokens(resp);
-
-        logApiUsage({
-          api_key_id: k._id.toString(),
-          provider: 'gemini',
-          model_name: modelName,
-          user_id: userId,
-          project_id: projectId,
-          request_type: 'text',
-          endpoint: 'generateActivityDiagram',
-          ...tokens,
-          status: 'success',
-          status_code: 200,
-          response_time: responseTime,
-        }).catch(err => console.error('Failed to log API usage:', err));
-
-        const text: string = resp?.response?.text?.() || "";
-        return this.cleanJson(text);
-
-      } catch (err: any) {
-        const responseTime = Date.now() - startTime;
-
-        // Phân tích lỗi API key
-        const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../../shared/apiKeyErrorHandler");
-        const errorInfo = analyzeApiKeyError(err);
-        lastError = err;
-
-        const { logApiUsage } = await import("../../../../features/stats/domain/apiUsageLogger");
-        const modelName = k.model_name || 'gemini-2.0-flash-001';
-        logApiUsage({
-          api_key_id: k._id.toString(),
-          provider: 'gemini',
-          model_name: modelName,
-          user_id: userId,
-          project_id: projectId,
-          request_type: 'text',
-          endpoint: 'generateActivityDiagram',
-          status: 'failed',
-          status_code: err.status || err.statusCode || 500,
-          error_message: err.message || 'Unknown error',
-          error_type: errorInfo.type,
-          response_time: responseTime,
-        }).catch(logErr => console.error('Failed to log API usage:', logErr));
-
-        // Disable key nếu cần (invalid, unauthorized)
-        if (errorInfo.shouldDisableKey) {
-          try {
-            await this.apiKeyService.disableKey(k._id);
-            console.warn(`⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
-          } catch { }
-        }
-
-        // Nếu là lỗi không retryable (quota, invalid key), không thử key tiếp theo
-        if (!errorInfo.retryable && errorInfo.type !== ApiKeyErrorType.RATE_LIMIT) {
-          const { ApiKeyError } = await import("../../../../shared/apiKeyErrorHandler");
-          throw new ApiKeyError(err, 'vi');
-        }
-
-        continue;
-      }
+      return this.cleanJson(response.text);
+    } catch (err: any) {
+      console.error('❌ LLM call failed for activity diagram:', err.message);
+      throw err;
     }
-
-    // Nếu tất cả các key đều thất bại
-    if (lastError) {
-      const { ApiKeyError } = await import("../../../../shared/apiKeyErrorHandler");
-      throw new ApiKeyError(lastError, 'vi');
-    }
-
-    throw new Error("All Gemini keys failed for activity generation.");
   }
 
   private cleanJson(text: string): string {
@@ -207,12 +141,10 @@ export class ActivityGeminiService {
     console.log('Prompt sent to AI (preview):', prompt.substring(0, 400));
 
     // ✅ MỚI: Token analysis trước khi gọi LLM
-    const { getModelConfig, estimateTokens, determineStrategy, logTokenInfo } = await import("../../../../shared/tokenManager");
-    const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-    if (keys && keys.length > 0) {
-      const modelConfig = getModelConfig(keys[0].model_name || 'gemini-2.0-flash', 'gemini');
-      logTokenInfo(prompt, modelConfig, '[UML Activity Diagram]');
-    }
+    const { getModelConfig, logTokenInfo } = await import("../../../../shared/tokenManager");
+    const modelName = await this.llmService.getRecommendedModel();
+    const modelConfig = getModelConfig(modelName, undefined);
+    logTokenInfo(prompt, modelConfig, '[UML Activity Diagram]');
 
     let raw = '';
     try {

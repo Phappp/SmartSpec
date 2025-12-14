@@ -1,6 +1,7 @@
 import { Types } from "mongoose";
 import { ApiKeyService } from "./ApiKeyService";
 import { logApiUsage, extractGeminiTokens } from "../../stats/domain/apiUsageLogger";
+import { LLMService } from "../../../shared/LLMService";
 
 // THÊM MỚI: Tập trung hóa toàn bộ prompt để hỗ trợ đa ngôn ngữ
 const prompts = {
@@ -443,6 +444,7 @@ ${estimatedTotal ? `- **IMPORTANT**: Total estimated use cases is ${estimatedTot
 
 export class GeminiService {
     private apiKeyService = new ApiKeyService();
+    private llmService = new LLMService();;
     // config
     private readonly BATCH_SIZE = 20;
     private readonly MAX_BATCHES = 100;
@@ -800,7 +802,9 @@ export class GeminiService {
     async addRelatedUseCases(
         useCases: any[],
         options: { incremental?: boolean } | undefined,
-        language: string
+        language: string,
+        userId?: string,
+        projectId?: string
     ): Promise<any[]> {
         if (!useCases || useCases.length <= 1) {
             console.log("⏩ Skipping addRelatedUseCases: Not enough use cases.");
@@ -811,73 +815,63 @@ export class GeminiService {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const basePrompt = prompts[lang].relatedUseCases(simplified, options?.incremental);
 
-        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-        if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
+        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
+        const modelName = await this.llmService.getRecommendedModel();
 
-        for (const k of keys) {
-            try {
-                const { GoogleGenerativeAI } = await import("@google/generative-ai");
-                const client = new GoogleGenerativeAI(k.key_value);
-                const modelName = k.model_name || 'gemini-2.0-flash-001';
-                const model = client.getGenerativeModel({ model: modelName });
+        try {
+            console.log(`🔑 Calling LLM for addRelatedUseCases with model: ${modelName}`);
 
-                const resp: any = await model.generateContent({
-                    contents: [{ role: "user", parts: [{ text: basePrompt }] }],
-                });
+            const response = await this.llmService.callLLM({
+                prompt: basePrompt,
+                modelName: modelName,
+                userId: userId,
+                projectId: projectId,
+                endpoint: 'addRelatedUseCases',
+                isProductionFreeMode: true
+            });
 
-                let text: string = resp?.response?.text?.() || "[]";
-                text = this.cleanJsonString(text);
-                const parsed = this.safeJsonParse(text);
+            let text: string = response.text || "[]";
+            text = this.cleanJsonString(text);
+            const parsed = this.safeJsonParse(text);
 
-                if (Array.isArray(parsed)) {
-                    // Tạo mapping từ id (từ Gemini response) sang _id (trong useCases)
-                    const updated = useCases.map((u) => {
-                        const uId = u._id ? String(u._id) : '';
-                        // Tìm match theo _id hoặc id (nếu Gemini trả về id cũ)
-                        const match = parsed.find((p: any) => {
-                            const pId = p._id ? String(p._id) : (p.id || '');
-                            return pId === uId;
-                        });
-
-                        if (match && Array.isArray(match.related_usecases)) {
-                            // Map related_usecases từ id cũ (UC1) sang _id mới
-                            const mappedRelated = match.related_usecases.map((refId: string) => {
-                                // Nếu refId là format cũ (UC1, UC2), tìm trong parsed để lấy _id tương ứng
-                                if (refId.match(/^UC\d+$/)) {
-                                    const refUseCase = parsed.find((p: any) => p.id === refId || p._tempOldId === refId);
-                                    if (refUseCase && refUseCase._id) {
-                                        return String(refUseCase._id);
-                                    }
-                                    // Nếu không tìm thấy trong parsed, tìm trong useCases
-                                    // (trường hợp này ít xảy ra vì Gemini chỉ trả về related trong cùng batch)
-                                }
-                                // Nếu refId đã là _id, giữ nguyên
-                                return refId;
-                            }).filter(Boolean);
-
-                            return { ...u, related_usecases: mappedRelated };
-                        }
-                        return u;
+            if (Array.isArray(parsed)) {
+                // Tạo mapping từ id (từ Gemini response) sang _id (trong useCases)
+                const updated = useCases.map((u) => {
+                    const uId = u._id ? String(u._id) : '';
+                    // Tìm match theo _id hoặc id (nếu Gemini trả về id cũ)
+                    const match = parsed.find((p: any) => {
+                        const pId = p._id ? String(p._id) : (p.id || '');
+                        return pId === uId;
                     });
-                    return updated;
-                }
-                return useCases;
-            } catch (err: any) {
-                console.error(" addRelatedUseCases error:", err);
-                const retryInfo = err?.errorDetails?.find(
-                    (d: any) => d["@type"]?.includes("RetryInfo")
-                );
-                if (retryInfo?.retryDelay) {
-                    const seconds = parseInt(retryInfo.retryDelay);
-                    if (!isNaN(seconds) && seconds > 0) {
-                        console.log(`⏳ Waiting ${seconds}s before trying next key...`);
-                        await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+
+                    if (match && Array.isArray(match.related_usecases)) {
+                        // Map related_usecases từ id cũ (UC1) sang _id mới
+                        const mappedRelated = match.related_usecases.map((refId: string) => {
+                            // Nếu refId là format cũ (UC1, UC2), tìm trong parsed để lấy _id tương ứng
+                            if (refId.match(/^UC\d+$/)) {
+                                const refUseCase = parsed.find((p: any) => p.id === refId || p._tempOldId === refId);
+                                if (refUseCase && refUseCase._id) {
+                                    return String(refUseCase._id);
+                                }
+                                // Nếu không tìm thấy trong parsed, tìm trong useCases
+                                // (trường hợp này ít xảy ra vì Gemini chỉ trả về related trong cùng batch)
+                            }
+                            // Nếu refId đã là _id, giữ nguyên
+                            return refId;
+                        }).filter(Boolean);
+
+                        return { ...u, related_usecases: mappedRelated };
                     }
-                }
-                continue;
+                    return u;
+                });
+                return updated;
             }
+            return useCases;
+        } catch (err: any) {
+            console.error("❌ addRelatedUseCases error:", err);
+            // Nếu lỗi, trả về useCases gốc (không có related_usecases)
+            return useCases;
         }
-        return useCases;
     }
 
     /**
@@ -911,119 +905,91 @@ export class GeminiService {
         }
         // Text rất dài (> 2000 chars): không giới hạn (maxAllowed = 100, nhưng có thể cao hơn)
 
-        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-        if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
+        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
+        const effectiveModelName = modelName || await this.llmService.getRecommendedModel();
 
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const prompt = prompts[lang].estimateUseCasesCount(text);
 
-        // Thử từng key cho đến khi thành công
-        for (const k of keys) {
+        try {
+            console.log(`🔑 Calling LLM for estimateUseCasesCount with model: ${effectiveModelName}`);
+
+            const response = await this.llmService.callLLM({
+                prompt: prompt,
+                modelName: effectiveModelName,
+                userId: userId,
+                projectId: projectId,
+                endpoint: 'estimateUseCasesCount',
+                isProductionFreeMode: true
+            });
+
+            let text: string = response.text || "{}";
+
+            // Log raw response for debugging
+            console.log(`🔍 [ESTIMATE] Raw response (first 500 chars): ${text.substring(0, 500)}`);
+
+            text = this.cleanJsonString(text);
+
+            // Try to parse as JSON object (not array)
+            let parsed: any = null;
             try {
-                const { GoogleGenerativeAI } = await import("@google/generative-ai");
-                const client = new GoogleGenerativeAI(k.key_value);
-                const effectiveModelName = modelName || k.model_name || 'gemini-2.0-flash-001';
-                const model = client.getGenerativeModel({ model: effectiveModelName });
-
-                const startTime = Date.now();
-                const resp: any = await model.generateContent({
-                    contents: [{ role: "user", parts: [{ text: prompt }] }],
-                });
-
-                const responseTime = Date.now() - startTime;
-                const tokens = extractGeminiTokens(resp);
-
-                // Log API usage
-                logApiUsage({
-                    api_key_id: k._id.toString(),
-                    provider: 'gemini',
-                    model_name: effectiveModelName,
-                    user_id: userId,
-                    project_id: projectId,
-                    request_type: 'text',
-                    endpoint: 'estimateUseCasesCount',
-                    ...tokens,
-                    status: 'success',
-                    status_code: 200,
-                    response_time: responseTime,
-                }).catch(err => console.error('Failed to log API usage:', err));
-
-                let text: string = resp?.response?.text?.() || "{}";
-
-                // Log raw response for debugging
-                console.log(`🔍 [ESTIMATE] Raw response (first 500 chars): ${text.substring(0, 500)}`);
-
-                text = this.cleanJsonString(text);
-
-                // Try to parse as JSON object (not array)
-                let parsed: any = null;
-                try {
-                    parsed = JSON.parse(text);
-                } catch (parseError: any) {
-                    // Try to extract JSON object from text if it's wrapped in markdown or has extra text
-                    const jsonMatch = text.match(/\{[\s\S]*\}/);
-                    if (jsonMatch) {
-                        try {
-                            parsed = JSON.parse(jsonMatch[0]);
-                        } catch (e) {
-                            console.error(`❌ [ESTIMATE] Failed to parse JSON: ${parseError.message}`);
-                            console.error(`❌ [ESTIMATE] Cleaned text: ${text.substring(0, 1000)}`);
-                            throw new Error(`Invalid JSON format: ${parseError.message}`);
-                        }
-                    } else {
-                        console.error(`❌ [ESTIMATE] No JSON object found in response`);
+                parsed = JSON.parse(text);
+            } catch (parseError: any) {
+                // Try to extract JSON object from text if it's wrapped in markdown or has extra text
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    try {
+                        parsed = JSON.parse(jsonMatch[0]);
+                    } catch (e) {
+                        console.error(`❌ [ESTIMATE] Failed to parse JSON: ${parseError.message}`);
                         console.error(`❌ [ESTIMATE] Cleaned text: ${text.substring(0, 1000)}`);
-                        throw new Error("No JSON object found in response");
+                        throw new Error(`Invalid JSON format: ${parseError.message}`);
                     }
+                } else {
+                    console.error(`❌ [ESTIMATE] No JSON object found in response`);
+                    console.error(`❌ [ESTIMATE] Cleaned text: ${text.substring(0, 1000)}`);
+                    throw new Error("No JSON object found in response");
                 }
-
-                // Validate parsed object
-                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                    const estimate = parsed as any;
-
-                    // Validate required fields
-                    if (typeof estimate.estimated_count !== 'number' || estimate.estimated_count < 1) {
-                        console.error(`❌ [ESTIMATE] Invalid estimated_count: ${estimate.estimated_count}`);
-                        throw new Error(`Invalid estimated_count: must be a positive number, got ${estimate.estimated_count}`);
-                    }
-
-                    let estimated_count = Math.max(1, Math.floor(estimate.estimated_count || 1));
-
-                    // ✅ FIX: Giới hạn estimate dựa trên độ dài text input
-                    // maxAllowed đã được tính ở trên dựa trên textLength
-                    if (estimated_count > maxAllowed) {
-                        console.warn(`⚠️ [ESTIMATE] LLM estimated ${estimated_count} use cases, but text length (${textLength} chars) suggests max ${maxAllowed}. Adjusting to ${maxAllowed}.`);
-                        estimated_count = maxAllowed;
-                    }
-
-                    const estimated_batches = Math.ceil(estimated_count / 50);
-
-                    console.log(`✅ [ESTIMATE] Estimated ${estimated_count} use cases (from ${textLength} chars text), ${estimated_batches} batches`);
-
-                    return {
-                        estimated_count,
-                        summary: estimate.summary || 'System analysis',
-                        estimated_batches,
-                        reasoning: estimate.reasoning
-                    };
-                }
-
-                console.error(`❌ [ESTIMATE] Parsed result is not a valid object. Type: ${typeof parsed}, IsArray: ${Array.isArray(parsed)}`);
-                console.error(`❌ [ESTIMATE] Parsed value: ${JSON.stringify(parsed).substring(0, 500)}`);
-                throw new Error("Invalid estimate response format: expected JSON object, got " + (Array.isArray(parsed) ? "array" : typeof parsed));
-            } catch (err: any) {
-                console.error(`❌ [ESTIMATE] Error with key ${k._id}:`, err.message);
-                const { analyzeApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
-                const errorInfo = analyzeApiKeyError(err);
-
-                if (!errorInfo.retryable) {
-                    throw err;
-                }
-                continue;
             }
-        }
 
-        throw new Error("All Gemini API keys failed for estimate");
+            // Validate parsed object
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const estimate = parsed as any;
+
+                // Validate required fields
+                if (typeof estimate.estimated_count !== 'number' || estimate.estimated_count < 1) {
+                    console.error(`❌ [ESTIMATE] Invalid estimated_count: ${estimate.estimated_count}`);
+                    throw new Error(`Invalid estimated_count: must be a positive number, got ${estimate.estimated_count}`);
+                }
+
+                let estimated_count = Math.max(1, Math.floor(estimate.estimated_count || 1));
+
+                // ✅ FIX: Giới hạn estimate dựa trên độ dài text input
+                // maxAllowed đã được tính ở trên dựa trên textLength
+                if (estimated_count > maxAllowed) {
+                    console.warn(`⚠️ [ESTIMATE] LLM estimated ${estimated_count} use cases, but text length (${textLength} chars) suggests max ${maxAllowed}. Adjusting to ${maxAllowed}.`);
+                    estimated_count = maxAllowed;
+                }
+
+                const estimated_batches = Math.ceil(estimated_count / 50);
+
+                console.log(`✅ [ESTIMATE] Estimated ${estimated_count} use cases (from ${textLength} chars text), ${estimated_batches} batches`);
+
+                return {
+                    estimated_count,
+                    summary: estimate.summary || 'System analysis',
+                    estimated_batches,
+                    reasoning: estimate.reasoning
+                };
+            }
+
+            console.error(`❌ [ESTIMATE] Parsed result is not a valid object. Type: ${typeof parsed}, IsArray: ${Array.isArray(parsed)}`);
+            console.error(`❌ [ESTIMATE] Parsed value: ${JSON.stringify(parsed).substring(0, 500)}`);
+            throw new Error("Invalid estimate response format: expected JSON object, got " + (Array.isArray(parsed) ? "array" : typeof parsed));
+        } catch (err: any) {
+            console.error(`❌ [ESTIMATE] LLM call failed:`, err?.message || err);
+            throw err;
+        }
     }
 
     /**
@@ -1043,80 +1009,52 @@ export class GeminiService {
     ): Promise<any[]> {
         console.log(`📦 [BATCH ${batchNumber}/${totalBatches}] Generating use cases ${offset + 1} to ${offset + batchSize}${estimatedTotal ? ` (estimated total: ${estimatedTotal})` : ''}`);
 
-        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-        if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
+        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
+        const effectiveModelName = modelName || await this.llmService.getRecommendedModel();
 
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const prompt = prompts[lang].generateBatchUseCases(text, batchNumber, totalBatches, offset, batchSize, estimatedTotal);
 
-        // Thử từng key cho đến khi thành công
-        for (const k of keys) {
-            try {
-                const { GoogleGenerativeAI } = await import("@google/generative-ai");
-                const client = new GoogleGenerativeAI(k.key_value);
-                const effectiveModelName = modelName || k.model_name || 'gemini-2.0-flash-001';
-                const model = client.getGenerativeModel({ model: effectiveModelName });
+        try {
+            console.log(`🔑 Calling LLM for generateUseCasesBatch with model: ${effectiveModelName}`);
 
-                const startTime = Date.now();
-                const resp: any = await model.generateContent({
-                    contents: [{ role: "user", parts: [{ text: prompt }] }],
-                });
+            const response = await this.llmService.callLLM({
+                prompt: prompt,
+                modelName: effectiveModelName,
+                userId: userId,
+                projectId: projectId,
+                endpoint: 'generateUseCasesBatch',
+                isProductionFreeMode: true
+            });
 
-                const responseTime = Date.now() - startTime;
-                const tokens = extractGeminiTokens(resp);
+            let responseText: string = response.text || "[]";
+            responseText = this.cleanJsonString(responseText);
 
-                // Log API usage
-                logApiUsage({
-                    api_key_id: k._id.toString(),
-                    provider: 'gemini',
-                    model_name: effectiveModelName,
-                    user_id: userId,
-                    project_id: projectId,
-                    request_type: 'text',
-                    endpoint: 'generateUseCasesBatch',
-                    ...tokens,
-                    status: 'success',
-                    status_code: 200,
-                    response_time: responseTime,
-                }).catch(err => console.error('Failed to log API usage:', err));
+            const parsed = this.safeJsonParseRobust(responseText);
+            let useCases = parsed.items || [];
 
-                let responseText: string = resp?.response?.text?.() || "[]";
-                responseText = this.cleanJsonString(responseText);
-
-                const parsed = this.safeJsonParseRobust(responseText);
-                let useCases = parsed.items || [];
-
-                if (useCases.length === 0) {
-                    console.log(`⏩ [BATCH ${batchNumber}/${totalBatches}] No more use cases to generate`);
-                    return [];
-                }
-
-                // ✅ FIX: Giới hạn số lượng use cases dựa trên estimate
-                if (estimatedTotal && estimatedTotal > 0) {
-                    const maxAllowed = estimatedTotal - offset;
-                    if (useCases.length > maxAllowed) {
-                        console.warn(`⚠️ [BATCH ${batchNumber}/${totalBatches}] LLM generated ${useCases.length} use cases, but estimate (${estimatedTotal}) allows only ${maxAllowed} (offset: ${offset}). Limiting to ${maxAllowed}.`);
-                        useCases = useCases.slice(0, maxAllowed);
-                    }
-                }
-
-                const normalized = this.normalizeUseCases(useCases);
-                console.log(`✅ [BATCH ${batchNumber}/${totalBatches}] Generated ${normalized.length} use cases${estimatedTotal ? ` (estimated total: ${estimatedTotal}, remaining: ${estimatedTotal - offset - normalized.length})` : ''}`);
-
-                return normalized;
-            } catch (err: any) {
-                console.error(`❌ [BATCH ${batchNumber}/${totalBatches}] Error with key ${k._id}:`, err.message);
-                const { analyzeApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
-                const errorInfo = analyzeApiKeyError(err);
-
-                if (!errorInfo.retryable) {
-                    throw err;
-                }
-                continue;
+            if (useCases.length === 0) {
+                console.log(`⏩ [BATCH ${batchNumber}/${totalBatches}] No more use cases to generate`);
+                return [];
             }
-        }
 
-        throw new Error(`All Gemini API keys failed for batch ${batchNumber}`);
+            // ✅ FIX: Giới hạn số lượng use cases dựa trên estimate
+            if (estimatedTotal && estimatedTotal > 0) {
+                const maxAllowed = estimatedTotal - offset;
+                if (useCases.length > maxAllowed) {
+                    console.warn(`⚠️ [BATCH ${batchNumber}/${totalBatches}] LLM generated ${useCases.length} use cases, but estimate (${estimatedTotal}) allows only ${maxAllowed} (offset: ${offset}). Limiting to ${maxAllowed}.`);
+                    useCases = useCases.slice(0, maxAllowed);
+                }
+            }
+
+            const normalized = this.normalizeUseCases(useCases);
+            console.log(`✅ [BATCH ${batchNumber}/${totalBatches}] Generated ${normalized.length} use cases${estimatedTotal ? ` (estimated total: ${estimatedTotal}, remaining: ${estimatedTotal - offset - normalized.length})` : ''}`);
+
+            return normalized;
+        } catch (err: any) {
+            console.error(`❌ [BATCH ${batchNumber}/${totalBatches}] LLM call failed:`, err?.message || err);
+            throw err;
+        }
     }
 
     /**
@@ -1134,19 +1072,16 @@ export class GeminiService {
         totalChunks?: number
     ): Promise<any[]> {
         const chunkLabel = chunkIndex ? `[Chunk ${chunkIndex}${totalChunks ? `/${totalChunks}` : ''}]` : '';
-        console.log(`${chunkLabel} Analyzing text with Gemini (lang: ${language}). Text length: ${cleanText?.length ?? 0}`);
+        console.log(`${chunkLabel} Analyzing text with LLM (lang: ${language}). Text length: ${cleanText?.length ?? 0}`);
 
-        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-        if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
-
-        // ✅ Lấy model config để quyết định strategy
+        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
         const { getModelConfig, estimateTokens, determineStrategy } = await import("../../../shared/tokenManager");
-        const firstKey = keys[0];
-        const modelConfig = getModelConfig(firstKey.model_name || 'gemini-2.0-flash', 'gemini');
+        const modelName = await this.llmService.getRecommendedModel();
+        const modelConfig = getModelConfig(modelName, undefined);
         const estimatedTokens = estimateTokens(cleanText, modelConfig);
         const strategy = determineStrategy(cleanText, modelConfig);
 
-        console.log(`${chunkLabel} 📊 Token Analysis: ${estimatedTokens.toLocaleString()} tokens, Context Window: ${modelConfig.contextWindow.toLocaleString()}, Strategy: ${strategy.strategy}`);
+        console.log(`${chunkLabel} 📊 Token Analysis: ${estimatedTokens.toLocaleString()} tokens, Context Window: ${modelConfig.contextWindow.toLocaleString()}, Strategy: ${strategy.strategy}, Provider: ${modelConfig.provider}, Model: ${modelName}`);
 
         // ✅ QUAN TRỌNG: Nếu text vừa với context window (< 80%) → single call, không batch
         const contextThreshold = modelConfig.contextWindow * 0.8; // 80% để reserve cho prompt và output
@@ -1154,11 +1089,11 @@ export class GeminiService {
 
         if (useSimpleStrategy) {
             console.log(`${chunkLabel} ✅ Text nhỏ (${estimatedTokens.toLocaleString()} < ${Math.floor(contextThreshold).toLocaleString()} tokens). Sử dụng single call strategy.`);
-            return await this.analyzeRequirementsSingleCall(cleanText, language, keys, modelConfig, userId, projectId, chunkLabel);
+            return await this.analyzeRequirementsSingleCall(cleanText, language, modelName, modelConfig, userId, projectId, chunkLabel);
         } else {
             // Text lớn hoặc đã được chunk → sử dụng batch strategy (giữ logic cũ nhưng tối ưu)
             console.log(`${chunkLabel} 📦 Text lớn hoặc đã chunk. Sử dụng batch strategy.`);
-            return await this.analyzeRequirementsBatch(cleanText, language, keys, modelConfig, userId, projectId, chunkLabel);
+            return await this.analyzeRequirementsBatch(cleanText, language, modelName, modelConfig, userId, projectId, chunkLabel);
         }
     }
 
@@ -1169,7 +1104,7 @@ export class GeminiService {
     private async analyzeRequirementsSingleCall(
         cleanText: string,
         language: string,
-        keys: { _id: string; key_value: string; model_name: string }[],
+        modelName: string,
         modelConfig: any,
         userId?: string,
         projectId?: string,
@@ -1177,92 +1112,50 @@ export class GeminiService {
     ): Promise<any[]> {
         const prompt = this.buildPromptSimple(cleanText, language);
 
-        // Thử từng key cho đến khi thành công
-        for (const k of keys) {
-            try {
-                console.log(`${chunkLabel} 🔑 Trying Gemini key: ${k.key_value.slice(0, 12)}... (single call)`);
-                const { GoogleGenerativeAI } = await import("@google/generative-ai");
-                const client = new GoogleGenerativeAI(k.key_value);
-                const modelName = k.model_name || 'gemini-2.0-flash-001';
-                const model = client.getGenerativeModel({ model: modelName });
+        try {
+            console.log(`${chunkLabel} 🔑 Calling LLM with model: ${modelName} (single call)`);
 
-                const startTime = Date.now();
-                const resp: any = await model.generateContent({
-                    contents: [{ role: "user", parts: [{ text: prompt }] }],
-                });
+            const response = await this.llmService.callLLM({
+                prompt: prompt,
+                modelName: modelName,
+                userId: userId,
+                projectId: projectId,
+                endpoint: 'analyzeRequirements',
+                isProductionFreeMode: true
+            });
 
-                const responseTime = Date.now() - startTime;
-                const tokens = extractGeminiTokens(resp);
+            let text: string = response.text || "";
+            text = this.cleanJsonString(text);
+            console.log(`${chunkLabel} 🤖 LLM response length: ${text.length} (single call)`);
 
-                // Log API usage
-                logApiUsage({
-                    api_key_id: k._id.toString(),
-                    provider: 'gemini',
-                    model_name: modelName,
-                    user_id: userId,
-                    project_id: projectId,
-                    request_type: 'text',
-                    endpoint: 'analyzeRequirements',
-                    ...tokens,
-                    status: 'success',
-                    status_code: 200,
-                    response_time: responseTime,
-                }).catch(err => console.error('Failed to log API usage:', err));
+            // Parse và normalize
+            const parsed = this.safeJsonParseRobust(text);
 
-                let text: string = resp?.response?.text?.() || "";
-                text = this.cleanJsonString(text);
-                console.log(`${chunkLabel} 🤖 Gemini response length: ${text.length} (single call)`);
-
-                // Parse và normalize
-                const parsed = this.safeJsonParseRobust(text);
-
-                // ✅ CẢI THIỆN: Log chi tiết về truncation trong single call
-                if (parsed.isTruncated) {
-                    console.warn(`${chunkLabel} ⚠️ PHÁT HIỆN RESPONSE BỊ CẮT trong single call! Parse được ${parsed.items.length} items từ response dài ${text.length} chars.`);
-                    console.warn(`${chunkLabel} ⚠️ Response preview (last 500 chars): ${text.slice(-500)}`);
-                    console.warn(`${chunkLabel} ⚠️ LƯU Ý: Single call strategy không thể retry. Có thể cần chuyển sang batch strategy cho text lớn.`);
-                }
-
-                if (parsed.items.length === 0) {
-                    console.log(`${chunkLabel} ✅ No use cases found in response.`);
-                    return [];
-                }
-
-                const normalizeStartTime = Date.now();
-                const normalized = this.normalizeUseCases(parsed.items);
-                const normalizeTime = Date.now() - normalizeStartTime;
-                console.log(`${chunkLabel} ✅ Parsed ${normalized.length} use cases from single call (normalize took ${normalizeTime}ms, truncated=${parsed.isTruncated || false}).`);
-
-                // ✅ QUAN TRỌNG: Return ngay sau khi parse xong để tránh timeout
-                // ⚠️ Nếu response bị cắt, có thể cần chuyển sang batch strategy
-                return normalized;
-
-            } catch (err: any) {
-                const { analyzeApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
-                const errorInfo = analyzeApiKeyError(err);
-
-                console.error(`${chunkLabel} ❌ Gemini key ${k._id} failed:`, err?.message || err, `[${errorInfo.type}]`);
-
-                // Disable key nếu cần
-                if (errorInfo.shouldDisableKey) {
-                    try {
-                        await this.apiKeyService.disableKey(k._id);
-                        console.warn(`${chunkLabel} ⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
-                    } catch { /* ignore */ }
-                }
-
-                // Nếu không retryable, throw ngay
-                if (!errorInfo.retryable) {
-                    const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
-                    throw new ApiKeyError(err, 'vi');
-                }
-
-                // Tiếp tục thử key tiếp theo
-                continue;
+            // ✅ CẢI THIỆN: Log chi tiết về truncation trong single call
+            if (parsed.isTruncated) {
+                console.warn(`${chunkLabel} ⚠️ PHÁT HIỆN RESPONSE BỊ CẮT trong single call! Parse được ${parsed.items.length} items từ response dài ${text.length} chars.`);
+                console.warn(`${chunkLabel} ⚠️ Response preview (last 500 chars): ${text.slice(-500)}`);
+                console.warn(`${chunkLabel} ⚠️ LƯU Ý: Single call strategy không thể retry. Có thể cần chuyển sang batch strategy cho text lớn.`);
             }
-        }
 
-        throw new Error("All Gemini API keys failed");
+            if (parsed.items.length === 0) {
+                console.log(`${chunkLabel} ✅ No use cases found in response.`);
+                return [];
+            }
+
+            const normalizeStartTime = Date.now();
+            const normalized = this.normalizeUseCases(parsed.items);
+            const normalizeTime = Date.now() - normalizeStartTime;
+            console.log(`${chunkLabel} ✅ Parsed ${normalized.length} use cases from single call (normalize took ${normalizeTime}ms, truncated=${parsed.isTruncated || false}).`);
+
+            // ✅ QUAN TRỌNG: Return ngay sau khi parse xong để tránh timeout
+            // ⚠️ Nếu response bị cắt, có thể cần chuyển sang batch strategy
+            return normalized;
+
+        } catch (err: any) {
+            console.error(`${chunkLabel} ❌ LLM call failed:`, err?.message || err);
+            throw err;
+        }
     }
 
     /**
@@ -1272,7 +1165,7 @@ export class GeminiService {
     private async analyzeRequirementsBatch(
         cleanText: string,
         language: string,
-        keys: { _id: string; key_value: string; model_name: string }[],
+        modelName: string,
         modelConfig: any,
         userId?: string,
         projectId?: string,
@@ -1295,44 +1188,25 @@ export class GeminiService {
                 return allResults.slice(0, this.MAX_TOTAL_USE_CASES);
             }
 
-            for (const k of keys) {
-                if (attemptsForThisOffset >= this.MAX_ATTEMPTS_PER_OFFSET) break;
+            // Thử gọi LLM với retry logic
+            while (attemptsForThisOffset < this.MAX_ATTEMPTS_PER_OFFSET) {
                 attemptsForThisOffset++;
-
-                const key = k.key_value;
                 const startTime = Date.now();
                 try {
-                    console.log(`${chunkLabel} 🔑 Trying Gemini key: ${key.slice(0, 12)}... (offset=${offset}, batch=${batchCount})`);
-                    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-                    const client = new GoogleGenerativeAI(key);
-                    const modelName = k.model_name || 'gemini-2.0-flash-001';
-                    const model = client.getGenerativeModel({ model: modelName });
+                    console.log(`${chunkLabel} 🔑 Calling LLM with model: ${modelName} (offset=${offset}, batch=${batchCount}, attempt=${attemptsForThisOffset})`);
 
                     const prompt = this.buildPrompt(cleanText, language, offset, this.BATCH_SIZE);
 
-                    const resp: any = await model.generateContent({
-                        contents: [{ role: "user", parts: [{ text: prompt }] }],
+                    const response = await this.llmService.callLLM({
+                        prompt: prompt,
+                        modelName: modelName,
+                        userId: userId,
+                        projectId: projectId,
+                        endpoint: 'analyzeRequirements',
+                        isProductionFreeMode: true
                     });
 
-                    const responseTime = Date.now() - startTime;
-                    const tokens = extractGeminiTokens(resp);
-
-                    // Log API usage
-                    logApiUsage({
-                        api_key_id: k._id.toString(),
-                        provider: 'gemini',
-                        model_name: modelName,
-                        user_id: userId,
-                        project_id: projectId,
-                        request_type: 'text',
-                        endpoint: 'analyzeRequirements',
-                        ...tokens,
-                        status: 'success',
-                        status_code: 200,
-                        response_time: responseTime,
-                    }).catch(err => console.error('Failed to log API usage:', err));
-
-                    let text: string = resp?.response?.text?.() || "";
+                    let text: string = response.text || "";
                     text = this.cleanJsonString(text);
                     console.log(`${chunkLabel} 🤖 Gemini response length: ${text.length}, offset=${offset}, batch=${batchCount}`);
 
@@ -1458,7 +1332,7 @@ export class GeminiService {
                     } else {
                         // Không có items hợp lệ từ response
                         consecutiveEmptyBatches++;
-                        console.warn(`⚠️ No parsable items from key ${key.slice(0, 12)}. Response preview: ${text.slice(0, 200)}`);
+                        console.warn(`⚠️ No parsable items from LLM. Response preview: ${text.slice(0, 200)}`);
 
                         // Nếu có 2 batch liên tiếp không có items → dừng
                         if (consecutiveEmptyBatches >= 2) {
@@ -1471,49 +1345,23 @@ export class GeminiService {
                             return allResults;
                         }
                         lastError = new Error("No parsable items");
-                        continue;
+                        break; // Thử lại với attempt tiếp theo
                     }
                 } catch (err: any) {
                     const responseTime = Date.now() - startTime;
-
-                    // Phân tích lỗi API key
-                    const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../shared/apiKeyErrorHandler");
-                    const errorInfo = analyzeApiKeyError(err);
                     lastError = err;
 
-                    console.error(`❌ Gemini key ${k._id} failed:`, err?.message || err, `[${errorInfo.type}]`);
+                    console.error(`${chunkLabel} ❌ LLM call failed (attempt ${attemptsForThisOffset}):`, err?.message || err);
 
-                    // Log failed API usage
-                    const modelName = k.model_name || 'gemini-2.0-flash-001';
-                    logApiUsage({
-                        api_key_id: k._id.toString(),
-                        provider: 'gemini',
-                        model_name: modelName,
-                        user_id: userId,
-                        project_id: projectId,
-                        request_type: 'text',
-                        endpoint: 'analyzeRequirements',
-                        status: 'failed',
-                        status_code: err.status || err.statusCode || 500,
-                        error_message: err.message || 'Unknown error',
-                        error_type: errorInfo.type,
-                        response_time: responseTime,
-                    }).catch(logErr => console.error('Failed to log API usage:', logErr));
-
-                    // Disable key nếu cần (invalid, unauthorized)
-                    if (errorInfo.shouldDisableKey) {
-                        try {
-                            await this.apiKeyService.disableKey(k._id);
-                            console.warn(`⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
-                        } catch { /* ignore */ }
+                    // Nếu đã thử hết attempts cho offset này, break để thử offset tiếp theo hoặc dừng
+                    if (attemptsForThisOffset >= this.MAX_ATTEMPTS_PER_OFFSET) {
+                        console.warn(`${chunkLabel} ⚠️ Đã thử hết ${this.MAX_ATTEMPTS_PER_OFFSET} attempts cho offset ${offset}.`);
+                        break;
                     }
-
-                    // ✅ THAY ĐỔI: Lưu lại lỗi nhưng tiếp tục thử các key khác
-                    // Chỉ throw error khi đã thử hết tất cả các key
-                    console.warn(`${chunkLabel} ⚠️ Key ${k._id} failed (${errorInfo.type}), trying next key...`);
+                    // Tiếp tục thử lại
                     continue;
                 }
-            } // end for keys
+            } // end while attempts
 
             if (!gotBatch) {
                 consecutiveEmptyBatches++;
@@ -1556,105 +1404,45 @@ export class GeminiService {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const prompt = prompts[lang].conflictCheck(textA, textB);
 
-        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-        if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
+        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
+        const modelName = await this.llmService.getRecommendedModel();
 
-        let lastError: any;
-        for (const k of keys) {
-            const startTime = Date.now();
-            try {
-                const { GoogleGenerativeAI } = await import("@google/generative-ai");
-                const client = new GoogleGenerativeAI(k.key_value);
-                const modelName = k.model_name || 'gemini-2.0-flash-001';
-                const model = client.getGenerativeModel({ model: modelName });
+        try {
+            console.log(`🔑 Calling LLM for checkConflict with model: ${modelName}`);
 
-                const resp: any = await model.generateContent({
-                    contents: [{ role: "user", parts: [{ text: prompt }] }],
-                });
+            const response = await this.llmService.callLLM({
+                prompt: prompt,
+                modelName: modelName,
+                userId: userId,
+                projectId: projectId,
+                endpoint: 'checkConflict',
+                isProductionFreeMode: true
+            });
 
-                const responseTime = Date.now() - startTime;
-                const tokens = extractGeminiTokens(resp);
+            let text: string = response.text || "{}";
+            text = this.cleanJsonString(text);
 
-                logApiUsage({
-                    api_key_id: k._id.toString(),
-                    provider: 'gemini',
-                    model_name: modelName,
-                    user_id: userId,
-                    project_id: projectId,
-                    request_type: 'text',
-                    endpoint: 'checkConflict',
-                    ...tokens,
-                    status: 'success',
-                    status_code: 200,
-                    response_time: responseTime,
-                }).catch(err => console.error('Failed to log API usage:', err));
+            // Debug log
+            console.log("🔎 LLM conflict check raw response:", text);
 
-                let text: string = resp?.response?.text?.() || "{}";
-                text = this.cleanJsonString(text);
+            const parsed = JSON.parse(text.trim());
 
-                //  Debug log
-                console.log("🔎 Gemini conflict check raw response:", text);
-
-                const parsed = JSON.parse(text.trim());
-
-                if (typeof parsed.conflict === "boolean") {
-                    console.log(
-                        ` Gemini conflict decision: ${parsed.conflict ? "CONFLICT" : "NO CONFLICT"} | A="${textA}" | B="${textB}"`
-                    );
-                    return parsed.conflict;
-                } else {
-                    console.warn("⚠️ Gemini did not return a valid { conflict: boolean } object:", text);
-                }
-            } catch (err: any) {
-                const responseTime = Date.now() - startTime;
-
-                // Phân tích lỗi API key
-                const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../shared/apiKeyErrorHandler");
-                const errorInfo = analyzeApiKeyError(err);
-                lastError = err;
-
-                console.error("❌ Gemini checkConflictWithGemini error:", err, `[${errorInfo.type}]`);
-
-                const modelName = k.model_name || 'gemini-2.0-flash-001';
-                logApiUsage({
-                    api_key_id: k._id.toString(),
-                    provider: 'gemini',
-                    model_name: modelName,
-                    user_id: userId,
-                    project_id: projectId,
-                    request_type: 'text',
-                    endpoint: 'checkConflict',
-                    status: 'failed',
-                    status_code: err.status || err.statusCode || 500,
-                    error_message: err.message || 'Unknown error',
-                    error_type: errorInfo.type,
-                    response_time: responseTime,
-                }).catch(logErr => console.error('Failed to log API usage:', logErr));
-
-                // Disable key nếu cần (invalid, unauthorized)
-                if (errorInfo.shouldDisableKey) {
-                    try {
-                        await this.apiKeyService.disableKey(k._id);
-                        console.warn(`⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
-                    } catch { /* ignore */ }
-                }
-
-                // ✅ THAY ĐỔI: Lưu lại lỗi nhưng tiếp tục thử các key khác
-                console.warn(`⚠️ Key ${k._id} failed (${errorInfo.type}), trying next key...`);
-                continue;
+            if (typeof parsed.conflict === "boolean") {
+                console.log(
+                    `✅ LLM conflict decision: ${parsed.conflict ? "CONFLICT" : "NO CONFLICT"} | A="${textA}" | B="${textB}"`
+                );
+                return parsed.conflict;
+            } else {
+                console.warn("⚠️ LLM did not return a valid { conflict: boolean } object:", text);
+                return false; // Default to no conflict if invalid response
             }
+        } catch (err: any) {
+            console.error("❌ LLM checkConflict error:", err);
+            throw err;
         }
-
-        // Nếu tất cả key đều fail, throw error với thông tin chi tiết
-        if (lastError) {
-            const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
-            throw new ApiKeyError(lastError, 'vi');
-        }
-
-        throw new Error("All Gemini API keys failed for conflict check");
     }
 
-    // --- HÀM MỚI: Gọi Gemini để tìm các nhóm ID xung đột ---
+    // --- HÀM MỚI: Gọi LLM để tìm các nhóm ID xung đột ---
     async findConflictGroups(useCases: any[], language: string, userId?: string, projectId?: string): Promise<string[][]> {
         if (!useCases || useCases.length < 2) {
             return [];
@@ -1669,95 +1457,35 @@ export class GeminiService {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const prompt = prompts[lang].groupConflicts(JSON.stringify(simplifiedUseCases, null, 2));
 
-        const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-        if (!keys || keys.length === 0) throw new Error("No active Gemini API key");
+        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
+        const modelName = await this.llmService.getRecommendedModel();
 
-        let lastError: any;
-        for (const k of keys) {
-            const startTime = Date.now();
-            try {
-                const { GoogleGenerativeAI } = await import("@google/generative-ai");
-                const client = new GoogleGenerativeAI(k.key_value);
-                const modelName = k.model_name || 'gemini-2.0-flash-001';
-                const model = client.getGenerativeModel({ model: modelName });
+        try {
+            console.log(`🔑 Calling LLM for findConflictGroups with model: ${modelName}`);
 
-                const resp: any = await model.generateContent({
-                    contents: [{ role: "user", parts: [{ text: prompt }] }],
-                });
+            const response = await this.llmService.callLLM({
+                prompt: prompt,
+                modelName: modelName,
+                userId: userId,
+                projectId: projectId,
+                endpoint: 'findConflictGroups',
+                isProductionFreeMode: true
+            });
 
-                const responseTime = Date.now() - startTime;
-                const tokens = extractGeminiTokens(resp);
+            let text: string = response.text || "[]";
+            text = this.cleanJsonString(text);
+            const parsed = JSON.parse(text.trim());
 
-                logApiUsage({
-                    api_key_id: k._id.toString(),
-                    provider: 'gemini',
-                    model_name: modelName,
-                    user_id: userId,
-                    project_id: projectId,
-                    request_type: 'text',
-                    endpoint: 'findConflictGroups',
-                    ...tokens,
-                    status: 'success',
-                    status_code: 200,
-                    response_time: responseTime,
-                }).catch(err => console.error('Failed to log API usage:', err));
-
-                let text: string = resp?.response?.text?.() || "[]";
-                text = this.cleanJsonString(text);
-                const parsed = JSON.parse(text.trim());
-
-                if (Array.isArray(parsed) && (parsed.length === 0 || Array.isArray(parsed[0]))) {
-                    console.log(` Gemini found ${parsed.length} conflict groups.`);
-                    return parsed;
-                } else {
-                    console.warn("⚠️ Gemini did not return a valid array of arrays:", text);
-                }
-            } catch (err: any) {
-                const responseTime = Date.now() - startTime;
-
-                // Phân tích lỗi API key
-                const { analyzeApiKeyError, ApiKeyErrorType } = await import("../../../shared/apiKeyErrorHandler");
-                const errorInfo = analyzeApiKeyError(err);
-                lastError = err;
-
-                console.error("❌ Gemini findConflictGroups error:", err, `[${errorInfo.type}]`);
-
-                const modelName = k.model_name || 'gemini-2.0-flash-001';
-                logApiUsage({
-                    api_key_id: k._id.toString(),
-                    provider: 'gemini',
-                    model_name: modelName,
-                    user_id: userId,
-                    project_id: projectId,
-                    request_type: 'text',
-                    endpoint: 'findConflictGroups',
-                    status: 'failed',
-                    status_code: err.status || err.statusCode || 500,
-                    error_message: err.message || 'Unknown error',
-                    error_type: errorInfo.type,
-                    response_time: responseTime,
-                }).catch(logErr => console.error('Failed to log API usage:', logErr));
-
-                // Disable key nếu cần (invalid, unauthorized)
-                if (errorInfo.shouldDisableKey) {
-                    try {
-                        await this.apiKeyService.disableKey(k._id);
-                        console.warn(`⚠️ Disabled ${errorInfo.type} Gemini key: ${k._id}`);
-                    } catch { /* ignore */ }
-                }
-
-                // ✅ THAY ĐỔI: Lưu lại lỗi nhưng tiếp tục thử các key khác
-                console.warn(`⚠️ Key ${k._id} failed (${errorInfo.type}), trying next key...`);
-                continue;
+            if (Array.isArray(parsed) && (parsed.length === 0 || Array.isArray(parsed[0]))) {
+                console.log(`✅ LLM found ${parsed.length} conflict groups.`);
+                return parsed;
+            } else {
+                console.warn("⚠️ LLM did not return a valid array of arrays:", text);
+                return [];
             }
+        } catch (err: any) {
+            console.error("❌ LLM findConflictGroups error:", err);
+            throw err;
         }
-
-        // Nếu tất cả key đều fail, throw error với thông tin chi tiết
-        if (lastError) {
-            const { ApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
-            throw new ApiKeyError(lastError, 'vi');
-        }
-
-        throw new Error("All Gemini API keys failed for conflict grouping");
     }
 }
