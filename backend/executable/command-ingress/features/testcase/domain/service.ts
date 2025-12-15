@@ -153,14 +153,14 @@ export class TestcaseService {
         let estimate;
         try {
             estimate = await this.testcaseGeminiService.estimateTestCasesCount(
-                requirementsToProcess,
-                testType,
-                language,
-                undefined, // modelName
-                userId,
-                projectId
-            );
-            console.log(`✅ [ESTIMATE PHASE] Estimated ${estimate.estimated_count} test cases, ${estimate.estimated_batches} batches`);
+            requirementsToProcess,
+            testType,
+            language,
+            undefined, // modelName
+            userId,
+            projectId
+        );
+        console.log(`✅ [ESTIMATE PHASE] Estimated ${estimate.estimated_count} test cases, ${estimate.estimated_batches} batches`);
             
             // Emit estimate received
             if (testcaseSocketService && projectId && versionId && userId) {

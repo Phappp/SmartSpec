@@ -32,145 +32,145 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
     const { versionId, projectId, usecaseId, useCaseContext, language } = payload;
 
     try {
-      // --- Phần xác thực (Validation) ---
-      const user = await new UserServiceImpl().getUserById(userId);
-      if (!user) {
+    // --- Phần xác thực (Validation) ---
+    const user = await new UserServiceImpl().getUserById(userId);
+    if (!user) {
         const errorMsg = "User not found";
         if (umlSocketService && projectId && versionId && userId) {
           umlSocketService.emitProgress(projectId, versionId, userId, 'sequence', 100, 'failed', false, [errorMsg]);
         }
         throw new Error(errorMsg);
-      }
-      const version = await Version.findById(versionId);
-      if (!version) {
+    }
+    const version = await Version.findById(versionId);
+    if (!version) {
         const errorMsg = "Version not found";
         if (umlSocketService && projectId && versionId && userId) {
           umlSocketService.emitProgress(projectId, versionId, userId, 'sequence', 100, 'failed', false, [errorMsg]);
         }
         throw new Error(errorMsg);
-      }
-      const project = await Project.findById(projectId);
-      if (!project) {
+    }
+    const project = await Project.findById(projectId);
+    if (!project) {
         const errorMsg = "Project not found";
         if (umlSocketService && projectId && versionId && userId) {
           umlSocketService.emitProgress(projectId, versionId, userId, 'sequence', 100, 'failed', false, [errorMsg]);
         }
         throw new Error(errorMsg);
-      }
+    }
 
-      // --- THAY ĐỔI: Logic xác thực usecase ---
-      // (Giờ chúng ta nhận object 'useCaseContext' trực tiếp, không cần mảng 'requirements' nữa)
-      if (!useCaseContext || typeof useCaseContext !== "object") {
+    // --- THAY ĐỔI: Logic xác thực usecase ---
+    // (Giờ chúng ta nhận object 'useCaseContext' trực tiếp, không cần mảng 'requirements' nữa)
+    if (!useCaseContext || typeof useCaseContext !== "object") {
         const errorMsg = "A valid useCaseContext object is required.";
         if (umlSocketService && projectId && versionId && userId) {
           umlSocketService.emitProgress(projectId, versionId, userId, 'sequence', 100, 'failed', false, [errorMsg]);
         }
         throw new Error(errorMsg);
       }
-      // Kiểm tra xem usecase có 'tasks' không (GeminiService sẽ làm, nhưng check ở đây tốt hơn)
-      if (!useCaseContext.tasks || useCaseContext.tasks.length === 0) {
+    // Kiểm tra xem usecase có 'tasks' không (GeminiService sẽ làm, nhưng check ở đây tốt hơn)
+    if (!useCaseContext.tasks || useCaseContext.tasks.length === 0) {
         const errorMsg = "This Usecase has no steps (tasks) defined to generate a sequence diagram.";
         if (umlSocketService && projectId && versionId && userId) {
           umlSocketService.emitProgress(projectId, versionId, userId, 'sequence', 100, 'failed', false, [errorMsg]);
         }
         throw new Error(errorMsg);
-      }
-      // --- Kết thúc Thay đổi ---
+    }
+    // --- Kết thúc Thay đổi ---
 
       // Emit start event
       if (umlSocketService && projectId && versionId && userId) {
         umlSocketService.emitProgress(projectId, versionId, userId, 'sequence', 10, 'generating', true);
       }
 
-      // 1. Gọi Gemini Service
-      // (Payload giờ đã đúng 100% với những gì GeminiService mong đợi)
-      const geminiDiagramData = await this.geminiService.generateSequenceDiagram(
-        {
-          versionId,
-          projectId,
-          usecaseId,
-          useCaseContext: useCaseContext, // <-- Đã đúng
-          language,
-        },
-        language
-      );
+    // 1. Gọi Gemini Service
+    // (Payload giờ đã đúng 100% với những gì GeminiService mong đợi)
+    const geminiDiagramData = await this.geminiService.generateSequenceDiagram(
+      {
+        versionId,
+        projectId,
+        usecaseId,
+        useCaseContext: useCaseContext, // <-- Đã đúng
+        language,
+      },
+      language
+    );
 
-      // 2. Validate kết quả (Giữ nguyên)
-      if (
-        !geminiDiagramData ||
-        !geminiDiagramData.name ||
-        geminiDiagramData.name === "Generation Failed" ||
-        !geminiDiagramData.lifelines ||
-        !geminiDiagramData.messages
-      ) {
+    // 2. Validate kết quả (Giữ nguyên)
+    if (
+      !geminiDiagramData ||
+      !geminiDiagramData.name ||
+      geminiDiagramData.name === "Generation Failed" ||
+      !geminiDiagramData.lifelines ||
+      !geminiDiagramData.messages
+    ) {
         const errorMsg = "Failed to generate complete diagram data from Gemini. The response was invalid or empty.";
         if (umlSocketService && projectId && versionId && userId) {
           umlSocketService.emitProgress(projectId, versionId, userId, 'sequence', 100, 'failed', false, [errorMsg]);
         }
         throw new Error(errorMsg);
-      }
+    }
 
-      // 3. Lưu vào DB (Giữ nguyên)
-      const newSequenceDiagram = new SequenceDiagramSchema({
+    // 3. Lưu vào DB (Giữ nguyên)
+    const newSequenceDiagram = new SequenceDiagramSchema({
+      project_id: projectId,
+      version_id: versionId,
+      usecase_ref_id: usecaseId,
+      name: geminiDiagramData.name,
+      description: geminiDiagramData.description || "",
+      lifelines: geminiDiagramData.lifelines,
+      messages: geminiDiagramData.messages,
+      fragments: geminiDiagramData.fragments || [],
+      layout_data: geminiDiagramData.layout_data || { nodes: [], edges: [] },
+      created_by: user.id,
+      related_requirements: [],
+    });
+
+    const savedDocument = await newSequenceDiagram.save();
+
+    // ✅ Tạo preview change cho sequence diagram mới
+    if (userId && versionId) {
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "sequence_diagram",
+          entity_id: savedDocument._id.toString(),
+          change_type: "added",
+          before_snapshot: null,
+          after_snapshot: savedDocument.toObject()
+        }
+      );
+    }
+
+    // ✅ Ghi log cho generate sequence diagram
+    try {
+      const user = await User.findById(userId).lean();
+      const username = user?.name || "Unknown User";
+      await this.logService.createLog({
         project_id: projectId,
-        version_id: versionId,
-        usecase_ref_id: usecaseId,
-        name: geminiDiagramData.name,
-        description: geminiDiagramData.description || "",
-        lifelines: geminiDiagramData.lifelines,
-        messages: geminiDiagramData.messages,
-        fragments: geminiDiagramData.fragments || [],
-        layout_data: geminiDiagramData.layout_data || { nodes: [], edges: [] },
-        created_by: user.id,
-        related_requirements: [],
+        user_id: userId,
+        action: "generate_output",
+        target_id: savedDocument._id.toString(),
+        target_type: "sequence_diagrams",
+        version_number: version.version_number,
+        affects_requirement: true,
+        level: "info",
+        performed_by_ai: true,
+        details: {
+          after: { name: savedDocument.name, usecase_ref_id: usecaseId },
+          message: `${username} generated sequence diagram "${savedDocument.name}" from usecase`
+        }
       });
-
-      const savedDocument = await newSequenceDiagram.save();
-
-      // ✅ Tạo preview change cho sequence diagram mới
-      if (userId && versionId) {
-        await this.versionService.createOrUpdatePreview(
-          versionId,
-          userId,
-          {
-            entity_type: "sequence_diagram",
-            entity_id: savedDocument._id.toString(),
-            change_type: "added",
-            before_snapshot: null,
-            after_snapshot: savedDocument.toObject()
-          }
-        );
-      }
-
-      // ✅ Ghi log cho generate sequence diagram
-      try {
-        const user = await User.findById(userId).lean();
-        const username = user?.name || "Unknown User";
-        await this.logService.createLog({
-          project_id: projectId,
-          user_id: userId,
-          action: "generate_output",
-          target_id: savedDocument._id.toString(),
-          target_type: "sequence_diagrams",
-          version_number: version.version_number,
-          affects_requirement: true,
-          level: "info",
-          performed_by_ai: true,
-          details: {
-            after: { name: savedDocument.name, usecase_ref_id: usecaseId },
-            message: `${username} generated sequence diagram "${savedDocument.name}" from usecase`
-          }
-        });
-      } catch (logError) {
-        console.error("❌ Error logging sequence diagram generation:", logError);
-      }
+    } catch (logError) {
+      console.error("❌ Error logging sequence diagram generation:", logError);
+    }
 
       // Emit completion event
       if (umlSocketService && projectId && versionId && userId) {
         umlSocketService.emitProgress(projectId, versionId, userId, 'sequence', 100, 'completed', false);
       }
 
-      return savedDocument.toObject({ getters: true }) as SequenceDiagramResponse;
+    return savedDocument.toObject({ getters: true }) as SequenceDiagramResponse;
     } catch (error: any) {
       console.error('❌ Error generating sequence diagram:', error);
       // Emit failed event với error message

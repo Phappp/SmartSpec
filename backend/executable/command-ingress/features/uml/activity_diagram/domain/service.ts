@@ -35,44 +35,44 @@ export class ActivityDiagramService {
         throw new Error(errorMsg);
       }
 
-      // Lấy usecase từ collection - handle cả _id và id (backward compatibility)
-      // Normalize requirementId (handle ObjectId string, plain string, etc.)
-      let normalizedRequirementId = requirementId;
-      if (Types.ObjectId.isValid(String(requirementId))) {
-        normalizedRequirementId = new Types.ObjectId(requirementId).toString();
-      }
+    // Lấy usecase từ collection - handle cả _id và id (backward compatibility)
+    // Normalize requirementId (handle ObjectId string, plain string, etc.)
+    let normalizedRequirementId = requirementId;
+    if (Types.ObjectId.isValid(String(requirementId))) {
+      normalizedRequirementId = new Types.ObjectId(requirementId).toString();
+    }
 
-      let requirement = await Usecase.findOne({
-        $or: [
-          { _id: new Types.ObjectId(requirementId) },
-          { _id: requirementId },
-          { _id: normalizedRequirementId },
-          { id: requirementId }
-        ],
-        version_id: versionId
-      }).lean();
+    let requirement = await Usecase.findOne({
+      $or: [
+        { _id: new Types.ObjectId(requirementId) },
+        { _id: requirementId },
+        { _id: normalizedRequirementId },
+        { id: requirementId }
+      ],
+      version_id: versionId
+    }).lean();
 
-      if (!requirement) {
-        // Try one more time with string comparison
-        const allUsecases = await Usecase.find({ version_id: versionId }).lean();
-        requirement = allUsecases.find(uc =>
-          String(uc._id) === String(requirementId) ||
-          String(uc._id) === normalizedRequirementId ||
-          (uc._id && String(uc._id) === String(requirementId))
-        );
-      }
+    if (!requirement) {
+      // Try one more time with string comparison
+      const allUsecases = await Usecase.find({ version_id: versionId }).lean();
+      requirement = allUsecases.find(uc =>
+        String(uc._id) === String(requirementId) ||
+        String(uc._id) === normalizedRequirementId ||
+        (uc._id && String(uc._id) === String(requirementId))
+      );
+    }
 
-      if (!requirement) {
-        const availableUsecases = await Usecase.find({ version_id: versionId }).select('_id name').lean();
-        console.error('❌ Activity Diagram: Requirement not found:', {
-          requirementId,
-          normalizedRequirementId,
-          versionId,
-          availableUsecases: availableUsecases.map(uc => ({
-            _id: String(uc._id),
-            name: uc.name
-          }))
-        });
+    if (!requirement) {
+      const availableUsecases = await Usecase.find({ version_id: versionId }).select('_id name').lean();
+      console.error('❌ Activity Diagram: Requirement not found:', {
+        requirementId,
+        normalizedRequirementId,
+        versionId,
+        availableUsecases: availableUsecases.map(uc => ({
+          _id: String(uc._id),
+          name: uc.name
+        }))
+      });
         const errorMsg = `Requirement not found with id: ${requirementId}. Available usecases: ${availableUsecases.length}`;
         if (umlSocketService && version.project_id && versionId && userId) {
           umlSocketService.emitProgress(version.project_id.toString(), versionId, userId, 'activity', 100, 'failed', false, [errorMsg]);
@@ -83,9 +83,9 @@ export class ActivityDiagramService {
       // Emit start event
       if (umlSocketService && version.project_id && versionId && userId) {
         umlSocketService.emitProgress(version.project_id.toString(), versionId, userId, 'activity', 10, 'generating', true);
-      }
+    }
 
-      const generated = await this.ai.generateFromUseCase([requirement], language);
+    const generated = await this.ai.generateFromUseCase([requirement], language);
       
       // ✅ Validate generated data - không dùng fallback
       if (!generated || !generated.nodes || generated.nodes.length === 0) {
@@ -101,38 +101,38 @@ export class ActivityDiagramService {
       const nodes = generated.nodes;
       const edges = generated.edges || [];
 
-      const newDiagram = await ActivityDiagramModel.create({
-        project_id: version.project_id,
-        version_id: versionId,
-        name,
-        description: generated?.description || 'Generated from requirement',
-        lanes,
-        nodes,
-        edges,
-        created_by: userId ? new Types.ObjectId(userId) : undefined,
-      } as any);
+    const newDiagram = await ActivityDiagramModel.create({
+      project_id: version.project_id,
+      version_id: versionId,
+      name,
+      description: generated?.description || 'Generated from requirement',
+      lanes,
+      nodes,
+      edges,
+      created_by: userId ? new Types.ObjectId(userId) : undefined,
+    } as any);
 
-      // ✅ Tạo preview change cho activity diagram mới
-      if (userId && versionId) {
-        await this.versionService.createOrUpdatePreview(
-          versionId,
-          userId,
-          {
-            entity_type: "activity_diagram",
-            entity_id: newDiagram._id.toString(),
-            change_type: "added",
-            before_snapshot: null,
-            after_snapshot: newDiagram.toObject()
-          }
-        );
-      }
+    // ✅ Tạo preview change cho activity diagram mới
+    if (userId && versionId) {
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "activity_diagram",
+          entity_id: newDiagram._id.toString(),
+          change_type: "added",
+          before_snapshot: null,
+          after_snapshot: newDiagram.toObject()
+        }
+      );
+    }
 
       // Emit completion event
       if (umlSocketService && version.project_id && versionId && userId) {
         umlSocketService.emitProgress(version.project_id.toString(), versionId, userId, 'activity', 100, 'completed', false);
       }
 
-      return newDiagram;
+    return newDiagram;
     } catch (error: any) {
       console.error('❌ Error generating activity diagram from usecase:', error);
       // Emit failed event với error message
@@ -153,7 +153,7 @@ export class ActivityDiagramService {
 
   public async generateFromActor(versionId: string, actor: string, language: string, userId?: string) {
     try {
-      const version = await VersionModel.findById(versionId).lean();
+    const version = await VersionModel.findById(versionId).lean();
       if (!version) {
         const errorMsg = 'Version not found';
         if (umlSocketService && version?.project_id && versionId && userId) {
@@ -162,11 +162,11 @@ export class ActivityDiagramService {
         throw new Error(errorMsg);
       }
 
-      // Lấy usecases từ collection theo role
-      const requirements = await Usecase.find({
-        version_id: versionId,
-        "role.name": { $regex: new RegExp(`^${actor}$`, 'i') }
-      }).lean();
+    // Lấy usecases từ collection theo role
+    const requirements = await Usecase.find({
+      version_id: versionId,
+      "role.name": { $regex: new RegExp(`^${actor}$`, 'i') }
+    }).lean();
       if (!requirements.length) {
         const errorMsg = 'No requirements found for this actor';
         if (umlSocketService && version.project_id && versionId && userId) {
@@ -180,7 +180,7 @@ export class ActivityDiagramService {
         umlSocketService.emitProgress(version.project_id.toString(), versionId, userId, 'activity', 10, 'generating', true);
       }
 
-      const generated = await this.ai.generateFromUseCase(requirements, language);
+    const generated = await this.ai.generateFromUseCase(requirements, language);
       
       // ✅ Validate generated data - không dùng fallback
       if (!generated || !generated.nodes || generated.nodes.length === 0) {
@@ -196,63 +196,63 @@ export class ActivityDiagramService {
       const nodes = generated.nodes;
       const edges = generated.edges || [];
 
-      const newDiagram = await ActivityDiagramModel.create({
-        project_id: version.project_id,
-        version_id: versionId,
-        name,
-        description: generated?.description || 'Generated from actor requirements',
-        lanes,
-        nodes,
-        edges,
-        created_by: userId ? new Types.ObjectId(userId) : undefined,
-      } as any);
+    const newDiagram = await ActivityDiagramModel.create({
+      project_id: version.project_id,
+      version_id: versionId,
+      name,
+      description: generated?.description || 'Generated from actor requirements',
+      lanes,
+      nodes,
+      edges,
+      created_by: userId ? new Types.ObjectId(userId) : undefined,
+    } as any);
 
-      // ✅ Tạo preview change cho activity diagram mới
-      if (userId && versionId) {
-        await this.versionService.createOrUpdatePreview(
-          versionId,
-          userId,
-          {
-            entity_type: "activity_diagram",
-            entity_id: newDiagram._id.toString(),
-            change_type: "added",
-            before_snapshot: null,
-            after_snapshot: newDiagram.toObject()
-          }
-        );
-      }
+    // ✅ Tạo preview change cho activity diagram mới
+    if (userId && versionId) {
+      await this.versionService.createOrUpdatePreview(
+        versionId,
+        userId,
+        {
+          entity_type: "activity_diagram",
+          entity_id: newDiagram._id.toString(),
+          change_type: "added",
+          before_snapshot: null,
+          after_snapshot: newDiagram.toObject()
+        }
+      );
+    }
 
       // Emit completion event
       if (umlSocketService && version.project_id && versionId && userId) {
         umlSocketService.emitProgress(version.project_id.toString(), versionId, userId, 'activity', 100, 'completed', false);
       }
 
-      // ✅ Ghi log cho generate activity diagram from actor
-      try {
-        if (userId) {
-          const user = await User.findById(userId).lean();
-          const username = user?.name || "Unknown User";
-          await this.logService.createLog({
-            project_id: version.project_id.toString(),
-            user_id: userId,
-            action: "generate_output",
-            target_id: newDiagram._id.toString(),
-            target_type: "activity_diagrams",
-            version_number: version.version_number,
-            affects_requirement: true,
-            level: "info",
-            performed_by_ai: true,
-            details: {
-              after: { name: newDiagram.name, actor: actor },
-              message: `${username} generated activity diagram "${newDiagram.name}" from actor "${actor}"`
-            }
-          });
-        }
-      } catch (logError) {
-        console.error("❌ Error logging activity diagram generation:", logError);
+    // ✅ Ghi log cho generate activity diagram from actor
+    try {
+      if (userId) {
+        const user = await User.findById(userId).lean();
+        const username = user?.name || "Unknown User";
+        await this.logService.createLog({
+          project_id: version.project_id.toString(),
+          user_id: userId,
+          action: "generate_output",
+          target_id: newDiagram._id.toString(),
+          target_type: "activity_diagrams",
+          version_number: version.version_number,
+          affects_requirement: true,
+          level: "info",
+          performed_by_ai: true,
+          details: {
+            after: { name: newDiagram.name, actor: actor },
+            message: `${username} generated activity diagram "${newDiagram.name}" from actor "${actor}"`
+          }
+        });
       }
+    } catch (logError) {
+      console.error("❌ Error logging activity diagram generation:", logError);
+    }
 
-      return newDiagram;
+    return newDiagram;
     } catch (error: any) {
       console.error('❌ Error generating activity diagram from actor:', error);
       // Emit failed event với error message

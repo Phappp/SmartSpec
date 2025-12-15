@@ -48,33 +48,33 @@ const routes = [
       },
       {
         path: 'editor',
-        name: 'Editor',
-        component: UsecaseManagement,
-        props: true,
-      },
-      {
+    name: 'Editor',
+    component: UsecaseManagement,
+    props: true,
+  },
+  {
         path: 'output',
-        name: 'OutputManagement',
-        component: OutputManagement,
-        props: true,
-      },
-      {
+    name: 'OutputManagement',
+    component: OutputManagement,
+    props: true,
+  },
+  {
         path: 'testcases',
-        name: 'TestcaseManagement',
-        component: TestcaseManagement,
-        props: true,
-      },
-      {
+    name: 'TestcaseManagement',
+    component: TestcaseManagement,
+    props: true,
+  },
+  {
         path: 'database',
-        name: 'DatabaseManagement',
-        component: DatabaseManagement,
-        props: true,
-      },
-      {
+    name: 'DatabaseManagement',
+    component: DatabaseManagement,
+    props: true,
+  },
+  {
         path: 'uml',
-        name: 'UmlManagement',
-        component: UmlManagement,
-        props: true,
+    name: 'UmlManagement',
+    component: UmlManagement,
+    props: true,
       },
     ]
   },
