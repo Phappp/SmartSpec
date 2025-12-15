@@ -395,14 +395,14 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 1rem;
-  animation: fadeIn 0.2s ease-out;
+  animation: fadeIn 0.3s ease-out;
 }
 
 @keyframes fadeIn {
@@ -416,13 +416,14 @@ export default {
 
 .modal-content.large {
   background: white;
-  border-radius: 16px;
+  border-radius: 20px;
   width: 100%;
   max-width: 900px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  animation: slideUp 0.3s ease-out;
+  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 @keyframes slideUp {
@@ -806,15 +807,17 @@ export default {
 
 /* Selection styles (keep existing) */
 .selection-container {
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: box-shadow 0.2s ease;
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: white;
 }
 
 .selection-container:hover {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+  box-shadow: 0 8px 24px rgba(26, 54, 93, 0.15);
+  border-color: rgba(26, 54, 93, 0.2);
 }
 
 .selection-header {
@@ -879,13 +882,14 @@ export default {
 
 .search-input {
   width: 100%;
-  padding: 0.625rem 2.5rem 0.625rem 2.75rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  padding: 0.75rem 2.5rem 0.75rem 2.75rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
   font-size: 0.875rem;
   color: #374151;
   background: #f8fafc;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .search-input::placeholder {
@@ -896,7 +900,8 @@ export default {
   outline: none;
   border-color: #1a365d;
   background: white;
-  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
+  box-shadow: 0 0 0 4px rgba(26, 54, 93, 0.1), 0 4px 12px rgba(26, 54, 93, 0.15);
+  transform: translateY(-1px);
 }
 
 .clear-search-btn {
@@ -935,8 +940,9 @@ export default {
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid #f1f5f9;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
+  background: white;
 }
 
 .selection-item::before {
@@ -946,30 +952,34 @@ export default {
   top: 0;
   bottom: 0;
   width: 0;
-  background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
-  transition: width 0.2s ease;
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.1) 0%, rgba(45, 74, 138, 0.1) 100%);
+  transition: width 0.3s ease;
 }
 
 .selection-item:hover {
-  background: #f8fafc;
-  transform: translateX(2px);
+  background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.1);
 }
 
 .selection-item:hover::before {
-  width: 3px;
+  width: 4px;
 }
 
 .selection-item.selected {
-  background: linear-gradient(90deg, #eff6ff 0%, #f0f9ff 100%);
-  border-left: 3px solid #1a365d;
+  background: linear-gradient(90deg, #e6f2ff 0%, #dbeafe 100%);
+  border-left: 4px solid #1a365d;
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.15);
 }
 
 .selection-item.selected::before {
-  width: 3px;
+  width: 4px;
 }
 
 .selection-item.selected:hover {
-  background: linear-gradient(90deg, #dbeafe 0%, #e0f2fe 100%);
+  background: linear-gradient(90deg, #dbeafe 0%, #bfdbfe 100%);
+  transform: translateX(4px) translateY(-2px);
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.2);
 }
 
 .selection-item:last-child {
@@ -1154,17 +1164,18 @@ export default {
 }
 
 .btn-primary {
-  background: #1a365d;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
   border-color: #1a365d;
   color: white;
-  box-shadow: 0 2px 4px rgba(26, 54, 93, 0.2);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.25);
+  border-radius: 12px;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #1f3b62;
-  border-color: #1f3b62;
-  box-shadow: 0 4px 8px rgba(26, 54, 93, 0.3);
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, #2d4a7c 0%, #1a365d 100%);
+  border-color: #1a365d;
+  box-shadow: 0 6px 20px rgba(26, 54, 93, 0.35);
+  transform: translateY(-2px);
 }
 
 .btn-primary:active:not(:disabled) {

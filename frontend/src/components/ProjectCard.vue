@@ -509,29 +509,68 @@ export default {
 /* Giữ nguyên tất cả CSS hiện có và thêm style mới */
 
 .project-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 16px 20px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 16px;
+  padding: 20px 24px;
   margin-bottom: 64px;
   margin-right: 36px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   position: relative;
   min-height: 140px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.project-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.1) 0%, rgba(45, 74, 138, 0.1) 100%);
+  transition: width 0.3s ease;
+}
+
+.project-card:hover:not(.trashed)::before {
+  width: 4px;
 }
 
 .project-card:hover:not(.trashed) {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.32);
+  box-shadow: 0 8px 32px rgba(26, 54, 93, 0.2), 0 0 0 1px rgba(26, 54, 93, 0.1);
+  transform: translateY(-4px) scale(1.02);
+  background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
 }
 
 .project-card.selected {
-  border: 2px solid #007bff;
-  background-color: #f0f8ff;
-  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2);
+  border: 3px solid #1a365d;
+  background: linear-gradient(135deg, #e6f2ff 0%, #dbeafe 100%);
+  box-shadow: 0 8px 24px rgba(26, 54, 93, 0.25), 0 0 0 3px rgba(26, 54, 93, 0.1);
+  animation: selectedPulse 2s ease-in-out infinite;
+}
+
+@keyframes selectedPulse {
+  0%, 100% {
+    box-shadow: 0 8px 24px rgba(26, 54, 93, 0.25), 0 0 0 3px rgba(26, 54, 93, 0.1);
+  }
+  50% {
+    box-shadow: 0 8px 24px rgba(26, 54, 93, 0.35), 0 0 0 3px rgba(26, 54, 93, 0.2);
+  }
 }
 
 .project-card.trashed.selected {
@@ -573,19 +612,24 @@ export default {
 
 .project-header h3 {
   font-size: 18px;
-  font-weight: 600;
-  color: #222;
+  font-weight: 700;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0;
   cursor: pointer;
-  transition: color 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   max-width: 200px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.01em;
 }
 
 .project-header h3:hover {
-  color: #007bff;
+  transform: translateX(2px);
+  filter: brightness(1.1);
 }
 
 .project-type {
@@ -673,20 +717,40 @@ export default {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: #fff3cd;
-  color: #856404;
-  padding: 4px 8px;
-  border-radius: 6px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+  padding: 6px 12px;
+  border-radius: 10px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid #ffeaa7;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.changes-indicator::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transition: left 0.5s;
+}
+
+.changes-indicator:hover::before {
+  left: 100%;
 }
 
 .changes-indicator:hover {
-  background: #ffeaa7;
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, #fde68a 0%, #fcd34d 100%);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.3);
+  border-color: rgba(245, 158, 11, 0.5);
 }
 
 .changes-indicator .material-symbols-outlined {

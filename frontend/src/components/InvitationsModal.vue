@@ -321,54 +321,134 @@ export default {
   padding: 16px;
   box-sizing: border-box;
   overflow-x: hidden;
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .modal-content {
-  background: white;
-  border-radius: 12px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 20px;
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
   overflow: hidden;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
-  border: 1px solid #e2e8f0;
+  border: none;
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #667eea 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+  z-index: 1;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 24px 28px;
+  border-bottom: 2px solid rgba(229, 231, 235, 0.3);
   flex-shrink: 0;
-  background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  position: relative;
+  overflow: visible;
+}
+
+.modal-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #667eea 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+@keyframes shimmerHeader {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
 }
 
 .modal-header h2 {
   margin: 0;
-  font-size: 1.375rem;
-  color: white;
-  font-weight: 600;
+  font-size: 1.5rem;
+  color: #1f2937;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  position: relative;
+  z-index: 1;
 }
 
 .close-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
   cursor: pointer;
   padding: 8px;
   border-radius: 8px;
-  color: white;
+  color: #6b7280;
   transition: all 0.3s;
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 10;
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: #e5e7eb;
+  color: #374151;
   transform: scale(1.05);
+  border-color: #d1d5db;
+}
+
+.close-btn:active {
+  transform: scale(0.95);
 }
 
 .modal-body {
@@ -469,13 +549,13 @@ export default {
 }
 
 .tab-button.active {
-  color: #1a365d;
-  border-bottom-color: #1a365d;
+  color: #667eea;
+  border-bottom-color: #667eea;
   background: linear-gradient(to bottom, #f7fafc, white);
 }
 
 .tab-button:hover:not(.active) {
-  color: #1a365d;
+  color: #667eea;
   background: #f7fafc;
 }
 
@@ -496,17 +576,47 @@ export default {
   display: flex;
   align-items: flex-start;
   padding: 20px;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
   gap: 16px;
-  transition: all 0.3s;
-  box-shadow: 0 2px 4px rgba(26, 54, 93, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.12);
+  position: relative;
+  overflow: hidden;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.invitation-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+  transition: width 0.3s ease;
+}
+
+.invitation-item:hover::before {
+  width: 4px;
 }
 
 .invitation-item:hover {
-  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
-  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-4px) scale(1.01);
+  border-color: #667eea;
 }
 
 .invitation-avatar {
@@ -537,7 +647,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   font-size: 14px;
   font-weight: 600;
@@ -550,7 +660,7 @@ export default {
 
 .invitation-info h4 {
   margin: 0 0 8px 0;
-  color: #1a365d;
+  color: #374151;
   font-size: 1.1rem;
   font-weight: 600;
   word-break: break-word;
@@ -572,7 +682,7 @@ export default {
 }
 
 .role-badge {
-  background: #1a365d;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   padding: 4px 8px;
   border-radius: 6px;
@@ -580,6 +690,7 @@ export default {
   font-weight: 600;
   text-transform: capitalize;
   margin-left: 4px;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
 }
 
 .status-pending {

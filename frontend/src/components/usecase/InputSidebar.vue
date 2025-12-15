@@ -662,17 +662,22 @@ export default {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  padding: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  border-radius: 16px;
+  border: 2px solid #e5e7eb;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(26, 54, 93, 0.12);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 280px;
   max-width: 380px;
   width: 100%;
   height: 100%;
   overflow: hidden;
   background: white;
+}
+
+.input-sidebar:hover {
+  box-shadow: 0 8px 30px rgba(26, 54, 93, 0.15);
+  border-color: rgba(26, 54, 93, 0.2);
 }
 
 .input-sidebar.collapsed {
@@ -808,32 +813,38 @@ export default {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  background: #1a365d;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 12px;
   font-weight: 600;
   font-size: 0.75rem;
   cursor: pointer;
-  transition: background 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.2);
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
 }
 
 .btn-primary:hover {
-  background: #2d4a8a;
+  background: linear-gradient(135deg, #2d4a7c 0%, #1a365d 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.3);
 }
 
 .btn-primary.active {
-  background: #dc2626;
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
 }
 
 .btn-primary.active:hover {
-  background: #b91c1c;
+  background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
 }
 
 /* Filter Tabs */
@@ -842,11 +853,17 @@ export default {
   flex-wrap: wrap;
   gap: 4px;
   margin-bottom: 0;
-  padding: 8px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  padding: 10px;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border-radius: 12px;
+  border: 2px solid #e5e7eb;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.08);
+  transition: box-shadow 0.3s ease;
+}
+
+.filter-tabs:hover {
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.12);
 }
 
 .filter-tabs.compact {
@@ -952,22 +969,40 @@ export default {
 }
 
 .input-card {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.input-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.1) 0%, rgba(45, 74, 138, 0.1) 100%);
+  transition: width 0.3s ease;
+}
+
+.input-card:hover::before {
+  width: 4px;
 }
 
 .input-card:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-color: #1a365d;
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.15);
 }
 
 .input-card.expanded {
   border-color: #1a365d;
-  background: white;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 6px 20px rgba(26, 54, 93, 0.2);
 }
 
 .input-card.processed {
@@ -1592,15 +1627,21 @@ export default {
 
 /* Add Input Form Styles */
 .add-input-form {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 16px;
   margin-bottom: 12px;
   flex-shrink: 0;
   max-height: 450px;
   overflow-y: auto;
   overflow-x: hidden;
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.add-input-form:hover {
+  box-shadow: 0 8px 20px rgba(26, 54, 93, 0.15);
 }
 
 .form-section {
@@ -1620,17 +1661,34 @@ export default {
 
 .file-upload-area {
   border: 2px dashed #d1d5db;
-  border-radius: 8px;
-  padding: 16px 12px;
+  border-radius: 12px;
+  padding: 20px 16px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.2s ease;
-  background: white;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.file-upload-area::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.05) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.file-upload-area:hover::before {
+  opacity: 1;
 }
 
 .file-upload-area:hover {
   border-color: #1a365d;
-  background: #f8fafc;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
 }
 
 .upload-placeholder {
@@ -1732,11 +1790,21 @@ export default {
 
 .text-input {
   width: 100%;
-  padding: 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
   font-size: 0.875rem;
   resize: vertical;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: #1a365d;
+  box-shadow: 0 0 0 4px rgba(26, 54, 93, 0.1), 0 4px 12px rgba(26, 54, 93, 0.15);
+  transform: translateY(-1px);
   transition: border-color 0.2s ease;
   font-family: inherit;
   line-height: 1.5;
@@ -1771,23 +1839,30 @@ export default {
 }
 
 .submit-btn {
-  padding: 6px 12px;
+  padding: 10px 16px;
   border: none;
-  border-radius: 6px;
-  background: #1a365d;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
   color: white;
-  font-weight: 500;
-  font-size: 0.75rem;
+  font-weight: 600;
+  font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.25);
+  width: 100%;
+  justify-content: center;
   align-items: center;
   gap: 6px;
   white-space: nowrap;
 }
 
 .submit-btn:hover:not(:disabled) {
-  background: #12337c;
+  background: linear-gradient(135deg, #2d4a7c 0%, #1a365d 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(26, 54, 93, 0.35);
 }
 
 .submit-btn:disabled {

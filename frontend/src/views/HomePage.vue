@@ -1255,9 +1255,20 @@ export default {
 <style scoped>
 .homepage {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #f9fafb;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 200%;
+  animation: gradientShift 15s ease infinite;
   min-height: 100vh;
   overflow: hidden;
+}
+
+@keyframes gradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
 }
 
 .app-container {
@@ -1283,21 +1294,50 @@ export default {
 }
 
 .page-header {
-  padding: 20px 30px;
-  border-bottom: 1px solid #e5e7eb;
-  background-color: #ffffff;
+  padding: 24px 32px;
+  border-bottom: 2px solid #e5e7eb;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
   min-height: 80px;
+  box-shadow: 0 2px 12px rgba(26, 54, 93, 0.08);
+  position: relative;
+  animation: slideDown 0.4s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.page-header::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100px;
+  height: 2px;
+  background: linear-gradient(90deg, #1a365d 0%, #2d4a8a 100%);
+  border-radius: 2px;
 }
 
 .page-header h1 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1a365d;
+  font-size: 1.75rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0;
+  letter-spacing: -0.02em;
 }
 
 /* Bulk Actions */
@@ -1500,16 +1540,33 @@ export default {
 
 /* Filter Section */
 .filter-section {
-  background: white;
-  padding: 20px;
-  border-radius: 12px;
-  margin-bottom: 30px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  padding: 24px;
+  border-radius: 16px;
+  margin-bottom: 32px;
+  box-shadow: 0 4px 20px rgba(26, 54, 93, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
   display: flex;
   justify-content: space-between;
   align-items: center;
   max-width: 100%;
   box-sizing: border-box;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.filter-section:hover {
+  box-shadow: 0 6px 28px rgba(26, 54, 93, 0.15), 0 0 0 1px rgba(26, 54, 93, 0.1);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .filter-controls {
@@ -1533,18 +1590,28 @@ export default {
 }
 
 .search-input {
-  padding: 10px 12px 10px 40px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+  padding: 12px 16px 12px 44px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
   font-size: 0.875rem;
   width: 300px;
-  transition: border-color 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.search-input:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.1);
 }
 
 .search-input:focus {
   outline: none;
   border-color: #1a365d;
+  box-shadow: 0 0 0 4px rgba(26, 54, 93, 0.15), 0 4px 16px rgba(26, 54, 93, 0.2);
+  background: #ffffff;
+  transform: translateY(-1px);
 }
 
 .filter-select {
@@ -1734,9 +1801,19 @@ export default {
 .projects-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 24px;
+  gap: 28px;
   max-width: 100%;
   box-sizing: border-box;
+  animation: fadeIn 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* Empty State */

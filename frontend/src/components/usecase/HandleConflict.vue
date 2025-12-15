@@ -45,19 +45,31 @@
 
     <div v-if="hasConflicts" class="conflicts-section">
       <div class="section-header">
-        <h3>Duplicate Use Cases Detected</h3>
-        <p>
-          We found {{ pendingConflicts.length }} group(s) of duplicate use cases. Please select one
-          version to keep from each group, or skip conflicts you want to handle later.
-        </p>
+        <div class="header-content">
+          <h3>Duplicate Use Cases Detected</h3>
+          <p>
+            We found {{ pendingConflicts.length }} group(s) of duplicate use cases. Please select one
+            version to keep from each group, or skip conflicts you want to handle later.
+          </p>
+        </div>
+        <button
+          class="section-collapse-toggle"
+          @click="toggleConflictsSection"
+          :title="isConflictsSectionCollapsed ? 'Expand conflicts section' : 'Collapse conflicts section'"
+        >
+          <span class="material-symbols-outlined">
+            {{ isConflictsSectionCollapsed ? 'expand_more' : 'expand_less' }}
+          </span>
+        </button>
       </div>
 
-      <div class="conflicts-list">
-        <div
-          v-for="(conflict, index) in pendingConflicts"
-          :key="conflict.conflict_id"
-          class="conflict-item"
-        >
+      <transition name="slide-fade">
+        <div v-show="!isConflictsSectionCollapsed" class="conflicts-list">
+          <div
+            v-for="(conflict, index) in pendingConflicts"
+            :key="conflict.conflict_id"
+            class="conflict-item"
+          >
           <div class="conflict-header">
             <div class="conflict-title">
               <button
@@ -127,10 +139,12 @@
               </div>
             </div>
           </div>
+          </div>
         </div>
-      </div>
+      </transition>
 
-      <div class="conflicts-footer">
+      <transition name="slide-fade">
+        <div v-show="!isConflictsSectionCollapsed" class="conflicts-footer">
         <div class="footer-info">
           <span class="resolved-count">
             Resolved: <strong>{{ resolvedConflictsCount }}/{{ pendingConflicts.length }}</strong>
@@ -150,7 +164,8 @@
             {{ isResolvingConflicts ? 'Resolving...' : `Resolve All (${resolvedConflictsCount})` }}
           </button>
         </div>
-      </div>
+        </div>
+      </transition>
     </div>
 
     <!-- Empty State - Hidden when no conflicts -->
@@ -198,6 +213,7 @@ export default {
   data() {
     return {
       collapsedConflicts: new Set(), // Track which conflicts are collapsed
+      isConflictsSectionCollapsed: false, // Track if conflicts section is collapsed
     }
   },
   computed: {
@@ -211,6 +227,10 @@ export default {
     },
   },
   methods: {
+    // Toggle collapse/expand for conflicts section
+    toggleConflictsSection() {
+      this.isConflictsSectionCollapsed = !this.isConflictsSectionCollapsed
+    },
     // Toggle collapse/expand for a conflict
     toggleConflict(conflictId) {
       if (this.collapsedConflicts.has(conflictId)) {
@@ -318,6 +338,18 @@ export default {
 .handle-conflict-view {
   padding: 0;
   margin-bottom: 32px;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Content Header */
@@ -348,17 +380,20 @@ export default {
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  background: #1a365d;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.25);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #2d4a8a;
+  background: linear-gradient(135deg, #2d4a7c 0%, #1a365d 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(26, 54, 93, 0.35);
 }
 
 .btn-primary:disabled {
@@ -369,96 +404,172 @@ export default {
 /* Stats Grid */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 20px;
   margin-bottom: 30px;
 }
 
 .stat-card {
   background: white;
-  padding: 20px;
-  border-radius: 12px;
+  padding: 24px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   gap: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.1);
+  border: 2px solid transparent;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, rgba(26, 54, 93, 0.3), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.5s ease;
+}
+
+.stat-card:hover::before {
+  transform: translateX(100%);
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(26, 54, 93, 0.2);
+  border-color: rgba(26, 54, 93, 0.2);
 }
 
 .stat-card.total {
   border-left: 4px solid #f59e0b;
+  background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%);
 }
 
 .stat-card.resolved {
   border-left: 4px solid #10b981;
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
 }
 
 .stat-card.pending {
   border-left: 4px solid #6b7280;
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
 }
 
 .stat-card.progress {
   border-left: 4px solid #3b82f6;
+  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
 }
 
 .stat-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 10px;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.stat-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.stat-card:hover .stat-icon {
+  transform: scale(1.1) rotate(5deg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.stat-card:hover .stat-icon::before {
+  opacity: 1;
 }
 
 .stat-card.total .stat-icon {
-  background: #fef3c7;
-  color: #f59e0b;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
 }
 
 .stat-card.resolved .stat-icon {
-  background: #d1fae5;
-  color: #10b981;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
 }
 
 .stat-card.pending .stat-icon {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  color: white;
 }
 
 .stat-card.progress .stat-icon {
-  background: #dbeafe;
-  color: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
 }
 
 .stat-info h3 {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   margin-bottom: 4px;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
 }
 
 .stat-info p {
   color: #6b7280;
   font-size: 0.875rem;
   margin: 0;
+  font-weight: 500;
 }
 
 /* Conflicts Section */
 .conflicts-section {
   background: white;
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 30px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(26, 54, 93, 0.12);
+  transition: box-shadow 0.3s ease;
+}
+
+.conflicts-section:hover {
+  box-shadow: 0 8px 30px rgba(26, 54, 93, 0.15);
 }
 
 .section-header {
   margin-bottom: 30px;
   text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.header-content {
+  flex: 1;
 }
 
 .section-header h3 {
   font-size: 1.5rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: 700;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0 0 8px 0;
+  letter-spacing: -0.01em;
 }
 
 .section-header p {
@@ -468,21 +579,78 @@ export default {
   line-height: 1.5;
 }
 
+.section-collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  border: 2px solid #e5e7eb;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.section-collapse-toggle:hover {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: #1a365d;
+  color: #1a365d;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
+}
+
+.section-collapse-toggle:active {
+  transform: scale(0.95);
+}
+
+.section-collapse-toggle .material-symbols-outlined {
+  font-size: 24px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
 .conflicts-list {
   margin: 0;
 }
 
 .conflict-item {
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
   padding: 24px;
   margin-bottom: 20px;
-  background: #fafafa;
-  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.conflict-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.1) 100%);
+  transition: width 0.3s ease;
+}
+
+.conflict-item:hover::before {
+  width: 4px;
 }
 
 .conflict-item:hover {
-  border-color: #d1d5db;
+  border-color: #f59e0b;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.2);
+  transform: translateX(2px);
 }
 
 .conflict-header {
@@ -586,24 +754,46 @@ export default {
 
 .conflict-option {
   background: white;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 20px;
   border: 2px solid #e5e7eb;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.conflict-option::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.1) 0%, rgba(45, 74, 138, 0.1) 100%);
+  transition: width 0.3s ease;
+}
+
+.conflict-option:hover::before {
+  width: 4px;
 }
 
 .conflict-option:hover {
-  border-color: #d1d5db;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #1a365d;
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.15);
+  transform: translateX(4px) translateY(-2px);
 }
 
 .conflict-option.selected {
   border-color: #1a365d;
-  background: #f0f4ff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
+  background: linear-gradient(135deg, #e6f2ff 0%, #dbeafe 100%);
+  transform: translateX(4px) translateY(-2px);
+  box-shadow: 0 6px 20px rgba(26, 54, 93, 0.2);
+}
+
+.conflict-option.selected::before {
+  width: 4px;
 }
 
 .option-header {
@@ -719,19 +909,20 @@ export default {
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
-  background: #10b981;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
 }
 
 .btn-resolve:hover:not(:disabled) {
-  background: #059669;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
 }
 
 .btn-resolve:disabled {
@@ -796,6 +987,39 @@ export default {
   100% {
     transform: rotate(360deg);
   }
+}
+
+/* Slide-fade transition for conflicts section */
+.slide-fade-enter-active {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slide-fade-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slide-fade-enter-from {
+  opacity: 0;
+  transform: translateY(-20px);
+  max-height: 0;
+}
+
+.slide-fade-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+  max-height: 5000px;
+}
+
+.slide-fade-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+  max-height: 5000px;
+}
+
+.slide-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
+  max-height: 0;
 }
 
 /* Responsive Design */

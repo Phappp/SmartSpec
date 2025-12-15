@@ -22,7 +22,7 @@
         <!-- Changes List -->
         <div class="changes-section">
           <div class="section-header">
-            <h3>Pending Changes ({{ filteredChanges.length }}/{{ changes.length }})</h3>
+            <!-- <h3>({{ filteredChanges.length }}/{{ changes.length }})</h3> -->
             <div class="section-actions">
               <!-- Search Input -->
               <div class="search-wrapper">
@@ -35,25 +35,124 @@
                   @input="handleSearch"
                 />
               </div>
-              <!-- Filter Dropdown -->
-              <div class="filter-wrapper">
-                <select v-model="filterType" class="filter-select" @change="handleFilter" title="Filter by item type">
-                  <option value="all">All Types</option>
-                  <option value="requirement">Requirements</option>
-                  <option value="testcase">Test Cases</option>
-                  <option value="database">Database</option>
-                  <option value="activity_diagram">Activity Diagrams</option>
-                  <option value="sequence_diagram">Sequence Diagrams</option>
-                  <option value="usecase_diagram">Use Case Diagrams</option>
-                </select>
+              <!-- Filter Icon Buttons -->
+              <div class="filter-icon-wrapper">
+                <button 
+                  class="filter-icon-btn" 
+                  @click.stop="toggleEntityTypeFilter"
+                  :title="getEntityTypeFilterLabel()"
+                >
+                  <span class="material-symbols-outlined">category</span>
+                </button>
+                <div 
+                  v-if="showEntityTypeFilter" 
+                  class="filter-dropdown-menu"
+                  @click.stop
+                >
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: filterType === 'all' }"
+                    @click="setEntityTypeFilter('all')"
+                  >
+                    <span class="material-symbols-outlined">apps</span>
+                    All Types
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: filterType === 'requirement' }"
+                    @click="setEntityTypeFilter('requirement')"
+                  >
+                    <span class="material-symbols-outlined">description</span>
+                    Requirements
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: filterType === 'testcase' }"
+                    @click="setEntityTypeFilter('testcase')"
+                  >
+                    <span class="material-symbols-outlined">checklist</span>
+                    Test Cases
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: filterType === 'database' }"
+                    @click="setEntityTypeFilter('database')"
+                  >
+                    <span class="material-symbols-outlined">storage</span>
+                    Database
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: filterType === 'activity_diagram' }"
+                    @click="setEntityTypeFilter('activity_diagram')"
+                  >
+                    <span class="material-symbols-outlined">account_tree</span>
+                    Activity Diagrams
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: filterType === 'sequence_diagram' }"
+                    @click="setEntityTypeFilter('sequence_diagram')"
+                  >
+                    <span class="material-symbols-outlined">timeline</span>
+                    Sequence Diagrams
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: filterType === 'usecase_diagram' }"
+                    @click="setEntityTypeFilter('usecase_diagram')"
+                  >
+                    <span class="material-symbols-outlined">hub</span>
+                    Use Case Diagrams
+                  </button>
+                </div>
               </div>
-              <div class="filter-wrapper">
-                <select v-model="filterChangeType" class="filter-select" @change="handleFilter" title="Filter by change type">
-                  <option value="all">All Changes</option>
-                  <option value="added">Added</option>
-                  <option value="updated">Updated</option>
-                  <option value="deleted">Deleted</option>
-                </select>
+              <div class="filter-icon-wrapper">
+                <button 
+                  class="filter-icon-btn" 
+                  @click.stop="toggleChangeTypeFilter"
+                  :title="getChangeTypeFilterLabel()"
+                >
+                  <span class="material-symbols-outlined">filter_list</span>
+                </button>
+                <div 
+                  v-if="showChangeTypeFilter" 
+                  class="filter-dropdown-menu"
+                  @click.stop
+                >
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: filterChangeType === 'all' }"
+                    @click="setChangeTypeFilter('all')"
+                  >
+                    <span class="material-symbols-outlined">apps</span>
+                    All Changes
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: filterChangeType === 'added' }"
+                    @click="setChangeTypeFilter('added')"
+                  >
+                    <span class="material-symbols-outlined">add_circle</span>
+                    Added
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: filterChangeType === 'updated' }"
+                    @click="setChangeTypeFilter('updated')"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                    Updated
+                  </button>
+                  <button 
+                    class="filter-option" 
+                    :class="{ active: filterChangeType === 'deleted' }"
+                    @click="setChangeTypeFilter('deleted')"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                    Deleted
+                  </button>
+                </div>
               </div>
               <button class="btn-refresh" @click="refreshPreview" :disabled="isLoading" title="Refresh">
                 <span class="material-symbols-outlined">refresh</span>
@@ -133,16 +232,21 @@
         </div>
 
         <!-- Change Comparison -->
-        <div class="comparison-section" v-if="selectedChange">
+        <div class="comparison-section" v-if="selectedChange" :class="{ 'fullscreen-mode': isFullscreen }">
           <div class="section-header">
             <h3>Change Details</h3>
-            <div class="change-navigation">
-              <button class="btn-nav" @click="selectPreviousChange" :disabled="!hasPreviousChange">
-                <span class="material-symbols-outlined">chevron_left</span>
-              </button>
-              <span class="nav-info"> {{ currentChangeIndex + 1 }} of {{ filteredChanges.length }} </span>
-              <button class="btn-nav" @click="selectNextChange" :disabled="!hasNextChange">
-                <span class="material-symbols-outlined">chevron_right</span>
+            <div class="header-actions">
+              <div class="change-navigation">
+                <button class="btn-nav" @click="selectPreviousChange" :disabled="!hasPreviousChange">
+                  <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <span class="nav-info"> {{ currentChangeIndex + 1 }} of {{ filteredChanges.length }} </span>
+                <button class="btn-nav" @click="selectNextChange" :disabled="!hasNextChange">
+                  <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+              </div>
+              <button class="btn-fullscreen" @click="toggleFullscreen" :title="isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'">
+                <span class="material-symbols-outlined">{{ isFullscreen ? 'fullscreen_exit' : 'fullscreen' }}</span>
               </button>
             </div>
           </div>
@@ -185,7 +289,7 @@
                   value="minor"
                   :disabled="isApproving"
                 />
-                <span class="radio-label">Minor Update ({{ nextMinorVersion }})</span>
+                <span class="radio-label">Minor ({{ nextMinorVersion }})</span>
               </label>
               <label class="version-option">
                 <input
@@ -194,7 +298,7 @@
                   value="major"
                   :disabled="isApproving"
                 />
-                <span class="radio-label">Major Update ({{ nextMajorVersion }})</span>
+                <span class="radio-label">Major ({{ nextMajorVersion }})</span>
               </label>
             </div>
           </div>
@@ -259,12 +363,21 @@ export default {
       searchQuery: '',
       filterType: 'all',
       filterChangeType: 'all',
+      showEntityTypeFilter: false,
+      showChangeTypeFilter: false,
       selectedChanges: [], // For bulk actions
       refreshInterval: null, // For auto-refresh
+      isFullscreen: false, // Fullscreen mode for comparison
     }
   },
   created() {
     this.toast = useToast()
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.handleClickOutside)
+    if (this.isFullscreen) {
+      document.body.style.overflow = ''
+    }
   },
   computed: {
     selectedChange() {
@@ -330,10 +443,16 @@ export default {
           this.loadData()
           // Start auto-refresh every 5 seconds
           this.startAutoRefresh()
+          // Add click outside listener for filter dropdowns
+          this.$nextTick(() => {
+            document.addEventListener('click', this.handleClickOutside)
+          })
         } else {
           // Reset khi modal đóng
           this.stopAutoRefresh()
           this.resetModalState()
+          // Remove click outside listener
+          document.removeEventListener('click', this.handleClickOutside)
         }
       },
     },
@@ -689,7 +808,11 @@ export default {
       this.searchQuery = ''
       this.filterType = 'all'
       this.filterChangeType = 'all'
+      this.showEntityTypeFilter = false
+      this.showChangeTypeFilter = false
       this.selectedChanges = []
+      this.isFullscreen = false
+      document.body.style.overflow = ''
     },
     // Filter & Search handlers
     handleSearch() {
@@ -712,6 +835,62 @@ export default {
         } else {
           this.selectedChangeId = null
         }
+      }
+    },
+    // Filter dropdown methods
+    toggleEntityTypeFilter() {
+      this.showEntityTypeFilter = !this.showEntityTypeFilter
+      this.showChangeTypeFilter = false
+    },
+    toggleChangeTypeFilter() {
+      this.showChangeTypeFilter = !this.showChangeTypeFilter
+      this.showEntityTypeFilter = false
+    },
+    setEntityTypeFilter(value) {
+      this.filterType = value
+      this.showEntityTypeFilter = false
+      this.handleFilter()
+    },
+    setChangeTypeFilter(value) {
+      this.filterChangeType = value
+      this.showChangeTypeFilter = false
+      this.handleFilter()
+    },
+    getEntityTypeFilterLabel() {
+      if (this.filterType === 'all') return 'All Types'
+      const labels = {
+        requirement: 'Requirements',
+        testcase: 'Test Cases',
+        database: 'Database',
+        activity_diagram: 'Activity Diagrams',
+        sequence_diagram: 'Sequence Diagrams',
+        usecase_diagram: 'Use Case Diagrams',
+      }
+      return labels[this.filterType] || this.filterType
+    },
+    getChangeTypeFilterLabel() {
+      if (this.filterChangeType === 'all') return 'All Changes'
+      const labels = {
+        added: 'Added',
+        updated: 'Updated',
+        deleted: 'Deleted',
+      }
+      return labels[this.filterChangeType] || this.filterChangeType
+    },
+    // Fullscreen methods
+    toggleFullscreen() {
+      this.isFullscreen = !this.isFullscreen
+      if (this.isFullscreen) {
+        document.body.style.overflow = 'hidden'
+      } else {
+        document.body.style.overflow = ''
+      }
+    },
+    // Click outside handler for filter dropdowns
+    handleClickOutside(event) {
+      if (!event.target.closest('.filter-icon-wrapper')) {
+        this.showEntityTypeFilter = false
+        this.showChangeTypeFilter = false
       }
     },
     // Bulk actions
@@ -782,6 +961,12 @@ export default {
       })
 
       try {
+        // Exit fullscreen if active
+        if (this.isFullscreen) {
+          this.isFullscreen = false
+          document.body.style.overflow = ''
+        }
+
         // Stop auto-refresh
         this.stopAutoRefresh()
 
@@ -832,6 +1017,22 @@ export default {
   z-index: 1000;
   padding: 20px;
   animation: fadeIn 0.2s ease-out;
+}
+
+/* Hide overlay when fullscreen */
+.comparison-section.fullscreen-mode ~ *,
+.preview-modal-overlay:has(.comparison-section.fullscreen-mode) {
+  pointer-events: none;
+}
+
+/* Ensure buttons are clickable in fullscreen */
+.comparison-section.fullscreen-mode .btn-nav,
+.comparison-section.fullscreen-mode .btn-fullscreen,
+.comparison-section.fullscreen-mode .section-header,
+.comparison-section.fullscreen-mode .header-actions {
+  pointer-events: auto !important;
+  z-index: 3010 !important;
+  position: relative;
 }
 
 @keyframes fadeIn {
@@ -918,6 +1119,9 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
 }
 
 .btn-close:hover {
@@ -925,13 +1129,24 @@ export default {
   color: #374151;
 }
 
+.comparison-section.fullscreen-mode .btn-close {
+  z-index: 3010;
+  pointer-events: auto;
+}
+
 /* Content */
 .modal-content {
   flex: 1;
   display: grid;
-  grid-template-columns: 400px 1fr;
+  grid-template-columns: 350px 1fr;
   gap: 0;
   overflow: hidden;
+  position: relative;
+}
+
+/* Hide changes section when fullscreen */
+.comparison-section.fullscreen-mode ~ .changes-section {
+  display: none;
 }
 
 /* Changes List */
@@ -1199,6 +1414,36 @@ export default {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.comparison-section.fullscreen-mode {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 3000 !important;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  animation: fullscreenEnter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100vw !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+@keyframes fullscreenEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .comparison-content {
@@ -1208,6 +1453,19 @@ export default {
   padding: 20px;
   gap: 20px;
   overflow: hidden;
+}
+
+.comparison-section.fullscreen-mode .comparison-content {
+  padding: 24px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: calc(100vh - 80px);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .change-navigation {
@@ -1227,6 +1485,9 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
 }
 
 .btn-nav:hover:not(:disabled) {
@@ -1238,6 +1499,47 @@ export default {
 .btn-nav:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.comparison-section.fullscreen-mode .btn-nav {
+  z-index: 3010;
+  pointer-events: auto;
+}
+
+.btn-fullscreen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 40px;
+  height: 40px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.btn-fullscreen:hover {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: #1a365d;
+  color: #1a365d;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
+}
+
+.btn-fullscreen .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.comparison-section.fullscreen-mode .btn-fullscreen {
+  z-index: 3010;
+  pointer-events: auto;
 }
 
 .nav-info {
@@ -1549,25 +1851,118 @@ export default {
   border-color: #9ca3af;
 }
 
-.filter-select {
-  padding: 8px 24px 8px 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  background: white;
-  color: #1f2937;
+/* Filter Icon Buttons */
+.filter-icon-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.filter-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  color: #6b7280;
   cursor: pointer;
-  transition: border-color 0.3s ease;
-  min-width: 60px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 40px;
+  height: 40px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.filter-select:hover {
-  border-color: #9ca3af;
-}
-
-.filter-select:focus {
-  outline: none;
+.filter-icon-btn:hover {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-color: #1a365d;
+  color: #1a365d;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
+}
+
+.filter-icon-btn .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(26, 54, 93, 0.2);
+  min-width: 200px;
+  z-index: 100;
+  overflow: hidden;
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: white;
+  color: #374151;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.filter-option::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.1) 0%, rgba(45, 74, 138, 0.1) 100%);
+  transition: width 0.3s ease;
+}
+
+.filter-option:hover::before {
+  width: 4px;
+}
+
+.filter-option:hover {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.filter-option.active {
+  background: linear-gradient(135deg, #e6f2ff 0%, #dbeafe 100%);
+  color: #1a365d;
+  font-weight: 600;
+}
+
+.filter-option.active::before {
+  width: 4px;
+}
+
+.filter-option .material-symbols-outlined {
+  font-size: 18px;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.filter-option.active .material-symbols-outlined {
+  color: #1a365d;
 }
 
 /* Bulk Actions Styles */

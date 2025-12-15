@@ -1,34 +1,6 @@
 <template>
   <div class="main-content">
     <div class="usecase-area">
-      <!-- Header với thống kê -->
-      <!-- Thay thế phần content-header hiện tại -->
-      <div class="content-header">
-        <div class="header-info">
-          <!-- <h2>Use Cases Management</h2>
-          <p class="subtitle">Manage and organize your system use cases and requirements</p> -->
-        </div>
-        <div class="header-actions">
-          <button class="btn-primary" @click="showAddUsecaseModal">
-            <span class="material-symbols-outlined">add</span>
-            Add Use Case
-          </button>
-          <button
-            class="btn-secondary"
-            @click="$emit('find-conflicts')"
-            :disabled="isFindingConflicts"
-          >
-            <span v-if="isFindingConflicts" class="button-spinner-small"></span>
-            <span v-else class="material-symbols-outlined">rule</span>
-            {{ isFindingConflicts ? 'Scanning...' : 'Scan for Duplicates' }}
-          </button>
-          <button class="btn-secondary" @click="showExportModal">
-            <span class="material-symbols-outlined">download</span>
-            Export
-          </button>
-        </div>
-      </div>
-
       <!-- Statistics Cards -->
       <div class="stats-grid">
         <div class="stat-card total">
@@ -67,6 +39,27 @@
             <p>Completed</p>
           </div>
         </div> -->
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="header-actions">
+        <button class="btn-primary" @click="showAddUsecaseModal">
+          <span class="material-symbols-outlined">add</span>
+          Add Use Case
+        </button>
+        <button
+          class="btn-secondary"
+          @click="$emit('find-conflicts')"
+          :disabled="isFindingConflicts"
+        >
+          <span v-if="isFindingConflicts" class="button-spinner-small"></span>
+          <span v-else class="material-symbols-outlined">rule</span>
+          {{ isFindingConflicts ? 'Scanning...' : 'Scan for Duplicates' }}
+        </button>
+        <button class="btn-secondary" @click="showExportModal">
+          <span class="material-symbols-outlined">download</span>
+          Export
+        </button>
       </div>
 
       <!-- Loading State -->
@@ -2162,34 +2155,35 @@ export default {
 <style scoped>
 .main-content {
   flex: 3;
-  min-width: 0; /* Cho phép flex item co lại dưới min-content */
-  background: #f9fafb;
+  min-width: 0;
+  background: white;
   padding: 0;
   overflow-y: auto;
-  overflow-x: hidden; /* Ẩn thanh cuộn ngang */
+  overflow-x: hidden;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(26, 54, 93, 0.12);
+  margin: 0;
 }
 
 .usecase-area {
   max-width: 1400px;
-  width: 100%; /* Đảm bảo không vượt quá container */
+  width: 100%;
   margin: 0 auto;
   padding: 24px;
-  box-sizing: border-box; /* Bao gồm padding trong width */
+  box-sizing: border-box;
 }
 
-/* Header Styles */
-.content-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 32px;
-}
+/* Header Styles - Removed as header is no longer used */
 
 .header-info h2 {
   font-size: 2rem;
   font-weight: 700;
-  color: #1a365d;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0 0 8px 0;
+  letter-spacing: -0.02em;
 }
 
 .subtitle {
@@ -2203,25 +2197,41 @@ export default {
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  background: #1a365d;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.25);
 }
 
 .header-actions {
   display: flex;
   gap: 12px;
+  margin-top: 24px;
+  margin-bottom: 32px;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(26, 54, 93, 0.12);
+  transition: box-shadow 0.3s ease;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.header-actions:hover {
+  box-shadow: 0 8px 30px rgba(26, 54, 93, 0.15);
 }
 
 .btn-primary:hover {
-  background: #2d4a8a;
+  background: linear-gradient(135deg, #2d4a7c 0%, #1a365d 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(26, 54, 93, 0.35);
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
@@ -2230,79 +2240,135 @@ export default {
 /* Stats Grid */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 20px;
   margin-bottom: 32px;
 }
 
 .stat-card {
   background: white;
-  padding: 20px;
-  border-radius: 12px;
+  padding: 24px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   gap: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #3b82f6;
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.1);
+  border: 2px solid transparent;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, rgba(26, 54, 93, 0.3), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.5s ease;
+}
+
+.stat-card:hover::before {
+  transform: translateX(100%);
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(26, 54, 93, 0.2);
+  border-color: rgba(26, 54, 93, 0.2);
 }
 
 .stat-card.total {
-  border-left-color: #3b82f6;
+  border-left: 4px solid #3b82f6;
+  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
 }
 
 .stat-card.roles {
-  border-left-color: #8b5cf6;
+  border-left: 4px solid #8b5cf6;
+  background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%);
 }
 
 .stat-card.high-priority {
-  border-left-color: #ef4444;
+  border-left: 4px solid #ef4444;
+  background: linear-gradient(135deg, #ffffff 0%, #fef2f2 100%);
 }
 
 .stat-card.completed {
-  border-left-color: #10b981;
+  border-left: 4px solid #10b981;
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
 }
 
 .stat-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 10px;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f3f4f6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.stat-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.stat-card:hover .stat-icon {
+  transform: scale(1.1) rotate(5deg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.stat-card:hover .stat-icon::before {
+  opacity: 1;
 }
 
 .stat-card.total .stat-icon {
-  background: #dbeafe;
-  color: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
 }
 
 .stat-card.roles .stat-icon {
-  background: #ede9fe;
-  color: #8b5cf6;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
 }
 
 .stat-card.high-priority .stat-icon {
-  background: #fee2e2;
-  color: #ef4444;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
 }
 
 .stat-card.completed .stat-icon {
-  background: #d1fae5;
-  color: #10b981;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
 }
 
 .stat-info h3 {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   margin: 0 0 4px 0;
-  color: #1f2937;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
 }
 
 .stat-info p {
   color: #6b7280;
   font-size: 0.875rem;
   margin: 0;
+  font-weight: 500;
 }
 
 /* Toolbar */
@@ -2312,6 +2378,15 @@ export default {
   align-items: center;
   margin-bottom: 24px;
   gap: 16px;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(26, 54, 93, 0.12);
+  transition: box-shadow 0.3s ease;
+}
+
+.toolbar:hover {
+  box-shadow: 0 8px 30px rgba(26, 54, 93, 0.15);
 }
 
 .search-box {
@@ -2326,20 +2401,30 @@ export default {
   top: 50%;
   transform: translateY(-50%);
   color: #9ca3af;
+  transition: color 0.3s ease;
+  z-index: 1;
+}
+
+.search-box:focus-within .material-symbols-outlined {
+  color: #1a365d;
 }
 
 .search-input {
   width: 100%;
-  padding: 10px 12px 10px 40px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+  padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
   font-size: 0.875rem;
-  transition: border-color 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .search-input:focus {
   outline: none;
   border-color: #1a365d;
+  box-shadow: 0 0 0 4px rgba(26, 54, 93, 0.1), 0 4px 12px rgba(26, 54, 93, 0.15);
+  transform: translateY(-1px);
 }
 
 .toolbar-right {
@@ -2410,20 +2495,40 @@ export default {
   align-items: center;
   justify-content: center;
   padding: 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
   background: white;
   color: #6b7280;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   width: 40px;
   height: 40px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.filter-icon-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(26, 54, 93, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.filter-icon-btn:hover:not(:disabled)::before {
+  left: 100%;
 }
 
 .filter-icon-btn:hover {
-  background: #f9fafb;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-color: #1a365d;
   color: #1a365d;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
 }
 
 .filter-icon-btn .material-symbols-outlined {
@@ -2436,11 +2541,25 @@ export default {
   right: 0;
   background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   min-width: 180px;
-  z-index: 100;
-  overflow: hidden;
+  max-width: 300px;
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 1000;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .filter-option {
@@ -2455,17 +2574,37 @@ export default {
   font-size: 0.875rem;
   text-align: left;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  border-left: 3px solid transparent;
+}
+
+.filter-option::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.1) 0%, rgba(45, 74, 138, 0.1) 100%);
+  transition: width 0.3s ease;
+}
+
+.filter-option:hover::before {
+  width: 100%;
 }
 
 .filter-option:hover {
-  background: #f9fafb;
+  background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
+  padding-left: 20px;
 }
 
 .filter-option.active {
-  background: #e6f2ff;
+  background: linear-gradient(90deg, #e6f2ff 0%, #dbeafe 100%);
   color: #1a365d;
-  font-weight: 500;
+  font-weight: 600;
+  border-left-color: #1a365d;
+  padding-left: 20px;
 }
 
 .filter-option .material-symbols-outlined {
@@ -2486,24 +2625,46 @@ export default {
 
 .usecase-group-card {
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(26, 54, 93, 0.12);
   overflow: hidden;
+  transition: box-shadow 0.3s ease;
+}
+
+.usecase-group-card:hover {
+  box-shadow: 0 8px 30px rgba(26, 54, 93, 0.15);
 }
 
 .group-header {
   padding: 20px;
-  background: #f8fafc;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
   border-bottom: 1px solid #e5e7eb;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: background-color 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.group-header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.1) 0%, rgba(45, 74, 138, 0.1) 100%);
+  transition: width 0.3s ease;
+}
+
+.group-header:hover::before {
+  width: 4px;
 }
 
 .group-header:hover {
-  background: #f1f5f9;
+  background: linear-gradient(135deg, #f1f5f9 0%, #f8fafc 100%);
+  transform: translateX(2px);
 }
 
 .group-info {
@@ -2544,21 +2705,41 @@ export default {
 
 /* Use Case Cards */
 .usecase-card {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  transition: all 0.3s ease;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.usecase-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.1) 0%, rgba(45, 74, 138, 0.1) 100%);
+  transition: width 0.3s ease;
+}
+
+.usecase-card:hover::before {
+  width: 4px;
 }
 
 .usecase-card:hover {
-  border-color: #9ca3af;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-color: #1a365d;
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.15);
+  transform: translateX(4px) translateY(-2px);
 }
 
 .usecase-card.expanded {
   border-color: #1a365d;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 20px rgba(26, 54, 93, 0.2);
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
 }
 
 .usecase-header {
@@ -2805,16 +2986,21 @@ export default {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  background: white;
+  color: #1a365d;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .btn-secondary:hover {
-  background: #e5e7eb;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: #1a365d;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
 }
 
 .btn-danger {
@@ -3026,10 +3212,15 @@ export default {
     padding: 16px;
   }
 
-  .content-header {
+  .header-actions {
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     align-items: stretch;
+  }
+
+  .header-actions button {
+    width: 100%;
+    justify-content: center;
   }
 
   .toolbar {

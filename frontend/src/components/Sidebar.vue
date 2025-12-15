@@ -279,14 +279,27 @@ export default {
   position: fixed;
   height: 100vh;
   width: 250px;
-  background: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   display: flex;
   flex-direction: column;
   padding: 20px 16px 0 0;
   border-radius: 0 0px 16px 0;
-  transition: all 0.3s ease;
-  border-right: 1px solid #e0e0e0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-right: 2px solid #e5e7eb;
   z-index: 30;
+  box-shadow: 4px 0 20px rgba(26, 54, 93, 0.08);
+  animation: slideInLeft 0.4s ease-out;
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 .sidebar-content {
@@ -319,19 +332,38 @@ export default {
   gap: 8px;
   justify-content: center;
   align-items: center;
-  background-color: #1a365d;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
   color: white;
   border: none;
-  padding: 13px 15px;
+  padding: 14px 16px;
   border-radius: 16px;
   font-size: 14px;
   cursor: pointer;
   margin-bottom: 30px;
   width: 100%;
   font-weight: 600;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.25);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
+  overflow: hidden;
+}
+
+.new-project-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.new-project-btn:hover::before {
+  width: 300px;
+  height: 300px;
 }
 
 .new-project-btn i {
@@ -339,16 +371,18 @@ export default {
   left: 1.4em;
   font-weight: bold;
   font-size: 1.3rem;
-  transition: transform 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  z-index: 1;
 }
 
 .new-project-btn:hover i {
-  transform: rotate(180deg);
+  transform: rotate(180deg) scale(1.1);
 }
 
 .new-project-btn:hover {
-  transform: translateY(-2px);
-  background-color: #2c5282;
+  transform: translateY(-3px);
+  background: linear-gradient(135deg, #2d4a8a 0%, #1a365d 100%);
+  box-shadow: 0 8px 24px rgba(26, 54, 93, 0.35);
 }
 
 .navigation ul {
@@ -364,26 +398,49 @@ export default {
 
 .navigation a {
   display: block;
-  padding: 8px 12px;
-  color: #666;
+  padding: 10px 14px;
+  color: #6b7280;
   text-decoration: none;
   font-size: 14px;
-  border-radius: 10px;
-  transition: all 0.25s ease;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  font-weight: 500;
+}
+
+.navigation a::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.1) 0%, rgba(45, 74, 138, 0.1) 100%);
+  transition: width 0.3s ease;
+}
+
+.navigation a:hover::before {
+  width: 4px;
 }
 
 .navigation a:hover {
-  background-color: #f0f0f0;
-  color: #333;
-  transform: scale(1.02);
+  color: #1a365d;
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.1);
 }
 
 .navigation a.active {
-  background-color: #909095ff;
-  font-weight: bold;
+  background-color:#909095ff;
+  font-weight: 700;
   color: #fff;
-  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.2);
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.3);
+  transform: translateX(4px);
+}
+
+.navigation a.active::before {
+  width: 4px;
 }
 
 .sidebar-link i {

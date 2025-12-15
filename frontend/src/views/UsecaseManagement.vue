@@ -2167,20 +2167,53 @@ export default {
 </script>
 
 <style scoped>
-/* CSS remains the same as original */
+/* Modern UI Styles */
 .project-detail-view {
-  padding: 15px;
-  background: #f9fafb;
+  padding: 20px;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .view-body {
   display: flex;
   gap: 24px;
   flex: 1;
-  min-width: 0; /* Cho phép flex container co lại */
-  overflow-x: hidden; /* Ẩn thanh cuộn ngang */
+  min-width: 0;
+  overflow-x: hidden;
+  transition: gap 0.3s ease;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .project-detail-view {
+    padding: 15px;
+  }
+
+  .view-body {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .project-detail-view {
+    padding: 10px;
+  }
+
+  .view-body {
+    flex-direction: column;
+    gap: 16px;
+  }
 }
 </style>
