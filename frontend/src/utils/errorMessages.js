@@ -24,72 +24,104 @@ export const API_KEY_ERROR_TYPES = {
  */
 export function translateErrorMessage(errorMessage) {
   if (!errorMessage) {
-    return 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.'
+    return 'An unexpected error occurred. Please try again.'
   }
 
   const message = String(errorMessage).toLowerCase()
 
-  // API Key errors - ưu tiên xử lý trước
-  if (message.includes('quota') && (message.includes('hết') || message.includes('exceeded'))) {
-    return 'API key đã hết quota. Vui lòng kiểm tra và nạp thêm quota hoặc sử dụng API key khác.'
+  // API Key errors - prioritize handling first
+  if (message.includes('all gemini api keys failed') || message.includes('api keys failed')) {
+    return 'LLM service is temporarily unavailable. Please check your API key or try again later.'
+  }
+  if (message.includes('googlegenerativeai error') || message.includes('404 not found')) {
+    return 'LLM service is unavailable. Please try again later or contact support.'
+  }
+
+  // ✅ LLM Generation errors - check BEFORE generic "invalid" check
+  if (message.includes('failed to generate') && (message.includes('gemini') || message.includes('ai') || message.includes('diagram'))) {
+    return 'LLM service failed to generate the requested content. Please try again later.'
+  }
+  if (message.includes('invalid') && (message.includes('gemini') || message.includes('ai response') || message.includes('diagram json'))) {
+    return 'LLM service returned invalid data. Please try again later.'
+  }
+  if (message.includes('empty response') && (message.includes('gemini') || message.includes('ai'))) {
+    return 'LLM service returned an empty response. Please try again later.'
+  }
+  if (message.includes('failed to parse ai response') || message.includes('failed to parse json')) {
+    return 'LLM service returned invalid data format. Please try again later.'
+  }
+  if (message.includes('no nodes') && message.includes('generated')) {
+    return 'LLM service failed to generate diagram content. Please try again later.'
+  }
+
+  if (message.includes('quota') && (message.includes('exceeded') || message.includes('hết'))) {
+    return 'API key quota has been exceeded. Please check and add more quota or use a different API key.'
   }
   if (message.includes('rate limit') || message.includes('giới hạn số lượng request')) {
-    return 'API key đã vượt quá giới hạn số lượng request. Vui lòng thử lại sau vài phút.'
+    return 'API key has exceeded the rate limit. Please try again in a few minutes.'
   }
-  if (message.includes('không hợp lệ') || message.includes('invalid api key')) {
-    return 'API key không hợp lệ. Vui lòng kiểm tra lại API key.'
+  if (message.includes('invalid api key') || message.includes('không hợp lệ')) {
+    return 'Invalid API key. Please check your API key.'
   }
-  if (message.includes('hết tài nguyên') || message.includes('resource exhausted')) {
-    return 'API key đã hết tài nguyên. Vui lòng kiểm tra quota hoặc sử dụng API key khác.'
+  if (message.includes('resource exhausted') || message.includes('hết tài nguyên')) {
+    return 'API key resources have been exhausted. Please check quota or use a different API key.'
   }
-  if (message.includes('không có quyền') || message.includes('permission')) {
-    return 'API key không có quyền thực hiện thao tác này.'
+  if (message.includes('permission') || message.includes('không có quyền')) {
+    return 'API key does not have permission to perform this operation.'
   }
-  if (message.includes('thanh toán') || message.includes('billing')) {
-    return 'Có vấn đề với thanh toán của API key. Vui lòng kiểm tra tài khoản.'
+  if (message.includes('billing') || message.includes('thanh toán')) {
+    return 'There is an issue with the API key billing. Please check your account.'
   }
-  if (message.includes('không khả dụng') || message.includes('unavailable')) {
-    return 'Dịch vụ API tạm thời không khả dụng. Vui lòng thử lại sau.'
+  if (message.includes('unavailable') || message.includes('không khả dụng')) {
+    return 'API service is temporarily unavailable. Please try again later.'
+  }
+  // Chunk errors - format more friendly
+  if (message.includes('all database schema generation chunks failed') || message.includes('all chunks failed')) {
+    return 'Failed to generate database schema. Please try again later.'
+  }
+  if (message.includes('chunk') && message.includes('failed')) {
+    return 'Some parts of the database generation process encountered errors. Please try again.'
   }
 
   // Database errors
   if (message.includes('duplicate') || message.includes('already exists')) {
-    return 'Mục này đã tồn tại. Vui lòng sử dụng tên hoặc định danh khác.'
+    return 'This item already exists. Please use a different name or identifier.'
   }
   if (message.includes('not found')) {
-    return 'Không tìm thấy mục được yêu cầu. Có thể đã bị xóa hoặc di chuyển.'
+    return 'The requested item was not found. It may have been deleted or moved.'
   }
-  if (message.includes('validation') || message.includes('invalid')) {
-    return 'Vui lòng kiểm tra dữ liệu đầu vào. Một số trường có thể thiếu hoặc chứa dữ liệu không hợp lệ.'
+  // ✅ Generic "invalid" check - only after LLM-specific checks
+  if (message.includes('validation') || (message.includes('invalid') && !message.includes('api key'))) {
+    return 'Please check your input data. Some fields may be missing or contain invalid data.'
   }
   if (message.includes('unauthorized') || message.includes('forbidden')) {
-    return 'Bạn không có quyền thực hiện thao tác này.'
+    return 'You do not have permission to perform this operation.'
   }
   if (message.includes('network') || message.includes('timeout')) {
-    return 'Vấn đề kết nối. Vui lòng kiểm tra kết nối internet và thử lại.'
+    return 'Connection issue. Please check your internet connection and try again.'
   }
   if (message.includes('server error') || message.includes('internal server')) {
-    return 'Đã xảy ra lỗi máy chủ. Vui lòng thử lại sau hoặc liên hệ hỗ trợ nếu vấn đề vẫn tiếp tục.'
+    return 'A server error occurred. Please try again later or contact support if the issue persists.'
   }
 
   // Specific business logic errors
   if (message.includes('primary key')) {
-    return 'Một bản ghi với định danh này đã tồn tại. Vui lòng sử dụng giá trị khác.'
+    return 'A record with this identifier already exists. Please use a different value.'
   }
   if (message.includes('foreign key')) {
-    return 'Mục này được tham chiếu bởi các mục khác và không thể xóa hoặc sửa đổi.'
+    return 'This item is referenced by other items and cannot be deleted or modified.'
   }
   if (message.includes('composite')) {
-    return 'Sự kết hợp các giá trị này đã tồn tại. Vui lòng sử dụng các giá trị khác.'
+    return 'This combination of values already exists. Please use different values.'
   }
   if (message.includes('nullable')) {
-    return 'Trường này là bắt buộc và không thể để trống.'
+    return 'This field is required and cannot be empty.'
   }
 
   // If no specific translation found, return a sanitized version
   // Remove technical details but keep the core message if it's user-friendly
   if (message.length > 100) {
-    return 'Đã xảy ra lỗi khi xử lý yêu cầu của bạn. Vui lòng thử lại hoặc liên hệ hỗ trợ.'
+    return 'An error occurred while processing your request. Please try again or contact support.'
   }
 
   // Capitalize first letter and return
@@ -103,7 +135,7 @@ export function translateErrorMessage(errorMessage) {
  */
 export function extractErrorMessage(error) {
   if (!error) {
-    return 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.'
+    return 'An unexpected error occurred. Please try again.'
   }
 
   // Kiểm tra xem có phải lỗi API key không (từ backend response)
@@ -113,7 +145,7 @@ export function extractErrorMessage(error) {
     if (responseData.message) {
       return responseData.message
     }
-    
+
     // Nếu không có message, dịch theo errorCode
     const errorCode = responseData.errorCode || responseData.error
     return getApiKeyErrorMessage(errorCode)
@@ -133,7 +165,7 @@ export function extractErrorMessage(error) {
     } else if (message.error) {
       message = message.error
     } else {
-      message = 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.'
+      message = 'An unexpected error occurred. Please try again.'
     }
   }
 
@@ -147,19 +179,19 @@ export function extractErrorMessage(error) {
  */
 export function getApiKeyErrorMessage(errorCode) {
   if (!errorCode) {
-    return 'Đã xảy ra lỗi với API key. Vui lòng thử lại hoặc liên hệ hỗ trợ.'
+    return 'An error occurred with the API key. Please try again or contact support.'
   }
 
   const errorMessages = {
-    [API_KEY_ERROR_TYPES.QUOTA_EXCEEDED]: 'API key đã hết quota. Vui lòng kiểm tra và nạp thêm quota hoặc sử dụng API key khác.',
-    [API_KEY_ERROR_TYPES.RATE_LIMIT]: 'API key đã vượt quá giới hạn số lượng request. Vui lòng thử lại sau vài phút.',
-    [API_KEY_ERROR_TYPES.INVALID_KEY]: 'API key không hợp lệ. Vui lòng kiểm tra lại API key.',
-    [API_KEY_ERROR_TYPES.UNAUTHORIZED]: 'API key không có quyền truy cập. Vui lòng kiểm tra quyền của API key.',
-    [API_KEY_ERROR_TYPES.RESOURCE_EXHAUSTED]: 'API key đã hết tài nguyên. Vui lòng kiểm tra quota hoặc sử dụng API key khác.',
-    [API_KEY_ERROR_TYPES.PERMISSION_DENIED]: 'API key không có quyền thực hiện thao tác này.',
-    [API_KEY_ERROR_TYPES.BILLING_ISSUE]: 'Có vấn đề với thanh toán của API key. Vui lòng kiểm tra tài khoản.',
-    [API_KEY_ERROR_TYPES.SERVICE_UNAVAILABLE]: 'Dịch vụ API tạm thời không khả dụng. Vui lòng thử lại sau.',
-    [API_KEY_ERROR_TYPES.UNKNOWN]: 'Đã xảy ra lỗi không xác định với API key. Vui lòng thử lại hoặc liên hệ hỗ trợ.'
+    [API_KEY_ERROR_TYPES.QUOTA_EXCEEDED]: 'API key quota has been exceeded. Please check and add more quota or use a different API key.',
+    [API_KEY_ERROR_TYPES.RATE_LIMIT]: 'API key has exceeded the rate limit. Please try again in a few minutes.',
+    [API_KEY_ERROR_TYPES.INVALID_KEY]: 'Invalid API key. Please check your API key.',
+    [API_KEY_ERROR_TYPES.UNAUTHORIZED]: 'API key does not have access permission. Please check the API key permissions.',
+    [API_KEY_ERROR_TYPES.RESOURCE_EXHAUSTED]: 'API key resources have been exhausted. Please check quota or use a different API key.',
+    [API_KEY_ERROR_TYPES.PERMISSION_DENIED]: 'API key does not have permission to perform this operation.',
+    [API_KEY_ERROR_TYPES.BILLING_ISSUE]: 'There is an issue with the API key billing. Please check your account.',
+    [API_KEY_ERROR_TYPES.SERVICE_UNAVAILABLE]: 'API service is temporarily unavailable. Please try again later.',
+    [API_KEY_ERROR_TYPES.UNKNOWN]: 'An unknown error occurred with the API key. Please try again or contact support.'
   }
 
   return errorMessages[errorCode] || errorMessages[API_KEY_ERROR_TYPES.UNKNOWN]
@@ -171,7 +203,7 @@ export function getApiKeyErrorMessage(errorCode) {
  * @param {string} defaultMessage - Default message if error cannot be extracted
  * @returns {string} - Formatted error message
  */
-export function formatErrorForDisplay(error, defaultMessage = 'Đã xảy ra lỗi') {
+export function formatErrorForDisplay(error, defaultMessage = 'An error occurred') {
   if (!error) {
     return defaultMessage
   }
@@ -187,10 +219,10 @@ export function formatErrorForDisplay(error, defaultMessage = 'Đã xảy ra l�
  */
 export function isApiKeyError(error) {
   if (!error) return false
-  
+
   const responseData = error.response?.data
-  return responseData?.errorType === 'API_KEY_ERROR' || 
-         (responseData?.errorCode && Object.values(API_KEY_ERROR_TYPES).includes(responseData.errorCode))
+  return responseData?.errorType === 'API_KEY_ERROR' ||
+    (responseData?.errorCode && Object.values(API_KEY_ERROR_TYPES).includes(responseData.errorCode))
 }
 
 /**
@@ -200,16 +232,16 @@ export function isApiKeyError(error) {
  */
 export function isRetryableError(error) {
   if (!error) return false
-  
+
   const responseData = error.response?.data
   if (responseData?.retryable !== undefined) {
     return responseData.retryable
   }
-  
+
   // Mặc định: rate limit và service unavailable có thể retry
   const errorCode = responseData?.errorCode
-  return errorCode === API_KEY_ERROR_TYPES.RATE_LIMIT || 
-         errorCode === API_KEY_ERROR_TYPES.SERVICE_UNAVAILABLE
+  return errorCode === API_KEY_ERROR_TYPES.RATE_LIMIT ||
+    errorCode === API_KEY_ERROR_TYPES.SERVICE_UNAVAILABLE
 }
 
 

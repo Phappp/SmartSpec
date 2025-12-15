@@ -22,6 +22,8 @@ export interface TestcaseProgressEvent {
         estimated_batches: number;
         reasoning?: string;
     };
+    errors?: string[]; // ✅ Thêm errors field để frontend có thể detect failed state
+    errorMessage?: string; // ✅ Thêm errorMessage cho compatibility
     timestamp: Date;
 }
 
@@ -76,7 +78,8 @@ export class TestcaseSocketService {
             testcasesInBatch: number;
             savedCount: number;
             totalCount: number;
-        }
+        },
+        errors?: string[] // ✅ Thêm errors parameter
     ): void {
         const event: TestcaseProgressEvent = {
             type: 'TESTCASE_PROGRESS',
@@ -87,12 +90,16 @@ export class TestcaseSocketService {
             stage,
             isProcessing,
             batchInfo,
+            errors, // ✅ Gửi errors trong event
+            errorMessage: errors && errors.length > 0 ? errors.join('; ') : undefined, // ✅ Thêm errorMessage cho compatibility
             timestamp: new Date()
         };
         this.broadcastToProject(projectId, event);
-        console.log(`📊 Broadcast testcase progress: ${progress}% - ${stage}${batchInfo ? ` (Batch ${batchInfo.currentBatch}/${batchInfo.totalBatches})` : ''}`);
+        const errorInfo = errors && errors.length > 0 ? ` (Errors: ${errors.length})` : '';
+        console.log(`📊 Broadcast testcase progress: ${progress}% - ${stage}${batchInfo ? ` (Batch ${batchInfo.currentBatch}/${batchInfo.totalBatches})` : ''}${errorInfo}`);
     }
 }
 
 export const testcaseSocketService = new TestcaseSocketService();
+
 

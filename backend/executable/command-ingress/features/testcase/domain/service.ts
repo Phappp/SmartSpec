@@ -150,19 +150,38 @@ export class TestcaseService {
             );
         }
         
-        const estimate = await this.testcaseGeminiService.estimateTestCasesCount(
-            requirementsToProcess,
-            testType,
-            language,
-            undefined, // modelName
-            userId,
-            projectId
-        );
-        console.log(`✅ [ESTIMATE PHASE] Estimated ${estimate.estimated_count} test cases, ${estimate.estimated_batches} batches`);
-        
-        // Emit estimate received
-        if (testcaseSocketService && projectId && versionId && userId) {
-            testcaseSocketService.emitEstimateReceived(projectId, versionId, userId, estimate);
+        let estimate;
+        try {
+            estimate = await this.testcaseGeminiService.estimateTestCasesCount(
+                requirementsToProcess,
+                testType,
+                language,
+                undefined, // modelName
+                userId,
+                projectId
+            );
+            console.log(`✅ [ESTIMATE PHASE] Estimated ${estimate.estimated_count} test cases, ${estimate.estimated_batches} batches`);
+            
+            // Emit estimate received
+            if (testcaseSocketService && projectId && versionId && userId) {
+                testcaseSocketService.emitEstimateReceived(projectId, versionId, userId, estimate);
+            }
+        } catch (estimateError: any) {
+            console.error(`❌ [ESTIMATE PHASE] Error:`, estimateError.message);
+            // Emit failed event với errors
+            if (testcaseSocketService && projectId && versionId && userId) {
+                testcaseSocketService.emitProgress(
+                    projectId,
+                    versionId,
+                    userId,
+                    100,
+                    'failed',
+                    false,
+                    undefined,
+                    [estimateError.message || 'Failed to estimate test cases']
+                );
+            }
+            throw estimateError; // Re-throw để controller xử lý
         }
 
         // ✅ MỚI: Generate và save từng batch
@@ -171,6 +190,7 @@ export class TestcaseService {
         const estimatedCount = estimate.estimated_count;
         let totalSaved = 0;
         let allGeneratedTestCases: any[] = [];
+        const batchErrors: string[] = []; // ✅ Collect errors từ các batches
 
         // Generate và save từng batch
         for (let batchNumber = 1; batchNumber <= estimatedBatches; batchNumber++) {
@@ -304,12 +324,14 @@ export class TestcaseService {
                         }
                     } catch (err: any) {
                         console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Error saving test cases:`, err.message);
+                        batchErrors.push(`Batch ${batchNumber}: ${err.message || 'Failed to save test cases'}`);
                         // Tiếp tục với batch tiếp theo thay vì throw error
                         continue;
                     }
                 }
             } catch (error: any) {
                 console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Error:`, error.message);
+                batchErrors.push(`Batch ${batchNumber}: ${error.message || 'Failed to generate test cases'}`);
                 // Tiếp tục với batch tiếp theo thay vì throw error
                 continue;
             }
@@ -345,23 +367,56 @@ export class TestcaseService {
             // Không throw error để không ảnh hưởng đến flow chính
         }
 
-        // Emit completion
+        // ✅ Kiểm tra nếu có lỗi trong quá trình generate
+        const hasErrors = batchErrors.length > 0 || (totalSaved === 0 && allGeneratedTestCases.length === 0);
+        const processingErrors: string[] = [];
+        
+        // Thêm batch errors vào processing errors
+        if (batchErrors.length > 0) {
+            processingErrors.push(...batchErrors);
+        }
+        
+        // Nếu không có test cases nào được save, có thể có lỗi
+        if (totalSaved === 0 && allGeneratedTestCases.length === 0 && batchErrors.length === 0) {
+            processingErrors.push('No test cases were generated. Please check your requirements and try again.');
+        }
+
+        // Emit completion (hoặc failed nếu có errors)
         if (testcaseSocketService && projectId && versionId && userId) {
-            testcaseSocketService.emitProgress(
-                projectId,
-                versionId,
-                userId,
-                100,
-                'completed',
-                false,
-                {
-                    currentBatch: estimatedBatches,
-                    totalBatches: estimatedBatches,
-                    testcasesInBatch: 0,
-                    savedCount: totalSaved,
-                    totalCount: totalSaved
-                }
-            );
+            if (hasErrors && processingErrors.length > 0) {
+                testcaseSocketService.emitProgress(
+                    projectId,
+                    versionId,
+                    userId,
+                    100,
+                    'failed',
+                    false,
+                    {
+                        currentBatch: estimatedBatches,
+                        totalBatches: estimatedBatches,
+                        testcasesInBatch: 0,
+                        savedCount: totalSaved,
+                        totalCount: totalSaved
+                    },
+                    processingErrors
+                );
+            } else {
+                testcaseSocketService.emitProgress(
+                    projectId,
+                    versionId,
+                    userId,
+                    100,
+                    'completed',
+                    false,
+                    {
+                        currentBatch: estimatedBatches,
+                        totalBatches: estimatedBatches,
+                        testcasesInBatch: 0,
+                        savedCount: totalSaved,
+                        totalCount: totalSaved
+                    }
+                );
+            }
         }
 
         return allGeneratedTestCases;

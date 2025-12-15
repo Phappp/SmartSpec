@@ -18,13 +18,15 @@ export class DatabaseController {
      * Endpoint để sinh schema database từ một version_id.
      */
     public generateDatabaseSchema = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
+        // ✅ Khai báo các biến ở đầu function để có thể sử dụng trong catch block
+        const userId = req.getSubject();
+        const { versionId } = req.params || {};
+        
         try {
-            const userId = req.getSubject();
             if (!userId) {
                 handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
                 return;
             }
-            const { versionId } = req.params;
 
             if (!versionId) {
                 res.status(400).json({ message: "versionId là bắt buộc." });
@@ -38,8 +40,8 @@ export class DatabaseController {
             }
 
             // Lấy usecases từ collection
-                        const Usecase = (await import("../../../../../internal/model/usecase")).default;
-                        const requirements = await Usecase.find({ version_id: version._id }).lean();
+            const Usecase = (await import("../../../../../internal/model/usecase")).default;
+            const requirements = await Usecase.find({ version_id: version._id }).lean();
             
             const payload = {
                 versionId: version._id.toString(),
@@ -47,14 +49,63 @@ export class DatabaseController {
                 requirements: requirements,
             };
 
-            const newDatabase = await this.databaseService.generateSchemaFromRequirements(userId,payload);
+            const newDatabase = await this.databaseService.generateSchemaFromRequirements(userId, payload);
 
             res.status(201).json({
                 message: "Tạo database schema thành công!",
                 data: newDatabase
             });
 
-        } catch (error) {
+        } catch (error: any) {
+            console.error("❌ Error generating database schema:", error);
+
+            // ✅ Emit failed event với errors - các biến đã được khai báo ở đầu function
+            if (userId && versionId) {
+                try {
+                    const version = await VersionModel.findById(versionId);
+                    if (version) {
+                        const { databaseSocketService } = await import('../domain/database.socket.service');
+                        if (databaseSocketService) {
+                            const errorMessage = error.message || 'Failed to generate database schema';
+                            databaseSocketService.emitProgress(
+                                version.project_id.toString(),
+                                versionId,
+                                userId,
+                                100,
+                                'failed',
+                                false,
+                                undefined,
+                                [errorMessage]
+                            );
+                        }
+                    }
+                } catch (socketError) {
+                    console.error("❌ Error emitting failed event:", socketError);
+                }
+            }
+
+            if (error.message?.includes('not found')) {
+                res.status(404).json({
+                    message: error.message
+                });
+                return;
+            }
+
+            if (error.message?.includes('requirements') || error.message?.includes('No requirements')) {
+                res.status(400).json({
+                    message: error.message
+                });
+                return;
+            }
+
+            if (error.message?.includes('API key') || error.message?.includes('Gemini')) {
+                res.status(503).json({
+                    message: "Database generation service temporarily unavailable",
+                    error: error.message
+                });
+                return;
+            }
+
             next(error);
         }
     }

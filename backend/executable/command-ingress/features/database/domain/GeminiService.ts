@@ -490,27 +490,16 @@ export class DatabaseGeminiService {
     requirements: any[],
     language: string
   ): Promise<any> {
-    try {
-      if (requirements.length <= this.DB_GEN_BATCH_SIZE) {
-        // Nếu ít requirements, xử lý một l ần
-        return await this.generateDatabaseSchemaBatch(requirements, language);
-      } else {
-        // Nhiều requirements, chia thành các batch và merge
-        return await this.generateDatabaseSchemaWithChunking(
-          requirements,
-          language
-        );
-      }
-    } catch (error) {
-      console.error("❌ Error in generateDatabaseSchema:", error);
-
-      // Fallback: trả về schema cơ bản nếu không generate được
-      return {
-        name: "fallback_database",
-        description: "Fallback database schema due to generation failure",
-        tables: [],
-        relationships: [],
-      };
+    // ✅ Không catch error ở đây - để DatabaseCoreService xử lý và emit failed event
+    if (requirements.length <= this.DB_GEN_BATCH_SIZE) {
+      // Nếu ít requirements, xử lý một lần
+      return await this.generateDatabaseSchemaBatch(requirements, language);
+    } else {
+      // Nhiều requirements, chia thành các batch và merge
+      return await this.generateDatabaseSchemaWithChunking(
+        requirements,
+        language
+      );
     }
   }
 
@@ -1216,6 +1205,8 @@ export class DatabaseGeminiService {
 
     const allSchemas: any[] = [];
 
+    const chunkErrors: string[] = [];
+    
     // Xử lý từng batch tuần tự để tránh rate limit
     for (let i = 0; i < chunks.length; i++) {
       try {
@@ -1231,14 +1222,25 @@ export class DatabaseGeminiService {
         if (i < chunks.length - 1) {
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-      } catch (error) {
-        console.error(`❌ Failed chunk ${i + 1}:`, error);
+      } catch (error: any) {
+        const errorMsg = error.message || `Failed to generate chunk ${i + 1}`;
+        console.error(`❌ Failed chunk ${i + 1}:`, errorMsg);
+        chunkErrors.push(`Chunk ${i + 1}/${chunks.length}: ${errorMsg}`);
         // Tiếp tục với các chunk khác thay vì dừng hoàn toàn
       }
     }
 
+    // ✅ Nếu tất cả chunks đều fail, throw error với chi tiết
     if (allSchemas.length === 0) {
-      throw new Error("All database schema generation chunks failed");
+      const errorMsg = chunkErrors.length > 0 
+        ? `All database schema generation chunks failed. Errors: ${chunkErrors.join('; ')}`
+        : "All database schema generation chunks failed";
+      throw new Error(errorMsg);
+    }
+    
+    // ✅ Nếu có một số chunks fail, log warning nhưng vẫn tiếp tục merge
+    if (chunkErrors.length > 0) {
+      console.warn(`⚠️ Some chunks failed (${chunkErrors.length}/${chunks.length}), but continuing with successful chunks. Errors:`, chunkErrors);
     }
 
     console.log(`🔄 Merging ${allSchemas.length} schemas...`);

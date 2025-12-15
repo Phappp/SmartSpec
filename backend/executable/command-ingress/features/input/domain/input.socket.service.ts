@@ -122,7 +122,8 @@ export class InputSocketService {
             currentBatch: number;
             totalBatches: number;
             usecasesInBatch: number;
-        }
+        },
+        errors?: string[] // ✅ Thêm errors parameter
     ): void {
         const event: IncrementalProgressEvent = {
             type: 'INCREMENTAL_PROGRESS',
@@ -133,10 +134,13 @@ export class InputSocketService {
             stage,
             isProcessing,
             batchInfo,
+            errors, // ✅ Gửi errors trong event
+            errorMessage: errors && errors.length > 0 ? errors.join('; ') : undefined, // ✅ Thêm errorMessage cho compatibility
             timestamp: new Date()
         };
         this.broadcastToProject(projectId, event);
-        console.log(`📊 Broadcast incremental progress: ${progress}% - ${stage}${batchInfo ? ` (Batch ${batchInfo.currentBatch}/${batchInfo.totalBatches})` : ''}`);
+        const errorInfo = errors && errors.length > 0 ? ` (Errors: ${errors.length})` : '';
+        console.log(`📊 Broadcast incremental progress: ${progress}% - ${stage}${batchInfo ? ` (Batch ${batchInfo.currentBatch}/${batchInfo.totalBatches})` : ''}${errorInfo}`);
     }
 
     emitEstimateReceived(

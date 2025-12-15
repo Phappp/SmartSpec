@@ -9,6 +9,8 @@ export interface DatabaseProgressEvent {
     progress?: number;
     stage?: string;
     isProcessing?: boolean;
+    errors?: string[];
+    errorMessage?: string;
     timestamp: Date;
 }
 
@@ -30,7 +32,9 @@ export class DatabaseSocketService {
         userId: string,
         progress: number,
         stage: string,
-        isProcessing: boolean
+        isProcessing: boolean,
+        batchInfo?: any,
+        errors?: string[]
     ): void {
         const event: DatabaseProgressEvent = {
             type: 'DATABASE_PROGRESS',
@@ -40,12 +44,19 @@ export class DatabaseSocketService {
             progress,
             stage,
             isProcessing,
+            errors,
+            errorMessage: errors && errors.length > 0 ? errors.join('; ') : undefined,
             timestamp: new Date()
         };
         this.broadcastToProject(projectId, event);
-        console.log(`📊 Broadcast database progress: ${progress}% - ${stage}`);
+        if (errors && errors.length > 0) {
+            console.log(`❌ Broadcast database failed: ${progress}% - ${stage}`, errors);
+        } else {
+            console.log(`📊 Broadcast database progress: ${progress}% - ${stage}`);
+        }
     }
 }
 
 export const databaseSocketService = new DatabaseSocketService();
+
 

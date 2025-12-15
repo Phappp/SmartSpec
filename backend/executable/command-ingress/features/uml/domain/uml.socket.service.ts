@@ -10,6 +10,8 @@ export interface UmlProgressEvent {
     progress?: number;
     stage?: string;
     isProcessing?: boolean;
+    errors?: string[];
+    errorMessage?: string;
     timestamp: Date;
 }
 
@@ -32,7 +34,8 @@ export class UmlSocketService {
         diagramType: 'usecase' | 'activity' | 'sequence',
         progress: number,
         stage: string,
-        isProcessing: boolean
+        isProcessing: boolean,
+        errors?: string[]
     ): void {
         const event: UmlProgressEvent = {
             type: 'UML_PROGRESS',
@@ -43,12 +46,19 @@ export class UmlSocketService {
             progress,
             stage,
             isProcessing,
+            errors,
+            errorMessage: errors && errors.length > 0 ? errors.join('; ') : undefined,
             timestamp: new Date()
         };
         this.broadcastToProject(projectId, event);
-        console.log(`📊 Broadcast uml progress (${diagramType}): ${progress}% - ${stage}`);
+        if (errors && errors.length > 0) {
+            console.log(`❌ Broadcast uml failed (${diagramType}): ${progress}% - ${stage}`, errors);
+        } else {
+            console.log(`📊 Broadcast uml progress (${diagramType}): ${progress}% - ${stage}`);
+        }
     }
 }
 
 export const umlSocketService = new UmlSocketService();
+
 

@@ -25,18 +25,15 @@ export class TestcaseController {
  * Generate test cases from selected requirements
  */
     public generateTestCases = async (req: HttpRequest, res: Response, next: NextFunction): Promise<void> => {
+        // ✅ Khai báo các biến ở đầu function để có thể sử dụng trong catch block
+        const userId = req.getSubject();
+        const { projectId, versionId } = req.params || {};
+        
         try {
-            const userId = req.getSubject();
             if (!userId) {
                 handleServiceResponse(new ServiceResponse(ResponseStatus.Failed, "Unauthorized", null, 401), res);
                 return;
             }
-            const { projectId, versionId } = req.params;
-            const {
-                selectedRequirementIds,
-                language = 'vi-VN',
-                testType = 'all' // MẶC ĐỊNH LÀ 'all'
-            } = req.body;
 
             if (!projectId || !versionId) {
                 res.status(400).json({
@@ -44,6 +41,12 @@ export class TestcaseController {
                 });
                 return;
             }
+
+            const {
+                selectedRequirementIds,
+                language = 'vi-VN',
+                testType = 'all' // MẶC ĐỊNH LÀ 'all'
+            } = req.body;
 
             if (!selectedRequirementIds || !Array.isArray(selectedRequirementIds) || selectedRequirementIds.length === 0) {
                 res.status(400).json({
@@ -90,6 +93,28 @@ export class TestcaseController {
 
         } catch (error: any) {
             console.error("❌ Error generating test cases:", error);
+
+            // ✅ Emit failed event với errors - các biến đã được khai báo ở đầu function
+            if (userId && projectId && versionId) {
+                try {
+                    const { testcaseSocketService } = await import('../domain/testcase.socket.service');
+                    if (testcaseSocketService) {
+                        const errorMessage = error.message || 'Failed to generate test cases';
+                        testcaseSocketService.emitProgress(
+                            projectId,
+                            versionId,
+                            userId,
+                            100,
+                            'failed',
+                            false,
+                            undefined,
+                            [errorMessage]
+                        );
+                    }
+                } catch (socketError) {
+                    console.error("❌ Error emitting failed event:", socketError);
+                }
+            }
 
             if (error.message.includes('not found')) {
                 res.status(404).json({

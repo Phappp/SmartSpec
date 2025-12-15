@@ -42,16 +42,49 @@
             v-for="process in userGroup.processes"
             :key="`${userGroup.userId}-${process.type}`"
             class="llm-progress-item"
+            :class="{
+              'status-success': process.status === 'success',
+              'status-failed': process.status === 'failed',
+            }"
           >
             <div class="progress-header">
               <div class="progress-title">
                 <span class="material-symbols-outlined process-icon">{{ getProcessIcon(process.type) }}</span>
                 <span class="process-name">{{ getProcessName(process.type) }}</span>
               </div>
+              <!-- Close button for success/failed states -->
+              <button
+                v-if="process.status === 'success' || process.status === 'failed'"
+                class="close-process-btn"
+                @click="removeProcess(process)"
+                title="Close"
+              >
+                <span class="material-symbols-outlined">close</span>
+              </button>
             </div>
             
-            <!-- Progress Stages -->
-            <div class="progress-stages">
+            <!-- Success State -->
+            <div v-if="process.status === 'success'" class="progress-stages">
+              <div class="progress-stage success-stage">
+                <div class="stage-content">
+                  <span class="material-symbols-outlined stage-icon success-icon">check_circle</span>
+                  <span class="stage-text">Completed successfully!</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Failed State -->
+            <div v-else-if="process.status === 'failed'" class="progress-stages">
+              <div class="progress-stage failed-stage">
+                <div class="stage-content">
+                  <span class="material-symbols-outlined stage-icon failed-icon">error</span>
+                  <span class="stage-text">{{ process.errorMessage || 'Generation failed' }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Processing States -->
+            <div v-else class="progress-stages">
               <!-- Estimate Phase -->
               <div v-if="process.stage === 'estimating'" class="progress-stage">
                 <div class="stage-content">
@@ -174,6 +207,7 @@ import { getProjectDetail } from '@/api/project'
 import { getVersionsByProject } from '@/api/version'
 import { useActiveMembers } from '@/utils/useActiveMembers'
 import { socket } from '@/utils/socket'
+import { translateErrorMessage } from '@/utils/errorMessages'
 
 export default {
   name: 'ProjectLayout',
@@ -245,16 +279,21 @@ export default {
         const now = Date.now()
         const MAX_AGE = 2 * 60 * 60 * 1000 // 2 hours
         
-        // Restore only valid processes
+        // Restore only valid processes (processing, success, or failed)
         Object.entries(savedProcesses).forEach(([key, process]) => {
-          if (process && process.isProcessing) {
+          if (process) {
             const processAge = now - (process.savedAt || now)
             if (processAge < MAX_AGE) {
               // Restore process but update timestamp
-              llmProcesses.value[key] = {
+              // Ensure status field exists (for old saved processes)
+              const restoredProcess = {
                 ...process,
                 timestamp: process.savedAt || now,
+                status: process.status || (process.isProcessing ? 'processing' : 'success'),
               }
+              
+              // ✅ Không tự động xóa success states - giữ lại để user đóng thủ công
+              llmProcesses.value[key] = restoredProcess
             }
           }
         })
@@ -348,13 +387,20 @@ export default {
       return 'usecase' // default
     })
 
+    // Remove process manually
+    const removeProcess = (process) => {
+      const processKey = `${process.userId}_${process.type}`
+      delete llmProcesses.value[processKey]
+      saveProcessesToStorage()
+    }
+
     // Group processes by userId
     const groupedProcessesByUser = computed(() => {
       const groups = {}
       
-      // Group processes by userId
+      // Group processes by userId - include all processes (processing, success, failed)
       Object.values(llmProcesses.value).forEach((process) => {
-        if (!process || !process.isProcessing) return
+        if (!process) return
         
         const userId = process.userId || 'unknown'
         if (!groups[userId]) {
@@ -447,6 +493,18 @@ export default {
 
     // Handle progress events from socket
     const handleLLMProgressEvent = (event) => {
+      // Debug log để kiểm tra event structure
+      console.log('📥 Received LLM progress event:', {
+        type: event.type,
+        stage: event.stage,
+        progress: event.progress,
+        isProcessing: event.isProcessing,
+        errors: event.errors,
+        errorMessage: event.errorMessage,
+        error: event.error,
+        hasErrors: event.errors && event.errors.length > 0,
+      })
+      
       // Determine process type from event
       let processType = null
       if (event.type === 'INCREMENTAL_PROGRESS' || event.type === 'ESTIMATE_RECEIVED') {
@@ -478,6 +536,7 @@ export default {
           userId,
           type: processType,
           isProcessing: true,
+          status: 'processing',
           progress: 10,
           stage: 'estimate_received',
           estimateInfo: event.estimate,
@@ -496,10 +555,77 @@ export default {
         const stage = event.stage || 'processing'
         const existingProcess = llmProcesses.value[processKey]
         
+        // ✅ QUAN TRỌNG: Kiểm tra failed TRƯỚC khi kiểm tra success
+        // Backend có thể gửi stage: "completed" nhưng vẫn có errors (partial success)
+        const hasErrors = Array.isArray(event.errors) && event.errors.length > 0
+        const hasErrorMessage = event.error || event.errorMessage || event.message
+        
+        // Debug log cho testcase
+        if (processType === 'testcase') {
+          console.log('🔍 Testcase event check:', {
+            stage,
+            progress,
+            isProcessing: event.isProcessing,
+            errors: event.errors,
+            errorMessage: event.errorMessage,
+            error: event.error,
+            hasErrors,
+            hasErrorMessage,
+          })
+        }
+        
+        // ✅ Kiểm tra failed: stage === 'failed' HOẶC có errors
+        if (stage === 'failed' || stage === 'error' || event.error || event.status === 'failed' || event.status === 'error' || hasErrors) {
+          // Format error message thân thiện với người dùng
+          const rawErrorMsg = hasErrors 
+            ? event.errors.join('; ') 
+            : (event.error || event.errorMessage || event.message || 'Generation failed')
+          
+          // Format error message để thân thiện hơn
+          const friendlyErrorMsg = translateErrorMessage(rawErrorMsg)
+          
+          llmProcesses.value[processKey] = {
+            userId,
+            type: processType,
+            isProcessing: false,
+            status: 'failed',
+            progress: existingProcess?.progress || progress,
+            stage: 'failed',
+            errorMessage: friendlyErrorMsg,
+            estimateInfo: existingProcess?.estimateInfo || null,
+            batchProgress: existingProcess?.batchProgress || null,
+            timestamp: existingProcess?.timestamp || Date.now(),
+          }
+          saveProcessesToStorage()
+          console.log('❌ Process failed:', processKey, friendlyErrorMsg)
+          return
+        }
+        
+        // Check if process completed successfully (chỉ khi không phải failed và không có errors)
+        // ✅ QUAN TRỌNG: Kiểm tra hasErrors và hasErrorMessage TRƯỚC khi set success
+        if (!event.isProcessing && progress >= 100 && stage !== 'failed' && stage !== 'error' && !hasErrors && !hasErrorMessage) {
+          llmProcesses.value[processKey] = {
+            userId,
+            type: processType,
+            isProcessing: false,
+            status: 'success',
+            progress: 100,
+            stage: 'completed',
+            estimateInfo: existingProcess?.estimateInfo || null,
+            batchProgress: existingProcess?.batchProgress || null,
+            timestamp: existingProcess?.timestamp || Date.now(),
+          }
+          saveProcessesToStorage()
+          // ✅ Không tự động xóa - chỉ xóa khi user đóng thủ công
+          return
+        }
+        
+        // Update processing state
         llmProcesses.value[processKey] = {
           userId,
           type: processType,
           isProcessing: event.isProcessing !== false,
+          status: 'processing',
           progress: Math.min(progress, 100),
           stage,
           estimateInfo: existingProcess?.estimateInfo || null,
@@ -514,14 +640,6 @@ export default {
         
         // Save to storage
         saveProcessesToStorage()
-        
-        // Clear process when completed
-        if (!event.isProcessing && progress >= 100) {
-          setTimeout(() => {
-            delete llmProcesses.value[processKey]
-            saveProcessesToStorage()
-          }, 2000)
-        }
       }
     }
 
@@ -541,15 +659,39 @@ export default {
       
       // Listen to other process events (database, testcase, uml)
       socket.on('database_event', (event) => {
-        handleLLMProgressEvent({ ...event, type: 'DATABASE_PROGRESS' })
+        // ✅ Đảm bảo giữ nguyên tất cả fields từ event, đặc biệt là errors
+        handleLLMProgressEvent({
+          ...event,
+          type: 'DATABASE_PROGRESS',
+          // Đảm bảo errors và errorMessage được giữ lại
+          errors: event.errors,
+          errorMessage: event.errorMessage,
+          error: event.error,
+        })
       })
       
       socket.on('testcase_event', (event) => {
-        handleLLMProgressEvent({ ...event, type: 'TESTCASE_PROGRESS' })
+        // ✅ Đảm bảo giữ nguyên tất cả fields từ event, đặc biệt là errors
+        handleLLMProgressEvent({
+          ...event,
+          type: 'TESTCASE_PROGRESS',
+          // Đảm bảo errors và errorMessage được giữ lại
+          errors: event.errors,
+          errorMessage: event.errorMessage,
+          error: event.error,
+        })
       })
       
       socket.on('uml_event', (event) => {
-        handleLLMProgressEvent({ ...event, type: 'UML_PROGRESS' })
+        // ✅ Đảm bảo giữ nguyên tất cả fields từ event, đặc biệt là errors
+        handleLLMProgressEvent({
+          ...event,
+          type: 'UML_PROGRESS',
+          // Đảm bảo errors và errorMessage được giữ lại
+          errors: event.errors,
+          errorMessage: event.errorMessage,
+          error: event.error,
+        })
       })
     }
 
@@ -711,6 +853,7 @@ export default {
       getFullAvatarUrl,
       getUserInitials,
       handleAvatarError,
+      removeProcess,
     }
   },
 }
@@ -792,6 +935,17 @@ export default {
   border: 1px solid #e1e5e9;
   min-width: 200px;
   flex: 1;
+  transition: all 0.3s ease;
+}
+
+.llm-progress-item.status-success {
+  background: #f0fdf4;
+  border-color: #10b981;
+}
+
+.llm-progress-item.status-failed {
+  background: #fef2f2;
+  border-color: #ef4444;
 }
 
 @keyframes fadeInUp {
@@ -861,6 +1015,16 @@ export default {
   color: #10b981;
 }
 
+.stage-icon.success-icon {
+  color: #10b981;
+  font-size: 18px;
+}
+
+.stage-icon.failed-icon {
+  color: #ef4444;
+  font-size: 18px;
+}
+
 .stage-icon.spinning {
   color: #3b82f6;
   animation: spin 1.5s linear infinite;
@@ -900,6 +1064,41 @@ export default {
   color: #64748b;
   font-weight: 500;
 }
+
+.success-stage .stage-text {
+  color: #059669;
+  font-weight: 600;
+}
+
+.failed-stage .stage-text {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.close-process-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #8a94a6;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.close-process-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1a365d;
+}
+
+.close-process-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
 
 .progress-bar {
   width: 100%;

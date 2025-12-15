@@ -365,14 +365,16 @@ export class OrchestratorService {
                     }
                 });
 
-                // ✅ BROADCAST: Completed với warnings (partial success)
+                // ✅ BROADCAST: Completed với warnings (partial success) - gửi kèm errors
                 inputSocketService.emitIncrementalProgress(
                     projectId,
                     versionId,
                     userId,
                     100,
                     "completed",
-                    false
+                    false,
+                    undefined, // batchInfo
+                    processingErrors // ✅ Gửi errors để frontend biết có lỗi
                 );
 
                 // Return partial success result

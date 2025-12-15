@@ -37,6 +37,8 @@ export interface IncrementalProgressEvent extends InputEventData {
         totalBatches: number;
         usecasesInBatch: number;
     };
+    errors?: string[]; // ✅ Thêm errors field để frontend có thể detect failed state
+    errorMessage?: string; // ✅ Thêm errorMessage cho compatibility
 }
 
 export interface EstimateReceivedEvent extends InputEventData {

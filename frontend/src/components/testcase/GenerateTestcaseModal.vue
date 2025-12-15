@@ -328,13 +328,13 @@ export default {
           response: response.data
         })
 
-        if (savedCount === 0) {
+        /*if (savedCount === 0) {
           toast.warning('No test cases were generated. Please try different requirements or options.')
         } else {
           toast.success(`Successfully generated and saved ${savedCount} test cases`)
           // Emit event để parent refresh test cases
           emit('generate', savedTestCases)
-        }
+        }*/
       } catch (error) {
         console.error('❌ Error generating test cases:', error)
         

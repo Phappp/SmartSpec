@@ -159,21 +159,11 @@
             
             <div class="diagrams-scroll-container" ref="usecaseScrollContainer">
               <div class="diagrams-scroll-content" ref="usecaseScrollContent">
-                <!-- Loading State for Use Case Diagrams - Giản dị -->
-                <div v-if="generatingDiagramType === 'usecase'" class="diagram-generating-overlay">
-                  <div class="generating-content">
-                    <div class="generating-spinner-wrapper">
-                      <div class="generating-spinner"></div>
-                    </div>
-                    <h3>Đang tạo Use Case Diagram...</h3>
-                  </div>
-                </div>
 
                 <div
                   v-for="diagram in filteredUsecaseDiagrams"
                   :key="diagram.id || diagram._id"
                   class="diagram-card"
-                  :class="{ 'blurred': generatingDiagramType === 'usecase' }"
                   @click="editDiagram(diagram)"
                 >
                   <div class="diagram-preview">
@@ -409,21 +399,11 @@
             
             <div class="diagrams-scroll-container" ref="activityScrollContainer">
               <div class="diagrams-scroll-content" ref="activityScrollContent">
-                <!-- Loading State for Activity Diagrams - Giản dị -->
-                <div v-if="generatingDiagramType === 'activity'" class="diagram-generating-overlay">
-                  <div class="generating-content">
-                    <div class="generating-spinner-wrapper">
-                      <div class="generating-spinner"></div>
-                    </div>
-                    <h3>Đang tạo Activity Diagram...</h3>
-                  </div>
-                </div>
 
                 <div
                   v-for="diagram in filteredActivityDiagrams"
                   :key="diagram.id || diagram._id"
                   class="diagram-card"
-                  :class="{ 'blurred': generatingDiagramType === 'activity' }"
                   @click="editDiagram(diagram)"
                 >
                   <div class="diagram-preview">
@@ -655,21 +635,11 @@
             
             <div class="diagrams-scroll-container" ref="sequenceScrollContainer">
               <div class="diagrams-scroll-content" ref="sequenceScrollContent">
-                <!-- Loading State for Sequence Diagrams - Giản dị -->
-                <div v-if="generatingDiagramType === 'sequence'" class="diagram-generating-overlay">
-                  <div class="generating-content">
-                    <div class="generating-spinner-wrapper">
-                      <div class="generating-spinner"></div>
-                    </div>
-                    <h3>Đang tạo Sequence Diagram...</h3>
-                  </div>
-                </div>
 
                 <div
                   v-for="diagram in filteredSequenceDiagrams"
                   :key="diagram.id || diagram._id"
                   class="diagram-card"
-                  :class="{ 'blurred': generatingDiagramType === 'sequence' }"
                   @click="editDiagram(diagram)"
                 >
                   <div class="diagram-preview">
@@ -756,7 +726,7 @@
                 </div>
 
                 <!-- Empty State for Sequence Diagrams -->
-                <div v-if="filteredSequenceDiagrams.length === 0 && generatingDiagramType !== 'sequence'" class="empty-section">
+                <div v-if="filteredSequenceDiagrams.length === 0" class="empty-section">
                   <div class="empty-icon">
                     <span class="material-symbols-outlined">timeline</span>
                   </div>
@@ -880,9 +850,8 @@
                 <button type="button" class="btn-secondary" @click="closeGenerateModal">
                   Cancel
                 </button>
-                <button type="submit" class="btn-primary" :disabled="generating || !canGenerate">
-                  <span v-if="generating" class="loading-spinner-small"></span>
-                  {{ generating ? 'Generating...' : `Generate ${getDiagramTypeName()}` }}
+                <button type="submit" class="btn-primary" :disabled="!canGenerate">
+                  {{ `Generate ${getDiagramTypeName()}` }}
                 </button>
               </div>
             </form>
@@ -999,8 +968,6 @@ export default {
       showGenerateModal: false,
       showSharingModal: false,
       editingDiagram: null,
-      generating: false,
-      generatingDiagramType: null, // Track which diagram type is being generated
       generateForm: {
         type: 'usecase',
         lang: 'en-US',
@@ -1494,9 +1461,7 @@ export default {
       const sourceType = this.generateForm.sourceType
       const language = this.project?.language || this.generateForm.lang || 'vi-VN'
 
-      // Set generating type and close modal
-      this.generatingDiagramType = diagramType
-      this.generating = true
+      // Close modal immediately - loading will be shown in ProjectLayout
       this.showGenerateModal = false // Chỉ đóng modal, không reset form
       
       try {
@@ -1590,8 +1555,6 @@ export default {
           }`
         )
       } finally {
-        this.generating = false
-        this.generatingDiagramType = null
         // Reset form sau khi hoàn thành (thành công hoặc lỗi)
         this.resetGenerateForm()
       }

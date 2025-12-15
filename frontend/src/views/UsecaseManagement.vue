@@ -1700,7 +1700,7 @@ export default {
 
       const message =
         mode === 'incremental' ? 'Incremental analysis completed!' : 'Retry completed successfully!'
-      this.toast.success(message)
+      //this.toast.success(message)
     },
 
     handleProcessingFailure(mode) {

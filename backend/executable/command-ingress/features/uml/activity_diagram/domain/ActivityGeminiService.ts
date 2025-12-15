@@ -106,13 +106,14 @@ export class ActivityGeminiService {
     });
     cleanedText = lines.join('\n').trim();
 
-    // 4️⃣ Thử parse JSON, nếu fail trả về fallback object
+    // 4️⃣ Thử parse JSON, nếu fail throw error thay vì trả về fallback
     try {
       const parsed = JSON.parse(cleanedText);
       if (typeof parsed === 'object') return JSON.stringify(parsed); // đảm bảo là string JSON chuẩn
-    } catch {
-      console.warn('⚠️ Could not parse AI response, using fallback ActivityDiagram.');
-      return null;
+      throw new Error('Parsed result is not an object');
+    } catch (parseError: any) {
+      console.error('❌ Could not parse AI response:', parseError);
+      throw new Error(`Failed to parse AI response: ${parseError.message || 'Invalid JSON format'}`);
     }
   }
 
@@ -146,27 +147,28 @@ export class ActivityGeminiService {
     const modelConfig = getModelConfig(modelName, undefined);
     logTokenInfo(prompt, modelConfig, '[UML Activity Diagram]');
 
-    let raw = '';
-    try {
-      raw = await this.callGemini(prompt);
-      console.log('Raw AI response length:', raw.length);
-    } catch (err) {
-      console.error('Error calling AI service:', err);
-    }
+    // ✅ Không catch error ở đây - để service layer xử lý và emit failed event
+    const raw = await this.callGemini(prompt);
+    console.log('Raw AI response length:', raw.length);
 
     const cleanedJson = this.cleanJson(raw);
     console.log('Cleaned JSON preview:', cleanedJson.substring(0, 400));
 
-    let parsed: any = {};
-    try {
-      parsed = cleanedJson ? JSON.parse(cleanedJson) : {};
-    } catch (err) {
-      console.error('Error parsing cleaned AI response:', err);
-      parsed = {};
+    // ✅ cleanJson sẽ throw error nếu parse fail, không cần fallback
+    const parsed = JSON.parse(cleanedJson);
+    
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error('Invalid response from AI: response is not an object');
     }
+    
     const lanes: ActivityLane[] = Array.isArray(parsed.lanes) ? parsed.lanes : [];
     const nodes: ActivityNode[] = Array.isArray(parsed.nodes) ? parsed.nodes : [];
     const edges: ActivityEdge[] = Array.isArray(parsed.edges) ? parsed.edges : [];
+
+    // ✅ Validate rằng có ít nhất nodes hoặc lanes
+    if (nodes.length === 0 && lanes.length === 0) {
+      throw new Error('Invalid response from AI: no nodes or lanes generated');
+    }
 
     const result: ActivityDiagramDTO = {
       name: parsed?.name || 'Generated Activity',

@@ -27,92 +27,126 @@ export class DatabaseCoreService {
         const {projectId, requirements } = payload;
         let  versionId = payload.versionId;
 
-        if (!requirements || requirements.length === 0) {
-            throw new Error("Không có requirements để sinh database.");
-        }
-        // 1️⃣ Lấy version
-        let version = await Version.findById(versionId);
-        if (!version) {
-            return new ServiceResponse(ResponseStatus.Failed, "Version not found", null, 404);
-        }
+        try {
+            if (!requirements || requirements.length === 0) {
+                const errorMsg = "Không có requirements để sinh database.";
+                // Emit failed event
+                if (databaseSocketService && projectId && versionId && userId) {
+                    databaseSocketService.emitProgress(projectId, versionId, userId, 100, 'failed', false, undefined, [errorMsg]);
+                }
+                throw new Error(errorMsg);
+            }
+            // 1️⃣ Lấy version
+            let version = await Version.findById(versionId);
+            if (!version) {
+                const errorMsg = "Version not found";
+                // Emit failed event
+                if (databaseSocketService && projectId && versionId && userId) {
+                    databaseSocketService.emitProgress(projectId, versionId, userId, 100, 'failed', false, undefined, [errorMsg]);
+                }
+                return new ServiceResponse(ResponseStatus.Failed, errorMsg, null, 404);
+            }
 
-        // 2️⃣ Auto bump version nếu không phải temporary
-        if (version.version_temporary === false) {
-            const bumpRes = await this.versionService.bumpVersion(
-                versionId,
+            // 2️⃣ Auto bump version nếu không phải temporary
+            if (version.version_temporary === false) {
+                const bumpRes = await this.versionService.bumpVersion(
+                    versionId,
+                    userId,
+                    "minor"
+                );
+
+                if (!bumpRes.data) {
+                    const errorMsg = "Auto bump failed";
+                    // Emit failed event
+                    if (databaseSocketService && projectId && versionId && userId) {
+                        databaseSocketService.emitProgress(projectId, versionId, userId, 100, 'failed', false, undefined, [errorMsg]);
+                    }
+                    return new ServiceResponse(ResponseStatus.Failed, errorMsg, null, 500);
+                }
+
+                version = bumpRes.data.newVersion;
+                payload.versionId = version._id.toString(); // update versionId
+                versionId = version._id.toString();
+            }
+
+            // Emit start event
+            if (databaseSocketService && projectId && versionId && userId) {
+                databaseSocketService.emitProgress(projectId, versionId, userId, 10, 'generating', true);
+            }
+
+            const databaseSchema = await this.geminiService.generateDatabaseSchema(requirements, 'vi-VN');
+
+            // Validate generated schema
+            try {
+                databaseSchema.tables.forEach((table: Table) => {
+                    this.validationService.validateTableStructure(table);
+                });
+            } catch (validationError: any) {
+                const errorMsg = validationError.message || 'Database schema validation failed';
+                // Emit failed event
+                if (databaseSocketService && projectId && versionId && userId) {
+                    databaseSocketService.emitProgress(projectId, versionId, userId, 100, 'failed', false, undefined, [errorMsg]);
+                }
+                throw validationError;
+            }
+
+            const newDatabase = new DatabaseModel({
+                project_id: projectId,
+                version_id: versionId,
+                name: databaseSchema.name,
+                description: databaseSchema.description,
+                tables: databaseSchema.tables,
+                relationships: databaseSchema.relationships,
+            });
+
+            await newDatabase.save();
+            const changePayload: PreviewChangeDto = {
+                entity_type: "database",
+                change_type: "added",
+                entity_id: newDatabase._id.toString(),
+                before_snapshot: null,
+                after_snapshot: newDatabase.toObject()
+            };
+
+            await this.versionService.createOrUpdatePreview(
+                version._id.toString(),
                 userId,
-                "minor"
+                changePayload
             );
 
-            if (!bumpRes.data) {
-            return new ServiceResponse(ResponseStatus.Failed, "Auto bump failed", null, 500);
+            // 7️⃣ GHI LOG
+            const user = await User.findById(userId).lean();
+            const username = user?.name || "Unknown User";
+
+            await this.logService.createLog({
+                project_id: projectId,
+                user_id: userId,
+                action: "generate_output",
+                target_id: newDatabase._id.toString(),
+                target_type: "databases",
+                version_number: version.version_number,
+                affects_requirement: true,
+                level: "info",
+                details: {
+                message: `${username} generated database ${newDatabase.name} for version ${version.version_number}`
+                }
+            });
+
+            // Emit completion event
+            if (databaseSocketService && projectId && versionId && userId) {
+                databaseSocketService.emitProgress(projectId, versionId, userId, 100, 'completed', false);
             }
 
-            version = bumpRes.data.newVersion;
-            payload.versionId = version._id.toString(); // update versionId
-            versionId = version._id.toString();
-        }
-
-        // Emit start event
-        if (databaseSocketService && projectId && versionId && userId) {
-            databaseSocketService.emitProgress(projectId, versionId, userId, 10, 'generating', true);
-        }
-
-        const databaseSchema = await this.geminiService.generateDatabaseSchema(requirements, 'vi-VN');
-
-        // Validate generated schema
-        databaseSchema.tables.forEach((table: Table) => {
-            this.validationService.validateTableStructure(table);
-        });
-
-        const newDatabase = new DatabaseModel({
-            project_id: projectId,
-            version_id: versionId,
-            name: databaseSchema.name,
-            description: databaseSchema.description,
-            tables: databaseSchema.tables,
-            relationships: databaseSchema.relationships,
-        });
-
-        await newDatabase.save();
-        const changePayload: PreviewChangeDto = {
-            entity_type: "database",
-            change_type: "added",
-            entity_id: newDatabase._id.toString(),
-            before_snapshot: null,
-            after_snapshot: newDatabase.toObject()
-        };
-
-        await this.versionService.createOrUpdatePreview(
-            version._id.toString(),
-            userId,
-            changePayload
-        );
-
-        // 7️⃣ GHI LOG
-        const user = await User.findById(userId).lean();
-        const username = user?.name || "Unknown User";
-
-        await this.logService.createLog({
-            project_id: projectId,
-            user_id: userId,
-            action: "generate_output",
-            target_id: newDatabase._id.toString(),
-            target_type: "databases",
-            version_number: version.version_number,
-            affects_requirement: true,
-            level: "info",
-            details: {
-            message: `${username} generated database ${newDatabase.name} for version ${version.version_number}`
+            return newDatabase;
+        } catch (error: any) {
+            console.error('❌ Error generating database schema:', error);
+            // Emit failed event với error message
+            if (databaseSocketService && projectId && versionId && userId) {
+                const errorMsg = error.message || 'Failed to generate database schema';
+                databaseSocketService.emitProgress(projectId, versionId, userId, 100, 'failed', false, undefined, [errorMsg]);
             }
-        });
-
-        // Emit completion event
-        if (databaseSocketService && projectId && versionId && userId) {
-            databaseSocketService.emitProgress(projectId, versionId, userId, 100, 'completed', false);
+            throw error; // Re-throw để controller xử lý
         }
-
-        return newDatabase;
     }
 
     public async getDatabasesByVersion(versionId: string) {
