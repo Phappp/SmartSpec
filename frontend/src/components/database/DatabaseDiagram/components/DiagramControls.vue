@@ -62,6 +62,16 @@
           {{ showRelationshipColors ? 'palette' : 'format_color_reset' }}
         </span>
       </button>
+      <button
+        class="btn-icon"
+        :class="{ active: enableTableDimming }"
+        @click="$emit('toggle-table-dimming')"
+        :title="enableTableDimming ? 'Disable Table Dimming on Hover' : 'Enable Table Dimming on Hover'"
+      >
+        <span class="material-symbols-outlined">
+          {{ enableTableDimming ? 'visibility' : 'visibility_off' }}
+        </span>
+      </button>
       <!-- <button
         class="btn-icon"
         @click="$emit('toggle-grid')"
@@ -189,6 +199,10 @@ export default {
     autoSaveEnabled: Boolean,
     isSaving: Boolean,
     searchQuery: String,
+    enableTableDimming: {
+      type: Boolean,
+      default: true,
+    },
   },
   emits: [
     'toggle-sort',
@@ -209,6 +223,7 @@ export default {
     'undo',
     'redo',
     'search-change',
+    'toggle-table-dimming',
   ],
   methods: {
     getSortDisplayName(sortType) {
@@ -273,6 +288,16 @@ export default {
 .btn-icon:hover {
   background: #3b82f6;
   color: white;
+}
+
+.btn-icon.active {
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.2);
+}
+
+.btn-icon.active:hover {
+  background: linear-gradient(135deg, #2d4a8a 0%, #3d5a9a 100%);
 }
 
 .btn-icon:disabled {

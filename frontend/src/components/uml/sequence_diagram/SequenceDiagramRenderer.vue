@@ -323,8 +323,9 @@
               :x1="lifeline.x"
               :y1="lifeline.y + 30"
               :x2="lifeline.x"
-              :y2="virtualSpace.maxY - 100"
+              :y2="lifeline.endY || virtualSpace.maxY - 50"
               class="lifeline-line"
+              :class="{ 'lifeline-mirror-line': lifeline.isMirror }"
             />
           </g>
         </g>
@@ -382,7 +383,7 @@
             :x1="dragPosition.x"
             :y1="dragPosition.y + 30"
             :x2="dragPosition.x"
-            :y2="virtualSpace.maxY - 100"
+            :y2="draggingElement.endY || virtualSpace.maxY - 50"
             class="lifeline-line drag-preview-element"
           />
         </g>
@@ -485,10 +486,10 @@ export default {
       isSaving: false,
       lastSaved: null,
       virtualSpace: {
-        minX: -500,
-        maxX: 1500,
-        minY: -500,
-        maxY: 1500,
+        minX: -1000,
+        maxX: 2200,
+        minY: -1000,
+        maxY: 1800,
         get width() {
           return this.maxX - this.minX
         },
@@ -522,29 +523,145 @@ export default {
         fragments: Array.isArray(this.diagramData?.fragments) ? this.diagramData.fragments : [],
       }
     },
+    lifelineEndY() {
+      // Tính toán Y lớn nhất từ tất cả messages và fragments
+      // Vue sẽ tự động tính computedMessages và computedFragments trước
+      let maxY = 0
+
+      // Tìm Y lớn nhất từ computedMessages
+      if (this.computedMessages && this.computedMessages.length > 0) {
+        const messageMaxY = Math.max(...this.computedMessages.map(msg => (msg.y || 0) + 30))
+        maxY = Math.max(maxY, messageMaxY)
+      }
+
+      // Tìm Y lớn nhất từ computedFragments
+      if (this.computedFragments && this.computedFragments.length > 0) {
+        this.computedFragments.forEach(fragment => {
+          // Y cuối của fragment chính
+          const fragmentEndY = fragment.y + (fragment.totalHeight || fragment.height || 0)
+          maxY = Math.max(maxY, fragmentEndY)
+
+          // Y cuối của các child fragments
+          if (fragment.children && fragment.children.length > 0) {
+            fragment.children.forEach(child => {
+              const childEndY = child.y + (child.height || 0)
+              maxY = Math.max(maxY, childEndY)
+            })
+          }
+        })
+      }
+
+      // Nếu không có messages/fragments, sử dụng giá trị mặc định
+      if (maxY === 0) {
+        maxY = this.virtualSpace.centerY + 200 // Giá trị mặc định
+      }
+
+      // Thêm padding phía dưới để có khoảng trống trước khi đặt lifeline ảo
+      return maxY + 100
+    },
     computedLifelines() {
       const lifelines = this.safeDiagramData.lifelines
       if (!lifelines || lifelines.length === 0) return []
-      return lifelines.map((lifeline, index) => {
+
+      const lifelineSpacing = 200 // Khoảng cách giữa các lifelines
+      const verticalOffset = 150 // Khoảng cách từ centerY
+      const baseCenterY = 400 // centerY của virtual space mặc định
+
+      // Tính toán độ dài của lifeline-line dựa trên messages và fragments
+      const lifelineEndY = this.lifelineEndY
+
+      // Tạo lifelines gốc ở phía trên
+      const topLifelines = lifelines.map((lifeline, index) => {
+        const totalLifelines = lifelines.length
+        const startX = this.virtualSpace.centerX - ((totalLifelines - 1) * lifelineSpacing) / 2
+        const defaultX = startX + index * lifelineSpacing
+        const defaultY = baseCenterY - verticalOffset
+        
+        // Chỉ sử dụng position đã lưu nếu cả x và y đều được set hợp lệ
+        const hasSavedPosition = lifeline.position && 
+          typeof lifeline.position.x === 'number' && 
+          typeof lifeline.position.y === 'number' &&
+          (Math.abs(lifeline.position.x) > 10 || Math.abs(lifeline.position.y) > 10)
+        
         const position = lifeline.position || { x: 0, y: 0 }
+        const x = hasSavedPosition ? position.x : defaultX
+        const y = hasSavedPosition ? position.y : defaultY
+
         return {
           id: this.normalizeId(lifeline._id || lifeline.id || `lifeline-${index}`),
           name: lifeline.name || 'Unnamed',
-          x: position.x || 100 + index * 200,
-          y: position.y || 100,
+          x,
+          y,
+          endY: lifelineEndY, // Độ dài dynamic của lifeline-line
           _originalData: lifeline,
+          isMirror: false,
         }
       })
+
+      // Tạo lifelines ảo đối xứng phía dưới - đặt ở cuối lifeline-line
+      const bottomLifelines = topLifelines.map((topLifeline, index) => {
+        // Lifelines ảo nằm ở cuối lifeline-line (endY)
+        // Điều chỉnh Y để lifeline ảo nằm ở giữa (center của header) tại endY
+        const x = topLifeline.x
+        const y = lifelineEndY - 30 // Trừ 30 để center của header nằm ở endY
+
+        return {
+          id: `mirror-${topLifeline.id}`,
+          name: topLifeline.name,
+          x,
+          y,
+          endY: lifelineEndY,
+          _originalData: null, // Không có original data vì là lifeline ảo
+          isMirror: true,
+          originalLifelineId: topLifeline.id, // Lưu ID của lifeline gốc để sync
+        }
+      })
+
+      // Kết hợp lifelines gốc và lifelines ảo
+      return [...topLifelines, ...bottomLifelines]
     },
     computedMessages() {
       const messages = this.safeDiagramData.messages
       if (!messages || messages.length === 0) return []
+      
+      // Tính toán lifelines gốc trực tiếp từ safeDiagramData để tránh circular dependency
+      const lifelines = this.safeDiagramData.lifelines || []
+      if (lifelines.length === 0) return []
+      
+      const lifelineSpacing = 200
+      const verticalOffset = 150
+      const baseCenterY = 400
+      
+      // Tạo lifelines gốc để map messages (không bao gồm lifelines ảo)
+      const originalLifelines = lifelines.map((lifeline, index) => {
+        const totalLifelines = lifelines.length
+        const startX = this.virtualSpace.centerX - ((totalLifelines - 1) * lifelineSpacing) / 2
+        const defaultX = startX + index * lifelineSpacing
+        const defaultY = baseCenterY - verticalOffset
+        
+        const hasSavedPosition = lifeline.position && 
+          typeof lifeline.position.x === 'number' && 
+          typeof lifeline.position.y === 'number' &&
+          (Math.abs(lifeline.position.x) > 10 || Math.abs(lifeline.position.y) > 10)
+        
+        const position = lifeline.position || { x: 0, y: 0 }
+        const x = hasSavedPosition ? position.x : defaultX
+        const y = hasSavedPosition ? position.y : defaultY
+
+        return {
+          id: this.normalizeId(lifeline._id || lifeline.id || `lifeline-${index}`),
+          name: lifeline.name || 'Unnamed',
+          x,
+          y,
+        }
+      })
+      
       return messages
         .map((message, index) => {
-          const sourceLifeline = this.computedLifelines.find(
+          const sourceLifeline = originalLifelines.find(
             (ll) => ll.id === this.normalizeId(message.source_lifeline_id)
           )
-          const targetLifeline = this.computedLifelines.find(
+          const targetLifeline = originalLifelines.find(
             (ll) => ll.id === this.normalizeId(message.target_lifeline_id)
           )
           return {
@@ -707,15 +824,26 @@ export default {
 
       const lifelineArray = Array.from(involvedLifelines)
       const lifelineXs = lifelineArray.map((ll) => ll.x)
-      const minX = Math.min(...lifelineXs) - 100
-      const maxX = Math.max(...lifelineXs) + 100
+      // Padding ngang: 120px mỗi bên để messages không đè lên biên
+      const horizontalPadding = 120
+      const minX = Math.min(...lifelineXs) - horizontalPadding
+      const maxX = Math.max(...lifelineXs) + horizontalPadding
 
       // Tính Y bounds CHỈ dựa trên messages thuộc fragment
       const messageYs = allFragmentMessages.map((msg) => msg.y)
-      const minY = Math.min(...messageYs) - 50 // Giảm padding
-      const maxY = Math.max(...messageYs) + 50 // Giảm padding
+      const messageMinY = Math.min(...messageYs)
+      const messageMaxY = Math.max(...messageYs)
+      
+      // Padding cho fragment: 
+      // - Top: 60px (20px cho label + 40px padding)
+      // - Bottom: 30px padding
+      const fragmentTopPadding = 60 // Không gian cho label và guard condition
+      const fragmentBottomPadding = 30
+      
+      const minY = messageMinY - fragmentTopPadding
+      const maxY = messageMaxY + fragmentBottomPadding
 
-      const baseHeight = Math.max(150, maxY - minY) // Giảm chiều cao tối thiểu
+      const baseHeight = Math.max(150, maxY - minY)
 
       // Khởi tạo fragment chính
       const mainFragment = {
@@ -755,14 +883,18 @@ export default {
             const childMessageYs = childMessages.map((msg) => msg.y)
             const childMinY = Math.min(...childMessageYs)
             const childMaxY = Math.max(...childMessageYs)
+            
+            // Padding cho child fragment: 30px top (cho label), 20px bottom
+            const childTopPadding = 30
+            const childBottomPadding = 20
 
             child.x = mainFragment.x
-            child.y = childMinY - 20 // Đặt đường phân cách phía trên messages
+            child.y = childMinY - childTopPadding // Đặt đường phân cách phía trên messages với padding
             child.width = mainFragment.width
-            child.height = childMaxY - childMinY + 40
+            child.height = childMaxY - childMinY + childTopPadding + childBottomPadding
 
             // Cập nhật currentY cho fragment tiếp theo
-            currentY = childMaxY + 30
+            currentY = childMaxY + childBottomPadding + 10
           }
         })
 
@@ -774,7 +906,8 @@ export default {
             ? Math.max(...lastChildMessages.map((m) => m.y))
             : lastChild.y + lastChild.height
 
-        const requiredHeight = lastChildMaxY - mainFragment.y + 40
+        // Tính lại required height với padding đầy đủ
+        const requiredHeight = lastChildMaxY - mainFragment.y + fragmentBottomPadding
         if (requiredHeight > mainFragment.totalHeight) {
           mainFragment.totalHeight = requiredHeight
         }
@@ -853,7 +986,14 @@ export default {
     // Virtual Space Management
     updateVirtualSpace() {
       const allElements = [...this.computedLifelines, ...this.computedFragments]
-      if (allElements.length === 0) return
+      if (allElements.length === 0) {
+        // Nếu không có elements, sử dụng kích thước mặc định đối xứng
+        this.virtualSpace.minX = -1000
+        this.virtualSpace.maxX = 2200
+        this.virtualSpace.minY = -1000
+        this.virtualSpace.maxY = 1800
+        return
+      }
 
       const bounds = allElements.reduce(
         (acc, element) => ({
@@ -868,16 +1008,51 @@ export default {
         { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
       )
 
+      // Tính toán bounds cho messages (bao gồm cả messages trong fragments)
       this.computedMessages.forEach((message) => {
-        bounds.minY = Math.min(bounds.minY, message.y - 20)
-        bounds.maxY = Math.max(bounds.maxY, message.y + 20)
+        bounds.minY = Math.min(bounds.minY, message.y - 30)
+        bounds.maxY = Math.max(bounds.maxY, message.y + 30)
       })
 
-      const padding = 150 // Giảm padding tổng
-      this.virtualSpace.minX = Math.min(this.virtualSpace.minX, bounds.minX - padding)
-      this.virtualSpace.maxX = Math.max(this.virtualSpace.maxX, bounds.maxX + padding)
-      this.virtualSpace.minY = Math.min(this.virtualSpace.minY, bounds.minY - padding)
-      this.virtualSpace.maxY = Math.max(this.virtualSpace.maxY, bounds.maxY + padding)
+      // Tính toán padding động dựa trên số lượng elements và messages
+      const elementCount = allElements.length + this.computedMessages.length
+      const basePadding = 200
+      const dynamicPadding = Math.min(400, basePadding + Math.floor(elementCount / 5) * 50)
+      
+      // Đặt centerY ở giữa virtual space mặc định để đảm bảo đối xứng
+      const targetCenterY = 400 // centerY của virtual space mặc định (1800 - 1000) / 2 = 400
+      
+      // Tính toán chiều cao cần thiết (đảm bảo đối xứng)
+      const contentHeight = bounds.maxY - bounds.minY
+      const symmetricHeight = Math.max(contentHeight + dynamicPadding * 2, 1000) // Min height 1000
+      
+      // Cập nhật virtual space với đối xứng
+      this.virtualSpace.minX = Math.min(this.virtualSpace.minX, bounds.minX - dynamicPadding)
+      this.virtualSpace.maxX = Math.max(this.virtualSpace.maxX, bounds.maxX + dynamicPadding)
+      
+      // Đảm bảo đối xứng: centerY luôn ở giữa
+      this.virtualSpace.minY = targetCenterY - symmetricHeight / 2
+      this.virtualSpace.maxY = targetCenterY + symmetricHeight / 2
+      
+      // Nếu elements không đối xứng, điều chỉnh để đảm bảo đối xứng
+      const topElements = allElements.filter(el => el.y < targetCenterY)
+      const bottomElements = allElements.filter(el => el.y > targetCenterY)
+      const topMessages = this.computedMessages.filter(msg => msg.y < targetCenterY)
+      const bottomMessages = this.computedMessages.filter(msg => msg.y > targetCenterY)
+      
+      const maxTopDistance = Math.max(
+        topElements.length > 0 ? Math.max(...topElements.map(el => targetCenterY - (el.y - (el.totalHeight || el.height || 30)))) : 0,
+        topMessages.length > 0 ? Math.max(...topMessages.map(msg => targetCenterY - (msg.y - 30))) : 0
+      )
+      const maxBottomDistance = Math.max(
+        bottomElements.length > 0 ? Math.max(...bottomElements.map(el => (el.y + (el.totalHeight || el.height || 0)) - targetCenterY)) : 0,
+        bottomMessages.length > 0 ? Math.max(...bottomMessages.map(msg => (msg.y + 30) - targetCenterY)) : 0
+      )
+      
+      // Đảm bảo khoảng cách trên và dưới bằng nhau
+      const maxDistance = Math.max(maxTopDistance, maxBottomDistance, 200)
+      this.virtualSpace.minY = targetCenterY - maxDistance - dynamicPadding
+      this.virtualSpace.maxY = targetCenterY + maxDistance + dynamicPadding
     },
 
     centerViewport() {
@@ -890,6 +1065,8 @@ export default {
     // Drag and Drop
     startDrag(element, type, event) {
       if (!this.editable || this.previewMode) return
+      // Không cho phép drag lifelines ảo
+      if (type === 'lifeline' && element.isMirror) return
       event.preventDefault()
       event.stopPropagation()
 
@@ -941,6 +1118,16 @@ export default {
       if (this.draggingType === 'lifeline') {
         newX = svgPoint.x - this.dragOffset.x
         newY = svgPoint.y - this.dragOffset.y
+        
+        // Cập nhật cả lifeline ảo tương ứng để giữ đối xứng
+        if (!this.draggingElement.isMirror) {
+          const mirrorId = `mirror-${this.draggingElement.id}`
+          const mirrorLifeline = this.computedLifelines.find(ll => ll.id === mirrorId)
+          if (mirrorLifeline) {
+            mirrorLifeline.x = newX // Giữ nguyên x
+            // Y sẽ được tính lại trong computedLifelines dựa trên baseCenterY
+          }
+        }
       } else if (this.draggingType === 'message') {
         newY = svgPoint.y - this.dragOffset.y
       }
@@ -960,20 +1147,25 @@ export default {
       if (this.draggingElement) {
         if (this.draggingType === 'lifeline') {
           this.draggingElement.x = newX
+          this.draggingElement.y = newY
+        } else if (this.draggingType === 'message') {
+          this.draggingElement.y = newY
         }
-        this.draggingElement.y = newY
 
-        this.showSavingIndicator()
-        this.$emit('position-updated', {
-          element: this.draggingElement,
-          type: this.draggingType,
-          position: this.dragPosition,
-        })
-        this.$emit('element-dragged', {
-          element: this.draggingElement,
-          type: this.draggingType,
-          newPosition: this.dragPosition,
-        })
+        // Chỉ emit event cho lifelines gốc, không phải lifelines ảo
+        if (!this.draggingElement.isMirror) {
+          this.showSavingIndicator()
+          this.$emit('position-updated', {
+            element: this.draggingElement,
+            type: this.draggingType,
+            position: this.dragPosition,
+          })
+          this.$emit('element-dragged', {
+            element: this.draggingElement,
+            type: this.draggingType,
+            newPosition: this.dragPosition,
+          })
+        }
       }
     },
 
@@ -1018,6 +1210,19 @@ export default {
           Math.abs(this.initialDragPosition.y - this.dragPosition.y) > 1)
 
       if (hasMoved && this.editable) {
+        // Cập nhật position trong _originalData để lưu vào backend
+        if (this.draggingElement._originalData) {
+          if (!this.draggingElement._originalData.position) {
+            this.draggingElement._originalData.position = {}
+          }
+          if (this.draggingType === 'lifeline') {
+            this.draggingElement._originalData.position.x = Math.round(this.dragPosition.x)
+            this.draggingElement._originalData.position.y = Math.round(this.dragPosition.y)
+          } else if (this.draggingType === 'message') {
+            this.draggingElement._originalData.position = { y: Math.round(this.dragPosition.y) }
+          }
+        }
+
         if (this.onPositionChange) {
           this.onPositionChange({
             element: this.draggingElement,
@@ -1112,32 +1317,19 @@ export default {
       const allElements = [...this.computedLifelines, ...this.computedFragments]
       if (allElements.length === 0) return
 
-      const bounds = allElements.reduce(
-        (acc, element) => ({
-          minX: Math.min(acc.minX, element.x - (element.width || 60)),
-          maxX: Math.max(acc.maxX, element.x + (element.width || 60)),
-          minY: Math.min(acc.minY, element.y - (element.totalHeight || element.height || 30)),
-          maxY: Math.max(
-            acc.maxY,
-            element.y + (element.totalHeight || element.height || 0) || this.virtualSpace.maxY
-          ),
-        }),
-        { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
-      )
+      // Đảm bảo virtualSpace được cập nhật trước
+      this.updateVirtualSpace()
 
-      this.computedMessages.forEach((message) => {
-        bounds.minY = Math.min(bounds.minY, message.y - 20)
-        bounds.maxY = Math.max(bounds.maxY, message.y + 20)
-      })
+      // Sử dụng virtualSpace bounds để đảm bảo đối xứng
+      const contentWidth = this.virtualSpace.width
+      const contentHeight = this.virtualSpace.height
 
-      const contentWidth = bounds.maxX - bounds.minX + 200
-      const contentHeight = bounds.maxY - bounds.minY + 200
       const scaleX = this.containerWidth / contentWidth
       const scaleY = this.containerHeight / contentHeight
 
       this.internalZoom = Math.min(scaleX, scaleY, 1)
-      this.viewport.x = -bounds.minX * this.internalZoom + 100
-      this.viewport.y = -bounds.minY * this.internalZoom + 100
+      this.viewport.x = -this.virtualSpace.minX * this.internalZoom + (this.containerWidth - contentWidth * this.internalZoom) / 2
+      this.viewport.y = -this.virtualSpace.minY * this.internalZoom + (this.containerHeight - contentHeight * this.internalZoom) / 2
       this.$emit('zoom-changed', this.internalZoom)
     },
 
@@ -1609,12 +1801,14 @@ export default {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: white;
-  border-radius: 8px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 16px;
   overflow: hidden;
   position: relative;
   transition: all 0.3s ease;
   user-select: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(226, 232, 240, 0.8);
 }
 .sequence-diagram-renderer.preview-mode {
   border: 1px solid #e5e7eb;
@@ -1648,61 +1842,87 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid #e5e7eb;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.95) 100%);
+  backdrop-filter: blur(12px);
+  border-bottom: 2px solid rgba(226, 232, 240, 0.8);
   z-index: 100;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
 }
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 .toolbar-group {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  gap: 6px;
+  padding: 6px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 12px;
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 .toolbar-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 8px 14px;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: 10px;
   cursor: pointer;
-  color: #6b7280;
+  color: #64748b;
   font-size: 12px;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+.toolbar-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(26, 54, 93, 0.1), transparent);
+  transition: left 0.5s;
+}
+.toolbar-btn:hover:not(:disabled)::before {
+  left: 100%;
 }
 .toolbar-btn:hover:not(:disabled) {
-  background: #3b82f6;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
   color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.2);
+}
+.toolbar-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 .toolbar-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 .zoom-display {
-  min-width: 48px;
+  min-width: 56px;
   text-align: center;
   font-size: 12px;
-  font-weight: 600;
-  color: #374151;
+  font-weight: 700;
+  color: #1a365d;
+  padding: 4px 8px;
+  background: linear-gradient(135deg, #e6f2ff 0%, #dbeafe 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(26, 54, 93, 0.1);
 }
 
 /* Main Container */
 .sequence-container {
   flex: 1;
   overflow: hidden;
-  background: #f8fafc;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #f8fafc 100%);
   position: relative;
   cursor: grab;
 }
@@ -1723,20 +1943,34 @@ export default {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
-  border-top: 1px solid #e5e7eb;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.95) 100%);
+  backdrop-filter: blur(12px);
+  border-top: 2px solid rgba(226, 232, 240, 0.8);
   font-size: 12px;
-  color: #6b7280;
+  color: #64748b;
+  font-weight: 500;
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.05);
 }
 .status-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+.status-item:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
 }
 .status-item.spacer {
   flex: 1;
+  background: transparent;
+}
+.status-item.spacer:hover {
+  transform: none;
 }
 
 /* Lifeline Styles */

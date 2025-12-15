@@ -325,4 +325,48 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
       getters: true,
     }) as SequenceDiagramResponse;
   }
+
+  public async updateLifelinePosition(
+    sqdId: string,
+    lifelineId: string,
+    position: { x: number; y: number }
+  ): Promise<SequenceDiagramResponse> {
+    const sequenceDiagram = await SequenceDiagramSchema.findById(sqdId);
+    if (!sequenceDiagram) {
+      throw new Error("Sequence Diagram not found");
+    }
+
+    // Normalize lifelineId để so sánh (handle cả ObjectId và string)
+    const normalizedLifelineId = String(lifelineId);
+    
+    const lifelineIndex = sequenceDiagram.lifelines.findIndex(
+      (lifeline: any) => {
+        const lifelineIdStr = lifeline._id ? String(lifeline._id) : String(lifeline.id || '');
+        return lifelineIdStr === normalizedLifelineId;
+      }
+    );
+    
+    if (lifelineIndex === -1) {
+      console.error('❌ Lifeline not found:', {
+        sqdId,
+        lifelineId,
+        normalizedLifelineId,
+        availableLifelines: sequenceDiagram.lifelines.map((ll: any, idx: number) => ({
+          index: idx,
+          _id: ll._id ? String(ll._id) : 'no _id',
+          id: ll.id || 'no id',
+          name: ll.name
+        }))
+      });
+      throw new Error(`Lifeline not found: ${lifelineId}`);
+    }
+
+    // ✅ Cập nhật position
+    sequenceDiagram.lifelines[lifelineIndex].position = position;
+    // ✅ Mark lifelines array as modified để đảm bảo Mongoose lưu thay đổi nested object
+    sequenceDiagram.markModified('lifelines');
+    await sequenceDiagram.save();
+
+    return this.getSequenceDiagramById(sqdId);
+  }
 }

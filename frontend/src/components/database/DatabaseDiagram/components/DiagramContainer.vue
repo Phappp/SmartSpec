@@ -39,7 +39,8 @@ export default {
 .diagram-container {
   position: relative;
   overflow: auto;
-  background-color: #f8fafc;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 100% 100%;
   cursor: grab;
 }
 
@@ -58,7 +59,21 @@ export default {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  opacity: 0.3;
+  opacity: 0.4;
+  background-image: 
+    linear-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+  animation: gridMove 20s linear infinite;
+}
+
+@keyframes gridMove {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 20px 20px;
+  }
 }
 
 /* Scrollbar Styling */

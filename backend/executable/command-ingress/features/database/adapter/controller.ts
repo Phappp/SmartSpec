@@ -711,13 +711,27 @@ export class DatabaseController {
     public exportDatabaseSQL = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { databaseId } = req.params;
+            const { dialect = 'mysql' } = req.query;
 
-            const sqlStatements = await this.databaseService.exportDatabaseSQL(databaseId);
+            // Validate dialect
+            const validDialects = ['mysql', 'postgresql', 'sqlserver', 'oracle', 'sqlite'];
+            if (!validDialects.includes(dialect as string)) {
+                res.status(400).json({
+                    message: `Invalid dialect. Must be one of: ${validDialects.join(', ')}`
+                });
+                return;
+            }
+
+            const sqlStatements = await this.databaseService.exportDatabaseSQL(
+                databaseId,
+                dialect as 'mysql' | 'postgresql' | 'sqlserver' | 'oracle' | 'sqlite'
+            );
 
             res.status(200).json({
                 message: "Export SQL thành công!",
                 data: {
                     sql: sqlStatements,
+                    dialect: dialect,
                     tablesCount: sqlStatements.split('CREATE TABLE').length - 1
                 }
             });

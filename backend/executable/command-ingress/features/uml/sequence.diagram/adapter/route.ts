@@ -16,14 +16,6 @@ const initSequenceDiagramRoute: (
       controller.generateSchemaFromRequirements.bind(controller)
     );
 
-  // Thêm route mới chỉ cần sequenceId
-  router
-    .route("/:sequenceId")
-    .delete(
-      requireAuthorizedUser,
-      controller.deleteSequenceDiagramById.bind(controller)
-    );
-
   // FIX: Sửa route get all diagrams
   router
     .route("/versions/:versionId/sequence-diagrams") // Đổi tên route
@@ -38,6 +30,20 @@ const initSequenceDiagramRoute: (
     .get(
       requireAuthorizedUser,
       controller.getSequenceDiagramById.bind(controller)
+    );
+
+  // POSITION ADJUSTMENT ROUTES - Đặt trước route generic :sequenceId để tránh conflict
+  // Update single lifeline position
+  router
+    .route("/:sqdId/lifelines/:lifelineId/position")
+    .patch(requireAuthorizedUser, controller.updateLifelinePosition.bind(controller));
+
+  // Thêm route mới chỉ cần sequenceId - Đặt sau route cụ thể
+  router
+    .route("/:sequenceId")
+    .delete(
+      requireAuthorizedUser,
+      controller.deleteSequenceDiagramById.bind(controller)
     );
 
   return router;

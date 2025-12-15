@@ -55,8 +55,8 @@ export class DatabaseService {
         return this.coreService.getDatabaseStats(databaseId);
     }
 
-    public async exportDatabaseSQL(databaseId: string) {
-        return this.coreService.exportDatabaseSQL(databaseId);
+    public async exportDatabaseSQL(databaseId: string, dialect: 'mysql' | 'postgresql' | 'sqlserver' | 'oracle' | 'sqlite' = 'mysql') {
+        return this.coreService.exportDatabaseSQL(databaseId, dialect);
     }
 
     // Table Management Methods

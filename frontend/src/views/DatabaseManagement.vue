@@ -647,6 +647,19 @@ export default {
         return
       }
 
+      // Nếu đã có database, cần xác nhận trước khi regenerate
+      if (this.database) {
+        const confirmMessage = 
+          'Are you sure you want to regenerate the database schema?\n\n' +
+          'This action will replace the current database schema with a new one generated from your use cases. ' +
+          'All existing tables, relationships, and data will be replaced.\n\n' +
+          'This action cannot be undone.'
+        
+        if (!confirm(confirmMessage)) {
+          return
+        }
+      }
+
       this.generatingSchema = true
       try {
         const { data } = await generateDatabaseSchema(this.selectedVersionId)
@@ -1095,18 +1108,18 @@ export default {
 
     async exportSQL() {
       try {
-        const { data: sqlData } = await exportDatabaseSQL(this.database._id)
+        const { data: sqlData } = await exportDatabaseSQL(this.database._id, this.selectedSQLDialect)
         const sql = sqlData.data?.sql || sqlData.sql || sqlData
 
         const blob = new Blob([sql], { type: 'text/sql' })
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.href = url
-        link.download = `${this.database?.name || 'database'}-schema-export.sql`
+        link.download = `${this.database?.name || 'database'}-schema-${this.selectedSQLDialect}.sql`
         link.click()
         URL.revokeObjectURL(url)
 
-        this.toast.success('SQL exported successfully')
+        this.toast.success(`SQL exported successfully (${this.getDialectName(this.selectedSQLDialect)})`)
       } catch (error) {
         console.error('Failed to export SQL:', error)
         this.toast.error('Failed to export SQL')
@@ -1609,8 +1622,8 @@ export default {
 
 <style scoped>
 .database-management-view {
-  padding: 30px;
-  background: #f9fafb;
+  padding: 24px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -1627,7 +1640,17 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 30px;
+  margin-bottom: 24px;
+  padding: 24px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.content-header:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .header-left h2 {
@@ -1645,19 +1668,33 @@ export default {
 
 .database-meta {
   display: flex;
-  gap: 20px;
+  gap: 24px;
+  flex-wrap: wrap;
 }
 
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.9rem;
-  color: #6b7280;
+  gap: 8px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #475569;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.meta-item:hover {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .meta-item .material-symbols-outlined {
-  font-size: 16px;
+  font-size: 18px;
+  color: #1a365d;
 }
 
 .header-actions {
@@ -1670,40 +1707,77 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
-  background: #1a365d;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-weight: 600;
+  font-size: 0.875rem;
   cursor: pointer;
-  transition: background 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn-primary:hover:not(:disabled)::before {
+  left: 100%;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #2d4a8a;
+  background: linear-gradient(135deg, #2d4a8a 0%, #3d5a9a 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.3);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.2);
 }
 
 .btn-primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
 }
 
 .btn-secondary {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 10px 20px;
+  background: white;
+  color: #475569;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-weight: 500;
+  font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .btn-secondary:hover {
-  background: #e5e7eb;
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.btn-secondary:active {
+  transform: translateY(0);
 }
 
 /* SQL Dialect Selector */
@@ -1720,7 +1794,17 @@ export default {
   font-weight: 500;
 }
 .database-main-content {
-  margin-top: 20px;
+  margin-top: 0;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .dialect-select {
   padding: 8px 12px;
@@ -1749,20 +1833,23 @@ export default {
   align-items: center;
   justify-content: center;
   padding: 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
   background: white;
-  color: #6b7280;
+  color: #64748b;
   cursor: pointer;
-  transition: all 0.2s ease;
-  width: 40px;
-  height: 40px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 44px;
+  height: 44px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .filter-icon-btn:hover {
-  background: #f9fafb;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-color: #1a365d;
   color: #1a365d;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
 }
 
 .filter-icon-btn .material-symbols-outlined {
@@ -1771,40 +1858,76 @@ export default {
 
 .filter-dropdown-menu {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 12px);
   right: 0;
   background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  min-width: 180px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  min-width: 200px;
   z-index: 100;
   overflow: hidden;
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .filter-option {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 10px 16px;
+  padding: 12px 20px;
   border: none;
   background: white;
-  color: #374151;
+  color: #475569;
   font-size: 0.875rem;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.filter-option::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #1a365d;
+  transform: scaleY(0);
+  transition: transform 0.2s ease;
 }
 
 .filter-option:hover {
-  background: #f9fafb;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  padding-left: 24px;
+}
+
+.filter-option:hover::before {
+  transform: scaleY(1);
 }
 
 .filter-option.active {
-  background: #e6f2ff;
+  background: linear-gradient(135deg, #e6f2ff 0%, #dbeafe 100%);
   color: #1a365d;
-  font-weight: 500;
+  font-weight: 600;
+  padding-left: 24px;
+}
+
+.filter-option.active::before {
+  transform: scaleY(1);
 }
 
 .filter-option .material-symbols-outlined {
@@ -1818,23 +1941,34 @@ export default {
 
 /* SQL Preview Header */
 .sql-header {
-  padding: 12px 20px;
-  background: #374151;
-  border-bottom: 1px solid #4b5563;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
 .dialect-badge {
-  background: #1a365d;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
   color: white;
-  padding: 4px 12px;
+  padding: 6px 16px;
   border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.3);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 /* Quick Actions Panel */
@@ -1999,21 +2133,35 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 20px;
+  padding: 100px 40px;
   text-align: center;
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  animation: fadeInUp 0.5s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .loading-state .spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #e5e7eb;
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e2e8f0;
   border-top: 4px solid #1a365d;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.2);
 }
 
 @keyframes spin {
@@ -2027,93 +2175,192 @@ export default {
 
 .error-state .material-symbols-outlined,
 .empty-state .material-symbols-outlined {
-  font-size: 48px;
-  margin-bottom: 16px;
+  font-size: 64px;
+  margin-bottom: 24px;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 .error-state .material-symbols-outlined {
   color: #ef4444;
+  filter: drop-shadow(0 4px 8px rgba(239, 68, 68, 0.3));
 }
 
 .empty-state .material-symbols-outlined {
-  color: #9ca3af;
+  color: #64748b;
+  filter: drop-shadow(0 4px 8px rgba(100, 116, 139, 0.2));
 }
 
 .error-state h3,
 .empty-state h3 {
-  font-size: 1.5rem;
-  margin-bottom: 8px;
-  color: #1f2937;
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #1a365d;
+  letter-spacing: -0.02em;
 }
 
 .error-state p,
 .empty-state p {
-  color: #6b7280;
-  margin-bottom: 20px;
+  color: #64748b;
+  margin-bottom: 32px;
+  font-size: 1rem;
+  line-height: 1.6;
+  max-width: 500px;
 }
 
 /* Schema Section */
 .schema-section {
   background: white;
-  border-radius: 12px;
-  margin-bottom: 30px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border: 2px solid #0000005a;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.schema-section:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
 .section-header {
-  padding: 20px;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: linear-gradient(135deg, #fafbfc 0%, #f8fafc 100%);
 }
 
 .section-header h3 {
   font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: 700;
+  color: #1a365d;
+  margin: 0;
+  letter-spacing: -0.02em;
 }
 
 .view-options {
   display: flex;
-  gap: 8px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .btn-secondary.active {
-  background: #1a365d;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
   color: white;
   border-color: #1a365d;
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.2);
 }
 
 /* SQL Preview */
 .sql-preview-section {
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.sql-preview-section:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
 .sql-preview {
   padding: 0;
-  background: #1f2937;
-  border-radius: 0 0 12px 12px;
-  max-height: 400px;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-radius: 0 0 16px 16px;
+  max-height: 500px;
   overflow-y: auto;
+  position: relative;
+}
+
+.sql-preview::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sql-preview::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.sql-preview::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 4px;
+}
+
+.sql-preview::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 .sql-preview pre {
   margin: 0;
-  color: #e5e7eb;
-  font-family: 'Courier New', monospace;
+  color: #e2e8f0;
+  font-family: 'Fira Code', 'Courier New', monospace;
   font-size: 0.875rem;
-  line-height: 1.5;
-  padding: 20px;
+  line-height: 1.8;
+  padding: 24px;
+  tab-size: 2;
+}
+
+.sql-preview code {
+  color: #e2e8f0;
+  font-family: inherit;
 }
 
 .sql-actions {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+  .database-management-view {
+    padding: 16px;
+  }
+
+  .content-header {
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .database-meta {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .section-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .view-options,
+  .sql-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .sql-preview {
+    max-height: 300px;
+  }
 }
 
 </style>

@@ -10,6 +10,11 @@ const lifelineSchema = new Schema(
   {
     name: { type: String, required: true, trim: true }, // Ví dụ: "Khách hàng" hoặc ":OrderController"
     description: String,
+    // Thêm trường position cho lifeline
+    position: {
+      x: { type: Number, default: 0 },
+      y: { type: Number, default: 0 }
+    }
   },
   { _id: true } // <-- Bật _id để messages có thể tham chiếu đến _id này
 );
@@ -56,6 +61,11 @@ const messageSchema = new Schema(
 
     // ID của fragment chứa nó (nếu có), trỏ đến _id trong MẢNG 'fragments'
     fragment_id: { type: Schema.Types.ObjectId, default: null },
+    
+    // Thêm trường position cho message (Y position)
+    position: {
+      y: { type: Number, default: 0 }
+    }
   },
   { _id: true }
 );

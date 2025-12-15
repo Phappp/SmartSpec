@@ -229,4 +229,46 @@ export class SequenceDiagramController extends BaseController {
       }
     );
   }
+
+  async updateLifelinePosition(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const sqdId = req.params.sqdId;
+        const lifelineId = req.params.lifelineId;
+        const position = req.body;
+
+        if (!sqdId) {
+          res.status(400).json({ message: "Sequence Diagram ID is required." });
+          return;
+        }
+        if (!lifelineId) {
+          res.status(400).json({ message: "Lifeline ID is required." });
+          return;
+        }
+        if (!position || position.x === undefined || position.y === undefined) {
+          res.status(400).json({ message: "Valid position {x, y} is required." });
+          return;
+        }
+
+        const responseData = await this.sequenceDiagramService.updateLifelinePosition(
+          sqdId,
+          lifelineId,
+          position
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Update Lifeline Position Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
 }

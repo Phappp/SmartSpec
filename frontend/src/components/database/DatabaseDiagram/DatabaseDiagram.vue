@@ -19,6 +19,7 @@
       :autoSaveEnabled="autoSaveEnabled"
       :isSaving="isSaving"
       :searchQuery="searchQuery"
+      :enableTableDimming="enableTableDimming"
       @toggle-sort="showSortOptions = !showSortOptions"
       @sort="sortTables"
       @auto-layout="autoLayout"
@@ -37,6 +38,7 @@
       @undo="undo"
       @redo="redo"
       @search-change="searchQuery = $event"
+      @toggle-table-dimming="enableTableDimming = !enableTableDimming"
     />
 
     <!-- Main Diagram Container -->
@@ -62,6 +64,8 @@
         :tables="localTables"
         :zoomLevel="zoomLevel"
         :diagramOffset="diagramOffset"
+        :diagramWidth="diagramWidth"
+        :diagramHeight="diagramHeight"
         :highlightedColumn="highlightedColumn"
         layer="under"
         @relationship-click="selectRelationship"
@@ -79,7 +83,7 @@
           :isSelected="selectedTable === table.name"
           :isDragging="dragData?.table?.name === table.name"
           :isDimmed="table.isDimmed"
-          :isUnrelated="showOnlyRelatedRelationships && !table.isRelated"
+          :isUnrelated="enableTableDimming && showOnlyRelatedRelationships && !table.isRelated"
           :isHovered="hoveredTable === table.name"
           :zIndex="getTableZIndex(table)"
           @mouseenter="handleTableHover(table, true)"
@@ -102,6 +106,8 @@
         :tables="localTables"
         :zoomLevel="zoomLevel"
         :diagramOffset="diagramOffset"
+        :diagramWidth="diagramWidth"
+        :diagramHeight="diagramHeight"
         :highlightedColumn="highlightedColumn"
         layer="over"
         @relationship-click="selectRelationship"
@@ -175,6 +181,7 @@
 
 <script>
 import { debounce } from 'lodash'
+import html2canvas from 'html2canvas'
 import DiagramControls from './components/DiagramControls.vue'
 import DiagramContainer from './components/DiagramContainer.vue'
 import TableCard from './components/TableCard.vue'
@@ -274,6 +281,7 @@ export default {
       focusedTable: null,
       showOnlyRelatedRelationships: false,
       hoveredTable: null,
+      enableTableDimming: true, // Toggle để bật/tắt chế độ làm mờ bảng khi hover
     }
   },
   computed: {
@@ -1363,24 +1371,177 @@ export default {
     },
     async exportAsImage() {
       const container = this.$refs.diagramContainer ? this.$refs.diagramContainer.$el : null
-      if (!container) return
+      if (!container) {
+        console.error('Container not found')
+        return
+      }
 
+      // Lưu trạng thái ban đầu
+      const originalShowRelationships = this.showRelationships
+      
       try {
-        // Note: html2canvas would need to be imported
+        // Đảm bảo relationships được hiển thị
+        if (!this.showRelationships) {
+          this.showRelationships = true
+          await this.$nextTick()
+          // Đợi SVG render
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+
+        // Tìm tất cả SVG elements (relationship layers)
+        const svgElements = container.querySelectorAll('svg.relationships-layer')
+        
+        // Đảm bảo SVG có kích thước đúng
+        svgElements.forEach(svg => {
+          if (!svg.getAttribute('width') || !svg.getAttribute('height')) {
+            svg.setAttribute('width', container.scrollWidth || container.offsetWidth)
+            svg.setAttribute('height', container.scrollHeight || container.offsetHeight)
+          }
+        })
+
+        // Lưu dimensions và transform để dùng trong onclone
+        const diagramWidth = this.diagramWidth
+        const diagramHeight = this.diagramHeight
+        const offsetX = this.diagramOffset.x
+        const offsetY = this.diagramOffset.y
+        const zoom = this.zoomLevel
+
+        // Đợi một chút để đảm bảo SVG đã render hoàn toàn
+        await new Promise(resolve => setTimeout(resolve, 300))
+
+        // Capture toàn bộ diagram container với html2canvas
         const canvas = await html2canvas(container, {
-          backgroundColor: '#ffffff',
+          backgroundColor: '#f1f5f9',
           scale: 2,
           useCORS: true,
           allowTaint: true,
+          logging: false,
+          removeContainer: false,
+          width: container.scrollWidth || container.offsetWidth || diagramWidth,
+          height: container.scrollHeight || container.offsetHeight || diagramHeight,
+          onclone: (clonedDoc, element) => {
+            // Đảm bảo SVG trong cloned document có đầy đủ styles và attributes
+            const clonedSvgs = clonedDoc.querySelectorAll('svg.relationships-layer')
+            console.log('Found SVG elements:', clonedSvgs.length)
+            
+            clonedSvgs.forEach((svg, index) => {
+              console.log(`Processing SVG ${index + 1}`)
+              
+              // Remove CSS transform và apply trực tiếp vào SVG
+              svg.style.transform = 'none'
+              svg.style.position = 'absolute'
+              svg.style.top = '0'
+              svg.style.left = '0'
+              svg.style.width = `${diagramWidth}px`
+              svg.style.height = `${diagramHeight}px`
+              svg.style.pointerEvents = 'none'
+              svg.style.overflow = 'visible'
+              
+              // Set explicit dimensions và viewBox
+              svg.setAttribute('width', diagramWidth)
+              svg.setAttribute('height', diagramHeight)
+              svg.setAttribute('viewBox', `0 0 ${diagramWidth} ${diagramHeight}`)
+              
+              // Tạo một group để chứa tất cả paths với transform
+              const existingG = svg.querySelector('g.transform-group')
+              if (existingG) {
+                existingG.remove()
+              }
+              
+              const transformGroup = clonedDoc.createElementNS('http://www.w3.org/2000/svg', 'g')
+              transformGroup.setAttribute('transform', `translate(${offsetX}, ${offsetY}) scale(${zoom})`)
+              
+              // Move tất cả paths vào transform group
+              const paths = Array.from(svg.querySelectorAll('path'))
+              console.log(`Found ${paths.length} paths in SVG ${index + 1}`)
+              
+              // Lưu marker-end trước khi remove
+              const pathMarkers = paths.map(p => ({
+                markerEnd: p.getAttribute('marker-end'),
+                classes: p.getAttribute('class') || ''
+              }))
+              
+              paths.forEach((path, pathIndex) => {
+                // Clone path vào transform group
+                const clonedPath = path.cloneNode(true)
+                
+                // Đảm bảo path có đầy đủ attributes
+                if (!clonedPath.getAttribute('stroke')) {
+                  // Lấy màu từ class hoặc default
+                  const classes = clonedPath.getAttribute('class') || ''
+                  let strokeColor = '#64748b' // default gray
+                  
+                  if (classes.includes('relationship-colored')) {
+                    if (classes.includes('one-to-one')) {
+                      strokeColor = '#10b981'
+                    } else if (classes.includes('one-to-many')) {
+                      strokeColor = '#3b82f6'
+                    } else if (classes.includes('many-to-one')) {
+                      strokeColor = '#8b5cf6'
+                    } else if (classes.includes('many-to-many')) {
+                      strokeColor = '#f59e0b'
+                    }
+                  }
+                  
+                  clonedPath.setAttribute('stroke', strokeColor)
+                }
+                
+                if (!clonedPath.getAttribute('stroke-width')) {
+                  clonedPath.setAttribute('stroke-width', '2.5')
+                }
+                
+                if (!clonedPath.getAttribute('fill')) {
+                  clonedPath.setAttribute('fill', 'none')
+                }
+                
+                // Re-apply marker-end
+                if (pathMarkers[pathIndex]?.markerEnd) {
+                  clonedPath.setAttribute('marker-end', pathMarkers[pathIndex].markerEnd)
+                }
+                
+                transformGroup.appendChild(clonedPath)
+              })
+              
+              // Remove paths gốc và thêm transform group
+              paths.forEach(p => p.remove())
+              svg.appendChild(transformGroup)
+              
+              // Đảm bảo markers được copy và visible
+              const markers = svg.querySelectorAll('marker')
+              markers.forEach(marker => {
+                marker.setAttribute('overflow', 'visible')
+                const polygons = marker.querySelectorAll('polygon')
+                polygons.forEach(poly => {
+                  if (!poly.getAttribute('fill')) {
+                    // Lấy màu từ class của marker
+                    const markerId = marker.getAttribute('id') || ''
+                    let fillColor = '#64748b'
+                    if (markerId.includes('highlighted')) {
+                      fillColor = '#475569'
+                    }
+                    poly.setAttribute('fill', fillColor)
+                  }
+                })
+              })
+            })
+          },
         })
 
+        // Tạo download link
         const link = document.createElement('a')
         link.download = `database-diagram-${new Date().getTime()}.png`
-        link.href = canvas.toDataURL()
+        link.href = canvas.toDataURL('image/png', 1.0)
+        document.body.appendChild(link)
         link.click()
+        document.body.removeChild(link)
       } catch (error) {
         console.error('Failed to export image:', error)
         alert('Failed to export image. Please try again.')
+      } finally {
+        // Restore original state
+        if (this.showRelationships !== originalShowRelationships) {
+          this.showRelationships = originalShowRelationships
+        }
       }
     },
     showContextMenu(event) {
@@ -1432,14 +1593,20 @@ export default {
     },
     handleTableHover(table, isHovering) {
       if (isHovering) {
+        this.hoveredTable = table.name
         this.focusedTable = table
-        this.showOnlyRelatedRelationships = true
+        
+        // Chỉ làm mờ bảng khác nếu chế độ dimming được bật
+        if (this.enableTableDimming) {
+          this.showOnlyRelatedRelationships = true
 
-        this.localTables.forEach((t) => {
-          const isRelated = this.isTableRelatedToFocused(t)
-          t.isRelated = isRelated
-        })
+          this.localTables.forEach((t) => {
+            const isRelated = this.isTableRelatedToFocused(t)
+            t.isRelated = isRelated
+          })
+        }
       } else {
+        this.hoveredTable = null
         if (!this.highlightedColumn) {
           this.focusedTable = null
           this.showOnlyRelatedRelationships = false
@@ -1661,9 +1828,9 @@ export default {
   position: relative;
   width: 100%;
   height: 100%;
-  background-color: #f8fafc;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
   overflow: hidden;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .tables-container {

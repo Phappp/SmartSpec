@@ -1,5 +1,12 @@
 <template>
-  <svg class="relationships-layer" :class="layerClass" :style="layerStyle" v-if="showRelationships">
+  <svg 
+    class="relationships-layer" 
+    :class="layerClass" 
+    :style="layerStyle" 
+    :width="svgWidth" 
+    :height="svgHeight"
+    v-if="showRelationships"
+  >
     <defs>
       <marker
         :id="`arrowhead-${layer}`"
@@ -58,7 +65,14 @@ export default {
     tables: Array,
     zoomLevel: Number,
     diagramOffset: Object,
-
+    diagramWidth: {
+      type: Number,
+      default: 2000,
+    },
+    diagramHeight: {
+      type: Number,
+      default: 2000,
+    },
     layer: {
       type: String,
       default: 'over',
@@ -87,6 +101,12 @@ export default {
     },
     showRelationships() {
       return this.relationships && this.relationships.length > 0
+    },
+    svgWidth() {
+      return this.diagramWidth
+    },
+    svgHeight() {
+      return this.diagramHeight
     },
   },
   methods: {
@@ -148,32 +168,50 @@ export default {
     drawOrthogonalPath(startPoint, endPoint) {
       const start = startPoint
       const end = endPoint
+      const curveRadius = 15
 
-      if (start.side === 'right' && end.side === 'left' && Math.abs(start.y - end.y) < 50) {
-        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+      // Direct horizontal/vertical lines with smooth curves
+      if (start.side === 'right' && end.side === 'left' && Math.abs(start.y - end.y) < 100) {
+        const midX = (start.x + end.x) / 2
+        return `M ${start.x} ${start.y} C ${start.x + curveRadius} ${start.y}, ${midX - curveRadius} ${end.y}, ${midX} ${end.y} C ${midX + curveRadius} ${end.y}, ${end.x - curveRadius} ${end.y}, ${end.x} ${end.y}`
       }
 
-      if (start.side === 'left' && end.side === 'right' && Math.abs(start.y - end.y) < 50) {
-        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+      if (start.side === 'left' && end.side === 'right' && Math.abs(start.y - end.y) < 100) {
+        const midX = (start.x + end.x) / 2
+        return `M ${start.x} ${start.y} C ${start.x - curveRadius} ${start.y}, ${midX + curveRadius} ${end.y}, ${midX} ${end.y} C ${midX - curveRadius} ${end.y}, ${end.x + curveRadius} ${end.y}, ${end.x} ${end.y}`
       }
 
-      if (start.side === 'top' && end.side === 'bottom' && Math.abs(start.x - end.x) < 50) {
-        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+      if (start.side === 'top' && end.side === 'bottom' && Math.abs(start.x - end.x) < 100) {
+        const midY = (start.y + end.y) / 2
+        return `M ${start.x} ${start.y} C ${start.x} ${start.y - curveRadius}, ${end.x} ${midY + curveRadius}, ${end.x} ${midY} C ${end.x} ${midY - curveRadius}, ${end.x} ${end.y - curveRadius}, ${end.x} ${end.y}`
       }
 
-      if (start.side === 'bottom' && end.side === 'top' && Math.abs(start.x - end.x) < 50) {
-        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+      if (start.side === 'bottom' && end.side === 'top' && Math.abs(start.x - end.x) < 100) {
+        const midY = (start.y + end.y) / 2
+        return `M ${start.x} ${start.y} C ${start.x} ${start.y + curveRadius}, ${end.x} ${midY - curveRadius}, ${end.x} ${midY} C ${end.x} ${midY + curveRadius}, ${end.x} ${end.y + curveRadius}, ${end.x} ${end.y}`
       }
 
+      // Orthogonal path with smooth curves
       let path = `M ${start.x} ${start.y}`
 
       const firstMid = this.getFirstIntermediatePoint(start, end)
-      path += ` L ${firstMid.x} ${firstMid.y}`
-
       const secondMid = this.getSecondIntermediatePoint(firstMid, end, start)
+
+      // Use bezier curves for smooth transitions
+      if (start.side === 'right' || start.side === 'left') {
+        path += ` C ${start.x + (firstMid.x - start.x) * 0.5} ${start.y}, ${firstMid.x} ${firstMid.y - (firstMid.y - start.y) * 0.5}, ${firstMid.x} ${firstMid.y}`
+      } else {
+        path += ` C ${start.x} ${start.y + (firstMid.y - start.y) * 0.5}, ${firstMid.x - (firstMid.x - start.x) * 0.5} ${firstMid.y}, ${firstMid.x} ${firstMid.y}`
+      }
+
       path += ` L ${secondMid.x} ${secondMid.y}`
 
-      path += ` L ${end.x} ${end.y}`
+      // Smooth curve to end point
+      if (end.side === 'right' || end.side === 'left') {
+        path += ` C ${secondMid.x} ${secondMid.y + (end.y - secondMid.y) * 0.5}, ${end.x - (end.x - secondMid.x) * 0.5} ${end.y}, ${end.x} ${end.y}`
+      } else {
+        path += ` C ${secondMid.x + (end.x - secondMid.x) * 0.5} ${secondMid.y}, ${end.x} ${end.y - (end.y - secondMid.y) * 0.5}, ${end.x} ${end.y}`
+      }
 
       return path
     },
@@ -272,44 +310,52 @@ export default {
 
 .relationship-path {
   fill: none;
-  stroke: #9ca3af;
-  stroke-width: 2;
+  stroke: #64748b;
+  stroke-width: 2.5;
   pointer-events: stroke;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
-  opacity: 0.6;
+  opacity: 0.7;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
 .relationship-path:hover,
 .relationship-path.relationship-highlighted {
-  stroke-width: 3.2;
+  stroke-width: 3.5;
   opacity: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
 }
 
 .relationship-path.relationship-highlighted.one-to-one {
-  stroke: #06eea5;
+  stroke: #10b981;
+  filter: drop-shadow(0 2px 6px rgba(16, 185, 129, 0.4));
 }
 
 .relationship-path.relationship-highlighted.one-to-many {
-  stroke: #d6ff07;
+  stroke: #3b82f6;
+  filter: drop-shadow(0 2px 6px rgba(59, 130, 246, 0.4));
 }
 
 .relationship-path.relationship-highlighted.many-to-one {
-  stroke: #02eaff;
+  stroke: #8b5cf6;
+  filter: drop-shadow(0 2px 6px rgba(139, 92, 246, 0.4));
 }
 
 .relationship-path.relationship-highlighted.many-to-many {
-  stroke: #d97706;
+  stroke: #f59e0b;
+  filter: drop-shadow(0 2px 6px rgba(245, 158, 11, 0.4));
 }
 
 /* Arrowhead styles */
 .arrowhead {
-  fill: #9ca3af;
+  fill: #64748b;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
 .arrowhead-highlighted {
-  fill: #5c6066;
+  fill: #475569;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
 }
 
 .arrowhead-one-to-one {
@@ -346,24 +392,39 @@ export default {
 
 /* Relationship coloring when enabled */
 .relationship-path.relationship-colored.one-to-one {
-  stroke: #06eea5;
+  stroke: #10b981;
+  opacity: 0.8;
 }
 
 .relationship-path.relationship-colored.one-to-many {
-  stroke: #d6ff07;
+  stroke: #3b82f6;
+  opacity: 0.8;
 }
 
 .relationship-path.relationship-colored.many-to-one {
-  stroke: #02eaff;
+  stroke: #8b5cf6;
+  opacity: 0.8;
 }
 
 .relationship-path.relationship-colored.many-to-many {
-  stroke: #d97706;
+  stroke: #f59e0b;
+  opacity: 0.8;
 }
 
 .relationship-path.relationship-selected {
-  stroke-width: 3;
-  filter: drop-shadow(0 2px 4px rgba(29, 78, 216, 0.3));
+  stroke-width: 4;
+  opacity: 1;
+  filter: drop-shadow(0 4px 8px rgba(26, 54, 93, 0.4));
+  animation: pulse-relationship 2s ease-in-out infinite;
+}
+
+@keyframes pulse-relationship {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 /* Relationship type styles */

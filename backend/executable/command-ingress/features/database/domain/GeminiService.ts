@@ -943,9 +943,23 @@ export class DatabaseGeminiService {
   }
 
   /**
-   * FIX 6: Validate naming conventions
+   * FIX 6: Validate naming conventions and SQL reserved words
    */
   private validateNamingConventions(databaseSchema: any): any {
+    // SQL reserved words (comprehensive list)
+    const sqlReservedWords = new Set([
+      'select', 'insert', 'update', 'delete', 'create', 'drop', 'alter', 'table',
+      'where', 'from', 'join', 'inner', 'left', 'right', 'outer', 'on',
+      'group', 'order', 'by', 'having', 'distinct', 'union', 'all',
+      'and', 'or', 'not', 'in', 'exists', 'like', 'between', 'is', 'null',
+      'as', 'case', 'when', 'then', 'else', 'end', 'if', 'while', 'for',
+      'begin', 'commit', 'rollback', 'transaction', 'index', 'view', 'procedure',
+      'function', 'trigger', 'constraint', 'primary', 'foreign', 'key', 'unique',
+      'check', 'default', 'auto_increment', 'identity', 'sequence', 'database',
+      'schema', 'user', 'grant', 'revoke', 'privileges', 'values', 'set',
+      'into', 'return', 'declare', 'variable', 'cursor', 'fetch', 'open', 'close'
+    ]);
+
     databaseSchema.tables.forEach((table: any) => {
       // Table naming convention
       if (!/^[a-z][a-z0-9_]*$/.test(table.name)) {
@@ -954,11 +968,25 @@ export class DatabaseGeminiService {
         );
       }
 
+      // Check SQL reserved words for table name
+      if (sqlReservedWords.has(table.name.toLowerCase())) {
+        console.warn(
+          `⚠️ Table name '${table.name}' is a SQL reserved word. Consider renaming or escaping with quotes/backticks.`
+        );
+      }
+
       table.columns.forEach((column: any) => {
         // Column naming convention
         if (!/^[a-z][a-z0-9_]*$/.test(column.name)) {
           console.warn(
             `💡 Column name should be lowercase snake_case: ${table.name}.${column.name}`
+          );
+        }
+
+        // Check SQL reserved words for column name
+        if (sqlReservedWords.has(column.name.toLowerCase())) {
+          console.warn(
+            `⚠️ Column name '${table.name}.${column.name}' is a SQL reserved word. Consider renaming or escaping with quotes/backticks.`
           );
         }
 

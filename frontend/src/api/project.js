@@ -127,8 +127,10 @@ export const getDatabaseStats = (databaseId) => {
   return axiosClient.get(`/api/databases/${databaseId}/stats`);
 };
 
-export const exportDatabaseSQL = (databaseId) => {
-  return axiosClient.get(`/api/databases/${databaseId}/export-sql`);
+export const exportDatabaseSQL = (databaseId, dialect = 'mysql') => {
+  return axiosClient.get(`/api/databases/${databaseId}/export-sql`, {
+    params: { dialect }
+  });
 };
 
 export const validateTableStructure = (databaseId, tableData) => {

@@ -367,74 +367,18 @@ export class DatabaseCoreService {
     /**
      * [U] - Export database schema thành SQL
      */
-    public async exportDatabaseSQL(databaseId: string) {
-        const database = await DatabaseModel.findById(databaseId);
-        if (!database) throw new Error("Database not found");
-
-        const sqlStatements = database.tables
-            .map((table) => {
-                const columns = (table.columns || [])
-                    .map((col) => {
-                        let columnDef = `${col.name} ${col.type}`;
-                        if (col.length) columnDef += `(${col.length})`;
-                        if (!col.nullable) columnDef += ' NOT NULL';
-                        if (col.unique) columnDef += ' UNIQUE';
-
-                        // Xử lý primary key (không thêm AUTO_INCREMENT cho composite key)
-                        if (col.is_primary_key) {
-                            const isSinglePK = table.columns.filter(c => c.is_primary_key).length === 1;
-                            columnDef += ' PRIMARY KEY';
-                            if (isSinglePK) columnDef += ' AUTO_INCREMENT';
-                        }
-
-                        if (col.default) {
-                            if (['VARCHAR', 'CHAR', 'TEXT', 'LONGTEXT'].includes(col.type)) {
-                                const formattedDefault =
-                                    col.default.startsWith("'") && col.default.endsWith("'")
-                                        ? col.default
-                                        : `'${col.default}'`;
-                                columnDef += ` DEFAULT ${formattedDefault}`;
-                            } else {
-                                columnDef += ` DEFAULT ${col.default}`;
-                            }
-                        }
-                        return columnDef;
-                    })
-                    .join(',\n  ');
-
-                // Xử lý composite primary key constraint
-                const primaryKeyColumns = table.columns.filter(col => col.is_primary_key);
-                let compositeKeyConstraint = '';
-
-                if (primaryKeyColumns.length > 1) {
-                    const pkColumnNames = primaryKeyColumns
-                        .sort((a, b) => (a.primary_key_order || 0) - (b.primary_key_order || 0))
-                        .map(col => col.name)
-                        .join(', ');
-
-                    compositeKeyConstraint = `,\n  PRIMARY KEY (${pkColumnNames})`;
-                }
-
-                const foreignKeys = (table.columns || [])
-                    .filter((col) => col.is_foreign_key && col.references)
-                    .map((col) => {
-                        // Tìm primary key của bảng được reference
-                        const referencedTable = database.tables.find(t => t.name === col.references);
-                        const referencedPK = referencedTable?.columns.find(c => c.is_primary_key);
-                        const pkColumnName = referencedPK?.name || 'id';
-
-                        return `FOREIGN KEY (${col.name}) REFERENCES ${col.references}(${pkColumnName})`;
-                    })
-                    .join(',\n  ');
-
-                const constraints = [compositeKeyConstraint, foreignKeys]
-                    .filter(Boolean)
-                    .join(',\n  ');
-
-                return `CREATE TABLE ${table.name} (\n  ${columns}${constraints ? ',\n  ' + constraints : ''}\n);`;
-            })
-            .join('\n\n');
-
-        return sqlStatements;
+    public async exportDatabaseSQL(databaseId: string, dialect: 'mysql' | 'postgresql' | 'sqlserver' | 'oracle' | 'sqlite' = 'mysql') {
+        const { SQLGenerationService } = await import('./SQLGenerationService');
+        const sqlService = new SQLGenerationService();
+        
+        return sqlService.generateSQL(databaseId, {
+            dialect,
+            includeIndexes: true,
+            includeComments: true,
+            foreignKeyActions: {
+                onDelete: 'RESTRICT',
+                onUpdate: 'RESTRICT'
+            }
+        });
     }
 }

@@ -1240,6 +1240,17 @@ export default {
     document.removeEventListener('click', this.handleClickOutside)
   },
   methods: {
+    // Helper: Normalize ID (convert ObjectId to string)
+    normalizeId(id) {
+      if (!id) return null
+      if (typeof id === 'object' && id.$oid) {
+        return id.$oid
+      }
+      if (typeof id === 'object' && id.toString) {
+        return id.toString()
+      }
+      return String(id)
+    },
     // Helper: Get usecase ID (support both _id and id for backward compatibility)
     getUsecaseId(uc) {
       if (!uc) return ''
@@ -2396,8 +2407,54 @@ export default {
     },
 
     handleSequencePositionUpdate({ element, type, position }) {
-      // TODO: Implement for sequence diagrams
-      console.log('Sequence diagram position update:', { element, type, position })
+      if (!this.editingDiagram) return
+
+      if (type === 'lifeline') {
+        // Normalize IDs để so sánh
+        const elementId = this.normalizeId(element._originalData?._id || element._originalData?.id || element.id)
+        const lifelineIndex = this.editingDiagram.lifelines.findIndex(
+          (ll) => {
+            const llId = this.normalizeId(ll._id || ll.id)
+            return llId === elementId
+          }
+        )
+        if (lifelineIndex !== -1) {
+          // Vue 3 không cần $set, chỉ cần assign trực tiếp
+          if (!this.editingDiagram.lifelines[lifelineIndex].position) {
+            this.editingDiagram.lifelines[lifelineIndex].position = { x: 0, y: 0 }
+          }
+          this.editingDiagram.lifelines[lifelineIndex].position = {
+            x: Math.round(position.x),
+            y: Math.round(position.y)
+          }
+        } else {
+          console.warn('⚠️ Lifeline not found in editingDiagram:', {
+            elementId,
+            element: element._originalData,
+            availableLifelines: this.editingDiagram.lifelines.map((ll, idx) => ({
+              index: idx,
+              _id: ll._id,
+              id: ll.id,
+              normalized: this.normalizeId(ll._id || ll.id),
+              name: ll.name
+            }))
+          })
+        }
+      } else if (type === 'message') {
+        const elementId = this.normalizeId(element._originalData?._id || element._originalData?.id || element.id)
+        const messageIndex = this.editingDiagram.messages.findIndex(
+          (msg) => {
+            const msgId = this.normalizeId(msg._id || msg.id)
+            return msgId === elementId
+          }
+        )
+        if (messageIndex !== -1) {
+          if (!this.editingDiagram.messages[messageIndex].position) {
+            this.editingDiagram.messages[messageIndex].position = {}
+          }
+          this.editingDiagram.messages[messageIndex].position.y = Math.round(position.y)
+        }
+      }
     },
 
     async saveActivityPositions(diagramId) {
@@ -2423,11 +2480,11 @@ export default {
                     (n) => n.id === updatedNode.id
                   )
                   if (localNodeIndex !== -1 && updatedNode.position) {
-                    // ✅ Dùng Vue.set để đảm bảo Vue detect được thay đổi
-                    this.$set(this.editingDiagram.nodes[localNodeIndex], 'position', {
+                    // Vue 3 không cần $set, chỉ cần assign trực tiếp
+                    this.editingDiagram.nodes[localNodeIndex].position = {
                       x: updatedNode.position.x,
                       y: updatedNode.position.y,
-                    })
+                    }
                   }
                 })
               }
@@ -2444,8 +2501,61 @@ export default {
     },
 
     async saveSequencePositions(diagramId) {
-      // TODO: Implement for sequence diagrams
-      console.log('Saving sequence diagram positions:', diagramId)
+      if (!this.editingDiagram || !this.editingDiagram.lifelines) return
+
+      try {
+        const { updateLifelinePosition } = await import('@/api/sqd')
+        
+        // Save tất cả lifelines có position (không filter vì có thể position là 0,0 hợp lệ)
+        const lifelinesToSave = this.editingDiagram.lifelines.filter(
+          (ll) => ll.position && typeof ll.position.x === 'number' && typeof ll.position.y === 'number'
+        )
+
+        console.log('💾 Saving sequence diagram positions:', {
+          diagramId,
+          totalLifelines: this.editingDiagram.lifelines.length,
+          lifelinesToSave: lifelinesToSave.length,
+          lifelines: lifelinesToSave.map(ll => ({
+            id: ll._id || ll.id,
+            normalizedId: this.normalizeId(ll._id || ll.id),
+            name: ll.name,
+            position: ll.position
+          }))
+        })
+
+        for (const lifeline of lifelinesToSave) {
+          // Normalize ID để gửi lên backend
+          const lifelineId = this.normalizeId(lifeline._id || lifeline.id)
+          if (lifelineId && lifeline.position) {
+            try {
+              console.log('💾 Saving lifeline position:', { 
+                diagramId, 
+                lifelineId, 
+                position: lifeline.position,
+                lifelineName: lifeline.name
+              })
+              await updateLifelinePosition(diagramId, lifelineId, {
+                x: Math.round(lifeline.position.x),
+                y: Math.round(lifeline.position.y),
+              })
+            } catch (err) {
+              console.error(`❌ Error saving lifeline ${lifelineId} (${lifeline.name}):`, err)
+              // Tiếp tục save các lifeline khác dù có lỗi
+            }
+          } else {
+            console.warn('⚠️ Skipping lifeline without ID or position:', {
+              lifeline: lifeline,
+              hasId: !!(lifeline._id || lifeline.id),
+              hasPosition: !!lifeline.position
+            })
+          }
+        }
+
+        console.log('💾 Sequence diagram positions saved successfully')
+      } catch (err) {
+        console.error('❌ Error saving sequence diagram positions:', err)
+        throw err
+      }
     },
     handleElementDrag({ element, type, newPosition }) {
       this.handlePositionUpdate({ element, type, position: newPosition })
@@ -2472,10 +2582,10 @@ export default {
             if (updatedDiagram) {
               const index = this.usecaseDiagrams.findIndex((d) => (d.id || d._id) === diagramId)
               if (index !== -1) {
-                this.$set(this.usecaseDiagrams, index, {
+                this.usecaseDiagrams[index] = {
                   ...this.processDiagrams([updatedDiagram], 'usecase')[0],
                   previewImage: this.usecaseDiagrams[index].previewImage, // Giữ preview image cũ
-                })
+                }
               } else {
                 // Nếu không tìm thấy trong list, thêm vào (trường hợp diagram mới được tạo)
                 this.usecaseDiagrams.push(this.processDiagrams([updatedDiagram], 'usecase')[0])
@@ -2488,10 +2598,10 @@ export default {
             if (updatedDiagram) {
               const index = this.activityDiagrams.findIndex((d) => (d.id || d._id) === diagramId)
               if (index !== -1) {
-                this.$set(this.activityDiagrams, index, {
+                this.activityDiagrams[index] = {
                   ...this.processDiagrams([updatedDiagram], 'activity')[0],
                   previewImage: this.activityDiagrams[index].previewImage, // Giữ preview image cũ
-                })
+                }
               } else {
                 // Nếu không tìm thấy trong list, thêm vào (trường hợp diagram mới được tạo)
                 this.activityDiagrams.push(this.processDiagrams([updatedDiagram], 'activity')[0])
@@ -2504,10 +2614,10 @@ export default {
             if (updatedDiagram) {
               const index = this.sequenceDiagrams.findIndex((d) => (d.id || d._id) === diagramId)
               if (index !== -1) {
-                this.$set(this.sequenceDiagrams, index, {
+                this.sequenceDiagrams[index] = {
                   ...this.processDiagrams([updatedDiagram], 'sequence')[0],
                   previewImage: this.sequenceDiagrams[index].previewImage, // Giữ preview image cũ
-                })
+                }
               } else {
                 // Nếu không tìm thấy trong list, thêm vào (trường hợp diagram mới được tạo)
                 this.sequenceDiagrams.push(this.processDiagrams([updatedDiagram], 'sequence')[0])
@@ -2643,10 +2753,20 @@ export default {
 <style scoped>
 .uml-management-view {
   padding: 30px;
-  background: #f9fafb;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .uml-content {
@@ -2655,6 +2775,18 @@ export default {
   margin: 0 auto;
   margin-top: 24px;
   width: 100%;
+  animation: fadeInUp 0.6s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Header */
@@ -2668,7 +2800,10 @@ export default {
 .header-left h2 {
   font-size: 2rem;
   font-weight: 700;
-  color: #1a365d;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0 0 8px 0;
 }
 
@@ -2687,18 +2822,50 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
-  background: #1a365d;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-weight: 600;
+  font-size: 0.875rem;
   cursor: pointer;
-  transition: background 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.2);
+  position: relative;
+  overflow: hidden;
 }
 
-.btn-primary:hover {
-  background: #2d4a8a;
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn-primary:hover:not(:disabled)::before {
+  left: 100%;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2d4a8a 0%, #3d5a9a 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.3);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.2);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .btn-primary.small {
@@ -2710,37 +2877,68 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 10px 20px;
+  background: white;
+  color: #475569;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-weight: 500;
+  font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .btn-secondary:hover {
-  background: #e5e7eb;
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.btn-secondary:active {
+  transform: translateY(0);
 }
 
 .btn-icon {
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  border: none;
-  border-radius: 6px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
   cursor: pointer;
   color: #374151;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-icon::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s;
+}
+
+.btn-icon:hover::before {
+  left: 100%;
 }
 
 .btn-icon:hover {
-  background: white;
-  transform: scale(1.1);
+  background: rgba(255, 255, 255, 1);
+  transform: scale(1.15) translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
 .btn-icon.danger:hover {
-  background: #fee2e2;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
   color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.3);
 }
 
 .btn-close {
@@ -2769,16 +2967,26 @@ export default {
 
 .diagram-section {
   background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 4px 20px rgba(26, 54, 93, 0.12);
+  margin-bottom: 32px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  transition: all 0.3s ease;
+}
+
+.diagram-section:hover {
+  box-shadow: 0 8px 30px rgba(26, 54, 93, 0.15);
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #f1f5f9;
+  position: relative;
 }
 
 .section-title {
@@ -2788,15 +2996,37 @@ export default {
 }
 
 .section-title h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: 1.75rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0;
+  position: relative;
+  padding-left: 12px;
+}
+
+.section-title h3::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 24px;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  border-radius: 2px;
 }
 
 .diagram-count {
-  color: #6b7280;
+  color: #64748b;
   font-size: 0.875rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  border-radius: 12px;
+  margin-left: 8px;
 }
 
 .section-controls {
@@ -2813,23 +3043,33 @@ export default {
 
 .search-icon {
   position: absolute;
-  left: 12px;
-  color: #9ca3af;
-  font-size: 20px;
+  left: 14px;
+  color: #94a3b8;
+  font-size: 18px;
+  z-index: 1;
+  transition: color 0.3s ease;
+}
+
+.search-box:focus-within .search-icon {
+  color: #1a365d;
 }
 
 .search-input {
-  padding: 8px 12px 8px 40px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 10px 12px 10px 40px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
   font-size: 0.875rem;
-  width: 250px;
-  transition: border-color 0.3s ease;
+  width: 280px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .search-input:focus {
   outline: none;
   border-color: #1a365d;
+  box-shadow: 0 0 0 4px rgba(26, 54, 93, 0.1), 0 4px 12px rgba(26, 54, 93, 0.15);
+  transform: translateY(-1px);
 }
 
 .filter-controls {
@@ -2841,6 +3081,9 @@ export default {
 .diagrams-scroll-container-wrapper {
   position: relative;
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0;
 }
 
 .diagrams-scroll-container {
@@ -2849,50 +3092,74 @@ export default {
   padding-bottom: 8px;
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 #f1f5f9;
+  flex: 1;
+  min-width: 0;
 }
 
 .diagrams-scroll-container::-webkit-scrollbar {
-  height: 8px;
+  height: 10px;
 }
 
 .diagrams-scroll-container::-webkit-scrollbar-track {
   background: #f1f5f9;
-  border-radius: 4px;
+  border-radius: 10px;
 }
 
 .diagrams-scroll-container::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%);
+  border-radius: 10px;
+  border: 2px solid #f1f5f9;
 }
 
 .diagrams-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
 }
 
 .diagrams-scroll-content {
   display: flex;
-  gap: 20px;
+  gap: 24px;
   min-width: min-content;
-  padding: 2px 0; /* Add padding để không bị cắt border */
+  padding: 4px 0; /* Add padding để không bị cắt border */
+  animation: fadeIn 0.5s ease;
 }
 
 /* Diagram Cards */
 .diagram-card {
   background: white;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e2e8f0;
   min-width: 300px;
   max-width: 300px;
   flex-shrink: 0;
+  position: relative;
+}
+
+.diagram-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  padding: 2px;
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.1) 0%, rgba(45, 74, 138, 0.1) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.diagram-card:hover::before {
+  opacity: 1;
 }
 
 .diagram-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 12px 32px rgba(26, 54, 93, 0.2);
+  border-color: #cbd5e1;
 }
 
 /* Diagram Preview với ảnh */
@@ -2937,10 +3204,22 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  color: #6b7280;
-  font-size: 14px;
-  background: #f8fafc;
+  gap: 12px;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  animation: fadeIn 0.3s ease;
+}
+
+.generating-preview .loading-spinner-small {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #e2e8f0;
+  border-top: 3px solid #1a365d;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.1);
 }
 
 .diagram-overlay {
@@ -2949,13 +3228,14 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.85) 0%, rgba(45, 74, 138, 0.9) 100%);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .diagram-card:hover .diagram-overlay {
@@ -2963,24 +3243,28 @@ export default {
 }
 
 .diagram-info {
-  padding: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
 }
 
 .diagram-info h4 {
-  margin: 0 0 8px 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1f2937;
+  margin: 0 0 10px 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .diagram-description {
-  margin: 0 0 12px 0;
-  color: #6b7280;
+  margin: 0 0 16px 0;
+  color: #64748b;
   font-size: 0.875rem;
-  line-height: 1.4;
+  line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -2991,39 +3275,65 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.5);
 }
 
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   font-size: 0.75rem;
-  color: #9ca3af;
+  font-weight: 500;
+  color: #64748b;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.meta-item:hover {
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.meta-item .material-symbols-outlined {
+  font-size: 16px;
 }
 
 /* Type Badges */
 .diagram-type-badge,
 .type-badge {
-  padding: 4px 8px;
+  padding: 6px 12px;
   border-radius: 12px;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
 }
 
 .type-usecase {
-  background: #dbeafe;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
   color: #1e40af;
 }
 
 .type-activity {
-  background: #dcfce7;
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
   color: #166534;
 }
 
 .type-sequence {
-  background: #fef3c7;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
   color: #92400e;
+}
+
+.diagram-type-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .diagram-stats {
@@ -3035,51 +3345,109 @@ export default {
 .stat-badge {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  background: #f3f4f6;
+  gap: 6px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-radius: 12px;
   font-size: 0.75rem;
-  color: #374151;
+  font-weight: 600;
+  color: #475569;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  border: 1px solid rgba(226, 232, 240, 0.5);
+}
+
+.stat-badge:hover {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stat-badge .material-symbols-outlined {
+  font-size: 16px;
 }
 
 /* Empty Section */
 .empty-section {
   text-align: center;
-  padding: 40px 20px;
+  padding: 60px 20px;
   min-width: 300px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
+  color: #64748b;
+  animation: fadeInUp 0.6s ease;
 }
 
 .empty-icon {
-  width: 60px;
-  height: 60px;
-  margin-bottom: 16px;
-  background: #f3f4f6;
+  width: 100px;
+  height: 100px;
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  animation: float 3s ease-in-out infinite;
+  position: relative;
+}
+
+.empty-icon::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1a365d, #2d4a8a);
+  opacity: 0.1;
+  z-index: -1;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.2;
+  }
 }
 
 .empty-icon .material-symbols-outlined {
-  font-size: 30px;
-  color: #9ca3af;
+  font-size: 48px;
+  color: #64748b;
+  animation: spin 20s linear infinite;
 }
 
 .empty-section h4 {
-  margin: 0 0 8px 0;
-  color: #374151;
-  font-size: 1rem;
+  margin: 0 0 12px 0;
+  color: #1e293b;
+  font-size: 1.25rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .empty-section p {
-  margin: 0 0 16px 0;
-  font-size: 0.875rem;
+  margin: 0 0 24px 0;
+  font-size: 0.9rem;
+  color: #64748b;
+  max-width: 300px;
+  line-height: 1.6;
 }
 
 .empty-section.loading-section {
@@ -3116,12 +3484,23 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 20px;
+  animation: modalFade 0.2s ease;
+}
+
+@keyframes modalFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .modal-overlay.large {
@@ -3130,11 +3509,24 @@ export default {
 
 .modal-content {
   background: white;
-  border-radius: 12px;
+  border-radius: 20px;
   width: 90%;
   max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalSlideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .modal-content.fullscreen {
@@ -3146,17 +3538,21 @@ export default {
 }
 
 .modal-header {
-  padding: 20px;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 24px;
+  border-bottom: 2px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
 }
 
 .modal-header h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0;
 }
 
@@ -3212,11 +3608,13 @@ export default {
 .form-group select,
 .form-group textarea {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 10px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
   font-size: 0.875rem;
-  transition: border-color 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .form-group input:focus,
@@ -3224,6 +3622,8 @@ export default {
 .form-group textarea:focus {
   outline: none;
   border-color: #1a365d;
+  box-shadow: 0 0 0 4px rgba(26, 54, 93, 0.1), 0 4px 12px rgba(26, 54, 93, 0.15);
+  transform: translateY(-1px);
 }
 
 .form-group textarea {
@@ -3244,18 +3644,23 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
-  color: #6b7280;
+  padding: 100px 40px;
+  color: #64748b;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(26, 54, 93, 0.12);
+  animation: fadeInUp 0.5s ease;
 }
 
 .loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #f3f4f6;
-  border-top: 3px solid #1a365d;
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e2e8f0;
+  border-top: 4px solid #1a365d;
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.1);
 }
 
 .loading-spinner-small {
@@ -3289,33 +3694,53 @@ export default {
 
 .export-options {
   position: absolute;
-  top: 100%;
-  left: -100%;
+  top: calc(100% + 8px);
+  left: 0;
   background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   z-index: 10;
-  min-width: 140px;
-  margin-top: 4px;
+  min-width: 160px;
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
 }
 
 .export-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
   color: #374151;
-  transition: background 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.export-option::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, rgba(26, 54, 93, 0.1) 0%, rgba(45, 74, 138, 0.1) 100%);
+  transition: width 0.3s ease;
+}
+
+.export-option:hover::before {
+  width: 100%;
 }
 
 .export-option:hover {
-  background: #f3f4f6;
+  background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
+  padding-left: 18px;
+  color: #1a365d;
 }
 
 .export-option:first-child {
@@ -3353,22 +3778,45 @@ export default {
   top: 50%;
   transform: translateY(-50%);
   z-index: 100;
-  width: 40px;
-  height: 40px;
-  background: white;
-  border: 1px solid #e5e7eb;
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1.5px solid #e2e8f0;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.scroll-arrow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(26, 54, 93, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.scroll-arrow:hover:not(:disabled)::before {
+  left: 100%;
 }
 
 .scroll-arrow:hover:not(:disabled) {
-  background: #f3f4f6;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  border-color: #1a365d;
+  box-shadow: 0 6px 20px rgba(26, 54, 93, 0.3);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.scroll-arrow:hover:not(:disabled) .material-symbols-outlined {
+  color: white;
 }
 
 .scroll-arrow:disabled {
@@ -3377,16 +3825,19 @@ export default {
 }
 
 .scroll-arrow-left {
-  left: -20px;
+  left: -22px;
 }
 
 .scroll-arrow-right {
-  right: -20px;
+  right: -22px;
 }
 
 .scroll-arrow .material-symbols-outlined {
   font-size: 24px;
-  color: #374151;
+  color: #64748b;
+  transition: color 0.3s ease;
+  position: relative;
+  z-index: 1;
 }
 
 /* Diagram Generating Overlay - Giản dị */
@@ -3529,11 +3980,11 @@ export default {
   
   /* Adjust scroll arrows for mobile */
   .scroll-arrow-left {
-    left: -15px;
+    left: -18px;
   }
   
   .scroll-arrow-right {
-    right: -15px;
+    right: -18px;
   }
   
   .scroll-arrow {
@@ -3564,11 +4015,11 @@ export default {
   }
   
   .scroll-arrow-left {
-    left: -10px;
+    left: -16px;
   }
   
   .scroll-arrow-right {
-    right: -10px;
+    right: -16px;
   }
   
   .scroll-arrow {
@@ -3599,18 +4050,38 @@ export default {
   width: 40px;
   height: 40px;
   padding: 0;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
   background: white;
-  color: #6b7280;
+  color: #64748b;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.filter-icon-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(26, 54, 93, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.filter-icon-btn:hover::before {
+  left: 100%;
 }
 
 .filter-icon-btn:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
-  color: #374151;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: #1a365d;
+  color: #1a365d;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
 }
 
 .filter-icon-btn .material-symbols-outlined {
@@ -3622,12 +4093,45 @@ export default {
   top: calc(100% + 8px);
   right: 0;
   min-width: 200px;
+  max-width: 300px;
+  max-height: 400px;
+  overflow-y: auto;
   background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  z-index: 100;
-  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+}
+
+.filter-dropdown-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.filter-dropdown-menu::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.filter-dropdown-menu::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.filter-dropdown-menu::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .filter-option {
@@ -3635,24 +4139,48 @@ export default {
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 12px 16px;
+  padding: 12px 18px;
   border: none;
   background: white;
   color: #374151;
   font-size: 0.875rem;
   text-align: left;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  border-left: 3px solid transparent;
+}
+
+.filter-option::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  transition: width 0.3s ease;
 }
 
 .filter-option:hover {
-  background: #f9fafb;
+  background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
+  padding-left: 20px;
+}
+
+.filter-option:hover::before {
+  width: 3px;
 }
 
 .filter-option.active {
-  background: #eff6ff;
-  color: #1e40af;
-  font-weight: 500;
+  background: linear-gradient(90deg, #e6f2ff 0%, #dbeafe 100%);
+  color: #1a365d;
+  font-weight: 600;
+  border-left-color: #1a365d;
+  padding-left: 20px;
+}
+
+.filter-option.active::before {
+  width: 3px;
 }
 
 .filter-option .material-symbols-outlined {

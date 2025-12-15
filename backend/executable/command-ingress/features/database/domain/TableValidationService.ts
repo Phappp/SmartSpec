@@ -141,6 +141,24 @@ export class TableValidationService {
             throw new Error(`Invalid table name: '${tableData.name}'. Must start with letter or underscore and contain only alphanumeric characters and underscores.`);
         }
 
+        // Kiểm tra tên bảng trùng với SQL reserved words
+        const sqlReservedWords = new Set([
+            'select', 'insert', 'update', 'delete', 'create', 'drop', 'alter', 'table',
+            'where', 'from', 'join', 'inner', 'left', 'right', 'outer', 'on',
+            'group', 'order', 'by', 'having', 'distinct', 'union', 'all',
+            'and', 'or', 'not', 'in', 'exists', 'like', 'between', 'is', 'null',
+            'as', 'case', 'when', 'then', 'else', 'end', 'if', 'while', 'for',
+            'begin', 'commit', 'rollback', 'transaction', 'index', 'view', 'procedure',
+            'function', 'trigger', 'constraint', 'primary', 'foreign', 'key', 'unique',
+            'check', 'default', 'auto_increment', 'identity', 'sequence', 'database',
+            'schema', 'user', 'grant', 'revoke', 'privileges', 'values', 'set',
+            'into', 'return', 'declare', 'variable', 'cursor', 'fetch', 'open', 'close'
+        ]);
+        
+        if (sqlReservedWords.has(tableData.name.toLowerCase())) {
+            throw new Error(`Table name '${tableData.name}' is a SQL reserved word. Please use a different name or escape it with quotes/backticks.`);
+        }
+
         // Kiểm tra độ dài tên bảng
         if (tableData.name.length > 64) {
             throw new Error(`Table name '${tableData.name}' exceeds 64 character limit`);
@@ -262,10 +280,22 @@ export class TableValidationService {
             throw new Error(`Column name '${column.name}' exceeds 64 character limit`);
         }
 
-        // Kiểm tra tên cột trùng với SQL keywords
-        const sqlKeywords = ['select', 'insert', 'update', 'delete', 'where', 'group', 'order', 'table'];
-        if (sqlKeywords.includes(column.name.toLowerCase())) {
-            console.warn(`⚠️ Column name '${column.name}' is a SQL keyword - may cause issues in queries`);
+        // Kiểm tra tên cột trùng với SQL reserved words (comprehensive list)
+        const sqlReservedWords = new Set([
+            'select', 'insert', 'update', 'delete', 'create', 'drop', 'alter', 'table',
+            'where', 'from', 'join', 'inner', 'left', 'right', 'outer', 'on',
+            'group', 'order', 'by', 'having', 'distinct', 'union', 'all',
+            'and', 'or', 'not', 'in', 'exists', 'like', 'between', 'is', 'null',
+            'as', 'case', 'when', 'then', 'else', 'end', 'if', 'while', 'for',
+            'begin', 'commit', 'rollback', 'transaction', 'index', 'view', 'procedure',
+            'function', 'trigger', 'constraint', 'primary', 'foreign', 'key', 'unique',
+            'check', 'default', 'auto_increment', 'identity', 'sequence', 'database',
+            'schema', 'user', 'grant', 'revoke', 'privileges', 'values', 'set',
+            'into', 'return', 'declare', 'variable', 'cursor', 'fetch', 'open', 'close'
+        ]);
+        
+        if (sqlReservedWords.has(column.name.toLowerCase())) {
+            throw new Error(`Column name '${column.name}' is a SQL reserved word. Please use a different name or escape it with quotes/backticks.`);
         }
 
         // Kiểm tra DEFAULT values

@@ -122,18 +122,19 @@ export default {
 <style scoped>
 .table-card {
   position: absolute;
-  width: 300px;
-  min-height: 300px;
-  max-height: 300px;
+  width: 320px;
+  min-height: 200px;
+  max-height: 500px;
   background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.1);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: grab;
   overflow: hidden;
   user-select: none;
   z-index: 10;
+  backdrop-filter: blur(10px);
 }
 
 .table-card.column-highlighted {
@@ -167,9 +168,9 @@ export default {
 }
 
 .table-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 8px 25px -8px rgba(59, 130, 246, 0.15), 0 4px 12px -4px rgba(0, 0, 0, 0.1);
-  transform: translateY(-4px) scale(1.02);
+  border-color: #1a365d;
+  box-shadow: 0 12px 40px rgba(26, 54, 93, 0.15), 0 4px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-6px) scale(1.03);
   z-index: 100;
 }
 
@@ -210,36 +211,100 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: #1a365d;
-  border-bottom: 1px solid #e5e7eb;
-  border-radius: 10px 10px 0 0;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px 14px 0 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.table-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.table-card:hover .table-header::before {
+  left: 100%;
 }
 
 .table-header h4 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: white;
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-header h4::before {
+  content: 'table';
+  font-family: 'Material Symbols Outlined';
+  font-size: 18px;
+  font-weight: normal;
+  opacity: 0.9;
 }
 
 .table-actions {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(10px);
 }
 
 .table-card:hover .table-actions {
   opacity: 1;
+  transform: translateX(0);
+}
+
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+.btn-icon:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-icon.danger:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.btn-icon .material-symbols-outlined {
+  font-size: 16px;
 }
 
 .table-description {
-  padding: 8px 16px;
+  padding: 10px 18px;
   font-size: 12px;
-  color: #6b7280;
-  border-bottom: 1px solid #f3f4f6;
-  background: #fafafa;
+  color: #64748b;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  font-style: italic;
+  line-height: 1.5;
 }
 
 .table-columns {
@@ -250,17 +315,36 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px;
-  border-bottom: 1px solid #f3f4f6;
-  transition: background-color 0.2s ease;
+  padding: 10px 18px;
+  border-bottom: 1px solid #f1f5f9;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.table-column::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+  transition: background 0.2s ease;
 }
 
 .table-column:hover {
-  background: #f8fafc;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  padding-left: 22px;
+}
+
+.table-column:hover::before {
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
 }
 
 .table-column.column-highlighted {
-  background: #dbeafe;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-left: 3px solid #3b82f6;
+  padding-left: 22px;
 }
 
 .column-name {
@@ -282,27 +366,36 @@ export default {
 }
 
 .column-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
   color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.column-badge:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .column-badge.pk {
-  background: #ef4444;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
 }
 
 .column-badge.fk {
-  background: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
 }
 
 .column-badge.nn {
-  background: #f59e0b;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
 }
 
 .column-badge.uq {
-  background: #10b981;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
 }
 
 /* Connection Points */
