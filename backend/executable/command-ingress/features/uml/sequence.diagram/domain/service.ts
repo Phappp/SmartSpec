@@ -423,4 +423,336 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
     await sequenceDiagram.save();
     return this.getSequenceDiagramById(sqdId);
   }
+
+  // ==================== LIFELINE CRUD ====================
+  public async updateLifeline(
+    sqdId: string,
+    lifelineId: string,
+    data: { name?: string; description?: string }
+  ): Promise<SequenceDiagramResponse> {
+    const sequenceDiagram = await SequenceDiagramSchema.findById(sqdId);
+    if (!sequenceDiagram) {
+      throw new Error("Sequence Diagram not found");
+    }
+
+    const normalizedLifelineId = String(lifelineId);
+    const lifelineIndex = sequenceDiagram.lifelines.findIndex(
+      (lifeline: any) => {
+        const lifelineIdStr = lifeline._id ? String(lifeline._id) : String(lifeline.id || '');
+        return lifelineIdStr === normalizedLifelineId;
+      }
+    );
+
+    if (lifelineIndex === -1) {
+      throw new Error(`Lifeline not found: ${lifelineId}`);
+    }
+
+    if (data.name !== undefined) {
+      sequenceDiagram.lifelines[lifelineIndex].name = data.name;
+    }
+    if (data.description !== undefined) {
+      sequenceDiagram.lifelines[lifelineIndex].description = data.description;
+    }
+
+    sequenceDiagram.markModified('lifelines');
+    await sequenceDiagram.save();
+
+    return this.getSequenceDiagramById(sqdId);
+  }
+
+  public async deleteLifeline(sqdId: string, lifelineId: string): Promise<void> {
+    const sequenceDiagram = await SequenceDiagramSchema.findById(sqdId);
+    if (!sequenceDiagram) {
+      throw new Error("Sequence Diagram not found");
+    }
+
+    const normalizedLifelineId = String(lifelineId);
+    const lifelineIndex = sequenceDiagram.lifelines.findIndex(
+      (lifeline: any) => {
+        const lifelineIdStr = lifeline._id ? String(lifeline._id) : String(lifeline.id || '');
+        return lifelineIdStr === normalizedLifelineId;
+      }
+    );
+
+    if (lifelineIndex === -1) {
+      throw new Error(`Lifeline not found: ${lifelineId}`);
+    }
+
+    // Lưu ObjectId của lifeline trước khi xóa
+    const lifelineObjectId = sequenceDiagram.lifelines[lifelineIndex]._id;
+
+    // Xóa tất cả messages liên quan đến lifeline này
+    const messagesToKeep: any[] = [];
+    for (let i = sequenceDiagram.messages.length - 1; i >= 0; i--) {
+      const message = sequenceDiagram.messages[i];
+      const sourceId = message.source_lifeline_id ? String(message.source_lifeline_id) : '';
+      const targetId = message.target_lifeline_id ? String(message.target_lifeline_id) : '';
+      if (sourceId === normalizedLifelineId || targetId === normalizedLifelineId) {
+        sequenceDiagram.messages.splice(i, 1);
+      }
+    }
+    sequenceDiagram.markModified('messages');
+
+    // Xóa lifeline
+    sequenceDiagram.lifelines.splice(lifelineIndex, 1);
+    sequenceDiagram.markModified('lifelines');
+    await sequenceDiagram.save();
+  }
+
+  // ==================== MESSAGE CRUD ====================
+  public async createMessage(
+    sqdId: string,
+    data: {
+      source_lifeline_id: string;
+      target_lifeline_id: string;
+      content: string;
+      type: string;
+      fragment_id?: string;
+      order?: number;
+    }
+  ): Promise<SequenceDiagramResponse> {
+    const sequenceDiagram = await SequenceDiagramSchema.findById(sqdId);
+    if (!sequenceDiagram) {
+      throw new Error("Sequence Diagram not found");
+    }
+
+    const { Types } = await import("mongoose");
+    const sourceLifelineId = new Types.ObjectId(data.source_lifeline_id);
+    const targetLifelineId = new Types.ObjectId(data.target_lifeline_id);
+
+    // Validate lifelines exist
+    const sourceExists = sequenceDiagram.lifelines.some(
+      (ll: any) => String(ll._id) === String(sourceLifelineId)
+    );
+    const targetExists = sequenceDiagram.lifelines.some(
+      (ll: any) => String(ll._id) === String(targetLifelineId)
+    );
+
+    if (!sourceExists || !targetExists) {
+      throw new Error("Source or target lifeline not found");
+    }
+
+    // Calculate order if not provided
+    const maxOrder = sequenceDiagram.messages.length > 0
+      ? Math.max(...sequenceDiagram.messages.map((m: any) => m.order || 0))
+      : 0;
+
+    const newMessage: any = {
+      source_lifeline_id: sourceLifelineId,
+      target_lifeline_id: targetLifelineId,
+      content: data.content,
+      type: data.type || 'sync',
+      order: data.order || maxOrder + 1,
+      position: { y: 0 },
+    };
+
+    if (data.fragment_id) {
+      newMessage.fragment_id = new Types.ObjectId(data.fragment_id);
+    }
+
+    sequenceDiagram.messages.push(newMessage);
+    sequenceDiagram.markModified('messages');
+    await sequenceDiagram.save();
+
+    return this.getSequenceDiagramById(sqdId);
+  }
+
+  public async updateMessage(
+    sqdId: string,
+    messageId: string,
+    data: {
+      source_lifeline_id?: string;
+      target_lifeline_id?: string;
+      content?: string;
+      type?: string;
+      fragment_id?: string;
+    }
+  ): Promise<SequenceDiagramResponse> {
+    const sequenceDiagram = await SequenceDiagramSchema.findById(sqdId);
+    if (!sequenceDiagram) {
+      throw new Error("Sequence Diagram not found");
+    }
+
+    const normalizedMessageId = String(messageId);
+    const messageIndex = sequenceDiagram.messages.findIndex(
+      (message: any) => {
+        const messageIdStr = message._id ? String(message._id) : String(message.id || '');
+        return messageIdStr === normalizedMessageId;
+      }
+    );
+
+    if (messageIndex === -1) {
+      throw new Error(`Message not found: ${messageId}`);
+    }
+
+    const { Types } = await import("mongoose");
+
+    if (data.source_lifeline_id !== undefined) {
+      sequenceDiagram.messages[messageIndex].source_lifeline_id = new Types.ObjectId(data.source_lifeline_id);
+    }
+    if (data.target_lifeline_id !== undefined) {
+      sequenceDiagram.messages[messageIndex].target_lifeline_id = new Types.ObjectId(data.target_lifeline_id);
+    }
+    if (data.content !== undefined) {
+      sequenceDiagram.messages[messageIndex].content = data.content;
+    }
+    if (data.type !== undefined) {
+      (sequenceDiagram.messages[messageIndex] as any).type = data.type as "sync" | "async" | "reply" | "create" | "destroy";
+    }
+    if (data.fragment_id !== undefined) {
+      sequenceDiagram.messages[messageIndex].fragment_id = data.fragment_id
+        ? new Types.ObjectId(data.fragment_id)
+        : null;
+    }
+
+    sequenceDiagram.markModified('messages');
+    await sequenceDiagram.save();
+
+    return this.getSequenceDiagramById(sqdId);
+  }
+
+  public async deleteMessage(sqdId: string, messageId: string): Promise<void> {
+    const sequenceDiagram = await SequenceDiagramSchema.findById(sqdId);
+    if (!sequenceDiagram) {
+      throw new Error("Sequence Diagram not found");
+    }
+
+    const normalizedMessageId = String(messageId);
+    const messageIndex = sequenceDiagram.messages.findIndex(
+      (message: any) => {
+        const messageIdStr = message._id ? String(message._id) : String(message.id || '');
+        return messageIdStr === normalizedMessageId;
+      }
+    );
+
+    if (messageIndex === -1) {
+      throw new Error(`Message not found: ${messageId}`);
+    }
+
+    sequenceDiagram.messages.splice(messageIndex, 1);
+    sequenceDiagram.markModified('messages');
+    await sequenceDiagram.save();
+  }
+
+  // ==================== FRAGMENT CRUD ====================
+  public async createFragment(
+    sqdId: string,
+    data: {
+      type: string;
+      guard_condition?: string;
+      parent_fragment_id?: string;
+    }
+  ): Promise<SequenceDiagramResponse> {
+    const sequenceDiagram = await SequenceDiagramSchema.findById(sqdId);
+    if (!sequenceDiagram) {
+      throw new Error("Sequence Diagram not found");
+    }
+
+    const { Types } = await import("mongoose");
+
+    const newFragment: any = {
+      type: data.type,
+      guard_condition: data.guard_condition || '',
+      parent_fragment_id: data.parent_fragment_id
+        ? new Types.ObjectId(data.parent_fragment_id)
+        : null,
+    };
+
+    sequenceDiagram.fragments.push(newFragment);
+    sequenceDiagram.markModified('fragments');
+    await sequenceDiagram.save();
+
+    return this.getSequenceDiagramById(sqdId);
+  }
+
+  public async updateFragment(
+    sqdId: string,
+    fragmentId: string,
+    data: {
+      type?: string;
+      guard_condition?: string;
+      parent_fragment_id?: string;
+    }
+  ): Promise<SequenceDiagramResponse> {
+    const sequenceDiagram = await SequenceDiagramSchema.findById(sqdId);
+    if (!sequenceDiagram) {
+      throw new Error("Sequence Diagram not found");
+    }
+
+    const normalizedFragmentId = String(fragmentId);
+    const fragmentIndex = sequenceDiagram.fragments.findIndex(
+      (fragment: any) => {
+        const fragmentIdStr = fragment._id ? String(fragment._id) : String(fragment.id || '');
+        return fragmentIdStr === normalizedFragmentId;
+      }
+    );
+
+    if (fragmentIndex === -1) {
+      throw new Error(`Fragment not found: ${fragmentId}`);
+    }
+
+    const { Types } = await import("mongoose");
+
+    if (data.type !== undefined) {
+      (sequenceDiagram.fragments[fragmentIndex] as any).type = data.type as "loop" | "alt" | "opt" | "par" | "region" | "else";
+    }
+    if (data.guard_condition !== undefined) {
+      sequenceDiagram.fragments[fragmentIndex].guard_condition = data.guard_condition;
+    }
+    if (data.parent_fragment_id !== undefined) {
+      sequenceDiagram.fragments[fragmentIndex].parent_fragment_id = data.parent_fragment_id
+        ? new Types.ObjectId(data.parent_fragment_id)
+        : null;
+    }
+
+    sequenceDiagram.markModified('fragments');
+    await sequenceDiagram.save();
+
+    return this.getSequenceDiagramById(sqdId);
+  }
+
+  public async deleteFragment(sqdId: string, fragmentId: string): Promise<void> {
+    const sequenceDiagram = await SequenceDiagramSchema.findById(sqdId);
+    if (!sequenceDiagram) {
+      throw new Error("Sequence Diagram not found");
+    }
+
+    const normalizedFragmentId = String(fragmentId);
+    const fragmentIndex = sequenceDiagram.fragments.findIndex(
+      (fragment: any) => {
+        const fragmentIdStr = fragment._id ? String(fragment._id) : String(fragment.id || '');
+        return fragmentIdStr === normalizedFragmentId;
+      }
+    );
+
+    if (fragmentIndex === -1) {
+      throw new Error(`Fragment not found: ${fragmentId}`);
+    }
+
+    // Lưu fragmentObjectId trước khi xóa
+    const fragmentObjectId = sequenceDiagram.fragments[fragmentIndex]._id;
+
+    // Xóa tất cả messages thuộc fragment này và set fragment_id = null cho các messages
+    sequenceDiagram.messages.forEach((message: any) => {
+      if (message.fragment_id && String(message.fragment_id) === normalizedFragmentId) {
+        message.fragment_id = null;
+      }
+    });
+    sequenceDiagram.markModified('messages');
+
+    // Xóa fragment
+    sequenceDiagram.fragments.splice(fragmentIndex, 1);
+
+    // Xóa các child fragments
+    for (let i = sequenceDiagram.fragments.length - 1; i >= 0; i--) {
+      const fragment = sequenceDiagram.fragments[i];
+      const parentId = fragment.parent_fragment_id ? String(fragment.parent_fragment_id) : '';
+      if (parentId === normalizedFragmentId) {
+        sequenceDiagram.fragments.splice(i, 1);
+      }
+    }
+
+    sequenceDiagram.markModified('fragments');
+    await sequenceDiagram.save();
+  }
 }

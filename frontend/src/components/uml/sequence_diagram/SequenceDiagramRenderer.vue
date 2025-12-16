@@ -37,6 +37,14 @@
           </button>
         </div>
 
+        <!-- CRUD Controls -->
+        <div class="toolbar-group">
+          <button class="toolbar-btn btn-manage" @click="showManagementModal" title="Manage Diagram">
+            <span class="material-symbols-outlined">settings</span>
+            Manage
+          </button>
+        </div>
+
         <!-- Export Controls -->
         <div class="toolbar-group">
           <button class="toolbar-btn" @click="exportAsSVG" title="Export as SVG">
@@ -419,10 +427,348 @@
       </div>
       <div class="status-item">Zoom: {{ Math.round(internalZoom * 100) }}%</div>
     </div>
+
+    <!-- Management Modal -->
+    <div v-if="managementModal.visible" class="management-modal-overlay" @click="closeManagementModal">
+      <div class="management-modal-content" @click.stop>
+        <div class="management-modal-header">
+          <h2>Manage Sequence Diagram</h2>
+          <button class="modal-close-btn" @click="closeManagementModal">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="management-tabs">
+          <button
+            v-for="tab in managementTabs"
+            :key="tab.id"
+            class="tab-btn"
+            :class="{ active: managementModal.activeTab === tab.id }"
+            @click="managementModal.activeTab = tab.id"
+          >
+            <span class="material-symbols-outlined">{{ tab.icon }}</span>
+            {{ tab.label }}
+            <span class="tab-count">({{ getTabCount(tab.id) }})</span>
+          </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="management-tab-content">
+          <!-- Lifelines Tab -->
+          <div v-if="managementModal.activeTab === 'lifelines'" class="tab-panel">
+            <div class="panel-header">
+              <h3>Lifelines</h3>
+              <button class="btn-add-item" @click="openCreateForm('lifeline')">
+                <span class="material-symbols-outlined">add</span>
+                Add Lifeline
+              </button>
+            </div>
+            <div class="items-list">
+              <div
+                v-for="lifeline in originalLifelines"
+                :key="lifeline.id"
+                class="item-card"
+              >
+                <div class="item-info">
+                  <div class="item-name">{{ lifeline.name || 'Unnamed Lifeline' }}</div>
+                  <div v-if="lifeline.description" class="item-description">{{ lifeline.description }}</div>
+                </div>
+                <div class="item-actions">
+                  <button class="btn-edit" @click="openEditForm('lifeline', lifeline)" title="Edit">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="btn-delete" @click="confirmDelete('lifeline', lifeline)" title="Delete">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </div>
+              <div v-if="originalLifelines.length === 0" class="empty-state">
+                <span class="material-symbols-outlined">person_off</span>
+                <p>No lifelines yet</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Messages Tab -->
+          <div v-if="managementModal.activeTab === 'messages'" class="tab-panel">
+            <div class="panel-header">
+              <h3>Messages</h3>
+              <button class="btn-add-item" @click="openCreateForm('message')">
+                <span class="material-symbols-outlined">add</span>
+                Add Message
+              </button>
+            </div>
+            
+            <!-- Outgoing Messages (Luồng đi) -->
+            <div class="message-section">
+              <h4 class="section-title">
+                <span class="material-symbols-outlined">arrow_forward</span>
+                Outgoing Messages ({{ outgoingMessages.length }})
+              </h4>
+              <div class="items-list">
+                <div
+                  v-for="message in outgoingMessages"
+                  :key="message.id"
+                  class="item-card"
+                >
+                  <div class="item-info">
+                    <div class="item-name">
+                      {{ message.from?.name || 'Unknown' }} → {{ message.to?.name || 'Unknown' }}
+                    </div>
+                    <div v-if="message.content" class="item-description">{{ message.content }}</div>
+                    <div class="item-meta">
+                      <span class="message-type">{{ message.type || 'sync' }}</span>
+                    </div>
+                  </div>
+                  <div class="item-actions">
+                    <button class="btn-edit" @click="openEditForm('message', message)" title="Edit">
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                    <button class="btn-delete" @click="confirmDelete('message', message)" title="Delete">
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  </div>
+                </div>
+                <div v-if="outgoingMessages.length === 0" class="empty-state-small">
+                  <span class="material-symbols-outlined">arrow_forward</span>
+                  <p>No outgoing messages</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Incoming Messages (Luồng về) -->
+            <div class="message-section">
+              <h4 class="section-title">
+                <span class="material-symbols-outlined">arrow_back</span>
+                Incoming Messages ({{ incomingMessages.length }})
+              </h4>
+              <div class="items-list">
+                <div
+                  v-for="message in incomingMessages"
+                  :key="message.id"
+                  class="item-card"
+                >
+                  <div class="item-info">
+                    <div class="item-name">
+                      {{ message.from?.name || 'Unknown' }} → {{ message.to?.name || 'Unknown' }}
+                    </div>
+                    <div v-if="message.content" class="item-description">{{ message.content }}</div>
+                    <div class="item-meta">
+                      <span class="message-type">{{ message.type || 'sync' }}</span>
+                    </div>
+                  </div>
+                  <div class="item-actions">
+                    <button class="btn-edit" @click="openEditForm('message', message)" title="Edit">
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                    <button class="btn-delete" @click="confirmDelete('message', message)" title="Delete">
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  </div>
+                </div>
+                <div v-if="incomingMessages.length === 0" class="empty-state-small">
+                  <span class="material-symbols-outlined">arrow_back</span>
+                  <p>No incoming messages</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Fragments Tab -->
+          <div v-if="managementModal.activeTab === 'fragments'" class="tab-panel">
+            <div class="panel-header">
+              <h3>Fragments</h3>
+              <button class="btn-add-item" @click="openCreateForm('fragment')">
+                <span class="material-symbols-outlined">add</span>
+                Add Fragment
+              </button>
+            </div>
+            <div class="items-list">
+              <div
+                v-for="fragment in computedFragments"
+                :key="fragment.id"
+                class="item-card fragment-card"
+              >
+                <div class="item-info">
+                  <div class="item-name">{{ getFragmentLabel(fragment.type) || 'Fragment' }}</div>
+                  <div v-if="fragment.guard_condition" class="item-description">
+                    Guard: {{ fragment.guard_condition }}
+                  </div>
+                  <div class="fragment-messages-info">
+                    <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">chat</span>
+                    <span style="margin-left: 4px;">{{ getFragmentMessages(fragment).length }} messages</span>
+                  </div>
+                  <!-- Messages trong fragment -->
+                  <div v-if="getFragmentMessages(fragment).length > 0" class="fragment-messages-list">
+                    <div
+                      v-for="msg in getFragmentMessages(fragment)"
+                      :key="msg.id"
+                      class="fragment-message-item"
+                    >
+                      <span class="message-arrow">→</span>
+                      <span class="message-content">{{ msg.content || 'No content' }}</span>
+                      <span class="message-type-badge">{{ msg.type || 'sync' }}</span>
+                    </div>
+                  </div>
+                  <div v-else class="fragment-no-messages">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">info</span>
+                    <span style="margin-left: 4px; font-size: 12px; color: #9ca3af;">No messages in this fragment</span>
+                  </div>
+                </div>
+                <div class="item-actions">
+                  <button class="btn-add-message" @click="openAddMessageToFragment(fragment)" title="Add Message">
+                    <span class="material-symbols-outlined">add_comment</span>
+                    Add Message
+                  </button>
+                  <button class="btn-edit" @click="openEditForm('fragment', fragment)" title="Edit">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="btn-delete" @click="confirmDelete('fragment', fragment)" title="Delete">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </div>
+              <div v-if="computedFragments.length === 0" class="empty-state">
+                <span class="material-symbols-outlined">widgets</span>
+                <p>No fragments yet</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create/Edit Form Modal -->
+    <div v-if="formModal.visible" class="form-modal-overlay" @click="closeFormModal">
+      <div class="form-modal-content" @click.stop>
+        <div class="form-modal-header">
+          <h3>{{ formModal.isEdit ? 'Edit' : 'Create' }} {{ formModal.type }}</h3>
+          <button class="modal-close-btn" @click="closeFormModal">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="form-modal-body">
+          <!-- Lifeline Form -->
+          <div v-if="formModal.type === 'lifeline'">
+            <div class="form-group">
+              <label>Lifeline Name *</label>
+              <input
+                v-model="formModal.data.name"
+                type="text"
+                placeholder="Enter lifeline name"
+                class="form-input"
+              />
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea
+                v-model="formModal.data.description"
+                placeholder="Enter description (optional)"
+                class="form-textarea"
+                rows="3"
+              ></textarea>
+            </div>
+          </div>
+
+          <!-- Message Form -->
+          <div v-if="formModal.type === 'message'">
+            <div v-if="formModal.data.fragment_id" class="form-group">
+              <div class="info-badge">
+                <span class="material-symbols-outlined">info</span>
+                Adding message to fragment: {{ getFragmentName(formModal.data.fragment_id) }}
+              </div>
+            </div>
+            <div class="form-group">
+              <label>From Lifeline *</label>
+              <select v-model="formModal.data.from" class="form-input">
+                <option value="">Select From Lifeline</option>
+                <option
+                  v-for="lifeline in originalLifelines"
+                  :key="lifeline.id"
+                  :value="lifeline.id"
+                >
+                  {{ lifeline.name }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>To Lifeline *</label>
+              <select v-model="formModal.data.to" class="form-input">
+                <option value="">Select To Lifeline</option>
+                <option
+                  v-for="lifeline in originalLifelines"
+                  :key="lifeline.id"
+                  :value="lifeline.id"
+                >
+                  {{ lifeline.name }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Message Content *</label>
+              <input
+                v-model="formModal.data.content"
+                type="text"
+                placeholder="Enter message content"
+                class="form-input"
+              />
+            </div>
+            <div class="form-group">
+              <label>Message Type *</label>
+              <select v-model="formModal.data.type" class="form-input">
+                <option value="sync">Sync</option>
+                <option value="async">Async</option>
+                <option value="reply">Reply</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Fragment Form -->
+          <div v-if="formModal.type === 'fragment'">
+            <div class="form-group">
+              <label>Fragment Type *</label>
+              <select v-model="formModal.data.type" class="form-input">
+                <option value="alt">Alt (Alternative)</option>
+                <option value="opt">Opt (Optional)</option>
+                <option value="loop">Loop</option>
+                <option value="par">Par (Parallel)</option>
+                <option value="ref">Ref (Reference)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Guard Condition</label>
+              <input
+                v-model="formModal.data.guard_condition"
+                type="text"
+                placeholder="Enter guard condition (optional)"
+                class="form-input"
+              />
+            </div>
+          </div>
+        </div>
+        <div class="form-modal-footer">
+          <button class="btn-secondary" @click="closeFormModal">Cancel</button>
+          <button class="btn-primary" @click="saveForm">{{ formModal.isEdit ? 'Update' : 'Create' }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
+import {
+  createMessage,
+  updateMessage,
+  deleteMessage,
+  createFragment,
+  updateFragment,
+  deleteFragment,
+  updateLifeline,
+  deleteLifeline,
+  getSequenceDiagramById,
+} from '@/api/sqd';
+
 export default {
   name: 'SequenceDiagramRenderer',
   props: {
@@ -504,6 +850,35 @@ export default {
         },
       },
       previewGenerated: false,
+
+      // Management Modal state
+      managementModal: {
+        visible: false,
+        activeTab: 'lifelines',
+        hasChanges: false,
+      },
+      managementTabs: [
+        { id: 'lifelines', label: 'Lifelines', icon: 'person' },
+        { id: 'messages', label: 'Messages', icon: 'chat' },
+        { id: 'fragments', label: 'Fragments', icon: 'widgets' },
+      ],
+      formModal: {
+        visible: false,
+        type: null, // 'lifeline', 'message', 'fragment'
+        isEdit: false,
+        hasChanges: false,
+        data: {
+          name: '',
+          description: '',
+          from: '',
+          to: '',
+          content: '',
+          type: 'sync',
+          guard_condition: '',
+        },
+        element: null,
+      },
+      diagramId: null,
     }
   },
   computed: {
@@ -668,6 +1043,8 @@ export default {
             id: this.normalizeId(message._id || message.id || `message-${index}`),
             source: sourceLifeline,
             target: targetLifeline,
+            from: sourceLifeline, // Alias for Management Modal
+            to: targetLifeline, // Alias for Management Modal
             content: message.content || 'message',
             type: message.type || 'sync',
             order: message.order || index,
@@ -681,6 +1058,19 @@ export default {
     },
     rootMessages() {
       return this.computedMessages.filter((message) => !message.fragment_id)
+    },
+    originalLifelines() {
+      return this.computedLifelines.filter((ll) => !ll.isMirror)
+    },
+    outgoingMessages() {
+      // Messages đi ra (sync và async, không phải reply)
+      return this.computedMessages.filter((msg) => {
+        return msg.type === 'sync' || msg.type === 'async'
+      })
+    },
+    incomingMessages() {
+      // Messages đi về (reply messages)
+      return this.computedMessages.filter((msg) => msg.type === 'reply')
     },
     computedFragments() {
       const fragments = this.safeDiagramData.fragments
@@ -956,6 +1346,36 @@ export default {
         else: 'else',
       }
       return labels[type] || type
+    },
+    getFragmentMessages(fragment) {
+      // Lấy tất cả messages trong fragment (bao gồm cả child fragments)
+      let messages = [...(fragment.messages || [])]
+      if (fragment.children && fragment.children.length > 0) {
+        fragment.children.forEach((child) => {
+          messages = messages.concat(child.messages || [])
+        })
+      }
+      return messages
+    },
+    getFragmentName(fragmentId) {
+      if (!fragmentId) return 'Fragment'
+      const fragment = this.computedFragments.find((f) => f.id === fragmentId)
+      return fragment ? this.getFragmentLabel(fragment.type) : 'Fragment'
+    },
+    openAddMessageToFragment(fragment) {
+      // Mở form để thêm message vào fragment
+      this.formModal.visible = true
+      this.formModal.type = 'message'
+      this.formModal.isEdit = false
+      this.formModal.element = null
+      this.formModal.hasChanges = false
+      this.formModal.data = {
+        from: '',
+        to: '',
+        content: '',
+        type: 'sync',
+        fragment_id: fragment.id, // Lưu fragment_id để biết message thuộc fragment nào
+      }
     },
 
     getSelectionBounds() {
@@ -1787,10 +2207,226 @@ export default {
         switch (event.key) {
           case 'Escape':
             this.clearSelection()
-            if (this.isFullscreen) this.exitFullscreen()
+            if (this.managementModal.visible) {
+              this.closeManagementModal()
+            } else if (this.formModal.visible) {
+              this.closeFormModal()
+            } else if (this.isFullscreen) {
+              this.exitFullscreen()
+            }
             break
         }
       })
+    },
+
+    // Management Modal Methods
+    showManagementModal() {
+      this.managementModal.visible = true
+      this.managementModal.activeTab = 'lifelines'
+      this.managementModal.hasChanges = false
+    },
+    closeManagementModal() {
+      if (this.managementModal.hasChanges) {
+        this.$emit('diagram-updated')
+      }
+      this.managementModal.visible = false
+      this.managementModal.hasChanges = false
+    },
+    getTabCount(tabId) {
+      switch (tabId) {
+        case 'lifelines':
+          return this.computedLifelines.filter(ll => !ll.isMirror).length
+        case 'messages':
+          return this.computedMessages.length
+        case 'fragments':
+          return this.computedFragments.length
+        default:
+          return 0
+      }
+    },
+    openCreateForm(type) {
+      this.formModal.visible = true
+      this.formModal.type = type
+      this.formModal.isEdit = false
+      this.formModal.element = null
+      this.formModal.hasChanges = false
+      this.formModal.data = {
+        name: '',
+        description: '',
+        from: '',
+        to: '',
+        content: '',
+        type: 'sync',
+        guard_condition: '',
+        fragment_id: null,
+      }
+    },
+    openEditForm(type, element) {
+      this.formModal.visible = true
+      this.formModal.type = type
+      this.formModal.isEdit = true
+      this.formModal.element = element
+      this.formModal.hasChanges = false
+
+      if (type === 'lifeline') {
+        this.formModal.data = {
+          name: element.name || '',
+          description: element.description || '',
+        }
+      } else if (type === 'message') {
+        const fromId = element.source?._id || element.source?.id || element.source_lifeline_id
+        const toId = element.target?._id || element.target?.id || element.target_lifeline_id
+        this.formModal.data = {
+          from: this.normalizeId(fromId) || '',
+          to: this.normalizeId(toId) || '',
+          content: element.content || '',
+          type: element.type || 'sync',
+          fragment_id: element.fragment_id || null,
+        }
+      } else if (type === 'fragment') {
+        this.formModal.data = {
+          type: element.type || 'opt',
+          guard_condition: element.guard_condition || '',
+        }
+      }
+    },
+    closeFormModal() {
+      if (this.formModal.hasChanges) {
+        this.$emit('diagram-updated')
+        this.managementModal.hasChanges = true
+      }
+      this.formModal.visible = false
+      this.formModal.element = null
+      this.formModal.hasChanges = false
+    },
+    async saveForm() {
+      const diagramId = this.diagramId || this.diagramData?.id || this.diagramData?._id
+      if (!diagramId) {
+        alert('Diagram ID not found')
+        return
+      }
+
+      try {
+        this.showSavingIndicator()
+
+        if (this.formModal.type === 'lifeline') {
+          if (!this.formModal.data.name.trim()) {
+            alert('Lifeline name is required')
+            this.hideSavingIndicator()
+            return
+          }
+          if (this.formModal.isEdit) {
+            await updateLifeline(String(diagramId), String(this.formModal.element.id), {
+              name: this.formModal.data.name,
+              description: this.formModal.data.description || '',
+            })
+          } else {
+            // Note: Creating lifelines might need special handling
+            alert('Creating new lifelines is not yet supported via API')
+            this.hideSavingIndicator()
+            return
+          }
+        } else if (this.formModal.type === 'message') {
+          if (!this.formModal.data.from || !this.formModal.data.to || !this.formModal.data.content) {
+            alert('From, To, and Content are required')
+            this.hideSavingIndicator()
+            return
+          }
+          const messageData = {
+            source_lifeline_id: this.formModal.data.from,
+            target_lifeline_id: this.formModal.data.to,
+            content: this.formModal.data.content,
+            type: this.formModal.data.type,
+          }
+          // Nếu có fragment_id, thêm vào message data
+          if (this.formModal.data.fragment_id) {
+            messageData.fragment_id = this.formModal.data.fragment_id
+          }
+          if (this.formModal.isEdit) {
+            await updateMessage(String(diagramId), String(this.formModal.element.id), messageData)
+          } else {
+            await createMessage(String(diagramId), messageData)
+          }
+        } else if (this.formModal.type === 'fragment') {
+          if (!this.formModal.data.type) {
+            alert('Fragment type is required')
+            this.hideSavingIndicator()
+            return
+          }
+          if (this.formModal.isEdit) {
+            await updateFragment(String(diagramId), String(this.formModal.element.id), {
+              type: this.formModal.data.type,
+              guard_condition: this.formModal.data.guard_condition || '',
+            })
+          } else {
+            await createFragment(String(diagramId), {
+              type: this.formModal.data.type,
+              guard_condition: this.formModal.data.guard_condition || '',
+            })
+          }
+        }
+
+        // Fetch updated diagram data
+        const response = await getSequenceDiagramById(String(diagramId))
+        const updatedDiagram = response?.data?.data || response?.data
+
+        this.formModal.hasChanges = true
+        this.managementModal.hasChanges = true
+
+        if (updatedDiagram) {
+          this.$emit('diagram-updated', updatedDiagram)
+        } else {
+          this.$emit('diagram-updated')
+        }
+
+        this.closeFormModal()
+        this.hideSavingIndicator()
+      } catch (error) {
+        console.error('Error saving:', error)
+        alert('Failed to save: ' + (error.response?.data?.message || error.message))
+        this.hideSavingIndicator()
+      }
+    },
+    async confirmDelete(type, element) {
+      if (!confirm(`Are you sure you want to delete this ${type}?`)) {
+        return
+      }
+
+      const diagramId = this.diagramId || this.diagramData?.id || this.diagramData?._id
+      if (!diagramId) {
+        alert('Diagram ID not found')
+        return
+      }
+
+      try {
+        this.showSavingIndicator()
+
+        if (type === 'lifeline') {
+          await deleteLifeline(String(diagramId), String(element.id))
+        } else if (type === 'message') {
+          await deleteMessage(String(diagramId), String(element.id))
+        } else if (type === 'fragment') {
+          await deleteFragment(String(diagramId), String(element.id))
+        }
+
+        // Fetch updated diagram data
+        const response = await getSequenceDiagramById(String(diagramId))
+        const updatedDiagram = response?.data?.data || response?.data
+
+        this.managementModal.hasChanges = true
+
+        if (updatedDiagram) {
+          this.$emit('diagram-updated', updatedDiagram)
+        } else {
+          this.$emit('diagram-updated')
+        }
+
+        this.hideSavingIndicator()
+      } catch (error) {
+        console.error('Error deleting:', error)
+        alert('Failed to delete: ' + (error.response?.data?.message || error.message))
+        this.hideSavingIndicator()
+      }
     },
   },
 }
@@ -2177,5 +2813,542 @@ export default {
 :-moz-full-screen .sequence-diagram-renderer,
 :-ms-fullscreen .sequence-diagram-renderer {
   border-radius: 0;
+}
+
+/* Management Modal Styles */
+.management-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+}
+
+.management-modal-content {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideIn 0.3s ease;
+}
+
+.management-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.management-modal-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  color: #6b7280;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.management-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.tab-btn.active {
+  background: white;
+  color: #1a365d;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tab-count {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.management-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.tab-panel {
+  animation: fadeIn 0.2s ease;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.btn-add-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-item:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.item-card:hover {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-color: #d1d5db;
+}
+
+.item-info {
+  flex: 1;
+}
+
+.item-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.item-description {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.item-meta {
+  margin-top: 4px;
+}
+
+.message-type {
+  padding: 2px 8px;
+  background: #e0e7ff;
+  color: #6366f1;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-edit,
+.btn-delete {
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-edit {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.btn-edit:hover {
+  background: #dbeafe;
+}
+
+.btn-delete {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.btn-delete:hover {
+  background: #fee2e2;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #9ca3af;
+}
+
+.empty-state .material-symbols-outlined {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.empty-state-small {
+  text-align: center;
+  padding: 20px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.empty-state-small .material-symbols-outlined {
+  font-size: 24px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.message-section {
+  margin-bottom: 32px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.section-title .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.fragment-card {
+  border-left: 4px solid #6366f1;
+}
+
+.fragment-messages-info {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+}
+
+.fragment-messages-list {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.fragment-message-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  margin-bottom: 4px;
+  background: white;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.fragment-message-item:last-child {
+  margin-bottom: 0;
+}
+
+.message-arrow {
+  color: #6366f1;
+  font-weight: bold;
+}
+
+.message-content {
+  flex: 1;
+  color: #374151;
+}
+
+.message-type-badge {
+  padding: 2px 6px;
+  background: #e0e7ff;
+  color: #6366f1;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.fragment-no-messages {
+  margin-top: 8px;
+  padding: 8px;
+  background: #fef3c7;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  color: #92400e;
+  font-size: 12px;
+}
+
+.btn-add-message {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #dbeafe;
+  color: #3b82f6;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.btn-add-message:hover {
+  background: #bfdbfe;
+}
+
+.info-badge {
+  padding: 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1e40af;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.info-badge .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* Form Modal Styles */
+.form-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  backdrop-filter: blur(4px);
+}
+
+.form-modal-content {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: modalSlideIn 0.3s ease;
+}
+
+.form-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.form-modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.form-modal-body {
+  padding: 24px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #1a365d;
+  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-secondary {
+  padding: 10px 20px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.btn-primary {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #2d4a8a 0%, #3d5a9a 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.2);
+}
+
+.btn-manage {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+  border: none;
+}
+
+.btn-manage:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 </style>

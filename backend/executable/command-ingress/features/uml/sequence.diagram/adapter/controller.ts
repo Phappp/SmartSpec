@@ -309,4 +309,303 @@ export class SequenceDiagramController extends BaseController {
       }
     );
   }
+
+  // ==================== LIFELINE CRUD ====================
+  async updateLifeline(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const sqdId = req.params.sqdId;
+        const lifelineId = req.params.lifelineId;
+        const data = req.body;
+
+        if (!sqdId) {
+          res.status(400).json({ message: "Sequence Diagram ID is required." });
+          return;
+        }
+        if (!lifelineId) {
+          res.status(400).json({ message: "Lifeline ID is required." });
+          return;
+        }
+        if (!data) {
+          res.status(400).json({ message: "Data is required." });
+          return;
+        }
+
+        const responseData = await this.sequenceDiagramService.updateLifeline(
+          sqdId,
+          lifelineId,
+          data
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Update Lifeline Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
+
+  async deleteLifeline(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const sqdId = req.params.sqdId;
+        const lifelineId = req.params.lifelineId;
+
+        if (!sqdId) {
+          res.status(400).json({ message: "Sequence Diagram ID is required." });
+          return;
+        }
+        if (!lifelineId) {
+          res.status(400).json({ message: "Lifeline ID is required." });
+          return;
+        }
+
+        await this.sequenceDiagramService.deleteLifeline(sqdId, lifelineId);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Delete Lifeline Successfully",
+        });
+      }
+    );
+  }
+
+  // ==================== MESSAGE CRUD ====================
+  async createMessage(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const sqdId = req.params.sqdId;
+        const data = req.body;
+
+        if (!sqdId) {
+          res.status(400).json({ message: "Sequence Diagram ID is required." });
+          return;
+        }
+        if (!data || !data.source_lifeline_id || !data.target_lifeline_id || !data.content) {
+          res.status(400).json({
+            message: "source_lifeline_id, target_lifeline_id, and content are required."
+          });
+          return;
+        }
+
+        const responseData = await this.sequenceDiagramService.createMessage(
+          sqdId,
+          data
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Create Message Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
+
+  async updateMessage(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const sqdId = req.params.sqdId;
+        const messageId = req.params.messageId;
+        const data = req.body;
+
+        if (!sqdId) {
+          res.status(400).json({ message: "Sequence Diagram ID is required." });
+          return;
+        }
+        if (!messageId) {
+          res.status(400).json({ message: "Message ID is required." });
+          return;
+        }
+        if (!data) {
+          res.status(400).json({ message: "Data is required." });
+          return;
+        }
+
+        const responseData = await this.sequenceDiagramService.updateMessage(
+          sqdId,
+          messageId,
+          data
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Update Message Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
+
+  async deleteMessage(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const sqdId = req.params.sqdId;
+        const messageId = req.params.messageId;
+
+        if (!sqdId) {
+          res.status(400).json({ message: "Sequence Diagram ID is required." });
+          return;
+        }
+        if (!messageId) {
+          res.status(400).json({ message: "Message ID is required." });
+          return;
+        }
+
+        await this.sequenceDiagramService.deleteMessage(sqdId, messageId);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Delete Message Successfully",
+        });
+      }
+    );
+  }
+
+  // ==================== FRAGMENT CRUD ====================
+  async createFragment(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const sqdId = req.params.sqdId;
+        const data = req.body;
+
+        if (!sqdId) {
+          res.status(400).json({ message: "Sequence Diagram ID is required." });
+          return;
+        }
+        if (!data || !data.type) {
+          res.status(400).json({ message: "Fragment type is required." });
+          return;
+        }
+
+        const responseData = await this.sequenceDiagramService.createFragment(
+          sqdId,
+          data
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Create Fragment Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
+
+  async updateFragment(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const sqdId = req.params.sqdId;
+        const fragmentId = req.params.fragmentId;
+        const data = req.body;
+
+        if (!sqdId) {
+          res.status(400).json({ message: "Sequence Diagram ID is required." });
+          return;
+        }
+        if (!fragmentId) {
+          res.status(400).json({ message: "Fragment ID is required." });
+          return;
+        }
+        if (!data) {
+          res.status(400).json({ message: "Data is required." });
+          return;
+        }
+
+        const responseData = await this.sequenceDiagramService.updateFragment(
+          sqdId,
+          fragmentId,
+          data
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Update Fragment Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
+
+  async deleteFragment(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const sqdId = req.params.sqdId;
+        const fragmentId = req.params.fragmentId;
+
+        if (!sqdId) {
+          res.status(400).json({ message: "Sequence Diagram ID is required." });
+          return;
+        }
+        if (!fragmentId) {
+          res.status(400).json({ message: "Fragment ID is required." });
+          return;
+        }
+
+        await this.sequenceDiagramService.deleteFragment(sqdId, fragmentId);
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Delete Fragment Successfully",
+        });
+      }
+    );
+  }
 }
