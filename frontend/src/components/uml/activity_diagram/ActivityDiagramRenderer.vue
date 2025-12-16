@@ -502,11 +502,26 @@
                   </div>
                 </div>
                 <div class="item-actions">
-                  <button class="btn-edit" @click="openEditForm('node', node)" title="Edit">
+                  <button 
+                    class="btn-edit" 
+                    @click="openEditForm('node', node)" 
+                    title="Edit"
+                    :disabled="isCrudLoading"
+                  >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="btn-delete" @click="confirmDelete('node', node)" title="Delete">
-                    <span class="material-symbols-outlined">delete</span>
+                  <button 
+                    class="btn-delete" 
+                    @click="confirmDelete('node', node)" 
+                    title="Delete"
+                    :disabled="isCrudLoading || deletingElementId === node.id"
+                  >
+                    <span 
+                      class="material-symbols-outlined"
+                      :class="{ 'spinning': deletingElementId === node.id }"
+                    >
+                      {{ deletingElementId === node.id ? 'sync' : 'delete' }}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -521,7 +536,11 @@
           <div v-if="managementModal.activeTab === 'edges'" class="tab-panel">
             <div class="panel-header">
               <h3>Edges</h3>
-              <button class="btn-add-item" @click="openCreateForm('edge')">
+              <button 
+                class="btn-add-item" 
+                @click="openCreateForm('edge')"
+                :disabled="isCrudLoading"
+              >
                 <span class="material-symbols-outlined">add</span>
                 Add Edge
               </button>
@@ -543,11 +562,26 @@
                   </div>
                 </div>
                 <div class="item-actions">
-                  <button class="btn-edit" @click="openEditForm('edge', edge)" title="Edit">
+                  <button 
+                    class="btn-edit" 
+                    @click="openEditForm('edge', edge)" 
+                    title="Edit"
+                    :disabled="isCrudLoading"
+                  >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="btn-delete" @click="confirmDelete('edge', edge)" title="Delete">
-                    <span class="material-symbols-outlined">delete</span>
+                  <button 
+                    class="btn-delete" 
+                    @click="confirmDelete('edge', edge)" 
+                    title="Delete"
+                    :disabled="isCrudLoading || deletingElementId === edge.id"
+                  >
+                    <span 
+                      class="material-symbols-outlined"
+                      :class="{ 'spinning': deletingElementId === edge.id }"
+                    >
+                      {{ deletingElementId === edge.id ? 'sync' : 'delete' }}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -576,11 +610,26 @@
                   </div>
                 </div>
                 <div class="item-actions">
-                  <button class="btn-edit" @click="openEditForm('lane', lane)" title="Edit">
+                  <button 
+                    class="btn-edit" 
+                    @click="openEditForm('lane', lane)" 
+                    title="Edit"
+                    :disabled="isCrudLoading"
+                  >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="btn-delete" @click="confirmDelete('lane', lane)" title="Delete">
-                    <span class="material-symbols-outlined">delete</span>
+                  <button 
+                    class="btn-delete" 
+                    @click="confirmDelete('lane', lane)" 
+                    title="Delete"
+                    :disabled="isCrudLoading || deletingElementId === lane.id"
+                  >
+                    <span 
+                      class="material-symbols-outlined"
+                      :class="{ 'spinning': deletingElementId === lane.id }"
+                    >
+                      {{ deletingElementId === lane.id ? 'sync' : 'delete' }}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -714,8 +763,27 @@
           </div>
         </div>
         <div class="form-modal-footer">
-          <button class="btn-secondary" @click="closeFormModal">Cancel</button>
-          <button class="btn-primary" @click="saveForm">{{ formModal.isEdit ? 'Update' : 'Create' }}</button>
+          <button 
+            class="btn-secondary" 
+            @click="closeFormModal"
+            :disabled="isCrudLoading"
+          >
+            Cancel
+          </button>
+          <button 
+            class="btn-primary" 
+            @click="saveForm"
+            :disabled="isCrudLoading"
+          >
+            <span 
+              v-if="isCrudLoading" 
+              class="material-symbols-outlined spinning"
+              style="font-size: 18px; margin-right: 6px;"
+            >
+              sync
+            </span>
+            {{ isCrudLoading ? 'Saving...' : (formModal.isEdit ? 'Update' : 'Create') }}
+          </button>
         </div>
       </div>
     </div>
@@ -863,6 +931,8 @@ export default {
         element: null,
       },
       diagramId: null,
+      isCrudLoading: false,
+      deletingElementId: null,
     }
   },
   computed: {
@@ -2574,12 +2644,16 @@ export default {
         return
       }
 
+      if (this.isCrudLoading) return
+
       try {
+        this.isCrudLoading = true
         this.showSavingIndicator()
 
         if (this.formModal.type === 'node') {
           if (!this.formModal.data.label || !this.formModal.data.type) {
             alert('Label and Type are required')
+            this.isCrudLoading = false
             this.hideSavingIndicator()
             return
           }
@@ -2591,12 +2665,14 @@ export default {
             })
           } else {
             alert('Creating new nodes is not yet supported via API')
+            this.isCrudLoading = false
             this.hideSavingIndicator()
             return
           }
         } else if (this.formModal.type === 'edge') {
           if (!this.formModal.data.from || !this.formModal.data.to) {
             alert('From and To nodes are required')
+            this.isCrudLoading = false
             this.hideSavingIndicator()
             return
           }
@@ -2620,6 +2696,7 @@ export default {
         } else if (this.formModal.type === 'lane') {
           if (!this.formModal.data.name) {
             alert('Lane name is required')
+            this.isCrudLoading = false
             this.hideSavingIndicator()
             return
           }
@@ -2629,6 +2706,7 @@ export default {
             })
           } else {
             alert('Creating new lanes is not yet supported via API')
+            this.isCrudLoading = false
             this.hideSavingIndicator()
             return
           }
@@ -2649,10 +2727,12 @@ export default {
 
         this.closeFormModal()
         this.hideSavingIndicator()
+        this.isCrudLoading = false
       } catch (error) {
         console.error('Error saving:', error)
         alert('Failed to save: ' + (error.response?.data?.message || error.message))
         this.hideSavingIndicator()
+        this.isCrudLoading = false
       }
     },
     async confirmDelete(type, element) {
@@ -2666,7 +2746,11 @@ export default {
         return
       }
 
+      if (this.isCrudLoading || this.deletingElementId) return
+
       try {
+        this.deletingElementId = element.id
+        this.isCrudLoading = true
         this.showSavingIndicator()
 
         if (type === 'node') {
@@ -2690,10 +2774,14 @@ export default {
         }
 
         this.hideSavingIndicator()
+        this.isCrudLoading = false
+        this.deletingElementId = null
       } catch (error) {
         console.error('Error deleting:', error)
         alert('Failed to delete: ' + (error.response?.data?.message || error.message))
         this.hideSavingIndicator()
+        this.isCrudLoading = false
+        this.deletingElementId = null
       }
     },
   },
@@ -3678,10 +3766,33 @@ export default {
   transition: all 0.2s ease;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: linear-gradient(135deg, #2d4a8a 0%, #3d5a9a 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(26, 54, 93, 0.2);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-add-item:disabled,
+.btn-edit:disabled,
+.btn-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .btn-manage {

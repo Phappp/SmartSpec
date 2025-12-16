@@ -505,8 +505,18 @@
                   <button class="btn-edit" @click="openEditForm('actor', actor)" title="Edit">
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="btn-delete" @click="confirmDelete('actor', actor)" title="Delete">
-                    <span class="material-symbols-outlined">delete</span>
+                  <button 
+                    class="btn-delete" 
+                    @click="confirmDelete('actor', actor)" 
+                    title="Delete"
+                    :disabled="isCrudLoading || deletingElementId === actor.id"
+                  >
+                    <span 
+                      class="material-symbols-outlined"
+                      :class="{ 'spinning': deletingElementId === actor.id }"
+                    >
+                      {{ deletingElementId === actor.id ? 'sync' : 'delete' }}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -521,7 +531,11 @@
           <div v-if="managementModal.activeTab === 'usecases'" class="tab-panel">
             <div class="panel-header">
               <h3>Use Cases</h3>
-              <button class="btn-add-item" @click="openCreateForm('usecase')">
+              <button 
+                class="btn-add-item" 
+                @click="openCreateForm('usecase')"
+                :disabled="isCrudLoading"
+              >
                 <span class="material-symbols-outlined">add</span>
                 Add Usecase
               </button>
@@ -540,8 +554,18 @@
                   <button class="btn-edit" @click="openEditForm('usecase', uc)" title="Edit">
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="btn-delete" @click="confirmDelete('usecase', uc)" title="Delete">
-                    <span class="material-symbols-outlined">delete</span>
+                  <button 
+                    class="btn-delete" 
+                    @click="confirmDelete('usecase', uc)" 
+                    title="Delete"
+                    :disabled="isCrudLoading || deletingElementId === uc.id"
+                  >
+                    <span 
+                      class="material-symbols-outlined"
+                      :class="{ 'spinning': deletingElementId === uc.id }"
+                    >
+                      {{ deletingElementId === uc.id ? 'sync' : 'delete' }}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -556,7 +580,11 @@
           <div v-if="managementModal.activeTab === 'associations'" class="tab-panel">
             <div class="panel-header">
               <h3>Associations</h3>
-              <button class="btn-add-item" @click="openCreateForm('association')">
+              <button 
+                class="btn-add-item" 
+                @click="openCreateForm('association')"
+                :disabled="isCrudLoading"
+              >
                 <span class="material-symbols-outlined">add</span>
                 Add Association
               </button>
@@ -576,8 +604,18 @@
                   <button class="btn-edit" @click="openEditForm('association', assoc)" title="Edit">
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="btn-delete" @click="confirmDelete('association', assoc)" title="Delete">
-                    <span class="material-symbols-outlined">delete</span>
+                  <button 
+                    class="btn-delete" 
+                    @click="confirmDelete('association', assoc)" 
+                    title="Delete"
+                    :disabled="isCrudLoading || deletingElementId === assoc.id"
+                  >
+                    <span 
+                      class="material-symbols-outlined"
+                      :class="{ 'spinning': deletingElementId === assoc.id }"
+                    >
+                      {{ deletingElementId === assoc.id ? 'sync' : 'delete' }}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -592,7 +630,11 @@
           <div v-if="managementModal.activeTab === 'relationships'" class="tab-panel">
             <div class="panel-header">
               <h3>Relationships</h3>
-              <button class="btn-add-item" @click="openCreateForm('relationship')">
+              <button 
+                class="btn-add-item" 
+                @click="openCreateForm('relationship')"
+                :disabled="isCrudLoading"
+              >
                 <span class="material-symbols-outlined">add</span>
                 Add Relationship
               </button>
@@ -614,8 +656,18 @@
                   <button class="btn-edit" @click="openEditForm('relationship', rel)" title="Edit">
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="btn-delete" @click="confirmDelete('relationship', rel)" title="Delete">
-                    <span class="material-symbols-outlined">delete</span>
+                  <button 
+                    class="btn-delete" 
+                    @click="confirmDelete('relationship', rel)" 
+                    title="Delete"
+                    :disabled="isCrudLoading || deletingElementId === rel.id"
+                  >
+                    <span 
+                      class="material-symbols-outlined"
+                      :class="{ 'spinning': deletingElementId === rel.id }"
+                    >
+                      {{ deletingElementId === rel.id ? 'sync' : 'delete' }}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -922,6 +974,8 @@ export default {
         element: null,
       },
       diagramId: null, // Will be set from props or diagramData
+      isCrudLoading: false,
+      deletingElementId: null,
     }
   },
   computed: {
@@ -2133,12 +2187,16 @@ export default {
         return;
       }
 
+      if (this.isCrudLoading) return
+
       try {
+        this.isCrudLoading = true
         this.showSavingIndicator();
 
         if (this.formModal.type === 'actor') {
           if (!this.formModal.data.name.trim()) {
             alert('Actor name is required');
+            this.isCrudLoading = false
             this.hideSavingIndicator();
             return;
           }
@@ -2161,6 +2219,7 @@ export default {
         } else if (this.formModal.type === 'usecase') {
           if (!this.formModal.data.title.trim()) {
             alert('Usecase title is required');
+            this.isCrudLoading = false
             this.hideSavingIndicator();
             return;
           }
@@ -2183,6 +2242,7 @@ export default {
         } else if (this.formModal.type === 'association') {
           if (!this.formModal.data.actor_id || !this.formModal.data.usecase_id) {
             alert('Actor and Usecase are required');
+            this.isCrudLoading = false
             this.hideSavingIndicator();
             return;
           }
@@ -2200,6 +2260,7 @@ export default {
         } else if (this.formModal.type === 'relationship') {
           if (!this.formModal.data.source || !this.formModal.data.target || !this.formModal.data.type) {
             alert('Source, Target, and Type are required');
+            this.isCrudLoading = false
             this.hideSavingIndicator();
             return;
           }
@@ -2236,10 +2297,12 @@ export default {
 
         this.closeFormModal();
         this.hideSavingIndicator();
+        this.isCrudLoading = false
       } catch (error) {
         console.error('Error saving:', error);
         alert('Failed to save: ' + (error.response?.data?.message || error.message));
         this.hideSavingIndicator();
+        this.isCrudLoading = false
       }
     },
     async confirmDelete(type, element) {
@@ -2253,7 +2316,11 @@ export default {
         return;
       }
 
+      if (this.isCrudLoading || this.deletingElementId) return
+
       try {
+        this.deletingElementId = element.id
+        this.isCrudLoading = true
         this.showSavingIndicator();
 
         if (type === 'actor') {
