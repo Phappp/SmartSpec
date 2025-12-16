@@ -274,75 +274,156 @@ export default {
         <link rel="icon" href="../../public/slack-brands-solid-full.svg">
         <style>
           body { 
-            font-family: Arial, sans-serif; 
-            line-height: 1.6; 
+            font-family: 'Times New Roman', Times, serif; 
+            font-size: 11pt;
+            line-height: 1.5; 
             margin: 20px;
-            color: #333;
+            color: #000;
           }
+          
+          h1 {
+            font-size: 16pt;
+            font-weight: bold;
+            margin: 12pt 0 8pt 0;
+            color: #000;
+          }
+          
+          h2 {
+            font-size: 14pt;
+            font-weight: bold;
+            margin: 10pt 0 6pt 0;
+            color: #000;
+          }
+          
+          h3 {
+            font-size: 12pt;
+            font-weight: bold;
+            margin: 8pt 0 4pt 0;
+            color: #000;
+          }
+          
           .header { 
             border-bottom: 2px solid #1a365d; 
             padding-bottom: 10px; 
             margin-bottom: 20px;
           }
+          
           .project-info { 
             background: #f8fafc; 
-            padding: 15px; 
+            padding: 12px; 
             border-radius: 5px; 
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             border-left: 4px solid #1a365d;
+            font-size: 11pt;
           }
+          
+          .project-info h3 {
+            font-size: 12pt;
+            margin-top: 0;
+          }
+          
+          .project-info p {
+            margin: 4pt 0;
+            font-size: 11pt;
+          }
+          
           .toc { 
             margin-bottom: 20px; 
-            padding: 15px;
+            padding: 12px;
             background: #f9fafb;
             border-radius: 5px;
+            font-size: 11pt;
+          }
+          
+          .toc h2 {
+            font-size: 14pt;
+            margin-top: 0;
+          }
+          
+          .toc ul {
+            margin: 8pt 0;
+            padding-left: 20px;
+          }
+          
+          .toc li {
+            margin: 4pt 0;
+            font-size: 11pt;
           }
           
           /* QUAN TRỌNG: Ngăn page break trong các section quan trọng */
           .usecase-section { 
-            margin-bottom: 30px; 
+            margin-bottom: 24pt; 
             page-break-inside: avoid;
             break-inside: avoid;
             border: 1px solid #e5e7eb;
             border-radius: 8px;
-            padding: 20px;
+            padding: 16px;
           }
+          
           .usecase-header { 
             background: #1a365d; 
             color: white; 
-            padding: 10px 15px; 
-            margin: -20px -20px 15px -20px;
+            padding: 8px 12px; 
+            margin: -16px -16px 12px -16px;
             border-radius: 8px 8px 0 0;
             page-break-after: avoid;
             break-after: avoid;
+          }
+          
+          .usecase-header h2 {
+            font-size: 14pt;
+            color: white;
+            margin: 0;
+          }
+          
+          .usecase-header p {
+            font-size: 10pt;
+            margin: 4pt 0 0 0;
+            color: rgba(255, 255, 255, 0.9);
           }
           
           /* Đảm bảo các detail-item không bị tách rời */
           .detail-grid { 
             display: grid; 
             grid-template-columns: 1fr 1fr; 
-            gap: 15px; 
-            margin-bottom: 15px;
+            gap: 12px; 
+            margin-bottom: 12px;
             page-break-inside: avoid;
             break-inside: avoid;
           }
+          
           .detail-item { 
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             page-break-inside: avoid;
             break-inside: avoid;
           }
+          
           .detail-item h4 { 
-            margin: 0 0 5px 0; 
-            color: #374151;
-            font-size: 14px;
+            margin: 0 0 4px 0; 
+            color: #000;
+            font-size: 11pt;
+            font-weight: bold;
             page-break-after: avoid;
             break-after: avoid;
           }
-          .detail-item p, .detail-item ul { 
+          
+          .detail-item p { 
             margin: 0; 
-            font-size: 13px;
+            font-size: 11pt;
+            line-height: 1.5;
             page-break-before: avoid;
             break-before: avoid;
+          }
+          
+          .detail-item ul, .detail-item ol {
+            margin: 4pt 0;
+            padding-left: 20px;
+            font-size: 11pt;
+            line-height: 1.5;
+          }
+          
+          .detail-item li {
+            margin: 2pt 0;
           }
           
           /* Đặc biệt quan tâm đến các phần full-width */
@@ -371,36 +452,82 @@ export default {
           
           .task-list, .condition-list { 
             padding-left: 20px; 
-            margin: 5px 0;
+            margin: 6pt 0;
+            font-size: 11pt;
+            line-height: 1.5;
           }
+          
+          .task-list li, .condition-list li {
+            margin: 3pt 0;
+          }
+          
           .tag { 
             display: inline-block; 
             background: #e5e7eb; 
-            padding: 2px 8px; 
-            border-radius: 12px; 
-            font-size: 12px; 
+            padding: 2px 6px; 
+            border-radius: 3px; 
+            font-size: 10pt; 
             margin: 2px;
+            line-height: 1.4;
           }
+          
           .timestamp { 
             text-align: center; 
-            color: #6b7280; 
+            color: #666; 
             font-style: italic; 
-            margin-top: 30px;
+            font-size: 10pt;
+            margin-top: 20pt;
           }
           
           /* Media print quan trọng */
           @media print {
             body { 
-              margin: 15mm;
+              margin: 20mm 15mm;
+              font-size: 11pt;
+              line-height: 1.5;
+              color: #000;
+            }
+            
+            h1 {
+              font-size: 16pt;
+              margin: 12pt 0 8pt 0;
+            }
+            
+            h2 {
+              font-size: 14pt;
+              margin: 10pt 0 6pt 0;
+            }
+            
+            h3 {
               font-size: 12pt;
-              line-height: 1.4;
+              margin: 8pt 0 4pt 0;
+            }
+            
+            .detail-item h4 {
+              font-size: 11pt;
+            }
+            
+            .detail-item p, .detail-item ul, .detail-item ol {
+              font-size: 11pt;
+            }
+            
+            .task-list, .condition-list {
+              font-size: 11pt;
+            }
+            
+            .tag {
+              font-size: 10pt;
+            }
+            
+            .timestamp {
+              font-size: 10pt;
             }
             
             /* Quy tắc page break cho in ấn */
             .usecase-section { 
               page-break-inside: avoid;
               break-inside: avoid-page;
-              margin-bottom: 20px;
+              margin-bottom: 20pt;
             }
             
             .detail-item,

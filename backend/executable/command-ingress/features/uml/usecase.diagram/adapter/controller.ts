@@ -132,6 +132,41 @@ export class UsecaseDiagramController extends BaseController {
   }
 
   //actor
+  async createActor(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const ucId = req.params.ucId;
+        const data = req.body;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+        if (!data || !data.name) {
+          res.status(400).json({ message: "Actor name is required." });
+          return;
+        }
+
+        const responseData = await this.usecaseDiagramService.createActor(
+          ucId,
+          data
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Create Actor Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
   async editActorById(
     req: HttpRequest,
     res: Response,
@@ -207,6 +242,41 @@ export class UsecaseDiagramController extends BaseController {
   }
 
   //usecase
+  async createUsecase(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const ucId = req.params.ucId;
+        const data = req.body;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+        if (!data || !data.title) {
+          res.status(400).json({ message: "Usecase title is required." });
+          return;
+        }
+
+        const responseData = await this.usecaseDiagramService.createUsecase(
+          ucId,
+          data
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Create Usecase Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
   async editUsecaseById(
     req: HttpRequest,
     res: Response,
@@ -281,6 +351,41 @@ export class UsecaseDiagramController extends BaseController {
   }
 
   //association
+  async createAssociation(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const ucId = req.params.ucId;
+        const data = req.body;
+
+        if (!ucId) {
+          res.status(400).json({ message: "UcId is required." });
+          return;
+        }
+        if (!data || !data.actor_id || !data.usecase_id) {
+          res.status(400).json({ message: "Actor ID and Usecase ID are required." });
+          return;
+        }
+
+        const responseData = await this.usecaseDiagramService.createAssociation(
+          ucId,
+          data
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Create Association Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
   async editAssociationById(
     req: HttpRequest,
     res: Response,

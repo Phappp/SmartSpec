@@ -189,6 +189,32 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       created_by: ucd.created_by,
     };
   }
+  public async createActor(
+    ucId: string,
+    data: { name: string; description?: string; position?: { x: number; y: number } }
+  ): Promise<UseCaseDiagramResponse> {
+    const uc = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!uc) {
+      throw new Error("Usecase Diagram not found");
+    }
+
+    // Tính toán position mặc định dựa trên số lượng actors hiện có
+    const existingActorsCount = uc.actors.length;
+    const defaultPosition = data.position || {
+      x: 100 + (existingActorsCount % 3) * 200,
+      y: 100 + Math.floor(existingActorsCount / 3) * 150,
+    };
+
+    uc.actors.push({
+      name: data.name,
+      description: data.description || '',
+      position: defaultPosition,
+    });
+    
+    uc.markModified('actors');
+    await uc.save();
+    return this.getUsecaseDiagramsById(ucId);
+  }
   public async editActorById(
     ucId: string,
     actorId: string,
@@ -259,6 +285,32 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     }
     uc.usecases.splice(usecaseIndex, 1);
     await uc.save();
+  }
+  public async createUsecase(
+    ucId: string,
+    data: { title: string; description?: string; position?: { x: number; y: number } }
+  ): Promise<UseCaseDiagramResponse> {
+    const uc = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!uc) {
+      throw new Error("Usecase Diagram not found");
+    }
+
+    // Tính toán position mặc định dựa trên số lượng usecases hiện có
+    const existingUsecasesCount = uc.usecases.length;
+    const defaultPosition = data.position || {
+      x: 400 + (existingUsecasesCount % 4) * 150,
+      y: 300 + Math.floor(existingUsecasesCount / 4) * 100,
+    };
+
+    uc.usecases.push({
+      title: data.title,
+      description: data.description || '',
+      position: defaultPosition,
+    });
+    
+    uc.markModified('usecases');
+    await uc.save();
+    return this.getUsecaseDiagramsById(ucId);
   }
   public async createRelationship(
     ucId: string,
@@ -406,6 +458,58 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     }
     ucd.associations.splice(associationIndex, 1);
     await ucd.save();
+  }
+  public async createAssociation(
+    ucId: string,
+    data: { actor_id: string; usecase_id: string }
+  ): Promise<UseCaseDiagramResponse> {
+    const ucd = await UsecaseDiagramSchema.findOne({ _id: ucId });
+    if (!ucd) {
+      throw new Error("Usecase Diagram not found");
+    }
+
+    // Validate actor exists
+    const actorIndex = ucd.actors.findIndex(
+      (actor: any) => {
+        const actorId = actor._id ? String(actor._id) : String(actor.id || '');
+        return actorId === data.actor_id;
+      }
+    );
+    if (actorIndex === -1) {
+      throw new Error("Actor not found in usecase diagram");
+    }
+
+    // Validate usecase exists
+    const usecaseIndex = ucd.usecases.findIndex(
+      (usecase: any) => {
+        const usecaseId = usecase._id ? String(usecase._id) : String(usecase.id || '');
+        return usecaseId === data.usecase_id;
+      }
+    );
+    if (usecaseIndex === -1) {
+      throw new Error("Usecase not found in usecase diagram");
+    }
+
+    // Check if association already exists
+    const existingAssociation = ucd.associations.find(
+      (assoc: any) => {
+        const assocActorId = assoc.actor_id ? String(assoc.actor_id) : String(assoc.actor_id || '');
+        const assocUsecaseId = assoc.usecase_id ? String(assoc.usecase_id) : String(assoc.usecase_id || '');
+        return assocActorId === data.actor_id && assocUsecaseId === data.usecase_id;
+      }
+    );
+    if (existingAssociation) {
+      throw new Error("Association already exists");
+    }
+
+    ucd.associations.push({
+      actor_id: data.actor_id,
+      usecase_id: data.usecase_id,
+    });
+    
+    ucd.markModified('associations');
+    await ucd.save();
+    return this.getUsecaseDiagramsById(ucId);
   }
   public async updateActorPosition(
     ucId: string,

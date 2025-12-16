@@ -38,6 +38,11 @@ const initSequenceDiagramRoute: (
     .route("/:sqdId/lifelines/:lifelineId/position")
     .patch(requireAuthorizedUser, controller.updateLifelinePosition.bind(controller));
 
+  // Update multiple positions (for drag & drop)
+  router
+    .route("/:sqdId/positions")
+    .patch(requireAuthorizedUser, controller.updateMultiplePositions.bind(controller));
+
   // Thêm route mới chỉ cần sequenceId - Đặt sau route cụ thể
   router
     .route("/:sequenceId")

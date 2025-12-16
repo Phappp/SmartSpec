@@ -27,6 +27,9 @@ const initUsecaseDiagramRoute: (
 
   //actor
   router
+    .route("/:ucId/actors")
+    .post(requireAuthorizedUser, controller.createActor.bind(controller));
+  router
     .route("/:ucId/actors/:actorId")
     .patch(requireAuthorizedUser, controller.editActorById.bind(controller));
   router
@@ -34,6 +37,9 @@ const initUsecaseDiagramRoute: (
     .delete(requireAuthorizedUser, controller.deleteActorById.bind(controller));
 
   //usecase
+  router
+    .route("/:ucId/usecases")
+    .post(requireAuthorizedUser, controller.createUsecase.bind(controller));
   router
     .route("/:ucId/usecases/:usecaseId")
     .patch(requireAuthorizedUser, controller.editUsecaseById.bind(controller));
@@ -65,6 +71,9 @@ const initUsecaseDiagramRoute: (
     );
 
   //association
+  router
+    .route("/:ucId/associations")
+    .post(requireAuthorizedUser, controller.createAssociation.bind(controller));
   router
     .route("/:ucId/associations/:associationId")
     .patch(

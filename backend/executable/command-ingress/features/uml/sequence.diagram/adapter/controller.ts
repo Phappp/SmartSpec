@@ -71,28 +71,28 @@ export class SequenceDiagramController extends BaseController {
         // 4. Tìm Usecase Context từ collection - handle cả _id và id (backward compatibility)
         const Usecase = (await import("../../../../../../internal/model/usecase")).default;
         const { Types } = await import("mongoose");
-        
+
         // Normalize usecaseId (handle ObjectId string, plain string, etc.)
         let normalizedUsecaseId = usecaseId;
         if (Types.ObjectId.isValid(String(usecaseId))) {
           normalizedUsecaseId = new Types.ObjectId(usecaseId).toString();
         }
-        
-        let useCaseContext = await Usecase.findOne({ 
+
+        let useCaseContext = await Usecase.findOne({
           $or: [
             { _id: new Types.ObjectId(usecaseId) },
             { _id: usecaseId },
             { _id: normalizedUsecaseId },
             { id: usecaseId }
           ],
-          version_id: version._id 
+          version_id: version._id
         }).lean();
 
         // Nếu không tìm thấy, thử tìm bằng string comparison
         if (!useCaseContext) {
           const allUsecases = await Usecase.find({ version_id: version._id }).lean();
-          useCaseContext = allUsecases.find(uc => 
-            String(uc._id) === String(usecaseId) || 
+          useCaseContext = allUsecases.find(uc =>
+            String(uc._id) === String(usecaseId) ||
             String(uc._id) === normalizedUsecaseId
           );
         }
@@ -266,6 +266,44 @@ export class SequenceDiagramController extends BaseController {
         res.status(StatusCodes.OK).json({
           status: "Success",
           message: "Update Lifeline Position Successfully",
+          data: responseData,
+        });
+      }
+    );
+  }
+
+  async updateMultiplePositions(
+    req: HttpRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    await this.execWithTryCatchBlock(
+      req,
+      res,
+      next,
+      async (req, res, _next) => {
+        const sqdId = req.params.sqdId;
+        const updates = req.body;
+
+        if (!sqdId) {
+          res.status(400).json({ message: "Sequence Diagram ID is required." });
+          return;
+        }
+        if (!updates || (!updates.lifelines && !updates.messages)) {
+          res.status(400).json({
+            message: "Valid updates {lifelines?, messages?} is required."
+          });
+          return;
+        }
+
+        const responseData = await this.sequenceDiagramService.updateMultiplePositions(
+          sqdId,
+          updates
+        );
+
+        res.status(StatusCodes.OK).json({
+          status: "Success",
+          message: "Update Multiple Positions Successfully",
           data: responseData,
         });
       }

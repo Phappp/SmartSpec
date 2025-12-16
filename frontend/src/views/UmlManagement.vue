@@ -7,20 +7,6 @@
           <!-- <h2>UML Diagram Management</h2>
           <p class="subtitle">Manage and visualize your system diagrams</p> -->
         </div>
-        <div class="header-actions">
-          <button class="btn-secondary" @click="refreshDiagrams">
-            <span class="material-symbols-outlined">refresh</span>
-            Refresh
-          </button>
-          <button class="btn-primary" @click="generateNewDiagram">
-            <span class="material-symbols-outlined">auto_awesome</span>
-            Generate Diagram
-          </button>
-          <!-- <button class="btn-secondary" @click="openManualEditor">
-            <span class="material-symbols-outlined">draw</span>
-            Create Manually
-          </button> -->
-        </div>
       </div>
 
       <!-- Loading State -->
@@ -143,6 +129,29 @@
                     </button>
                   </div>
                 </div>
+                <button 
+                  class="btn-refresh-section" 
+                  @click="refreshDiagramsByType('usecase')"
+                  :disabled="refreshingDiagrams.usecase"
+                  title="Refresh Use Case Diagrams"
+                >
+                  <span 
+                    v-if="refreshingDiagrams.usecase" 
+                    class="loading-spinner-small"
+                  ></span>
+                  <span 
+                    v-else 
+                    class="material-symbols-outlined"
+                  >refresh</span>
+                </button>
+                <button 
+                  class="btn-generate-section" 
+                  @click="generateSpecificDiagram('usecase')"
+                  title="Generate Use Case Diagram"
+                >
+                  <span class="material-symbols-outlined">auto_awesome</span>
+                  Generate
+                </button>
               </div>
             </div>
           </div>
@@ -383,6 +392,29 @@
                     </button>
                   </div>
                 </div>
+                <button 
+                  class="btn-refresh-section" 
+                  @click="refreshDiagramsByType('activity')"
+                  :disabled="refreshingDiagrams.activity"
+                  title="Refresh Activity Diagrams"
+                >
+                  <span 
+                    v-if="refreshingDiagrams.activity" 
+                    class="loading-spinner-small"
+                  ></span>
+                  <span 
+                    v-else 
+                    class="material-symbols-outlined"
+                  >refresh</span>
+                </button>
+                <button 
+                  class="btn-generate-section" 
+                  @click="generateSpecificDiagram('activity')"
+                  title="Generate Activity Diagram"
+                >
+                  <span class="material-symbols-outlined">auto_awesome</span>
+                  Generate
+                </button>
               </div>
             </div>
           </div>
@@ -619,6 +651,29 @@
                     </button>
                   </div>
                 </div>
+                <button 
+                  class="btn-refresh-section" 
+                  @click="refreshDiagramsByType('sequence')"
+                  :disabled="refreshingDiagrams.sequence"
+                  title="Refresh Sequence Diagrams"
+                >
+                  <span 
+                    v-if="refreshingDiagrams.sequence" 
+                    class="loading-spinner-small"
+                  ></span>
+                  <span 
+                    v-else 
+                    class="material-symbols-outlined"
+                  >refresh</span>
+                </button>
+                <button 
+                  class="btn-generate-section" 
+                  @click="generateSpecificDiagram('sequence')"
+                  title="Generate Sequence Diagram"
+                >
+                  <span class="material-symbols-outlined">auto_awesome</span>
+                  Generate
+                </button>
               </div>
             </div>
           </div>
@@ -764,15 +819,7 @@
 
           <div class="modal-body">
             <form @submit.prevent="generateDiagram">
-              <div class="form-group">
-                <label>Diagram Type</label>
-                <select v-model="generateForm.type" required>
-                  <option value="usecase">Use Case Diagram</option>
-                  <option value="activity">Activity Diagram</option>
-                  <option value="sequence">Sequence Diagram</option>
-                </select>
-              </div>
-
+              <!-- Diagram Type is now fixed based on which button was clicked -->
               <!-- Language is automatically set from project settings -->
 
               <!-- Sequence Diagram Options -->
@@ -886,6 +933,7 @@
                   @element-selected="handleElementSelect"
                   @position-updated="handlePositionUpdate"
                   @element-dragged="handleElementDrag"
+                  @diagram-updated="handleDiagramUpdated"
                 />
               </div>
             </div>
@@ -1023,6 +1071,12 @@ export default {
       // Dropdown states for sort and filter
       activeSortDropdown: null,
       activeLangDropdown: null,
+      // Track refreshing state for each diagram type
+      refreshingDiagrams: {
+        usecase: false,
+        activity: false,
+        sequence: false,
+      },
     }
   },
   computed: {
@@ -1446,6 +1500,8 @@ export default {
         return
       }
 
+      // Set type cố định và mở modal
+      this.generateForm.type = type
       this.showGenerateModal = true
     },
     closeGenerateModal() {
@@ -1961,6 +2017,55 @@ export default {
       await this.loadDiagrams()
       this.toast.success('Diagrams refreshed')
     },
+    async refreshDiagramsByType(type) {
+      if (!this.selectedVersionId) {
+        this.toast.error('Please select a version first')
+        return
+      }
+
+      // Set refreshing state
+      this.refreshingDiagrams[type] = true
+
+      try {
+        await this.loadAvailableUsecases()
+        
+        // Load only the specific diagram type
+        switch (type) {
+          case 'usecase':
+            const usecaseResponse = await getUsecaseDiagrams(this.selectedVersionId).catch(() => ({ data: { data: [] } }))
+            this.usecaseDiagrams = this.processDiagrams(usecaseResponse.data?.data || [], 'usecase')
+            break
+          case 'activity':
+            const activityResponse = await getActivityDiagrams(this.selectedVersionId).catch(() => ({ data: { data: [] } }))
+            this.activityDiagrams = this.processDiagrams(activityResponse.data?.data || [], 'activity')
+            break
+          case 'sequence':
+            const sequenceResponse = await getSequenceDiagrams(this.selectedVersionId).catch(() => ({ data: { data: [] } }))
+            this.sequenceDiagrams = this.processDiagrams(sequenceResponse.data?.data || [], 'sequence')
+            break
+        }
+
+        // Trigger preview generation for refreshed diagrams
+        this.$nextTick(() => {
+          setTimeout(() => {
+            const diagrams = this.getDiagramsByType(type)
+            this.triggerPreviewGenerationForDiagrams(diagrams, type)
+          }, 300)
+        })
+
+        const typeNames = {
+          usecase: 'Use Case',
+          activity: 'Activity',
+          sequence: 'Sequence',
+        }
+        this.toast.success(`${typeNames[type]} diagrams refreshed`)
+      } catch (err) {
+        console.error(`Error refreshing ${type} diagrams:`, err)
+        this.toast.error(`Failed to refresh ${type} diagrams`)
+      } finally {
+        this.refreshingDiagrams[type] = false
+      }
+    },
     // Preview Image Management
     getCacheKey(diagramId) {
       if (!this.cacheKeyPrefix) {
@@ -2458,42 +2563,41 @@ export default {
     },
 
     async saveActivityPositions(diagramId) {
-      // Save đơn lẻ từng node đã thay đổi (với debounce 1.5s)
+      // ✅ Tối ưu: Batch update tất cả nodes đã thay đổi trong một request
       if (!this.activityChangedNodes || this.activityChangedNodes.size === 0) {
         return
       }
 
       const nodesToSave = Array.from(this.activityChangedNodes.values())
       
-      // Save từng node một (đơn lẻ) và cập nhật UI
-      for (const node of nodesToSave) {
-        try {
-          const response = await updateNodePosition(diagramId, node.id, node.position)
-          // ✅ Cập nhật editingDiagram với dữ liệu mới từ server để UI cập nhật
-          if (response?.data?.data) {
-            const updatedDiagram = response.data.data
-            if (this.editingDiagram && (this.editingDiagram.id || this.editingDiagram._id) === diagramId) {
-              // Cập nhật nodes với position mới - dùng Vue.set để đảm bảo reactivity
-              if (updatedDiagram.nodes) {
-                updatedDiagram.nodes.forEach((updatedNode) => {
-                  const localNodeIndex = this.editingDiagram.nodes.findIndex(
-                    (n) => n.id === updatedNode.id
-                  )
-                  if (localNodeIndex !== -1 && updatedNode.position) {
-                    // Vue 3 không cần $set, chỉ cần assign trực tiếp
-                    this.editingDiagram.nodes[localNodeIndex].position = {
-                      x: updatedNode.position.x,
-                      y: updatedNode.position.y,
-                    }
+      try {
+        // ✅ Batch update: Gửi tất cả nodes cùng lúc thay vì từng node một
+        const response = await updateMultipleNodePositions(diagramId, nodesToSave)
+        
+        // ✅ Cập nhật editingDiagram với dữ liệu mới từ server để UI cập nhật
+        if (response?.data?.data) {
+          const updatedDiagram = response.data.data
+          if (this.editingDiagram && (this.editingDiagram.id || this.editingDiagram._id) === diagramId) {
+            // Cập nhật nodes với position mới
+            if (updatedDiagram.nodes) {
+              updatedDiagram.nodes.forEach((updatedNode) => {
+                const localNodeIndex = this.editingDiagram.nodes.findIndex(
+                  (n) => n.id === updatedNode.id
+                )
+                if (localNodeIndex !== -1 && updatedNode.position) {
+                  // Vue 3 không cần $set, chỉ cần assign trực tiếp
+                  this.editingDiagram.nodes[localNodeIndex].position = {
+                    x: updatedNode.position.x,
+                    y: updatedNode.position.y,
                   }
-                })
-              }
+                }
+              })
             }
           }
-        } catch (err) {
-          console.error(`❌ Error saving node ${node.id}:`, err)
-          // Tiếp tục save các node khác dù có lỗi
         }
+      } catch (err) {
+        console.error('❌ Error saving activity diagram positions:', err)
+        throw err
       }
 
       // Clear changed nodes sau khi save xong
@@ -2504,52 +2608,53 @@ export default {
       if (!this.editingDiagram || !this.editingDiagram.lifelines) return
 
       try {
-        const { updateLifelinePosition } = await import('@/api/sqd')
+        const { updateMultiplePositions } = await import('@/api/sqd')
         
-        // Save tất cả lifelines có position (không filter vì có thể position là 0,0 hợp lệ)
-        const lifelinesToSave = this.editingDiagram.lifelines.filter(
-          (ll) => ll.position && typeof ll.position.x === 'number' && typeof ll.position.y === 'number'
-        )
-
-        console.log('💾 Saving sequence diagram positions:', {
-          diagramId,
-          totalLifelines: this.editingDiagram.lifelines.length,
-          lifelinesToSave: lifelinesToSave.length,
-          lifelines: lifelinesToSave.map(ll => ({
-            id: ll._id || ll.id,
-            normalizedId: this.normalizeId(ll._id || ll.id),
-            name: ll.name,
-            position: ll.position
+        // ✅ Tối ưu: Batch update tất cả lifelines và messages trong một request
+        const lifelinesToSave = this.editingDiagram.lifelines
+          .filter((ll) => ll.position && typeof ll.position.x === 'number' && typeof ll.position.y === 'number')
+          .map((ll) => ({
+            id: this.normalizeId(ll._id || ll.id),
+            position: {
+              x: Math.round(ll.position.x),
+              y: Math.round(ll.position.y),
+            }
           }))
+          .filter((ll) => ll.id) // Chỉ lấy những lifeline có ID hợp lệ
+
+        // Lấy messages có position đã thay đổi
+        const messagesToSave = this.editingDiagram.messages
+          ? this.editingDiagram.messages
+              .filter((msg) => msg.position && typeof msg.position.y === 'number')
+              .map((msg) => ({
+                id: this.normalizeId(msg._id || msg.id),
+                position: {
+                  y: Math.round(msg.position.y),
+                }
+              }))
+              .filter((msg) => msg.id) // Chỉ lấy những message có ID hợp lệ
+          : []
+
+        // Chỉ gửi request nếu có thay đổi
+        if (lifelinesToSave.length === 0 && messagesToSave.length === 0) {
+          return
+        }
+
+        const updates = {}
+        if (lifelinesToSave.length > 0) {
+          updates.lifelines = lifelinesToSave
+        }
+        if (messagesToSave.length > 0) {
+          updates.messages = messagesToSave
+        }
+
+        console.log('💾 Saving sequence diagram positions (batch):', {
+          diagramId,
+          lifelinesCount: lifelinesToSave.length,
+          messagesCount: messagesToSave.length,
         })
 
-        for (const lifeline of lifelinesToSave) {
-          // Normalize ID để gửi lên backend
-          const lifelineId = this.normalizeId(lifeline._id || lifeline.id)
-          if (lifelineId && lifeline.position) {
-            try {
-              console.log('💾 Saving lifeline position:', { 
-                diagramId, 
-                lifelineId, 
-                position: lifeline.position,
-                lifelineName: lifeline.name
-              })
-              await updateLifelinePosition(diagramId, lifelineId, {
-                x: Math.round(lifeline.position.x),
-                y: Math.round(lifeline.position.y),
-              })
-            } catch (err) {
-              console.error(`❌ Error saving lifeline ${lifelineId} (${lifeline.name}):`, err)
-              // Tiếp tục save các lifeline khác dù có lỗi
-            }
-          } else {
-            console.warn('⚠️ Skipping lifeline without ID or position:', {
-              lifeline: lifeline,
-              hasId: !!(lifeline._id || lifeline.id),
-              hasPosition: !!lifeline.position
-            })
-          }
-        }
+        await updateMultiplePositions(diagramId, updates)
 
         console.log('💾 Sequence diagram positions saved successfully')
       } catch (err) {
@@ -2560,13 +2665,52 @@ export default {
     handleElementDrag({ element, type, newPosition }) {
       this.handlePositionUpdate({ element, type, position: newPosition })
     },
+    async handleDiagramUpdated(updatedDiagramData) {
+      if (!this.editingDiagram) return
+
+      const diagramType = this.editingDiagram._type
+      const diagramId = this.editingDiagram.id || this.editingDiagram._id
+
+      try {
+        // If updated data is provided, use it directly
+        if (updatedDiagramData) {
+          if (diagramType === 'usecase') {
+            this.editingDiagram = {
+              ...this.processDiagrams([updatedDiagramData], 'usecase')[0],
+              _type: 'usecase',
+            }
+          }
+          // Update the diagram in the list as well
+          await this.refreshSingleDiagram(diagramType, diagramId)
+          return
+        }
+
+        // Otherwise, refresh from API
+        await this.refreshSingleDiagram(diagramType, diagramId)
+        
+        // Update editingDiagram with fresh data
+        const diagrams = this.getDiagramsByType(diagramType)
+        const updatedDiagram = diagrams.find((d) => (d.id || d._id) === diagramId)
+        if (updatedDiagram) {
+          this.editingDiagram = {
+            ...updatedDiagram,
+            _type: diagramType,
+          }
+        }
+      } catch (error) {
+        console.error('Error refreshing diagram after update:', error)
+        this.toast.error('Failed to refresh diagram data')
+      }
+    },
     debounceSave() {
       if (this.saveTimeout) {
         clearTimeout(this.saveTimeout)
       }
+      // ✅ Tối ưu: Giảm debounce time từ 1500ms xuống 800ms vì đã dùng batch update
+      // Batch update chỉ gửi 1 request thay vì nhiều requests, nên có thể giảm delay
       this.saveTimeout = setTimeout(() => {
         this.saveDiagramPositions()
-      }, 1500)
+      }, 800)
     },
     async refreshSingleDiagram(diagramType, diagramId) {
       if (!diagramId) return
@@ -2987,6 +3131,7 @@ export default {
   padding-bottom: 20px;
   border-bottom: 2px solid #f1f5f9;
   position: relative;
+  gap: 16px;
 }
 
 .section-title {
@@ -3032,7 +3177,117 @@ export default {
 .section-controls {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.btn-refresh-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: white;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-refresh-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(26, 54, 93, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.btn-refresh-section:hover:not(:disabled)::before {
+  left: 100%;
+}
+
+.btn-refresh-section:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: #1a365d;
+  color: #1a365d;
+  transform: translateY(-2px) rotate(180deg);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
+}
+
+.btn-refresh-section:active:not(:disabled) {
+  transform: translateY(0) rotate(180deg);
+}
+
+.btn-refresh-section:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-refresh-section .material-symbols-outlined {
+  font-size: 20px;
+  transition: transform 0.3s ease;
+}
+
+.btn-refresh-section:hover:not(:disabled) .material-symbols-outlined {
+  transform: rotate(180deg);
+}
+
+.btn-generate-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-generate-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn-generate-section:hover::before {
+  left: 100%;
+}
+
+.btn-generate-section:hover {
+  background: linear-gradient(135deg, #2d4a8a 0%, #3d5a9a 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.3);
+}
+
+.btn-generate-section:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.2);
+}
+
+.btn-generate-section .material-symbols-outlined {
+  font-size: 18px;
 }
 
 .search-box {
