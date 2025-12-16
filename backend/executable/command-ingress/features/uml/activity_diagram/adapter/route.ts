@@ -44,6 +44,28 @@ export default function initActivityDiagramRoute(): Router {
   router.patch('/:activityDiagramId/nodes/:nodeId/position', requireAuthorizedUser, controller.updateNodePosition);
   router.patch('/:activityDiagramId/nodes/positions', requireAuthorizedUser, controller.updateMultipleNodePositions);
 
+  // ==================== NODE CRUD ROUTES ====================
+  router
+    .route('/:activityDiagramId/nodes/:nodeId')
+    .patch(requireAuthorizedUser, controller.updateNode)
+    .delete(requireAuthorizedUser, controller.deleteNode);
+
+  // ==================== EDGE CRUD ROUTES ====================
+  router
+    .route('/:activityDiagramId/edges')
+    .post(requireAuthorizedUser, controller.createEdge);
+
+  router
+    .route('/:activityDiagramId/edges/:edgeId')
+    .patch(requireAuthorizedUser, controller.updateEdge)
+    .delete(requireAuthorizedUser, controller.deleteEdge);
+
+  // ==================== LANE CRUD ROUTES ====================
+  router
+    .route('/:activityDiagramId/lanes/:laneId')
+    .patch(requireAuthorizedUser, controller.updateLane)
+    .delete(requireAuthorizedUser, controller.deleteLane);
+
   return router;
 }
 

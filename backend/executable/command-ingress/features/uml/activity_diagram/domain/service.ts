@@ -590,6 +590,284 @@ export class ActivityDiagramService {
     return this.getActivityDiagramByID(diagramId);
   }
 
+  // ==================== NODE CRUD ====================
+  public async updateNode(
+    diagramId: string,
+    nodeId: string,
+    data: { label?: string; type?: string; lane_id?: string | null }
+  ): Promise<any> {
+    const diagram = await ActivityDiagramModel.findById(diagramId);
+    if (!diagram) {
+      throw new Error("Activity Diagram not found");
+    }
+
+    const normalizedNodeId = String(nodeId);
+    const nodeIndex = diagram.nodes.findIndex(
+      (node: any) => {
+        const nodeIdStr = node._id ? String(node._id) : String(node.id || '');
+        return nodeIdStr === normalizedNodeId;
+      }
+    );
+
+    if (nodeIndex === -1) {
+      throw new Error(`Node not found: ${nodeId}`);
+    }
+
+    const { Types } = await import("mongoose");
+
+    if (data.label !== undefined) {
+      diagram.nodes[nodeIndex].label = data.label;
+    }
+    if (data.type !== undefined) {
+      (diagram.nodes[nodeIndex] as any).type = data.type as "start" | "end" | "action" | "decision" | "merge" | "fork" | "join" | "object" | "swimlane";
+    }
+    if (data.lane_id !== undefined) {
+      diagram.nodes[nodeIndex].lane_id = data.lane_id
+        ? new Types.ObjectId(data.lane_id)
+        : null;
+    }
+
+    diagram.markModified('nodes');
+    await diagram.save();
+
+    return this.getActivityDiagramByID(diagramId);
+  }
+
+  public async deleteNode(diagramId: string, nodeId: string): Promise<void> {
+    const diagram = await ActivityDiagramModel.findById(diagramId);
+    if (!diagram) {
+      throw new Error("Activity Diagram not found");
+    }
+
+    const normalizedNodeId = String(nodeId);
+    const nodeIndex = diagram.nodes.findIndex(
+      (node: any) => {
+        const nodeIdStr = node._id ? String(node._id) : String(node.id || '');
+        return nodeIdStr === normalizedNodeId;
+      }
+    );
+
+    if (nodeIndex === -1) {
+      throw new Error(`Node not found: ${nodeId}`);
+    }
+
+    const nodeObjectId = diagram.nodes[nodeIndex]._id;
+
+    // Xóa tất cả edges liên quan đến node này
+    for (let i = diagram.edges.length - 1; i >= 0; i--) {
+      const edge = diagram.edges[i];
+      const fromId = edge.from ? String(edge.from) : '';
+      const toId = edge.to ? String(edge.to) : '';
+      if (fromId === normalizedNodeId || toId === normalizedNodeId) {
+        diagram.edges.splice(i, 1);
+      }
+    }
+    diagram.markModified('edges');
+
+    // Xóa node
+    diagram.nodes.splice(nodeIndex, 1);
+    diagram.markModified('nodes');
+    await diagram.save();
+  }
+
+  // ==================== EDGE CRUD ====================
+  public async createEdge(
+    diagramId: string,
+    data: {
+      from: string;
+      to: string;
+      condition?: string;
+      guard?: string;
+      trigger?: string;
+    }
+  ): Promise<any> {
+    const diagram = await ActivityDiagramModel.findById(diagramId);
+    if (!diagram) {
+      throw new Error("Activity Diagram not found");
+    }
+
+    const { Types } = await import("mongoose");
+    const fromNodeId = new Types.ObjectId(data.from);
+    const toNodeId = new Types.ObjectId(data.to);
+
+    // Validate nodes exist
+    const fromExists = diagram.nodes.some(
+      (node: any) => String(node._id) === String(fromNodeId)
+    );
+    const toExists = diagram.nodes.some(
+      (node: any) => String(node._id) === String(toNodeId)
+    );
+
+    if (!fromExists || !toExists) {
+      throw new Error("Source or target node not found");
+    }
+
+    const newEdge: any = {
+      from: fromNodeId,
+      to: toNodeId,
+    };
+
+    if (data.condition !== undefined) {
+      newEdge.condition = data.condition;
+    }
+    if (data.guard !== undefined) {
+      newEdge.guard = data.guard;
+    }
+    if (data.trigger !== undefined) {
+      newEdge.trigger = data.trigger;
+    }
+
+    diagram.edges.push(newEdge);
+    diagram.markModified('edges');
+    await diagram.save();
+
+    return this.getActivityDiagramByID(diagramId);
+  }
+
+  public async updateEdge(
+    diagramId: string,
+    edgeId: string,
+    data: {
+      from?: string;
+      to?: string;
+      condition?: string;
+      guard?: string;
+      trigger?: string;
+    }
+  ): Promise<any> {
+    const diagram = await ActivityDiagramModel.findById(diagramId);
+    if (!diagram) {
+      throw new Error("Activity Diagram not found");
+    }
+
+    const normalizedEdgeId = String(edgeId);
+    const edgeIndex = diagram.edges.findIndex(
+      (edge: any) => {
+        const edgeIdStr = edge._id ? String(edge._id) : String(edge.id || '');
+        return edgeIdStr === normalizedEdgeId;
+      }
+    );
+
+    if (edgeIndex === -1) {
+      throw new Error(`Edge not found: ${edgeId}`);
+    }
+
+    const { Types } = await import("mongoose");
+
+    if (data.from !== undefined) {
+      diagram.edges[edgeIndex].from = new Types.ObjectId(data.from);
+    }
+    if (data.to !== undefined) {
+      diagram.edges[edgeIndex].to = new Types.ObjectId(data.to);
+    }
+    if (data.condition !== undefined) {
+      diagram.edges[edgeIndex].condition = data.condition;
+    }
+    if (data.guard !== undefined) {
+      diagram.edges[edgeIndex].guard = data.guard;
+    }
+    if (data.trigger !== undefined) {
+      diagram.edges[edgeIndex].trigger = data.trigger;
+    }
+
+    diagram.markModified('edges');
+    await diagram.save();
+
+    return this.getActivityDiagramByID(diagramId);
+  }
+
+  public async deleteEdge(diagramId: string, edgeId: string): Promise<void> {
+    const diagram = await ActivityDiagramModel.findById(diagramId);
+    if (!diagram) {
+      throw new Error("Activity Diagram not found");
+    }
+
+    const normalizedEdgeId = String(edgeId);
+    const edgeIndex = diagram.edges.findIndex(
+      (edge: any) => {
+        const edgeIdStr = edge._id ? String(edge._id) : String(edge.id || '');
+        return edgeIdStr === normalizedEdgeId;
+      }
+    );
+
+    if (edgeIndex === -1) {
+      throw new Error(`Edge not found: ${edgeId}`);
+    }
+
+    diagram.edges.splice(edgeIndex, 1);
+    diagram.markModified('edges');
+    await diagram.save();
+  }
+
+  // ==================== LANE CRUD ====================
+  public async updateLane(
+    diagramId: string,
+    laneId: string,
+    data: { name?: string }
+  ): Promise<any> {
+    const diagram = await ActivityDiagramModel.findById(diagramId);
+    if (!diagram) {
+      throw new Error("Activity Diagram not found");
+    }
+
+    const normalizedLaneId = String(laneId);
+    const laneIndex = diagram.lanes.findIndex(
+      (lane: any) => {
+        const laneIdStr = lane._id ? String(lane._id) : String(lane.id || '');
+        return laneIdStr === normalizedLaneId;
+      }
+    );
+
+    if (laneIndex === -1) {
+      throw new Error(`Lane not found: ${laneId}`);
+    }
+
+    if (data.name !== undefined) {
+      diagram.lanes[laneIndex].name = data.name;
+    }
+
+    diagram.markModified('lanes');
+    await diagram.save();
+
+    return this.getActivityDiagramByID(diagramId);
+  }
+
+  public async deleteLane(diagramId: string, laneId: string): Promise<void> {
+    const diagram = await ActivityDiagramModel.findById(diagramId);
+    if (!diagram) {
+      throw new Error("Activity Diagram not found");
+    }
+
+    const normalizedLaneId = String(laneId);
+    const laneIndex = diagram.lanes.findIndex(
+      (lane: any) => {
+        const laneIdStr = lane._id ? String(lane._id) : String(lane.id || '');
+        return laneIdStr === normalizedLaneId;
+      }
+    );
+
+    if (laneIndex === -1) {
+      throw new Error(`Lane not found: ${laneId}`);
+    }
+
+    // Set lane_id = null cho tất cả nodes thuộc lane này
+    const { Types } = await import("mongoose");
+    const lane = diagram.lanes[laneIndex] as any;
+    const laneObjectId = lane?._id;
+    if (laneObjectId) {
+      diagram.nodes.forEach((node: any) => {
+        if (node.lane_id && String(node.lane_id) === normalizedLaneId) {
+          node.lane_id = null;
+        }
+      });
+      diagram.markModified('nodes');
+    }
+
+    // Xóa lane
+    diagram.lanes.splice(laneIndex, 1);
+    diagram.markModified('lanes');
+    await diagram.save();
+  }
 }
 
 

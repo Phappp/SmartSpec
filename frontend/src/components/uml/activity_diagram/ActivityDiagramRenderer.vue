@@ -50,6 +50,14 @@
           </button>
         </div>
 
+        <!-- CRUD Controls -->
+        <div class="toolbar-group">
+          <button class="toolbar-btn btn-manage" @click="showManagementModal" title="Manage Diagram">
+            <span class="material-symbols-outlined">settings</span>
+            Manage
+          </button>
+        </div>
+
         <!-- Export Controls -->
         <div class="toolbar-group">
           <button class="toolbar-btn" @click="exportAsSVG" title="Export as SVG">
@@ -441,10 +449,291 @@
       </div>
       <div class="status-item">Zoom: {{ Math.round(internalZoom * 100) }}%</div>
     </div>
+
+    <!-- Management Modal -->
+    <div v-if="managementModal.visible" class="management-modal-overlay" @click="closeManagementModal">
+      <div class="management-modal-content" @click.stop>
+        <div class="management-modal-header">
+          <h2>Manage Activity Diagram</h2>
+          <button class="modal-close-btn" @click="closeManagementModal">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="management-tabs">
+          <button
+            v-for="tab in managementTabs"
+            :key="tab.id"
+            class="tab-btn"
+            :class="{ active: managementModal.activeTab === tab.id }"
+            @click="managementModal.activeTab = tab.id"
+          >
+            <span class="material-symbols-outlined">{{ tab.icon }}</span>
+            {{ tab.label }}
+            <span class="tab-count">({{ getTabCount(tab.id) }})</span>
+          </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="management-tab-content">
+          <!-- Nodes Tab -->
+          <div v-if="managementModal.activeTab === 'nodes'" class="tab-panel">
+            <div class="panel-header">
+              <h3>Nodes</h3>
+              <button class="btn-add-item" @click="openCreateForm('node')">
+                <span class="material-symbols-outlined">add</span>
+                Add Node
+              </button>
+            </div>
+            <div class="items-list">
+              <div
+                v-for="node in positionedNodes"
+                :key="node.id"
+                class="item-card"
+              >
+                <div class="item-info">
+                  <div class="item-name">{{ node.label || 'Unnamed Node' }}</div>
+                  <div class="item-meta">
+                    <span class="node-type-badge">{{ node.type }}</span>
+                    <span v-if="node.lane_id" class="lane-badge">
+                      Lane: {{ getLaneName(node.lane_id) }}
+                    </span>
+                  </div>
+                </div>
+                <div class="item-actions">
+                  <button class="btn-edit" @click="openEditForm('node', node)" title="Edit">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="btn-delete" @click="confirmDelete('node', node)" title="Delete">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </div>
+              <div v-if="positionedNodes.length === 0" class="empty-state">
+                <span class="material-symbols-outlined">circle</span>
+                <p>No nodes yet</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Edges Tab -->
+          <div v-if="managementModal.activeTab === 'edges'" class="tab-panel">
+            <div class="panel-header">
+              <h3>Edges</h3>
+              <button class="btn-add-item" @click="openCreateForm('edge')">
+                <span class="material-symbols-outlined">add</span>
+                Add Edge
+              </button>
+            </div>
+            <div class="items-list">
+              <div
+                v-for="edge in computedEdges"
+                :key="edge.id"
+                class="item-card"
+              >
+                <div class="item-info">
+                  <div class="item-name">
+                    {{ edge.source?.label || 'Unknown' }} → {{ edge.target?.label || 'Unknown' }}
+                  </div>
+                  <div v-if="edge.condition || edge.guard || edge.trigger" class="item-description">
+                    <span v-if="edge.condition">Condition: {{ edge.condition }}</span>
+                    <span v-if="edge.guard">Guard: {{ edge.guard }}</span>
+                    <span v-if="edge.trigger">Trigger: {{ edge.trigger }}</span>
+                  </div>
+                </div>
+                <div class="item-actions">
+                  <button class="btn-edit" @click="openEditForm('edge', edge)" title="Edit">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="btn-delete" @click="confirmDelete('edge', edge)" title="Delete">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </div>
+              <div v-if="computedEdges.length === 0" class="empty-state">
+                <span class="material-symbols-outlined">arrow_right_alt</span>
+                <p>No edges yet</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Lanes Tab -->
+          <div v-if="managementModal.activeTab === 'lanes'" class="tab-panel">
+            <div class="panel-header">
+              <h3>Lanes</h3>
+            </div>
+            <div class="items-list">
+              <div
+                v-for="lane in computedLanes"
+                :key="lane.id"
+                class="item-card"
+              >
+                <div class="item-info">
+                  <div class="item-name">{{ lane.name || 'Unnamed Lane' }}</div>
+                  <div class="item-meta">
+                    <span>{{ getNodesInLane(lane.id).length }} nodes</span>
+                  </div>
+                </div>
+                <div class="item-actions">
+                  <button class="btn-edit" @click="openEditForm('lane', lane)" title="Edit">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="btn-delete" @click="confirmDelete('lane', lane)" title="Delete">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </div>
+              <div v-if="computedLanes.length === 0" class="empty-state">
+                <span class="material-symbols-outlined">view_column</span>
+                <p>No lanes yet</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create/Edit Form Modal -->
+    <div v-if="formModal.visible" class="form-modal-overlay" @click="closeFormModal">
+      <div class="form-modal-content" @click.stop>
+        <div class="form-modal-header">
+          <h3>{{ formModal.isEdit ? 'Edit' : 'Create' }} {{ formModal.type }}</h3>
+          <button class="modal-close-btn" @click="closeFormModal">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="form-modal-body">
+          <!-- Node Form -->
+          <div v-if="formModal.type === 'node'">
+            <div class="form-group">
+              <label>Node Label *</label>
+              <input
+                v-model="formModal.data.label"
+                type="text"
+                placeholder="Enter node label"
+                class="form-input"
+              />
+            </div>
+            <div class="form-group">
+              <label>Node Type *</label>
+              <select v-model="formModal.data.type" class="form-input">
+                <option value="start">Start</option>
+                <option value="end">End</option>
+                <option value="action">Action</option>
+                <option value="decision">Decision</option>
+                <option value="merge">Merge</option>
+                <option value="fork">Fork</option>
+                <option value="join">Join</option>
+                <option value="object">Object</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Lane (Optional)</label>
+              <select v-model="formModal.data.lane_id" class="form-input">
+                <option :value="null">No Lane</option>
+                <option
+                  v-for="lane in computedLanes"
+                  :key="lane.id"
+                  :value="lane.id"
+                >
+                  {{ lane.name }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Edge Form -->
+          <div v-if="formModal.type === 'edge'">
+            <div class="form-group">
+              <label>From Node *</label>
+              <select v-model="formModal.data.from" class="form-input">
+                <option value="">Select From Node</option>
+                <option
+                  v-for="node in positionedNodes"
+                  :key="node.id"
+                  :value="node.id"
+                >
+                  {{ node.label }} ({{ node.type }})
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>To Node *</label>
+              <select v-model="formModal.data.to" class="form-input">
+                <option value="">Select To Node</option>
+                <option
+                  v-for="node in positionedNodes"
+                  :key="node.id"
+                  :value="node.id"
+                >
+                  {{ node.label }} ({{ node.type }})
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Condition</label>
+              <input
+                v-model="formModal.data.condition"
+                type="text"
+                placeholder="Enter condition (optional)"
+                class="form-input"
+              />
+            </div>
+            <div class="form-group">
+              <label>Guard</label>
+              <input
+                v-model="formModal.data.guard"
+                type="text"
+                placeholder="Enter guard (optional)"
+                class="form-input"
+              />
+            </div>
+            <div class="form-group">
+              <label>Trigger</label>
+              <input
+                v-model="formModal.data.trigger"
+                type="text"
+                placeholder="Enter trigger (optional)"
+                class="form-input"
+              />
+            </div>
+          </div>
+
+          <!-- Lane Form -->
+          <div v-if="formModal.type === 'lane'">
+            <div class="form-group">
+              <label>Lane Name *</label>
+              <input
+                v-model="formModal.data.name"
+                type="text"
+                placeholder="Enter lane name"
+                class="form-input"
+              />
+            </div>
+          </div>
+        </div>
+        <div class="form-modal-footer">
+          <button class="btn-secondary" @click="closeFormModal">Cancel</button>
+          <button class="btn-primary" @click="saveForm">{{ formModal.isEdit ? 'Update' : 'Create' }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
+import {
+  updateNode,
+  deleteNode,
+  createEdge,
+  updateEdge,
+  deleteEdge,
+  updateLane,
+  deleteLane,
+  getActivityDiagramById,
+} from '@/api/avd';
+
 export default {
   name: 'ActivityDiagramRenderer',
   props: {
@@ -543,6 +832,37 @@ export default {
       fixedLaneWidth: 600, // Kích thước cố định cho mỗi lane (tăng 1.5 lần từ 400)
       showAutoFixSuggestion: false,
       autoFixDismissed: false,
+
+      // Management Modal state
+      managementModal: {
+        visible: false,
+        activeTab: 'nodes',
+        hasChanges: false,
+      },
+      managementTabs: [
+        { id: 'nodes', label: 'Nodes', icon: 'circle' },
+        { id: 'edges', label: 'Edges', icon: 'arrow_right_alt' },
+        { id: 'lanes', label: 'Lanes', icon: 'view_column' },
+      ],
+      formModal: {
+        visible: false,
+        type: null, // 'node', 'edge', 'lane'
+        isEdit: false,
+        hasChanges: false,
+        data: {
+          label: '',
+          type: 'action',
+          lane_id: null,
+          from: '',
+          to: '',
+          condition: '',
+          guard: '',
+          trigger: '',
+          name: '',
+        },
+        element: null,
+      },
+      diagramId: null,
     }
   },
   computed: {
@@ -2141,10 +2461,240 @@ export default {
         switch (event.key) {
           case 'Escape':
             this.clearSelection()
-            if (this.isFullscreen) this.exitFullscreen()
+            if (this.managementModal.visible) {
+              this.closeManagementModal()
+            } else if (this.formModal.visible) {
+              this.closeFormModal()
+            } else if (this.isFullscreen) {
+              this.exitFullscreen()
+            }
             break
         }
       })
+    },
+
+    // Management Modal Methods
+    showManagementModal() {
+      this.managementModal.visible = true
+      this.managementModal.activeTab = 'nodes'
+      this.managementModal.hasChanges = false
+    },
+    closeManagementModal() {
+      if (this.managementModal.hasChanges) {
+        this.$emit('diagram-updated')
+      }
+      this.managementModal.visible = false
+      this.managementModal.hasChanges = false
+    },
+    getTabCount(tabId) {
+      switch (tabId) {
+        case 'nodes':
+          return this.positionedNodes.length
+        case 'edges':
+          return this.computedEdges.length
+        case 'lanes':
+          return this.computedLanes.length
+        default:
+          return 0
+      }
+    },
+    getLaneName(laneId) {
+      if (!laneId) return 'No Lane'
+      const lane = this.computedLanes.find((l) => l.id === laneId)
+      return lane ? lane.name : 'Unknown Lane'
+    },
+    getNodesInLane(laneId) {
+      if (!laneId) return []
+      return this.positionedNodes.filter((node) => {
+        const nodeLaneId = this.normalizeId(node.lane_id)
+        const normalizedLaneId = this.normalizeId(laneId)
+        return nodeLaneId === normalizedLaneId
+      })
+    },
+    openCreateForm(type) {
+      this.formModal.visible = true
+      this.formModal.type = type
+      this.formModal.isEdit = false
+      this.formModal.element = null
+      this.formModal.hasChanges = false
+      this.formModal.data = {
+        label: '',
+        type: 'action',
+        lane_id: null,
+        from: '',
+        to: '',
+        condition: '',
+        guard: '',
+        trigger: '',
+        name: '',
+      }
+    },
+    openEditForm(type, element) {
+      this.formModal.visible = true
+      this.formModal.type = type
+      this.formModal.isEdit = true
+      this.formModal.element = element
+      this.formModal.hasChanges = false
+
+      if (type === 'node') {
+        this.formModal.data = {
+          label: element.label || '',
+          type: element.type || 'action',
+          lane_id: element.lane_id || null,
+        }
+      } else if (type === 'edge') {
+        const fromId = element.source?._id || element.source?.id || element.from
+        const toId = element.target?._id || element.target?.id || element.to
+        this.formModal.data = {
+          from: this.normalizeId(fromId) || '',
+          to: this.normalizeId(toId) || '',
+          condition: element.condition || '',
+          guard: element.guard || '',
+          trigger: element.trigger || '',
+        }
+      } else if (type === 'lane') {
+        this.formModal.data = {
+          name: element.name || '',
+        }
+      }
+    },
+    closeFormModal() {
+      if (this.formModal.hasChanges) {
+        this.$emit('diagram-updated')
+        this.managementModal.hasChanges = true
+      }
+      this.formModal.visible = false
+      this.formModal.element = null
+      this.formModal.hasChanges = false
+    },
+    async saveForm() {
+      const diagramId = this.diagramId || this.diagramData?.id || this.diagramData?._id
+      if (!diagramId) {
+        alert('Diagram ID not found')
+        return
+      }
+
+      try {
+        this.showSavingIndicator()
+
+        if (this.formModal.type === 'node') {
+          if (!this.formModal.data.label || !this.formModal.data.type) {
+            alert('Label and Type are required')
+            this.hideSavingIndicator()
+            return
+          }
+          if (this.formModal.isEdit) {
+            await updateNode(String(diagramId), String(this.formModal.element.id), {
+              label: this.formModal.data.label,
+              type: this.formModal.data.type,
+              lane_id: this.formModal.data.lane_id || null,
+            })
+          } else {
+            alert('Creating new nodes is not yet supported via API')
+            this.hideSavingIndicator()
+            return
+          }
+        } else if (this.formModal.type === 'edge') {
+          if (!this.formModal.data.from || !this.formModal.data.to) {
+            alert('From and To nodes are required')
+            this.hideSavingIndicator()
+            return
+          }
+          if (this.formModal.isEdit) {
+            await updateEdge(String(diagramId), String(this.formModal.element.id), {
+              from: this.formModal.data.from,
+              to: this.formModal.data.to,
+              condition: this.formModal.data.condition || '',
+              guard: this.formModal.data.guard || '',
+              trigger: this.formModal.data.trigger || '',
+            })
+          } else {
+            await createEdge(String(diagramId), {
+              from: this.formModal.data.from,
+              to: this.formModal.data.to,
+              condition: this.formModal.data.condition || '',
+              guard: this.formModal.data.guard || '',
+              trigger: this.formModal.data.trigger || '',
+            })
+          }
+        } else if (this.formModal.type === 'lane') {
+          if (!this.formModal.data.name) {
+            alert('Lane name is required')
+            this.hideSavingIndicator()
+            return
+          }
+          if (this.formModal.isEdit) {
+            await updateLane(String(diagramId), String(this.formModal.element.id), {
+              name: this.formModal.data.name,
+            })
+          } else {
+            alert('Creating new lanes is not yet supported via API')
+            this.hideSavingIndicator()
+            return
+          }
+        }
+
+        // Fetch updated diagram data
+        const response = await getActivityDiagramById(String(diagramId))
+        const updatedDiagram = response?.data?.data || response?.data
+
+        this.formModal.hasChanges = true
+        this.managementModal.hasChanges = true
+
+        if (updatedDiagram) {
+          this.$emit('diagram-updated', updatedDiagram)
+        } else {
+          this.$emit('diagram-updated')
+        }
+
+        this.closeFormModal()
+        this.hideSavingIndicator()
+      } catch (error) {
+        console.error('Error saving:', error)
+        alert('Failed to save: ' + (error.response?.data?.message || error.message))
+        this.hideSavingIndicator()
+      }
+    },
+    async confirmDelete(type, element) {
+      if (!confirm(`Are you sure you want to delete this ${type}?`)) {
+        return
+      }
+
+      const diagramId = this.diagramId || this.diagramData?.id || this.diagramData?._id
+      if (!diagramId) {
+        alert('Diagram ID not found')
+        return
+      }
+
+      try {
+        this.showSavingIndicator()
+
+        if (type === 'node') {
+          await deleteNode(String(diagramId), String(element.id))
+        } else if (type === 'edge') {
+          await deleteEdge(String(diagramId), String(element.id))
+        } else if (type === 'lane') {
+          await deleteLane(String(diagramId), String(element.id))
+        }
+
+        // Fetch updated diagram data
+        const response = await getActivityDiagramById(String(diagramId))
+        const updatedDiagram = response?.data?.data || response?.data
+
+        this.managementModal.hasChanges = true
+
+        if (updatedDiagram) {
+          this.$emit('diagram-updated', updatedDiagram)
+        } else {
+          this.$emit('diagram-updated')
+        }
+
+        this.hideSavingIndicator()
+      } catch (error) {
+        console.error('Error deleting:', error)
+        alert('Failed to delete: ' + (error.response?.data?.message || error.message))
+        this.hideSavingIndicator()
+      }
     },
   },
 }
@@ -2747,5 +3297,420 @@ export default {
 :-moz-full-screen .activity-diagram-renderer,
 :-ms-fullscreen .activity-diagram-renderer {
   border-radius: 0;
+}
+
+/* Management Modal Styles */
+.management-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+}
+
+.management-modal-content {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideIn 0.3s ease;
+}
+
+.management-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.management-modal-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  color: #6b7280;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.management-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.tab-btn.active {
+  background: white;
+  color: #1a365d;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tab-count {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.management-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.tab-panel {
+  animation: fadeIn 0.2s ease;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.btn-add-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-item:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.item-card:hover {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-color: #d1d5db;
+}
+
+.item-info {
+  flex: 1;
+}
+
+.item-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.item-description {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.item-meta {
+  margin-top: 4px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.node-type-badge {
+  padding: 2px 8px;
+  background: #e0e7ff;
+  color: #6366f1;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.lane-badge {
+  padding: 2px 8px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-edit,
+.btn-delete {
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-edit {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.btn-edit:hover {
+  background: #dbeafe;
+}
+
+.btn-delete {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.btn-delete:hover {
+  background: #fee2e2;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #9ca3af;
+}
+
+.empty-state .material-symbols-outlined {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Form Modal Styles */
+.form-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  backdrop-filter: blur(4px);
+}
+
+.form-modal-content {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: modalSlideIn 0.3s ease;
+}
+
+.form-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.form-modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.form-modal-body {
+  padding: 24px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #1a365d;
+  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-secondary {
+  padding: 10px 20px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.btn-primary {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #2d4a8a 0%, #3d5a9a 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.2);
+}
+
+.btn-manage {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+  border: none;
+}
+
+.btn-manage:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 </style>

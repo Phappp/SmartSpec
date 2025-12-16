@@ -31,19 +31,26 @@ export const addNode = (activityDiagramId, data) =>
     axiosClient.post(`/api/activity-diagrams/${activityDiagramId}/nodes`, data);
 
 export const updateNode = (activityDiagramId, nodeId, data) =>
-    axiosClient.put(`/api/activity-diagrams/${activityDiagramId}/nodes/${nodeId}`, data);
+    axiosClient.patch(`/api/activity-diagrams/${activityDiagramId}/nodes/${nodeId}`, data);
 
 export const deleteNode = (activityDiagramId, nodeId) =>
     axiosClient.delete(`/api/activity-diagrams/${activityDiagramId}/nodes/${nodeId}`);
 
-export const addEdge = (activityDiagramId, data) =>
+export const createEdge = (activityDiagramId, data) =>
     axiosClient.post(`/api/activity-diagrams/${activityDiagramId}/edges`, data);
 
-export const updateEdge = (activityDiagramId, index, data) =>
-    axiosClient.put(`/api/activity-diagrams/${activityDiagramId}/edges/${index}`, data);
+export const updateEdge = (activityDiagramId, edgeId, data) =>
+    axiosClient.patch(`/api/activity-diagrams/${activityDiagramId}/edges/${edgeId}`, data);
 
-export const deleteEdge = (activityDiagramId, index) =>
-    axiosClient.delete(`/api/activity-diagrams/${activityDiagramId}/edges/${index}`);
+export const deleteEdge = (activityDiagramId, edgeId) =>
+    axiosClient.delete(`/api/activity-diagrams/${activityDiagramId}/edges/${edgeId}`);
+
+// ==================== LANE MANAGEMENT API ====================
+export const updateLane = (activityDiagramId, laneId, data) =>
+    axiosClient.patch(`/api/activity-diagrams/${activityDiagramId}/lanes/${laneId}`, data);
+
+export const deleteLane = (activityDiagramId, laneId) =>
+    axiosClient.delete(`/api/activity-diagrams/${activityDiagramId}/lanes/${laneId}`);
 
 export const updateSvg = (activityDiagramId, svgData) =>
     axiosClient.patch(`/api/activity-diagrams/${activityDiagramId}/svg`, svgData);
