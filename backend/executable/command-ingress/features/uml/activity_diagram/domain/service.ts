@@ -522,14 +522,21 @@ export class ActivityDiagramService {
       throw new Error("Activity Diagram not found");
     }
 
+    // Tìm node bằng _id (ObjectId) hoặc id (string) để backward compatibility
     const nodeIndex = diagram.nodes.findIndex(
-      (node: any) => node.id === nodeId
+      (node: any) => {
+        const nodeIdStr = node._id ? node._id.toString() : (node.id || '');
+        const searchIdStr = Types.ObjectId.isValid(nodeId) 
+          ? new Types.ObjectId(nodeId).toString() 
+          : nodeId;
+        return nodeIdStr === searchIdStr || node.id === nodeId;
+      }
     );
     if (nodeIndex === -1) {
       throw new Error("Node not found");
     }
 
-    // ✅ Gán trực tiếp position (vì nodeSchema không có _id, không thể dùng set())
+    // ✅ Gán trực tiếp position
     if (!diagram.nodes[nodeIndex].position) {
       diagram.nodes[nodeIndex].position = { x: 0, y: 0 };
     }
@@ -555,11 +562,18 @@ export class ActivityDiagramService {
     // Cập nhật positions cho nodes
     if (updates && updates.length > 0) {
       updates.forEach(({ id, position }) => {
+        // Tìm node bằng _id (ObjectId) hoặc id (string) để backward compatibility
         const nodeIndex = diagram.nodes.findIndex(
-          (node: any) => node.id === id
+          (node: any) => {
+            const nodeIdStr = node._id ? node._id.toString() : (node.id || '');
+            const searchIdStr = Types.ObjectId.isValid(id) 
+              ? new Types.ObjectId(id).toString() 
+              : id;
+            return nodeIdStr === searchIdStr || node.id === id;
+          }
         );
         if (nodeIndex !== -1) {
-          // ✅ Gán trực tiếp position (vì nodeSchema không có _id, không thể dùng set())
+          // ✅ Gán trực tiếp position
           if (!diagram.nodes[nodeIndex].position) {
             diagram.nodes[nodeIndex].position = { x: 0, y: 0 };
           }

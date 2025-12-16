@@ -896,6 +896,7 @@ export default {
       managementModal: {
         visible: false,
         activeTab: 'actors',
+        hasChanges: false, // Track if there were changes in the modal
       },
       managementTabs: [
         { id: 'actors', label: 'Actors', icon: 'person' },
@@ -907,6 +908,7 @@ export default {
         visible: false,
         type: null, // 'actor', 'usecase', 'association', 'relationship'
         isEdit: false,
+        hasChanges: false, // Track if there were changes in the form
         data: {
           name: '',
           title: '',
@@ -2039,9 +2041,15 @@ export default {
     showManagementModal() {
       this.managementModal.visible = true;
       this.managementModal.activeTab = 'actors';
+      this.managementModal.hasChanges = false; // Reset changes tracking
     },
     closeManagementModal() {
+      // If there were changes, emit event to refresh diagram
+      if (this.managementModal.hasChanges) {
+        this.$emit('diagram-updated');
+      }
       this.managementModal.visible = false;
+      this.managementModal.hasChanges = false;
     },
     getTabCount(tabId) {
       switch (tabId) {
@@ -2062,6 +2070,7 @@ export default {
       this.formModal.type = type;
       this.formModal.isEdit = false;
       this.formModal.element = null;
+      this.formModal.hasChanges = false; // Reset changes tracking
       this.formModal.data = {
         name: '',
         title: '',
@@ -2078,6 +2087,7 @@ export default {
       this.formModal.type = type;
       this.formModal.isEdit = true;
       this.formModal.element = element;
+      this.formModal.hasChanges = false; // Reset changes tracking
       
       if (type === 'actor') {
         this.formModal.data = {
@@ -2107,8 +2117,14 @@ export default {
       }
     },
     closeFormModal() {
+      // If there were changes, emit event to refresh diagram
+      if (this.formModal.hasChanges) {
+        this.$emit('diagram-updated');
+        this.managementModal.hasChanges = true; // Also mark management modal as changed
+      }
       this.formModal.visible = false;
       this.formModal.element = null;
+      this.formModal.hasChanges = false;
     },
     async saveForm() {
       const diagramId = this.diagramId || this.diagramData?.id || this.diagramData?._id;
@@ -2206,6 +2222,10 @@ export default {
         const response = await getUsecaseDiagramById(String(diagramId));
         const updatedDiagram = response?.data?.data || response?.data;
         
+        // Mark form as having changes
+        this.formModal.hasChanges = true;
+        this.managementModal.hasChanges = true;
+
         if (updatedDiagram) {
           // Emit updated data to parent
           this.$emit('diagram-updated', updatedDiagram);
@@ -2250,6 +2270,9 @@ export default {
         const response = await getUsecaseDiagramById(String(diagramId));
         const updatedDiagram = response?.data?.data || response?.data;
         
+        // Mark management modal as having changes
+        this.managementModal.hasChanges = true;
+
         if (updatedDiagram) {
           // Emit updated data to parent
           this.$emit('diagram-updated', updatedDiagram);

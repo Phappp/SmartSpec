@@ -1,7 +1,7 @@
 import { ActivityEdge, ActivityNode, ActivityLane, ActivityDiagramDTO } from './interfaces';
 import { ApiKeyService } from '../../../orchestrator/domain/ApiKeyService';
 import { LLMService } from '../../../../shared/LLMService';
-import { Types } from 'mongoose';
+import { ObjectId } from 'mongodb';
 
 const prompts = {
   'vi-VN': {
@@ -170,17 +170,90 @@ export class ActivityGeminiService {
       throw new Error('Invalid response from AI: no nodes or lanes generated');
     }
 
-    const result: ActivityDiagramDTO = {
+    // Translate string IDs to ObjectIds (giống sequence diagram)
+    const translated = this.translateKeysToIds({
       name: parsed?.name || 'Generated Activity',
       description: typeof parsed?.description === 'string' ? parsed.description : '',
       lanes,
       nodes,
       edges
-    };
+    });
 
-    console.log('Final ActivityDiagramDTO:', JSON.stringify(result, null, 2));
+    console.log('Final ActivityDiagramDTO (translated):', JSON.stringify(translated, null, 2));
     console.log('--- generateFromUseCase END ---');
 
-    return result;
+    return translated;
+  }
+
+  /**
+   * Translate string keys/IDs to ObjectIds (giống sequence diagram)
+   * Chuyển đổi từ format AI trả về (string IDs) sang format DB (ObjectIds)
+   */
+  private translateKeysToIds(diagramJson: any): ActivityDiagramDTO {
+    const nodeIdMap = new Map<string, ObjectId>();
+    const laneIdMap = new Map<string, ObjectId>();
+
+    // Bước 1: Tạo ID và Map cho Lanes
+    const lanesWithIds = (diagramJson.lanes || []).map((lane: any) => {
+      const newId = new ObjectId();
+      const laneKey = lane.id || lane.name; // Sử dụng id hoặc name làm key
+      if (laneKey) {
+        laneIdMap.set(laneKey, newId);
+      }
+      const { id, ...rest } = lane; // Xóa id string
+      return { ...rest, _id: newId };
+    });
+
+    // Bước 2: Tạo ID và Map cho Nodes
+    const nodesWithIds = (diagramJson.nodes || []).map((node: any) => {
+      const newId = new ObjectId();
+      const nodeKey = node.id; // Sử dụng id string từ AI
+      if (nodeKey) {
+        nodeIdMap.set(nodeKey, newId);
+      }
+      
+      // Dịch lane_id từ string sang ObjectId nếu có
+      let laneId = null;
+      if (node.lane_id) {
+        laneId = laneIdMap.get(node.lane_id) || null;
+      }
+
+      const { id, lane_id, ...rest } = node; // Xóa id và lane_id string
+      return {
+        ...rest,
+        _id: newId,
+        lane_id: laneId
+      };
+    });
+
+    // Bước 3: Dịch mảng edges - chuyển from/to từ string sang ObjectId
+    const edgesWithIds = (diagramJson.edges || [])
+      .map((edge: any) => {
+        const fromId = nodeIdMap.get(edge.from);
+        const toId = nodeIdMap.get(edge.to);
+
+        if (fromId && toId) {
+          const { from, to, ...rest } = edge;
+          return {
+            ...rest,
+            _id: new ObjectId(),
+            from: fromId,
+            to: toId
+          };
+        }
+        console.warn(
+          `[DATA_WARN] Bỏ qua edge bị lỗi (không tìm thấy node): ${edge.from} -> ${edge.to}`
+        );
+        return null;
+      })
+      .filter((e: any) => e !== null);
+
+    return {
+      name: diagramJson.name || 'Generated Activity',
+      description: diagramJson.description || '',
+      lanes: lanesWithIds,
+      nodes: nodesWithIds,
+      edges: edgesWithIds
+    };
   }
 }

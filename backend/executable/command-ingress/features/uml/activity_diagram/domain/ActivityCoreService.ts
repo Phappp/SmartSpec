@@ -1,9 +1,27 @@
 import { ActivityDiagramDTO, ActivityEdge, ActivityNode } from './interfaces';
+import { Types } from 'mongoose';
 
 export class ActivityCoreService {
+  // Helper để normalize ID (hỗ trợ cả ObjectId và string)
+  private normalizeId(id: any): string {
+    if (!id) return '';
+    if (Types.ObjectId.isValid(id)) {
+      return id.toString();
+    }
+    if (typeof id === 'object' && id.toString) {
+      return id.toString();
+    }
+    return String(id);
+  }
+
   validate(nodes: ActivityNode[] = [], edges: ActivityEdge[] = []) {
     const errors: string[] = [];
-    const nodeIds = new Set(nodes.map(n => n.id));
+    // Normalize node IDs để hỗ trợ cả ObjectId và string
+    const nodeIds = new Set(nodes.map(n => {
+      // Nếu node có _id (ObjectId), dùng _id, nếu không dùng id (string)
+      const nodeId = (n as any)._id || n.id;
+      return this.normalizeId(nodeId);
+    }));
 
     /* ----------------------------------------------------
     * 1. Basic Presence Rules
@@ -21,55 +39,64 @@ export class ActivityCoreService {
     * 2. Edge Validity Rules
     * -------------------------------------------------- */
     for (const e of edges) {
-      if (!nodeIds.has(e.from))
-        errors.push(`Edge 'from=${e.from}' references a non-existing node.`);
-      if (!nodeIds.has(e.to))
-        errors.push(`Edge 'to=${e.to}' references a non-existing node.`);
+      const fromId = this.normalizeId((e as any).from || e.from);
+      const toId = this.normalizeId((e as any).to || e.to);
+      if (!nodeIds.has(fromId))
+        errors.push(`Edge 'from=${fromId}' references a non-existing node.`);
+      if (!nodeIds.has(toId))
+        errors.push(`Edge 'to=${toId}' references a non-existing node.`);
     }
 
     /* ----------------------------------------------------
     * 3. Node-Specific UML Rules
     * -------------------------------------------------- */
     nodes.forEach((node) => {
-      const outEdges = edges.filter(e => e.from === node.id);
-      const inEdges  = edges.filter(e => e.to === node.id);
+      const nodeId = this.normalizeId((node as any)._id || node.id);
+      const outEdges = edges.filter(e => {
+        const edgeFrom = this.normalizeId((e as any).from || e.from);
+        return edgeFrom === nodeId;
+      });
+      const inEdges = edges.filter(e => {
+        const edgeTo = this.normalizeId((e as any).to || e.to);
+        return edgeTo === nodeId;
+      });
 
       switch (node.type) {
 
         case "start":
           if (inEdges.length !== 0)
-            errors.push(`Start node '${node.id}' must not have incoming edges.`);
+            errors.push(`Start node '${nodeId}' must not have incoming edges.`);
           if (outEdges.length !== 1)
-            errors.push(`Start node '${node.id}' must have exactly 1 outgoing edge.`);
+            errors.push(`Start node '${nodeId}' must have exactly 1 outgoing edge.`);
           break;
 
         case "end":
           if (outEdges.length !== 0)
-            errors.push(`End node '${node.id}' must not have outgoing edges.`);
+            errors.push(`End node '${nodeId}' must not have outgoing edges.`);
           break;
 
         case "decision":
           if (outEdges.length < 2)
-            errors.push(`Decision node '${node.id}' must have at least 2 outgoing edges.`);
+            errors.push(`Decision node '${nodeId}' must have at least 2 outgoing edges.`);
           break;
 
         case "merge":
           if (inEdges.length < 2)
-            errors.push(`Merge node '${node.id}' must have at least 2 incoming edges.`);
+            errors.push(`Merge node '${nodeId}' must have at least 2 incoming edges.`);
           break;
 
         case "fork":
           if (outEdges.length < 2)
-            errors.push(`Fork node '${node.id}' must output at least 2 flows.`);
+            errors.push(`Fork node '${nodeId}' must output at least 2 flows.`);
           if (inEdges.length !== 1)
-            errors.push(`Fork node '${node.id}' must have exactly 1 incoming edge.`);
+            errors.push(`Fork node '${nodeId}' must have exactly 1 incoming edge.`);
           break;
 
         case "join":
           if (inEdges.length < 2)
-            errors.push(`Join node '${node.id}' must have at least 2 incoming edges.`);
+            errors.push(`Join node '${nodeId}' must have at least 2 incoming edges.`);
           if (outEdges.length !== 1)
-            errors.push(`Join node '${node.id}' must have exactly 1 outgoing edge.`);
+            errors.push(`Join node '${nodeId}' must have exactly 1 outgoing edge.`);
           break;
       }
     });
@@ -78,9 +105,14 @@ export class ActivityCoreService {
     * 4. Optional: Floating Nodes (Not Connected)
     * -------------------------------------------------- */
     nodes.forEach((node) => {
-      const hasConnection = edges.some(e => e.from === node.id || e.to === node.id);
+      const nodeId = this.normalizeId((node as any)._id || node.id);
+      const hasConnection = edges.some(e => {
+        const edgeFrom = this.normalizeId((e as any).from || e.from);
+        const edgeTo = this.normalizeId((e as any).to || e.to);
+        return edgeFrom === nodeId || edgeTo === nodeId;
+      });
       if (!hasConnection)
-        errors.push(`Node '${node.id}' is isolated and not connected to the diagram.`);
+        errors.push(`Node '${nodeId}' is isolated and not connected to the diagram.`);
     });
 
     return {
@@ -91,9 +123,18 @@ export class ActivityCoreService {
 
   renderSvg(diagram: Pick<ActivityDiagramDTO, 'nodes' | 'edges' | 'lanes' | 'name'>): string {
     const nodes = diagram.nodes || [];
-    const edges = (diagram.edges || []).filter(e =>
-      nodes.find(n => n.id === e.from) && nodes.find(n => n.id === e.to)
-    );
+    // Filter edges - hỗ trợ cả ObjectId và string
+    const edges = (diagram.edges || []).filter(e => {
+      const fromId = this.normalizeId((e as any).from || e.from);
+      const toId = this.normalizeId((e as any).to || e.to);
+      return nodes.find(n => {
+        const nodeId = this.normalizeId((n as any)._id || n.id);
+        return nodeId === fromId;
+      }) && nodes.find(n => {
+        const nodeId = this.normalizeId((n as any)._id || n.id);
+        return nodeId === toId;
+      });
+    });
     const lanes = diagram.lanes || [];
 
     // ============================
@@ -103,20 +144,28 @@ export class ActivityCoreService {
     if (!startNode) throw new Error("Missing start node");
 
     const layerMap: Record<string, number> = {};
-    nodes.forEach(n => (layerMap[n.id] = Infinity));
-    layerMap[startNode.id] = 0;
+    nodes.forEach(n => {
+      const nodeId = this.normalizeId((n as any)._id || n.id);
+      layerMap[nodeId] = Infinity;
+    });
+    const startNodeId = this.normalizeId((startNode as any)._id || startNode.id);
+    layerMap[startNodeId] = 0;
 
-    const queue = [startNode.id];
+    const queue = [startNodeId];
     while (queue.length) {
       const curr = queue.shift()!;
       const currLayer = layerMap[curr];
 
       edges
-        .filter(e => e.from === curr)
+        .filter(e => {
+          const edgeFrom = this.normalizeId((e as any).from || e.from);
+          return edgeFrom === curr;
+        })
         .forEach(e => {
-          if (layerMap[e.to] > currLayer + 1) {
-            layerMap[e.to] = currLayer + 1;
-            queue.push(e.to);
+          const edgeTo = this.normalizeId((e as any).to || e.to);
+          if (layerMap[edgeTo] > currLayer + 1) {
+            layerMap[edgeTo] = currLayer + 1;
+            queue.push(edgeTo);
           }
         });
     }
@@ -124,7 +173,10 @@ export class ActivityCoreService {
     const maxLayer = Math.max(...Object.values(layerMap));
     nodes
       .filter(n => n.type === 'end')
-      .forEach(n => (layerMap[n.id] = maxLayer + 1));
+      .forEach(n => {
+        const nodeId = this.normalizeId((n as any)._id || n.id);
+        layerMap[nodeId] = maxLayer + 1;
+      });
 
     // ============================
     // 2) Build layers
@@ -147,7 +199,10 @@ export class ActivityCoreService {
 
     layers.forEach((layerNodes, layerIdx) => {
       const nodeBoxes = layerNodes.map(id => {
-        const node = nodes.find(n => n.id === id)!;
+        const node = nodes.find(n => {
+          const nodeId = this.normalizeId((n as any)._id || n.id);
+          return nodeId === id;
+        })!;
         let w = Math.max(80, (node.label?.length || id.length) * 7 + 30);
         let h = 40;
 
@@ -215,10 +270,11 @@ export class ActivityCoreService {
     // ============================
     const nodeEls = nodes
       .map(n => {
-        const p = positions[n.id];
+        const nodeId = this.normalizeId((n as any)._id || n.id);
+        const p = positions[nodeId];
         if (!p) return "";
 
-        const label = n.label || n.id;
+        const label = n.label || nodeId;
         let shape = "";
         let fontSize = 12;
 
@@ -282,8 +338,10 @@ export class ActivityCoreService {
     // ============================
     const edgeEls = edges
       .map(e => {
-        const from = positions[e.from],
-          to = positions[e.to];
+        const fromId = this.normalizeId((e as any).from || e.from);
+        const toId = this.normalizeId((e as any).to || e.to);
+        const from = positions[fromId];
+        const to = positions[toId];
         if (!from || !to) return "";
 
         const startX = from.x;

@@ -1264,8 +1264,6 @@ export default {
     if (projectId) {
       await this.fetchProjectData(projectId)
       await this.loadAvailableUsecases()
-      // Load preview cache từ localStorage trước khi load diagrams
-      this.loadPreviewCache()
       await this.loadDiagrams()
       this.initSocketConnection(projectId)
       this.initVersionSocketListeners(projectId)
@@ -1638,7 +1636,7 @@ export default {
       // Reset flag thay đổi
       this.diagramHasChanges = false
     },
-    closeEditor() {
+    async closeEditor() {
       const editedDiagramId = this.editingDiagram
         ? this.editingDiagram.id || this.editingDiagram._id
         : null
@@ -1662,15 +1660,80 @@ export default {
 
       // Chỉ refresh và regenerate preview nếu có thay đổi
       if (hasChanges && editedDiagramId && diagramType) {
-        const diagrams = this.getDiagramsByType(diagramType)
-        const diagram = diagrams.find((d) => (d.id || d._id) === editedDiagramId)
-        if (diagram) {
-          console.log('🔄 Regenerating preview for edited diagram:', editedDiagramId)
-          this.regeneratePreview(diagram)
-          this.previewCache.delete(editedDiagramId)
+        try {
+          // Refresh diagram từ API để lấy data mới nhất (name, description, nodes, etc.)
+          await this.refreshSingleDiagram(diagramType, editedDiagramId)
           
-          // Chỉ refresh diagram đã chỉnh sửa thay vì refresh tất cả
-          this.refreshSingleDiagram(diagramType, editedDiagramId)
+          // Đợi Vue reactivity cập nhật
+          await this.$nextTick()
+          
+          // Tìm lại diagram sau khi refresh để đảm bảo có data mới nhất
+          const diagrams = this.getDiagramsByType(diagramType)
+          const diagram = diagrams.find((d) => {
+            const dId = this.normalizeId(d.id || d._id)
+            const targetId = this.normalizeId(editedDiagramId)
+            return dId === targetId
+          })
+          
+          if (diagram) {
+            console.log('🔄 Regenerating preview for edited diagram:', editedDiagramId, {
+              name: diagram.name,
+              description: diagram.description,
+              hasNodes: !!diagram.nodes?.length,
+              nodesCount: diagram.nodes?.length || 0
+            })
+            
+            // Xóa preview cache và preview image để force regenerate với data mới
+            const normalizedId = this.normalizeId(editedDiagramId)
+            this.previewCache.delete(normalizedId)
+            delete diagram.previewImage
+            
+            // Force Vue reactivity update
+            this.$forceUpdate()
+            
+            // Đợi Vue cập nhật DOM và props của renderer component
+            await this.$nextTick()
+            await new Promise(resolve => setTimeout(resolve, 100))
+            
+            // Đảm bảo diagram object có đầy đủ data trước khi regenerate
+            const updatedDiagram = this.getDiagramsByType(diagramType).find((d) => {
+              const dId = this.normalizeId(d.id || d._id)
+              return dId === normalizedId
+            })
+            
+            if (updatedDiagram && updatedDiagram.name) {
+              // Regenerate preview với data mới
+              this.regeneratePreview(updatedDiagram)
+            } else {
+              console.warn('⚠️ Diagram data not ready, retrying...', updatedDiagram)
+              // Retry sau 200ms
+              setTimeout(() => {
+                const retryDiagram = this.getDiagramsByType(diagramType).find((d) => {
+                  const dId = this.normalizeId(d.id || d._id)
+                  return dId === normalizedId
+                })
+                if (retryDiagram) {
+                  this.regeneratePreview(retryDiagram)
+                }
+              }, 200)
+            }
+          } else {
+            console.warn('⚠️ Diagram not found after refresh:', editedDiagramId)
+          }
+        } catch (error) {
+          console.error('Error refreshing diagram on close:', error)
+          // Fallback: vẫn regenerate preview với data hiện tại
+          const diagrams = this.getDiagramsByType(diagramType)
+          const diagram = diagrams.find((d) => {
+            const dId = this.normalizeId(d.id || d._id)
+            const targetId = this.normalizeId(editedDiagramId)
+            return dId === targetId
+          })
+          if (diagram) {
+            this.previewCache.delete(editedDiagramId)
+            delete diagram.previewImage
+            this.regeneratePreview(diagram)
+          }
         }
       }
     },
@@ -1733,14 +1796,6 @@ export default {
         // Xóa cache trong memory
         this.previewCache.delete(diagramId)
         this.generatingPreviews.delete(diagramId)
-        
-        // Xóa cache trong localStorage
-        try {
-          const cacheKey = this.getCacheKey(diagramId)
-          localStorage.removeItem(cacheKey)
-        } catch (err) {
-          console.warn('Error removing cache:', err)
-        }
 
         if (
           this.editingDiagram &&
@@ -1919,16 +1974,12 @@ export default {
 
       const oldVersionId = this.selectedVersionId
       this.selectedVersionId = versionId
-      // Lưu vào localStorage để đồng bộ
-      saveSelectedVersion(this.project._id, versionId)
 
       // Emit socket event để các thành viên khác biết version đã được switch
       if (socket && socket.connected) {
-        const userId = localStorage.getItem('userId')
         socket.emit('version_event', {
           type: 'VERSION_SWITCHED',
           projectId: this.project._id,
-          userId: userId,
           toVersionId: versionId,
           fromVersionId: oldVersionId,
           timestamp: new Date(),
@@ -1936,8 +1987,6 @@ export default {
         console.log('📡 Emitted VERSION_SWITCHED socket event')
       }
 
-      // Load cache cho version mới
-      this.loadPreviewCache()
       this.loadAvailableUsecases()
       this.loadDiagrams()
     },
@@ -2066,134 +2115,19 @@ export default {
         this.refreshingDiagrams[type] = false
       }
     },
-    // Preview Image Management
-    getCacheKey(diagramId) {
-      if (!this.cacheKeyPrefix) {
-        const projectId = this.project._id || this.$route.params.id
-        const versionId = this.selectedVersionId || 'default'
-        this.cacheKeyPrefix = `diagram_preview_${projectId}_${versionId}_`
-      }
-      return `${this.cacheKeyPrefix}${diagramId}`
-    },
+    // Preview Image Management - removed getCacheKey as we no longer use localStorage
 
     loadPreviewCache() {
-      try {
-        // Reset cache key prefix khi version thay đổi
-        const projectId = this.project._id || this.$route.params.id
-        const versionId = this.selectedVersionId || 'default'
-        this.cacheKeyPrefix = `diagram_preview_${projectId}_${versionId}_`
-        
-        // Load tất cả cache keys cho project và version này
-        const cacheKeys = Object.keys(localStorage).filter(key => 
-          key.startsWith(this.cacheKeyPrefix)
-        )
-        
-        let loadedCount = 0
-        cacheKeys.forEach(key => {
-          try {
-            const cachedData = localStorage.getItem(key)
-            if (cachedData) {
-              const data = JSON.parse(cachedData)
-              // Check cache age (7 days)
-              const cacheAge = Date.now() - (data.timestamp || 0)
-              const maxAge = 7 * 24 * 60 * 60 * 1000 // 7 days
-              
-              if (cacheAge < maxAge && data.previewImage) {
-                const diagramId = key.replace(this.cacheKeyPrefix, '')
-                this.previewCache.set(diagramId, data.previewImage)
-                loadedCount++
-              } else {
-                // Remove expired cache
-                localStorage.removeItem(key)
-              }
-            }
-          } catch (err) {
-            console.warn('Error loading cached preview:', key, err)
-            localStorage.removeItem(key)
-          }
-        })
-        
-        if (loadedCount > 0) {
-          console.log(`📦 Loaded ${loadedCount} preview images from cache`)
-        }
-      } catch (err) {
-        console.error('Error loading preview cache:', err)
-      }
+      // Removed localStorage cache loading
     },
 
     savePreviewToCache(diagramId, previewData) {
-      try {
-        const cacheKey = this.getCacheKey(diagramId)
-        const cacheData = {
-          previewImage: previewData,
-          timestamp: Date.now(),
-          diagramId: diagramId,
-        }
-        
-        // Check localStorage size limit (5MB)
-        const dataString = JSON.stringify(cacheData)
-        const estimatedSize = new Blob([dataString]).size
-        
-        // Nếu quá lớn, skip cache (mỗi preview thường < 100KB)
-        if (estimatedSize > 500 * 1024) {
-          console.warn('Preview too large to cache:', diagramId)
-          return
-        }
-        
-        localStorage.setItem(cacheKey, dataString)
-      } catch (err) {
-        // Nếu localStorage đầy, try cleanup old cache
-        if (err.name === 'QuotaExceededError') {
-          console.warn('LocalStorage full, cleaning old cache...')
-          this.cleanupOldCache()
-          // Retry once
-          try {
-            const cacheKey = this.getCacheKey(diagramId)
-            const cacheData = {
-              previewImage: previewData,
-              timestamp: Date.now(),
-              diagramId: diagramId,
-            }
-            localStorage.setItem(cacheKey, JSON.stringify(cacheData))
-          } catch (retryErr) {
-            console.error('Failed to cache preview after cleanup:', retryErr)
-          }
-        } else {
-          console.error('Error saving preview to cache:', err)
-        }
-      }
+      // Removed localStorage cache saving - only keep in-memory cache
+      this.previewCache.set(diagramId, previewData)
     },
 
     cleanupOldCache() {
-      try {
-        // Cleanup cache older than 7 days
-        const maxAge = 7 * 24 * 60 * 60 * 1000
-        const allKeys = Object.keys(localStorage)
-        let cleanedCount = 0
-        
-        allKeys.forEach(key => {
-          if (key.startsWith('diagram_preview_')) {
-            try {
-              const data = JSON.parse(localStorage.getItem(key))
-              const cacheAge = Date.now() - (data.timestamp || 0)
-              if (cacheAge > maxAge) {
-                localStorage.removeItem(key)
-                cleanedCount++
-              }
-            } catch (err) {
-              // Invalid cache entry, remove it
-              localStorage.removeItem(key)
-              cleanedCount++
-            }
-          }
-        })
-        
-        if (cleanedCount > 0) {
-          console.log(`🧹 Cleaned up ${cleanedCount} old cache entries`)
-        }
-      } catch (err) {
-        console.error('Error cleaning up cache:', err)
-      }
+      // Removed localStorage cache cleanup
     },
 
     handlePreviewGenerated(diagram, previewData) {
@@ -2287,25 +2221,71 @@ export default {
     },
     async regeneratePreview(diagram) {
       const diagramId = diagram.id || diagram._id
-      if (this.generatingPreviews.has(diagramId)) return
+      const normalizedId = this.normalizeId(diagramId)
+      
+      if (this.generatingPreviews.has(normalizedId)) return
 
       // Xóa cache trong memory
-      this.previewCache.delete(diagramId)
+      this.previewCache.delete(normalizedId)
       
-      // Xóa cache trong localStorage
-      try {
-        const cacheKey = this.getCacheKey(diagramId)
-        localStorage.removeItem(cacheKey)
-      } catch (err) {
-        console.warn('Error removing cache:', err)
-      }
-      
+      // Tìm lại diagram từ list để đảm bảo có data mới nhất
       const diagrams = this.getDiagramsByType(diagram._type)
-      const diagramIndex = diagrams.findIndex((d) => (d.id || d._id) === diagramId)
+      const diagramIndex = diagrams.findIndex((d) => {
+        const dId = this.normalizeId(d.id || d._id)
+        return dId === normalizedId
+      })
+      
       if (diagramIndex !== -1) {
-        delete diagrams[diagramIndex].previewImage
+        // Cập nhật diagram object với data mới nhất từ list
+        const latestDiagram = diagrams[diagramIndex]
+        delete latestDiagram.previewImage
+        
+        // Đảm bảo diagram có đầy đủ data (name, description, nodes, etc.)
+        if (!latestDiagram.name && diagram.name) {
+          latestDiagram.name = diagram.name
+        }
+        if (!latestDiagram.description && diagram.description) {
+          latestDiagram.description = diagram.description
+        }
+        if (!latestDiagram.nodes && diagram.nodes) {
+          latestDiagram.nodes = diagram.nodes
+        }
+        if (!latestDiagram.edges && diagram.edges) {
+          latestDiagram.edges = diagram.edges
+        }
+        if (!latestDiagram.lanes && diagram.lanes) {
+          latestDiagram.lanes = diagram.lanes
+        }
+        
+        // Sử dụng latestDiagram thay vì diagram parameter
+        diagram = latestDiagram
+      } else {
+        // Nếu không tìm thấy, xóa preview image của diagram hiện tại
+        delete diagram.previewImage
       }
-      this.triggerPreviewGeneration(diagram)
+
+      // Đợi Vue cập nhật props của renderer component
+      await this.$nextTick()
+      await new Promise(resolve => setTimeout(resolve, 50))
+
+      // Gọi regeneratePreview trên renderer nếu có, nếu không thì gọi triggerPreviewGeneration
+      const rendererRef = `previewGenerator_${normalizedId}`
+      if (this.$refs[rendererRef] && this.$refs[rendererRef][0]) {
+        const renderer = this.$refs[rendererRef][0]
+        if (typeof renderer.regeneratePreview === 'function') {
+          // Gọi regeneratePreview trên renderer (tương tự sequence diagram)
+          renderer.regeneratePreview()
+        } else if (typeof renderer.generatePreviewImage === 'function') {
+          // Fallback: gọi generatePreviewImage nếu không có regeneratePreview
+          const previewData = await renderer.generatePreviewImage()
+          if (previewData) {
+            this.handlePreviewGenerated(diagram, previewData)
+          }
+        }
+      } else {
+        // Nếu renderer chưa được mount, trigger preview generation
+        this.triggerPreviewGeneration(diagram)
+      }
     },
     // Export dropdown methods
     toggleExportDropdown(diagram) {
@@ -2387,7 +2367,8 @@ export default {
           this.handleActivityPositionUpdate({ element, type, position })
           // Lưu thông tin node đã thay đổi để debounce save
           if (type === 'node') {
-            const nodeId = element.id || element._id
+            // Normalize ID để đảm bảo consistency
+            const nodeId = this.normalizeId(element._originalData?._id || element._originalData?.id || element.id)
             if (nodeId) {
               // Lưu node đã thay đổi vào map để debounce save
               if (!this.activityChangedNodes) {
@@ -2498,8 +2479,13 @@ export default {
     // Activity diagram position update handler
     handleActivityPositionUpdate({ element, type, position }) {
       if (type === 'node') {
+        // Normalize IDs để so sánh (giống sequence diagram)
+        const elementId = this.normalizeId(element._originalData?._id || element._originalData?.id || element.id)
         const nodeIndex = this.editingDiagram.nodes.findIndex(
-          (n) => n.id === (element.id || element._id)
+          (n) => {
+            const nodeId = this.normalizeId(n._id || n.id)
+            return nodeId === elementId
+          }
         )
         if (nodeIndex !== -1) {
           if (!this.editingDiagram.nodes[nodeIndex].position) {
@@ -2507,6 +2493,19 @@ export default {
           }
           this.editingDiagram.nodes[nodeIndex].position.x = Math.round(position.x)
           this.editingDiagram.nodes[nodeIndex].position.y = Math.round(position.y)
+        } else {
+          console.warn('⚠️ Node not found in editingDiagram:', {
+            elementId,
+            element: element._originalData,
+            availableNodes: this.editingDiagram.nodes.map((n, idx) => ({
+              index: idx,
+              _id: n._id,
+              id: n.id,
+              normalized: this.normalizeId(n._id || n.id),
+              type: n.type,
+              label: n.label
+            }))
+          })
         }
       }
     },
@@ -2578,11 +2577,15 @@ export default {
         if (response?.data?.data) {
           const updatedDiagram = response.data.data
           if (this.editingDiagram && (this.editingDiagram.id || this.editingDiagram._id) === diagramId) {
-            // Cập nhật nodes với position mới
+            // Cập nhật nodes với position mới - sử dụng normalizeId để so sánh
             if (updatedDiagram.nodes) {
               updatedDiagram.nodes.forEach((updatedNode) => {
+                const updatedNodeId = this.normalizeId(updatedNode._id || updatedNode.id)
                 const localNodeIndex = this.editingDiagram.nodes.findIndex(
-                  (n) => n.id === updatedNode.id
+                  (n) => {
+                    const nodeId = this.normalizeId(n._id || n.id)
+                    return nodeId === updatedNodeId
+                  }
                 )
                 if (localNodeIndex !== -1 && updatedNode.position) {
                   // Vue 3 không cần $set, chỉ cần assign trực tiếp
@@ -2672,6 +2675,9 @@ export default {
       const diagramId = this.editingDiagram.id || this.editingDiagram._id
 
       try {
+        // Refresh the specific diagram type from API
+        await this.refreshDiagramsByType(diagramType)
+        
         // If updated data is provided, use it directly
         if (updatedDiagramData) {
           if (diagramType === 'usecase') {
@@ -2679,24 +2685,40 @@ export default {
               ...this.processDiagrams([updatedDiagramData], 'usecase')[0],
               _type: 'usecase',
             }
+          } else {
+            // For other diagram types, update from refreshed list
+            const diagrams = this.getDiagramsByType(diagramType)
+            const updatedDiagram = diagrams.find((d) => (d.id || d._id) === diagramId)
+            if (updatedDiagram) {
+              this.editingDiagram = {
+                ...updatedDiagram,
+                _type: diagramType,
+              }
+            }
           }
-          // Update the diagram in the list as well
-          await this.refreshSingleDiagram(diagramType, diagramId)
-          return
+        } else {
+          // Update editingDiagram with fresh data from refreshed list
+          const diagrams = this.getDiagramsByType(diagramType)
+          const updatedDiagram = diagrams.find((d) => (d.id || d._id) === diagramId)
+          if (updatedDiagram) {
+            this.editingDiagram = {
+              ...updatedDiagram,
+              _type: diagramType,
+            }
+          }
         }
 
-        // Otherwise, refresh from API
-        await this.refreshSingleDiagram(diagramType, diagramId)
-        
-        // Update editingDiagram with fresh data
-        const diagrams = this.getDiagramsByType(diagramType)
-        const updatedDiagram = diagrams.find((d) => (d.id || d._id) === diagramId)
-        if (updatedDiagram) {
-          this.editingDiagram = {
-            ...updatedDiagram,
-            _type: diagramType,
+        // Regenerate preview for the updated diagram in the list
+        this.$nextTick(() => {
+          const diagrams = this.getDiagramsByType(diagramType)
+          const updatedDiagram = diagrams.find((d) => (d.id || d._id) === diagramId)
+          if (updatedDiagram) {
+            // Xóa preview image cũ để trigger regenerate
+            delete updatedDiagram.previewImage
+            // Trigger preview generation
+            this.triggerPreviewGeneration(updatedDiagram)
           }
-        }
+        })
       } catch (error) {
         console.error('Error refreshing diagram after update:', error)
         this.toast.error('Failed to refresh diagram data')
@@ -2740,15 +2762,47 @@ export default {
             response = await getActivityDiagramById(diagramId)
             updatedDiagram = response?.data?.data || response?.data
             if (updatedDiagram) {
-              const index = this.activityDiagrams.findIndex((d) => (d.id || d._id) === diagramId)
+              const normalizedDiagramId = this.normalizeId(diagramId)
+              const index = this.activityDiagrams.findIndex((d) => {
+                const dId = this.normalizeId(d.id || d._id)
+                return dId === normalizedDiagramId
+              })
+              
               if (index !== -1) {
-                this.activityDiagrams[index] = {
-                  ...this.processDiagrams([updatedDiagram], 'activity')[0],
-                  previewImage: this.activityDiagrams[index].previewImage, // Giữ preview image cũ
-                }
+                // Process diagram với đầy đủ data (name, description, nodes, edges, lanes)
+                const processedDiagram = this.processDiagrams([updatedDiagram], 'activity')[0]
+                
+                // Đảm bảo processedDiagram có đầy đủ data
+                console.log('📝 Refreshing activity diagram:', {
+                  id: processedDiagram.id || processedDiagram._id,
+                  name: processedDiagram.name,
+                  description: processedDiagram.description,
+                  nodesCount: processedDiagram.nodes?.length || 0,
+                  edgesCount: processedDiagram.edges?.length || 0,
+                  lanesCount: processedDiagram.lanes?.length || 0
+                })
+                
+                // Cập nhật diagram với đầy đủ data - không giữ preview image để force regenerate
+                // Sử dụng Vue.set hoặc spread operator để đảm bảo reactivity
+                this.$set(this.activityDiagrams, index, {
+                  ...processedDiagram,
+                  // Không giữ preview image cũ - sẽ regenerate với data mới
+                })
+                
+                // Xóa preview cache để force regenerate
+                const diagramIdKey = processedDiagram.id || processedDiagram._id
+                this.previewCache.delete(diagramIdKey)
+                
+                // Regenerate preview sau khi cập nhật để có preview với data mới
+                // Không regenerate ở đây vì closeEditor sẽ handle
               } else {
                 // Nếu không tìm thấy trong list, thêm vào (trường hợp diagram mới được tạo)
-                this.activityDiagrams.push(this.processDiagrams([updatedDiagram], 'activity')[0])
+                const newDiagram = this.processDiagrams([updatedDiagram], 'activity')[0]
+                this.activityDiagrams.push(newDiagram)
+                // Trigger preview generation cho diagram mới
+                this.$nextTick(() => {
+                  this.triggerPreviewGeneration(newDiagram)
+                })
               }
             }
             break

@@ -563,7 +563,14 @@ export default {
       }
     },
     computedLanes() {
-      return this.safeDiagramData.lanes
+      const lanes = this.safeDiagramData.lanes
+      if (!lanes || lanes.length === 0) return []
+
+      return lanes.map((lane, index) => ({
+        id: this.normalizeId(lane._id || lane.id || `lane-${index}`),
+        name: lane.name || `Lane ${index + 1}`,
+        _originalData: lane,
+      }))
     },
     computedNodes() {
       const nodes = this.safeDiagramData.nodes
@@ -574,7 +581,9 @@ export default {
       const nodesWithoutLane = []
       
       nodes.forEach((node) => {
-        const laneId = node.lane_id || null
+        // Normalize lane_id để hỗ trợ cả ObjectId và string
+        const rawLaneId = node.lane_id || null
+        const laneId = rawLaneId ? this.normalizeId(rawLaneId) : null
         if (laneId) {
           if (!nodesByLane[laneId]) {
             nodesByLane[laneId] = []
@@ -598,7 +607,10 @@ export default {
         const nodeHalfHeight = height / 2
         const safePadding = 20
         
-        const laneId = node.lane_id || null
+        // Normalize node ID và lane_id
+        const rawLaneId = node.lane_id || null
+        const laneId = rawLaneId ? this.normalizeId(rawLaneId) : null
+        const nodeId = this.normalizeId(node._id || node.id || `node-${index}`)
         const laneIndex = this.getLaneIndex(laneId)
         
         // Nếu node có position từ database, validate và điều chỉnh nếu cần
@@ -701,10 +713,10 @@ export default {
         }
 
         return {
-          id: node.id || `node-${index}`,
+          id: nodeId,
           type: node.type || 'action',
           label: node.label && node.label.trim() !== '' ? node.label : defaultLabel,
-          lane_id: node.lane_id || null,
+          lane_id: laneId,
           width: width,
           height: height,
           x: x,
@@ -758,17 +770,24 @@ export default {
 
       return edges
         .map((edge, index) => {
-          const sourceNode = this.positionedNodes.find((n) => n.id === edge.from)
-          const targetNode = this.positionedNodes.find((n) => n.id === edge.to)
+          // Normalize edge IDs để hỗ trợ cả ObjectId và string
+          // edge.from và edge.to có thể là ObjectId hoặc string
+          const fromId = this.normalizeId(edge.from)
+          const toId = this.normalizeId(edge.to)
+          
+          const sourceNode = this.positionedNodes.find((n) => n.id === fromId)
+          const targetNode = this.positionedNodes.find((n) => n.id === toId)
+          
           return {
-            id: `edge-${index}`,
-            from: edge.from,
-            to: edge.to,
+            id: this.normalizeId(edge._id || edge.id || `edge-${index}`),
+            from: fromId,
+            to: toId,
             condition: edge.condition,
             guard: edge.guard,
             trigger: edge.trigger,
             source: sourceNode,
             target: targetNode,
+            _originalData: edge,
           }
         })
         .filter((edge) => edge.source && edge.target)
@@ -846,6 +865,18 @@ export default {
     this.cleanupFullscreenListener()
   },
   methods: {
+    // ============ UTILITY METHODS ============
+    normalizeId(id) {
+      if (!id) return null
+      if (typeof id === 'object' && id.$oid) {
+        return id.$oid
+      }
+      if (typeof id === 'object' && id.toString) {
+        return id.toString()
+      }
+      return String(id)
+    },
+
     // ============ NODE METHODS ============
     getNodeSize(type) {
       switch (type) {
@@ -880,7 +911,11 @@ export default {
 
     getLaneIndex(laneId) {
       if (!laneId || this.computedLanes.length === 0) return -1
-      return this.computedLanes.findIndex(lane => lane.id === laneId || lane._id === laneId)
+      const normalizedLaneId = this.normalizeId(laneId)
+      return this.computedLanes.findIndex(lane => {
+        const laneNormalizedId = this.normalizeId(lane.id || lane._id)
+        return laneNormalizedId === normalizedLaneId
+      })
     },
 
     getDecisionPoints(node) {
@@ -1088,8 +1123,14 @@ export default {
     },
 
     getEdgeCondition(fromId, toId) {
+      const normalizedFromId = this.normalizeId(fromId)
+      const normalizedToId = this.normalizeId(toId)
       const edge = this.safeDiagramData.edges.find(
-        (edge) => edge.from === fromId && edge.to === toId
+        (edge) => {
+          const edgeFrom = this.normalizeId(edge.from)
+          const edgeTo = this.normalizeId(edge.to)
+          return edgeFrom === normalizedFromId && edgeTo === normalizedToId
+        }
       )
       return edge ? edge.condition : null
     },
@@ -1993,9 +2034,13 @@ export default {
               let newY = laneMinY
               
               // Tìm node gần nhất trong cùng lane để đặt phía dưới
-              const nodesInSameLane = this.computedNodes.filter(n => 
-                n.lane_id === node.lane_id && n.id !== node.id && n.type !== 'start' && n.type !== 'end'
-              )
+              const normalizedLaneId = this.normalizeId(node.lane_id)
+              const normalizedNodeId = this.normalizeId(node.id)
+              const nodesInSameLane = this.computedNodes.filter(n => {
+                const nLaneId = this.normalizeId(n.lane_id)
+                const nId = this.normalizeId(n.id)
+                return nLaneId === normalizedLaneId && nId !== normalizedNodeId && n.type !== 'start' && n.type !== 'end'
+              })
               
               if (nodesInSameLane.length > 0) {
                 const maxY = Math.max(...nodesInSameLane.map(n => n.y))
