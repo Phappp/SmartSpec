@@ -570,7 +570,6 @@ export default {
 
   position: fixed;
   inset: 0;
-  background: linear-gradient(135deg, rgba(26, 54, 93, 0.7) 0%, rgba(45, 74, 138, 0.7) 100%);
   display: flex;
   justify-content: center;
   align-items: center;

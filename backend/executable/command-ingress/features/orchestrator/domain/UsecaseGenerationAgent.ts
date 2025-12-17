@@ -860,8 +860,28 @@ export class UsecaseGenerationAgent {
             .select('name goal')
             .lean();
 
-        const existingNames = new Set(existingUsecases.map(uc => (uc.name as string)?.toLowerCase().trim()));
-        const existingGoals = new Set(existingUsecases.map(uc => (uc.goal as string)?.toLowerCase().trim()));
+        // ✅ Normalize tên để so sánh chính xác hơn (loại bỏ multiple spaces, normalize)
+        const normalizeName = (name: string): string => {
+            if (!name) return '';
+            return name
+                .toLowerCase()
+                .trim()
+                .replace(/\s+/g, ' ') // Normalize multiple spaces thành single space
+                .replace(/[^\w\s]/g, '') // Loại bỏ ký tự đặc biệt để so sánh
+                .trim();
+        };
+
+        const existingNames = new Set(existingUsecases.map(uc => normalizeName(uc.name as string)));
+        const existingGoals = new Set(existingUsecases.map(uc => normalizeName(uc.goal as string)));
+
+        // ✅ Lưu mapping từ normalized name → original name để hiển thị trong error message
+        const existingNamesMap = new Map<string, string>();
+        existingUsecases.forEach(uc => {
+            const normalized = normalizeName(uc.name as string);
+            if (normalized && !existingNamesMap.has(normalized)) {
+                existingNamesMap.set(normalized, uc.name as string);
+            }
+        });
 
         // Validate và filter
         const validUsecases: any[] = [];
@@ -874,15 +894,16 @@ export class UsecaseGenerationAgent {
             if (!uc.goal || uc.goal.trim() === '') errors.push('missing goal');
             if (!uc.tasks || !Array.isArray(uc.tasks) || uc.tasks.length === 0) errors.push('missing tasks');
 
-            // ✅ Check duplicate: tên hoặc mục đích trùng
-            const ucNameLower = uc.name?.toLowerCase().trim();
-            const ucGoalLower = uc.goal?.toLowerCase().trim();
+            // ✅ Check duplicate: tên hoặc mục đích trùng (sử dụng normalized name)
+            const ucNameNormalized = normalizeName(uc.name || '');
+            const ucGoalNormalized = normalizeName(uc.goal || '');
 
-            if (ucNameLower && existingNames.has(ucNameLower)) {
-                errors.push(`duplicate name: "${uc.name}" đã tồn tại`);
+            if (ucNameNormalized && existingNames.has(ucNameNormalized)) {
+                const existingName = existingNamesMap.get(ucNameNormalized) || ucNameNormalized;
+                errors.push(`duplicate name: "${uc.name}" đã tồn tại (trùng với "${existingName}")`);
             }
 
-            if (ucGoalLower && existingGoals.has(ucGoalLower)) {
+            if (ucGoalNormalized && existingGoals.has(ucGoalNormalized)) {
                 errors.push(`duplicate goal: mục đích "${uc.goal.substring(0, 50)}..." đã tồn tại`);
             }
 
@@ -891,9 +912,14 @@ export class UsecaseGenerationAgent {
                 console.warn(`⚠️ [SAVE_BATCH] Skipping usecase ${index + 1} ("${uc.name || 'unnamed'}"): ${errors.join(', ')}`);
             } else {
                 validUsecases.push(uc);
-                // ✅ Thêm vào set để check duplicate trong cùng batch
-                if (ucNameLower) existingNames.add(ucNameLower);
-                if (ucGoalLower) existingGoals.add(ucGoalLower);
+                // ✅ Thêm vào set để check duplicate trong cùng batch (sử dụng normalized)
+                if (ucNameNormalized) {
+                    existingNames.add(ucNameNormalized);
+                    if (!existingNamesMap.has(ucNameNormalized)) {
+                        existingNamesMap.set(ucNameNormalized, uc.name || '');
+                    }
+                }
+                if (ucGoalNormalized) existingGoals.add(ucGoalNormalized);
             }
         });
 

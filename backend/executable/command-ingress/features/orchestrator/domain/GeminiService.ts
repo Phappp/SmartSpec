@@ -13,6 +13,7 @@ const prompts = {
 • "Cán bộ ký văn bản giấy" →  SAI
 • "Nộp hồ sơ bản cứng" →  SAI  
 • "Gửi công văn giấy tờ" →  SAI
+• "Click nút", "Nhập form", "Màn hình" →  SAI (UI-level, không phải use case)
 
  **HÀNH VI PHẦN MỀM ĐÚNG**:
 • "Hệ thống xác thực chữ ký số" →  ĐÚNG
@@ -21,10 +22,11 @@ const prompts = {
 
  **YÊU CẦU ĐẦU RA**:
 • CHỈ trả về JSON array hợp lệ
-• KHÔNG giải thích, KHÔNG markdown, KHÔNG code fence
+• KHÔNG giải thích, KHÔNG markdown, KHÔNG code fence, KHÔNG comment
 • Parse được ngay bằng JSON.parse()
+• KHÔNG thêm field ngoài schema, KHÔNG thiếu field bắt buộc
 
-🛠 **CẤU TRÚC USE CASE BẮT BUỘC**:
+🛠 **CẤU TRÚC USE CASE BẮT BUỘC** (SCHEMA TUYỆT ĐỐI BẤT BIẾN):
 Mỗi use case PHẢI có đầy đủ các trường sau (KHÔNG bao gồm field "id" - hệ thống sẽ tự tạo):
 [
   {
@@ -37,9 +39,9 @@ Mỗi use case PHẢI có đầy đủ các trường sau (KHÔNG bao gồm fiel
     "goal": "Tạo tài khoản truy cập hệ thống",
     "reason": "Cho phép người dùng sử dụng các chức năng được bảo vệ",
     "tasks": [
-      "Truy cập trang đăng ký",
-      "Nhập thông tin cá nhân",
-      "Xác thực email", 
+      "Xác thực thông tin đăng ký",
+      "Tạo tài khoản trong database",
+      "Gửi email xác nhận", 
       "Kích hoạt tài khoản"
     ],
     "inputs": ["email", "mật khẩu", "họ tên", "số điện thoại"],
@@ -52,7 +54,7 @@ Mỗi use case PHẢI có đầy đủ các trường sau (KHÔNG bao gồm fiel
       "Mật khẩu tối thiểu 8 ký tự",
       "Không trùng email đã đăng ký"
     ],
-    "triggers": ["Người dùng click nút 'Đăng ký'"],
+    "triggers": ["Người dùng yêu cầu đăng ký tài khoản"],
     "preconditions": ["Người dùng chưa có tài khoản", "Hệ thống hoạt động bình thường"],
     "postconditions": ["Tài khoản được tạo", "Email xác nhận được gửi"],
     "exceptions": ["Email đã tồn tại", "Mất kết nối mạng", "Server lỗi"],
@@ -62,34 +64,130 @@ Mỗi use case PHẢI có đầy đủ các trường sau (KHÔNG bao gồm fiel
   }
 ]
 
- **QUY TẮC XỬ LÝ**:
+ **QUY TẮC XỬ LÝ NGHIÊM NGẶT**:
+
+I. PHẠM VI & NGỮ CẢNH:
+• CHỈ mô tả hành vi phần mềm, LOẠI BỎ thao tác giấy tờ, hành vi con người ngoài hệ thống
+• KHÔNG suy luận ngoài văn bản - Text là nguồn chân lý duy nhất
+• KHÔNG thêm module mới, KHÔNG thêm nghiệp vụ không được nhắc tới
+• KHÔNG "làm giàu" yêu cầu bằng kiến thức bên ngoài
+
+II. USE CASE SEMANTIC:
+• 1 Use Case = 1 MỤC TIÊU NGHIỆP VỤ duy nhất (có goal rõ ràng)
+• KHÔNG chứa nhiều mục tiêu độc lập, KHÔNG mơ hồ/chung chung
+• KHÔNG sinh 2 use case cùng mục tiêu (nếu khác tên nhưng cùng ý → conflict)
+• Đúng cấp độ trừu tượng: Use Case = Nghiệp vụ hệ thống (KHÔNG phải UI-level)
+
+**QUY TẮC GOM CRUD OPERATIONS (QUAN TRỌNG)**:
+• Khi có các chức năng CRUD (Create, Read, Update, Delete) cho CÙNG MỘT ENTITY → GOM LẠI thành 1 usecase quản lý
+• Ví dụ: "Add project", "Delete project", "Update project", "View project" → GOM thành "Quản lý Dự án (CRUD)"
+• Ví dụ: "Create user", "Edit user", "Remove user", "List users" → GOM thành "Quản lý Người dùng (CRUD)"
+• Ví dụ: "Add order", "Update order", "Delete order", "View order" → GOM thành "Quản lý Đơn hàng (CRUD)"
+• Tasks của usecase quản lý sẽ bao gồm các operations CRUD: ["Tạo entity", "Xem danh sách entity", "Xem chi tiết entity", "Cập nhật entity", "Xóa entity"]
+• Goal sẽ là: "Quản lý [entity] với đầy đủ các thao tác CRUD"
+• Name sẽ là: "Quản lý [Entity] (CRUD)" hoặc "[Entity] Management (CRUD)"
+• KHÔNG tách CRUD thành nhiều usecase riêng lẻ cho cùng một entity
+• Nếu chỉ có 1-2 operations (ví dụ: chỉ có "View" và "Create") → vẫn có thể gom lại nếu chúng thuộc cùng entity
+
+III. TASK QUALITY:
+• Task phải deployable (có thể giao cho dev, thời gian 1-3 ngày)
+• Task mô tả xử lý logic/nghiệp vụ, KHÔNG phải UI-step
+• Task KHÔNG được trùng vai trò Use Case (Task ≠ Use Case con, Task ≠ User journey)
+• KHÔNG: "Click nút", "Nhập form", "Mở màn hình" (UI-level)
+• ĐÚNG: "Xác thực thông tin", "Tạo record trong database", "Gửi email" (Business logic)
+
+IV. ROLE & ACTOR:
+• Role LUÔN là object đầy đủ {id, name, description}
+• Không rõ role → fallback chuẩn: {"id": "user", "name": "Người dùng hệ thống", "description": "Người dùng sử dụng hệ thống"}
+• KHÔNG tự sáng tạo vai trò mới nếu không có trong văn bản
+
+V. CẤP ĐỘ TRỪU TƯỢNG (KHÔNG ĐẢO TẦNG):
+• Use Case = Nghiệp vụ hệ thống (business-level)
+• Task = Business-level execution (deployable unit)
+• Epic = Nhóm use case cùng domain (trừu tượng hơn use case)
+• ❌ CẤM: UI-level (click, nhập form, màn hình, giao diện)
+
+VI. SCHEMA & JSON:
+• Schema tuyệt đối bất biến: KHÔNG thêm field, KHÔNG thiếu field, ĐÚNG type
+• JSON parse-safe: KHÔNG markdown, KHÔNG code fence, KHÔNG comment
+• KHÔNG sinh id: id do hệ thống backend quản lý, prompt cấm tuyệt đối thêm id
+
+VII. RELATED USE CASES:
+• related_usecases chỉ tham chiếu ID hợp lệ (chỉ dùng ID đã tồn tại)
+• KHÔNG tạo ID mới, KHÔNG tham chiếu vòng vô nghĩa
+• Mặc định để mảng rỗng [] (sẽ được xử lý sau)
+
+VIII. CHẤT LƯỢNG NỘI DUNG:
+• Mỗi use case phải tự đủ nghĩa (đọc riêng vẫn hiểu, không phụ thuộc ngữ cảnh ngoài)
+• Có rule – trigger – exception hợp lý (không rỗng, không hình thức, phù hợp nghiệp vụ)
+• KHÔNG sinh nội dung "cho đủ" (không filler text, không lặp cấu trúc máy móc)
+
+ **QUY TẮC BATCH**:
 • Mỗi lần trả về TỐI ĐA ${batchSize} use case
 • Bắt đầu từ use case số ${offset + 1}
 • QUAN TRỌNG: Nếu đã phân tích hết tất cả use case từ văn bản → TRẢ VỀ NGAY mảng rỗng []
 • KHÔNG được tạo use case mới nếu đã phân tích hết nội dung
 • KHÔNG được lặp lại các use case đã trả về ở các batch trước
-• Ưu tiên chức năng phần mềm cốt lõi
-• Quy trình phức tạp → tách thành nhiều use case
-• Không rõ vai trò → mặc định "Người dùng hệ thống"
-• KHÔNG thêm field "id" vào response - hệ thống sẽ tự tạo identifier
 
  **KIỂM TRA CUỐI**:
 ✓ KHÔNG có thao tác thủ công ngoài đời
 ✓ CHỈ có tương tác phần mềm
 ✓ Role là object đầy đủ {id, name, description}
-✓ Tất cả trường đều theo đúng schema
+✓ Tất cả trường đều theo đúng schema (không thêm, không thiếu)
 ✓ KHÔNG có field "id" trong response
 ✓ Related usecases để mảng rỗng [] (sẽ được xử lý sau)
+✓ 1 Use Case = 1 mục tiêu nghiệp vụ rõ ràng
+✓ Task là business-level, deployable (không phải UI-step)
+✓ Không có filler text, không lặp cấu trúc máy móc
 
 `,
-        relatedUseCases: (simplified: any, incremental?: boolean) => `Đây là danh sách use case phần mềm đã có:\n${JSON.stringify(simplified, null, 2)}\n\nNhiệm vụ của bạn:\n${incremental ? `- KHÔNG được xóa hoặc ghi đè related_usecases cũ.\n- Chỉ bổ sung liên kết giữa use case mới và use case cũ.` : `- Phân tích và sinh lại toàn bộ related_usecases cho tất cả use case.`}\n\nYÊU CẦU:\n- related_usecases[] chỉ tham chiếu tới use case trong danh sách trên.\n- Format: Sử dụng chính xác ID từ field "id" trong danh sách trên (ví dụ: nếu id là "507f1f77bcf86cd799439011" thì dùng "507f1f77bcf86cd799439011").\n- Nếu không có liên quan, để mảng rỗng [].\n- Trả về toàn bộ danh sách use case với related_usecases được cập nhật.\n- Giữ nguyên cấu trúc và các field khác của mỗi use case.`,
+        relatedUseCases: (simplified: any, incremental?: boolean) => `Đây là danh sách use case phần mềm đã có:\n${JSON.stringify(simplified, null, 2)}\n\n**TIÊU CHÍ RELATED USE CASES**:
+
+I. CHỈ THAM CHIẾU ID HỢP LỆ:
+- related_usecases[] chỉ tham chiếu tới use case trong danh sách trên
+- Format: Sử dụng chính xác ID từ field "id" trong danh sách trên (ví dụ: nếu id là "507f1f77bcf86cd799439011" thì dùng "507f1f77bcf86cd799439011")
+- KHÔNG tạo ID mới, KHÔNG tham chiếu vòng vô nghĩa
+- Nếu không có liên quan, để mảng rỗng []
+
+II. INCREMENTAL MODE AN TOÀN:
+${incremental ? `- KHÔNG được xóa hoặc ghi đè related_usecases cũ
+- Chỉ bổ sung liên kết giữa use case mới và use case cũ
+- Giữ nguyên tất cả related_usecases đã có` : `- Phân tích và sinh lại toàn bộ related_usecases cho tất cả use case
+- Đảm bảo chỉ tham chiếu ID hợp lệ từ danh sách trên`}
+
+Nhiệm vụ của bạn:
+${incremental ? `- KHÔNG được xóa hoặc ghi đè related_usecases cũ.\n- Chỉ bổ sung liên kết giữa use case mới và use case cũ.` : `- Phân tích và sinh lại toàn bộ related_usecases cho tất cả use case.`}
+
+YÊU CẦU:
+- related_usecases[] chỉ tham chiếu tới use case trong danh sách trên.
+- Format: Sử dụng chính xác ID từ field "id" trong danh sách trên (ví dụ: nếu id là "507f1f77bcf86cd799439011" thì dùng "507f1f77bcf86cd799439011").
+- Nếu không có liên quan, để mảng rỗng [].
+- Trả về toàn bộ danh sách use case với related_usecases được cập nhật.
+- Giữ nguyên cấu trúc và các field khác của mỗi use case.
+- KHÔNG tạo ID mới, KHÔNG tham chiếu vòng vô nghĩa.`,
         conflictCheck: (textA: string, textB: string) => `
 Bạn là một công cụ kiểm tra trùng lặp use case, cần đánh giá thật nghiêm ngặt.
 
-Nhiệm vụ: Xác định xem hai mô tả use case sau đây có thực sự diễn tả CÙNG một chức năng hay không.
+Nhiệm vụ: Xác định xem hai mô tả use case sau đây có thực sự diễn tả CÙNG một mục tiêu nghiệp vụ hay không.
 
 A: "${textA}"
 B: "${textB}"
+
+**TIÊU CHÍ CONFLICT & DEDUPLICATION**:
+
+I. TRÙNG = CÙNG MỤC TIÊU:
+- Trả về { "conflict": true } CHỈ KHI cả hai mô tả đều nói về CÙNG MỘT MỤC TIÊU NGHIỆP VỤ
+- KHÔNG dựa vào từ khóa, KHÔNG dựa vào độ giống câu chữ
+- CHỈ dựa vào ý nghĩa nghiệp vụ (cùng mục tiêu = trùng)
+- Ngay cả khi cách viết khác nhau hoặc có lỗi chính tả nhỏ 
+  (ví dụ: "Đăng nhập" và "Loginn" → cùng một use case)
+
+II. KHÔNG GOM NHẦM:
+- Trả về { "conflict": false } nếu chúng là HAI chức năng khác nhau,
+  kể cả khi có liên quan (ví dụ: "Đăng nhập" KHÁC với "Đăng ký")
+- Use case liên quan ≠ trùng (Login ≠ Register, Order ≠ Payment)
+- KHÔNG được giả định rằng các từ giống nhau một phần là cùng chức năng
+- Chỉ coi là trùng nếu ý nghĩa nghiệp vụ hoàn toàn giống (cùng mục tiêu)
 
 Quy tắc:
 1. Trả về { "conflict": true } chỉ khi cả hai mô tả đều nói về CÙNG một mục tiêu/chức năng, 
@@ -110,6 +208,20 @@ Nhiệm vụ của bạn là đọc danh sách các use case sau đây và GOM N
 
 DANH SÁCH USE CASE:
 ${useCasesJson}
+
+**TIÊU CHÍ CONFLICT & DEDUPLICATION**:
+
+I. TRÙNG = CÙNG MỤC TIÊU:
+- Hai use case được coi là trùng lặp NẾU chúng mô tả CÙNG MỘT MỤC TIÊU NGHIỆP VỤ
+- KHÔNG dựa vào từ khóa, KHÔNG dựa vào độ giống câu chữ
+- CHỈ dựa vào ý nghĩa nghiệp vụ (cùng mục tiêu = trùng)
+- Bất kể cách diễn đạt (ví dụ: "Đăng nhập vào hệ thống" và "Cho phép người dùng sign-in" là TRÙNG LẶP)
+
+II. KHÔNG GOM NHẦM:
+- Các chức năng liên quan nhưng khác mục tiêu thì KHÔNG trùng lặp
+- Ví dụ: "Đăng nhập" và "Đăng ký" là KHÁC NHAU (Login ≠ Register)
+- Ví dụ: "Đặt hàng" và "Thanh toán" là KHÁC NHAU (Order ≠ Payment)
+- Use case liên quan ≠ trùng
 
 QUY TẮC:
 1. Hai use case được coi là trùng lặp NẾU chúng mô tả CÙNG MỘT MỤC TIÊU hoặc CÙNG MỘT CHỨC NĂNG, bất kể cách diễn đạt.
@@ -135,12 +247,35 @@ Ví dụ output (sử dụng ID thực tế từ danh sách):
             const isShortText = textLength < 100;
 
             return `
-Bạn là một chuyên gia phân tích yêu cầu phần mềm.
+Bạn là một chuyên gia phân tích yêu cầu phần mềm với khả năng estimate chính xác.
 
 NHIỆM VỤ: Đọc toàn bộ văn bản dưới đây và ước tính số lượng use case sẽ được tạo ra.
 
 VĂN BẢN CẦN PHÂN TÍCH (${textLength} ký tự):
 ${text}
+
+**TIÊU CHÍ ESTIMATE NGHIÊM NGẶT**:
+
+I. PHẠM VI & NGỮ CẢNH:
+- Text là nguồn chân lý duy nhất (Single Source of Truth)
+- KHÔNG suy luận ngoài văn bản, KHÔNG thêm module mới, KHÔNG thêm nghiệp vụ không được nhắc tới
+- KHÔNG "làm giàu" yêu cầu bằng kiến thức bên ngoài
+
+II. ESTIMATE PHẢI PHÙ HỢP DOMAIN:
+- Website / E-commerce / CMS: ~3–6 use cases / module
+- ERP / Core system: ~6–12 use cases / module
+- Văn bản ngắn: chỉ estimate use case liên quan trực tiếp
+
+III. KHÔNG INFLATE SỐ LƯỢNG:
+- KHÔNG chia nhỏ use case chỉ để tăng count
+- KHÔNG tách UI-step thành use case
+- Estimate là cam kết, không phải gợi ý
+- 1 Use Case = 1 mục tiêu nghiệp vụ (không tách nhỏ vô lý)
+
+IV. ĐỒNG BỘ ESTIMATE ↔ GENERATE:
+- Tổng use case generate KHÔNG vượt estimated_count
+- Batch cuối có thể < batchSize
+- Nếu hết nội dung → trả về [] ngay
 
 ${isShortText ? `
 ⚠️ LƯU Ý QUAN TRỌNG: Văn bản này rất ngắn (chỉ ${textLength} ký tự). 
@@ -148,13 +283,17 @@ ${isShortText ? `
 - Ví dụ: Nếu text là "login", chỉ estimate các use cases liên quan như: Login, Register, Forgot Password, Reset Password, Logout (khoảng 3-10 use cases)
 - KHÔNG nên suy luận quá xa hoặc estimate quá nhiều use cases không liên quan
 - Chỉ estimate dựa trên những gì được đề cập TRỰC TIẾP trong text
+- KHÔNG inflate số lượng bằng cách chia nhỏ use case
 ` : `
-YÊU CẦU:
+YÊU CẦU PHÂN TÍCH:
 - Phân tích toàn bộ văn bản một cách kỹ lưỡng
 - Đếm số lượng chức năng/phân hệ/module có thể tạo use case
 - Ước tính số lượng use case sẽ được generate dựa trên độ phức tạp và số lượng chức năng được mô tả trong text
+- Áp dụng tiêu chí domain: Website/E-commerce (~3-6/module), ERP (~6-12/module)
 - Nếu text mô tả chi tiết nhiều module/chức năng, có thể estimate nhiều hơn
 - Nếu text chỉ mô tả một vài chức năng cơ bản, estimate vừa phải
+- KHÔNG chia nhỏ use case chỉ để tăng count
+- 1 Use Case = 1 mục tiêu nghiệp vụ (không tách nhỏ vô lý)
 `}
 
 TRẢ VỀ JSON:
@@ -162,23 +301,26 @@ TRẢ VỀ JSON:
   "estimated_count": ${isShortText ? '5' : '94'},
   "summary": "${isShortText ? 'Hệ thống với các chức năng cơ bản được đề cập trong text' : 'Hệ thống quản lý với 5 module chính: User Management, Order Processing, Product Catalog, Payment Gateway, Report Generation'}",
   "estimated_batches": ${isShortText ? '1' : '2'},
-  "reasoning": "${isShortText ? 'Text ngắn, chỉ estimate các use cases liên quan trực tiếp' : 'Dựa trên số lượng chức năng và độ phức tạp, ước tính sẽ có khoảng 94 usecases được tạo ra, chia thành nhiều batch (15 usecases/batch)'}"
+  "reasoning": "${isShortText ? 'Text ngắn, chỉ estimate các use cases liên quan trực tiếp' : 'Dựa trên số lượng chức năng và độ phức tạp, ước tính sẽ có khoảng 94 usecases được tạo ra, chia thành nhiều batch (50 usecases/batch)'}"
 }
 
 QUAN TRỌNG:
 - Chỉ trả về JSON, không có markdown, không có code fence
 - estimated_count phải là số nguyên dương và PHÙ HỢP với độ dài và nội dung của text
+- Áp dụng tiêu chí domain: Website/E-commerce (~3-6/module), ERP (~6-12/module)
 - Nếu text ngắn (< 100 ký tự): estimated_count nên từ 3-15 use cases
 - Nếu text vừa (100-500 ký tự): estimated_count nên từ 10-50 use cases
 - Nếu text dài (> 500 ký tự): có thể estimate nhiều hơn dựa trên nội dung
 - estimated_batches = Math.ceil(estimated_count / 50)
 - summary phải ngắn gọn, mô tả tổng quan hệ thống DỰA TRÊN NỘI DUNG THỰC TẾ của text
 - KHÔNG suy luận quá xa, chỉ estimate những gì được đề cập hoặc liên quan TRỰC TIẾP trong text
+- KHÔNG inflate số lượng bằng cách chia nhỏ use case
+- Estimate là cam kết: tổng use case generate KHÔNG vượt estimated_count
 `;
         },
         generateBatchUseCases: (text: string, batchNumber: number, totalBatches: number, offset: number, batchSize: number, estimatedTotal?: number) => ` **MỤC TIÊU**: Generate use cases từ văn bản theo batch
 
-**VĂN BẢN GỐC**:
+**VĂN BẢN GỐC** (NGUỒN CHÂN LÝ DUY NHẤT):
 ${text}
 
 **BATCH THÔNG TIN**:
@@ -187,32 +329,84 @@ ${text}
 - Số lượng use case cần generate trong batch này: ${batchSize}
 ${estimatedTotal ? `- **TỔNG SỐ USE CASES ĐÃ ESTIMATE: ${estimatedTotal}** - KHÔNG được generate quá số này!` : ''}
 
-**YÊU CẦU**:
+**YÊU CẦU NGHIÊM NGẶT**:
+
+I. PHẠM VI & NGỮ CẢNH:
+- CHỈ mô tả hành vi phần mềm, LOẠI BỎ thao tác giấy tờ, hành vi con người ngoài hệ thống
+- KHÔNG suy luận ngoài văn bản - Text là nguồn chân lý duy nhất
+- KHÔNG thêm module mới, KHÔNG thêm nghiệp vụ không được nhắc tới
+- KHÔNG "làm giàu" yêu cầu bằng kiến thức bên ngoài
+
+II. ESTIMATE ↔ GENERATE ĐỒNG BỘ:
 - Generate chính xác ${batchSize} use cases (hoặc ít hơn nếu đã hết nội dung)
 ${estimatedTotal ? `- **QUAN TRỌNG**: Tổng số use cases đã estimate là ${estimatedTotal}. Hiện tại đã generate ${offset} use cases. Chỉ được generate tối đa ${estimatedTotal - offset} use cases trong batch này.` : ''}
 - Bắt đầu từ use case số ${offset + 1}
 - KHÔNG lặp lại các use case đã generate ở batch trước
-- Mỗi use case phải đầy đủ thông tin (~400-500 tokens)
+- Nếu đã hết nội dung để generate → trả về mảng rỗng [] NGAY LẬP TỨC
 ${estimatedTotal ? `- **KHÔNG được suy luận quá xa hoặc generate nhiều hơn estimate (${estimatedTotal} use cases)**` : ''}
 
-**CẤU TRÚC USE CASE** (giống như schema cũ):
+III. USE CASE SEMANTIC:
+- 1 Use Case = 1 MỤC TIÊU NGHIỆP VỤ duy nhất (có goal rõ ràng)
+- KHÔNG chứa nhiều mục tiêu độc lập, KHÔNG mơ hồ/chung chung
+- KHÔNG sinh 2 use case cùng mục tiêu (nếu khác tên nhưng cùng ý → conflict)
+- Đúng cấp độ trừu tượng: Use Case = Nghiệp vụ hệ thống (KHÔNG phải UI-level)
+
+**QUY TẮC GOM CRUD OPERATIONS**:
+- Khi có các chức năng CRUD (Create, Read, Update, Delete) cho CÙNG MỘT ENTITY → GOM LẠI thành 1 usecase quản lý
+- Ví dụ: "Add project", "Delete project", "Update project", "View project" → GOM thành "Project Management (CRUD)"
+- Ví dụ: "Create user", "Edit user", "Remove user", "List users" → GOM thành "User Management (CRUD)"
+- Ví dụ: "Add order", "Update order", "Delete order", "View order" → GOM thành "Order Management (CRUD)"
+- Tasks của usecase quản lý sẽ bao gồm các operations CRUD: ["Create entity", "Read/View entity", "Update entity", "Delete entity"]
+- Goal sẽ là: "Quản lý [entity] với đầy đủ các thao tác CRUD"
+- KHÔNG tách CRUD thành nhiều usecase riêng lẻ cho cùng một entity
+
+IV. TASK QUALITY:
+- Task phải deployable (có thể giao cho dev, thời gian 1-3 ngày)
+- Task mô tả xử lý logic/nghiệp vụ, KHÔNG phải UI-step
+- Task KHÔNG được trùng vai trò Use Case (Task ≠ Use Case con, Task ≠ User journey)
+- ❌ CẤM: "Click nút", "Nhập form", "Mở màn hình", "Truy cập trang" (UI-level)
+- ✅ ĐÚNG: "Xác thực thông tin", "Tạo record trong database", "Gửi email", "Tính toán giá" (Business logic)
+
+V. ROLE & ACTOR:
+- Role LUÔN là object đầy đủ {id, name, description}
+- Không rõ role → fallback chuẩn: {"id": "user", "name": "Người dùng hệ thống", "description": "Người dùng sử dụng hệ thống"}
+- KHÔNG tự sáng tạo vai trò mới nếu không có trong văn bản
+
+VI. CẤP ĐỘ TRỪU TƯỢNG (KHÔNG ĐẢO TẦNG):
+- Use Case = Nghiệp vụ hệ thống (business-level)
+- Task = Business-level execution (deployable unit)
+- Epic = Nhóm use case cùng domain (trừu tượng hơn use case)
+- ❌ CẤM: UI-level (click, nhập form, màn hình, giao diện)
+
+VII. SCHEMA & JSON:
+- Schema tuyệt đối bất biến: KHÔNG thêm field, KHÔNG thiếu field, ĐÚNG type
+- JSON parse-safe: KHÔNG markdown, KHÔNG code fence, KHÔNG comment
+- KHÔNG sinh id: id do hệ thống backend quản lý, prompt cấm tuyệt đối thêm id
+
+VIII. CHẤT LƯỢNG NỘI DUNG:
+- Mỗi use case phải tự đủ nghĩa (đọc riêng vẫn hiểu, không phụ thuộc ngữ cảnh ngoài)
+- Có rule – trigger – exception hợp lý (không rỗng, không hình thức, phù hợp nghiệp vụ)
+- KHÔNG sinh nội dung "cho đủ" (không filler text, không lặp cấu trúc máy móc)
+- Mỗi use case phải đầy đủ thông tin (~400-500 tokens)
+
+**CẤU TRÚC USE CASE** (SCHEMA TUYỆT ĐỐI BẤT BIẾN):
 [
   {
-    "name": "Tên use case",
+    "name": "Tên use case (1 mục tiêu nghiệp vụ rõ ràng)",
     "role": { "id": "...", "name": "...", "description": "..." },
-    "goal": "...",
-    "reason": "...",
-    "tasks": [...],
+    "goal": "Mục tiêu nghiệp vụ rõ ràng, cụ thể",
+    "reason": "Lý do tồn tại use case này",
+    "tasks": ["Task deployable 1-3 ngày", "Task business logic", "KHÔNG phải UI-step"],
     "inputs": [...],
     "outputs": [...],
-    "context": "...",
+    "context": "Module/domain",
     "priority": "high|medium|low",
     "feedback": "...",
-    "rules": [...],
-    "triggers": [...],
+    "rules": ["Rule nghiệp vụ hợp lý", "KHÔNG rỗng, KHÔNG hình thức"],
+    "triggers": ["Trigger nghiệp vụ", "KHÔNG phải 'click nút'"],
     "preconditions": [...],
     "postconditions": [...],
-    "exceptions": [...],
+    "exceptions": ["Exception hợp lý", "KHÔNG rỗng"],
     "stakeholders": [...],
     "constraints": [...],
     "related_usecases": []
@@ -220,9 +414,10 @@ ${estimatedTotal ? `- **KHÔNG được suy luận quá xa hoặc generate nhi�
 ]
 
 **QUAN TRỌNG**:
-- Chỉ trả về JSON array, không có markdown
-- Nếu đã hết nội dung để generate → trả về mảng rỗng []
+- Chỉ trả về JSON array, không có markdown, không có code fence, không có comment
+- Nếu đã hết nội dung để generate → trả về mảng rỗng [] NGAY LẬP TỨC
 - KHÔNG thêm field "id" vào response
+- Đảm bảo 1 Use Case = 1 mục tiêu nghiệp vụ, Task là business-level deployable
 `
     },
     'en-US': {
@@ -233,6 +428,7 @@ ${estimatedTotal ? `- **KHÔNG được suy luận quá xa hoặc generate nhi�
 • "Officer signs paper documents" →  WRONG
 • "Submit hard copy documents" →  WRONG  
 • "Send paper official letters" →  WRONG
+• "Click button", "Enter form", "Screen" →  WRONG (UI-level, not use case)
 
  **CORRECT SOFTWARE BEHAVIORS**:
 • "System verifies digital signature" →  CORRECT
@@ -241,11 +437,14 @@ ${estimatedTotal ? `- **KHÔNG được suy luận quá xa hoặc generate nhi�
 
  **OUTPUT REQUIREMENTS**:
 • Return ONLY valid JSON array
-• NO explanations, NO markdown, NO code fence
+• NO explanations, NO markdown, NO code fence, NO comments
 • Immediately parseable with JSON.parse()
+• DO NOT add fields outside schema, DO NOT miss required fields
 
-🛠 **REQUIRED USE CASE STRUCTURE**:
+🛠 **REQUIRED USE CASE STRUCTURE** (ABSOLUTELY IMMUTABLE SCHEMA):
 Each use case MUST have the following fields (DO NOT include "id" field - system will auto-generate):
+
+**EXAMPLE 1: Single usecase**
 [
   {
     "name": "System Account Registration",
@@ -257,9 +456,9 @@ Each use case MUST have the following fields (DO NOT include "id" field - system
     "goal": "Create system access account",
     "reason": "Allow users to use protected features",
     "tasks": [
-      "Access registration page",
-      "Enter personal information",
-      "Verify email",
+      "Validate registration information",
+      "Create account in database",
+      "Send confirmation email",
       "Activate account"
     ],
     "inputs": ["email", "password", "full name", "phone number"],
@@ -272,7 +471,7 @@ Each use case MUST have the following fields (DO NOT include "id" field - system
       "Minimum 8-character password",
       "No duplicate email registration"
     ],
-    "triggers": ["User clicks 'Register' button"],
+    "triggers": ["User requests account registration"],
     "preconditions": ["User has no account", "System is operational"],
     "postconditions": ["Account created", "Confirmation email sent"],
     "exceptions": ["Email already exists", "Network connection lost", "Server error"],
@@ -282,33 +481,117 @@ Each use case MUST have the following fields (DO NOT include "id" field - system
   }
 ]
 
- **PROCESSING RULES**:
+ **STRICT PROCESSING RULES**:
+
+I. SCOPE & CONTEXT:
+• ONLY describe software behaviors, REMOVE paperwork operations, human behaviors outside system
+• DO NOT infer beyond text - Text is the single source of truth
+• DO NOT add new modules, DO NOT add business processes not mentioned
+• DO NOT "enrich" requirements with external knowledge
+
+II. USE CASE SEMANTIC:
+• 1 Use Case = 1 BUSINESS GOAL only (clear goal)
+• DO NOT contain multiple independent goals, DO NOT be vague/generic
+• DO NOT generate 2 use cases with same goal (if different names but same meaning → conflict)
+• Correct abstraction level: Use Case = System business (NOT UI-level)
+
+III. TASK QUALITY:
+• Task must be deployable (can be assigned to dev, 1-3 days duration)
+• Task describes logic/business processing, NOT UI-step
+• Task MUST NOT duplicate Use Case role (Task ≠ Use Case child, Task ≠ User journey)
+• ❌ FORBIDDEN: "Click button", "Enter form", "Open screen" (UI-level)
+• ✅ CORRECT: "Validate information", "Create record in database", "Send email" (Business logic)
+
+IV. ROLE & ACTOR:
+• Role ALWAYS complete object {id, name, description}
+• Unclear role → standard fallback: {"id": "user", "name": "System User", "description": "User using the system"}
+• DO NOT create new roles if not in text
+
+V. ABSTRACTION LEVEL (NO LEVEL MIXING):
+• Use Case = System business (business-level)
+• Task = Business-level execution (deployable unit)
+• Epic = Group of use cases in same domain (more abstract than use case)
+• ❌ FORBIDDEN: UI-level (click, enter form, screen, interface)
+
+VI. SCHEMA & JSON:
+• Absolutely immutable schema: DO NOT add fields, DO NOT miss fields, CORRECT types
+• JSON parse-safe: NO markdown, NO code fence, NO comments
+• DO NOT generate id: id managed by backend system, prompt absolutely forbids adding id
+
+VII. RELATED USE CASES:
+• related_usecases only reference valid IDs (only use existing IDs)
+• DO NOT create new IDs, DO NOT reference meaningless cycles
+• Default to empty array [] (will be processed later)
+
+VIII. CONTENT QUALITY:
+• Each use case must be self-sufficient (readable alone, no external context dependency)
+• Have valid rule – trigger – exception (not empty, not formal, business-appropriate)
+• DO NOT generate "filler" content (no filler text, no mechanical structure repetition)
+
+ **BATCH RULES**:
 • Return MAXIMUM ${batchSize} use cases per batch
 • Start from use case number ${offset + 1}
 • IMPORTANT: If you have already analyzed all use cases from the text → RETURN immediately an empty array []
 • DO NOT create new use cases if you have already analyzed all content
 • DO NOT repeat use cases that were already returned in previous batches
-• Prioritize core software functions
-• Complex processes → split into multiple use cases
-• Unclear role → default to "System User"
-• DO NOT add "id" field to response - system will auto-generate identifier
 
  **FINAL CHECK**:
 ✓ NO manual real-world operations
 ✓ ONLY software interactions
 ✓ Role is complete object {id, name, description}
-✓ All fields follow exact schema
+✓ All fields follow exact schema (no additions, no omissions)
 ✓ NO "id" field in response
 ✓ Related usecases as empty array [] (will be processed later)
+✓ 1 Use Case = 1 clear business goal
+✓ Task is business-level, deployable (not UI-step)
+✓ No filler text, no mechanical structure repetition
 :`,
-        relatedUseCases: (simplified: any, incremental?: boolean) => `Here is a list of existing software use cases:\n${JSON.stringify(simplified, null, 2)}\n\nYour task:\n${incremental ? `- DO NOT delete or overwrite existing related_usecases.\n- Only add links between new and old use cases.` : `- Analyze and regenerate all related_usecases for all use cases.`}\n\nREQUIREMENTS:\n- related_usecases[] must only reference use cases from the list above.\n- Format: Use the exact ID value from the "id" field in the list above (e.g., if id is "507f1f77bcf86cd799439011", use "507f1f77bcf86cd799439011").\n- If a use case has no relations, return an empty array [].\n- Return the entire list of use cases with the 'related_usecases' field updated.\n- Keep all other fields and structure of each use case unchanged.`,
+        relatedUseCases: (simplified: any, incremental?: boolean) => `Here is a list of existing software use cases:\n${JSON.stringify(simplified, null, 2)}\n\n**RELATED USE CASES CRITERIA**:
+
+I. ONLY REFERENCE VALID IDs:
+- related_usecases[] must only reference use cases from the list above
+- Format: Use the exact ID value from the "id" field in the list above (e.g., if id is "507f1f77bcf86cd799439011", use "507f1f77bcf86cd799439011")
+- DO NOT create new IDs, DO NOT reference meaningless cycles
+- If a use case has no relations, return an empty array []
+
+II. INCREMENTAL MODE SAFE:
+${incremental ? `- DO NOT delete or overwrite existing related_usecases
+- Only add links between new and old use cases
+- Keep all existing related_usecases intact` : `- Analyze and regenerate all related_usecases for all use cases
+- Ensure only valid IDs from the list above are referenced`}
+
+Your task:
+${incremental ? `- DO NOT delete or overwrite existing related_usecases.\n- Only add links between new and old use cases.` : `- Analyze and regenerate all related_usecases for all use cases.`}
+
+REQUIREMENTS:
+- related_usecases[] must only reference use cases from the list above.
+- Format: Use the exact ID value from the "id" field in the list above (e.g., if id is "507f1f77bcf86cd799439011", use "507f1f77bcf86cd799439011").
+- If a use case has no relations, return an empty array [].
+- Return the entire list of use cases with the 'related_usecases' field updated.
+- Keep all other fields and structure of each use case unchanged.
+- DO NOT create new IDs, DO NOT reference meaningless cycles.`,
         conflictCheck: (textA: string, textB: string) => `
 You are a strict use case comparison engine.
 
-Task: Decide if the following two use case descriptions represent the SAME functional requirement.
+Task: Decide if the following two use case descriptions represent the SAME business goal.
 
 A: "${textA}"
 B: "${textB}"
+
+**CONFLICT & DEDUPLICATION CRITERIA**:
+
+I. DUPLICATE = SAME GOAL:
+- Return { "conflict": true } ONLY IF both descriptions describe THE SAME BUSINESS GOAL
+- DO NOT base on keywords, DO NOT base on text similarity
+- ONLY base on business meaning (same goal = duplicate)
+- Even if wording differs or has minor typos (e.g., "Login" vs "Sign in" → same use case)
+
+II. DO NOT MISGROUP:
+- Return { "conflict": false } if they are TWO different functions,
+  even if related (e.g., "Login" is DIFFERENT from "Register")
+- Related use cases ≠ duplicate (Login ≠ Register, Order ≠ Payment)
+- DO NOT assume words with partial similarity are same function
+- Only consider duplicate if business meaning is completely same (same goal)
 
 Rules:
 1. They are the SAME (conflict = true) ONLY IF they describe the exact same user goal or functionality,
@@ -326,6 +609,20 @@ Your task is to read the following list of use cases and GROUP the ones that are
 
 LIST OF USE CASES:
 ${useCasesJson}
+
+**CONFLICT & DEDUPLICATION CRITERIA**:
+
+I. DUPLICATE = SAME GOAL:
+- Two use cases are duplicates IF they describe THE SAME BUSINESS GOAL
+- DO NOT base on keywords, DO NOT base on text similarity
+- ONLY base on business meaning (same goal = duplicate)
+- Regardless of wording (e.g., "Log into the system" and "Allow user to sign-in" are DUPLICATES)
+
+II. DO NOT MISGROUP:
+- Related but distinct functions are NOT duplicates
+- Example: "Login" and "Register" are DIFFERENT (Login ≠ Register)
+- Example: "Order" and "Payment" are DIFFERENT (Order ≠ Payment)
+- Related use cases ≠ duplicate
 
 RULES:
 1. Two use cases are duplicates IF they describe THE SAME GOAL or THE SAME FUNCTIONALITY, regardless of wording.
@@ -351,12 +648,35 @@ Example output (using actual IDs from the list):
             const isShortText = textLength < 100;
 
             return `
-You are a software requirements analysis expert.
+You are a software requirements analysis expert with accurate estimation capabilities.
 
 TASK: Read the entire text below and estimate the number of use cases that will be generated.
 
 TEXT TO ANALYZE (${textLength} characters):
 ${text}
+
+**STRICT ESTIMATION CRITERIA**:
+
+I. SCOPE & CONTEXT:
+- Text is the single source of truth
+- DO NOT infer beyond text, DO NOT add new modules, DO NOT add business processes not mentioned
+- DO NOT "enrich" requirements with external knowledge
+
+II. ESTIMATE MUST MATCH DOMAIN:
+- Website / E-commerce / CMS: ~3–6 use cases / module
+- ERP / Core system: ~6–12 use cases / module
+- Short text: only estimate directly related use cases
+
+III. DO NOT INFLATE COUNT:
+- DO NOT split use cases just to increase count
+- DO NOT split UI-steps into use cases
+- Estimate is a commitment, not a suggestion
+- 1 Use Case = 1 business goal (do not split unreasonably)
+
+IV. ESTIMATE ↔ GENERATE SYNC:
+- Total generated use cases MUST NOT exceed estimated_count
+- Last batch may be < batchSize
+- If content exhausted → return [] immediately
 
 ${isShortText ? `
 ⚠️ IMPORTANT NOTE: This text is very short (only ${textLength} characters).
@@ -364,13 +684,17 @@ ${isShortText ? `
 - Example: If text is "login", only estimate related use cases like: Login, Register, Forgot Password, Reset Password, Logout (approximately 3-10 use cases)
 - DO NOT over-infer or estimate too many unrelated use cases
 - Only estimate based on what is DIRECTLY mentioned in the text
+- DO NOT inflate count by splitting use cases
 ` : `
-REQUIREMENTS:
+ANALYSIS REQUIREMENTS:
 - Analyze the entire text thoroughly
 - Count the number of functions/modules/subsystems that can create use cases
 - Estimate the number of use cases to be generated based on complexity and number of functions described in the text
+- Apply domain criteria: Website/E-commerce (~3-6/module), ERP (~6-12/module)
 - If text describes many detailed modules/functions, you can estimate more
 - If text only describes a few basic functions, estimate moderately
+- DO NOT split use cases just to increase count
+- 1 Use Case = 1 business goal (do not split unreasonably)
 `}
 
 RETURN JSON:
@@ -378,23 +702,26 @@ RETURN JSON:
   "estimated_count": ${isShortText ? '5' : '94'},
   "summary": "${isShortText ? 'System with basic functions mentioned in the text' : 'Management system with 5 main modules: User Management, Order Processing, Product Catalog, Payment Gateway, Report Generation'}",
   "estimated_batches": ${isShortText ? '1' : '2'},
-  "reasoning": "${isShortText ? 'Short text, only estimating directly related use cases' : 'Based on the number of functions and complexity, estimated to generate approximately 94 usecases, divided into multiple batches (15 usecases/batch)'}"
+  "reasoning": "${isShortText ? 'Short text, only estimating directly related use cases' : 'Based on the number of functions and complexity, estimated to generate approximately 94 usecases, divided into multiple batches (50 usecases/batch)'}"
 }
 
 IMPORTANT:
 - Return ONLY JSON, no markdown, no code fence
 - estimated_count must be a positive integer and APPROPRIATE for the length and content of the text
+- Apply domain criteria: Website/E-commerce (~3-6/module), ERP (~6-12/module)
 - If text is short (< 100 characters): estimated_count should be 3-15 use cases
 - If text is medium (100-500 characters): estimated_count should be 10-50 use cases
 - If text is long (> 500 characters): can estimate more based on content
 - estimated_batches = Math.ceil(estimated_count / 50)
 - summary must be concise, describing the system overview BASED ON ACTUAL CONTENT of the text
 - DO NOT over-infer, only estimate what is mentioned or DIRECTLY related in the text
+- DO NOT inflate count by splitting use cases
+- Estimate is a commitment: total generated use cases MUST NOT exceed estimated_count
 `;
         },
         generateBatchUseCases: (text: string, batchNumber: number, totalBatches: number, offset: number, batchSize: number, estimatedTotal?: number) => ` **OBJECTIVE**: Generate use cases from text in batches
 
-**ORIGINAL TEXT**:
+**ORIGINAL TEXT** (SINGLE SOURCE OF TRUTH):
 ${text}
 
 **BATCH INFORMATION**:
@@ -403,31 +730,84 @@ ${text}
 - Number of use cases to generate in this batch: ${batchSize}
 ${estimatedTotal ? `- **TOTAL ESTIMATED USE CASES: ${estimatedTotal}** - DO NOT generate more than this!` : ''}
 
-**REQUIREMENTS**:
+**STRICT REQUIREMENTS**:
+
+I. SCOPE & CONTEXT:
+- ONLY describe software behaviors, REMOVE paperwork operations, human behaviors outside system
+- DO NOT infer beyond text - Text is the single source of truth
+- DO NOT add new modules, DO NOT add business processes not mentioned
+- DO NOT "enrich" requirements with external knowledge
+
+II. ESTIMATE ↔ GENERATE SYNC:
 - Generate exactly ${batchSize} use cases (or fewer if content is exhausted)
 ${estimatedTotal ? `- **IMPORTANT**: Total estimated use cases is ${estimatedTotal}. Currently generated ${offset} use cases. Only generate maximum ${estimatedTotal - offset} use cases in this batch.` : ''}
 - Start from use case number ${offset + 1}
 - DO NOT repeat use cases already generated in previous batches
+- If content exhausted → return empty array [] IMMEDIATELY
+${estimatedTotal ? `- **DO NOT over-infer or generate more than estimate (${estimatedTotal} use cases)**` : ''}
+
+III. USE CASE SEMANTIC:
+- 1 Use Case = 1 BUSINESS GOAL only (clear goal)
+- DO NOT contain multiple independent goals, DO NOT be vague/generic
+- DO NOT generate 2 use cases with same goal (if different names but same meaning → conflict)
+- Correct abstraction level: Use Case = System business (NOT UI-level)
+
+**CRUD OPERATIONS GROUPING RULE**:
+- When there are CRUD operations (Create, Read, Update, Delete) for the SAME ENTITY → GROUP them into 1 management usecase
+- Example: "Add project", "Delete project", "Update project", "View project" → GROUP into "Project Management (CRUD)"
+- Example: "Create user", "Edit user", "Remove user", "List users" → GROUP into "User Management (CRUD)"
+- Example: "Add order", "Update order", "Delete order", "View order" → GROUP into "Order Management (CRUD)"
+- Tasks of management usecase will include CRUD operations: ["Create entity", "Read/View entity", "Update entity", "Delete entity"]
+- Goal will be: "Manage [entity] with full CRUD operations"
+- DO NOT split CRUD into multiple separate usecases for the same entity
+
+IV. TASK QUALITY:
+- Task must be deployable (can be assigned to dev, 1-3 days duration)
+- Task describes logic/business processing, NOT UI-step
+- Task MUST NOT duplicate Use Case role (Task ≠ Use Case child, Task ≠ User journey)
+- ❌ FORBIDDEN: "Click button", "Enter form", "Open screen", "Access page" (UI-level)
+- ✅ CORRECT: "Validate information", "Create record in database", "Send email", "Calculate price" (Business logic)
+
+V. ROLE & ACTOR:
+- Role ALWAYS complete object {id, name, description}
+- Unclear role → standard fallback: {"id": "user", "name": "System User", "description": "User using the system"}
+- DO NOT create new roles if not in text
+
+VI. ABSTRACTION LEVEL (NO LEVEL MIXING):
+- Use Case = System business (business-level)
+- Task = Business-level execution (deployable unit)
+- Epic = Group of use cases in same domain (more abstract than use case)
+- ❌ FORBIDDEN: UI-level (click, enter form, screen, interface)
+
+VII. SCHEMA & JSON:
+- Absolutely immutable schema: DO NOT add fields, DO NOT miss fields, CORRECT types
+- JSON parse-safe: NO markdown, NO code fence, NO comments
+- DO NOT generate id: id managed by backend system, prompt absolutely forbids adding id
+
+VIII. CONTENT QUALITY:
+- Each use case must be self-sufficient (readable alone, no external context dependency)
+- Have valid rule – trigger – exception (not empty, not formal, business-appropriate)
+- DO NOT generate "filler" content (no filler text, no mechanical structure repetition)
 - Each use case must have complete information (~400-500 tokens)
 
-**USE CASE STRUCTURE** (same as previous schema):
+**USE CASE STRUCTURE** (ABSOLUTELY IMMUTABLE SCHEMA):
 [
   {
-    "name": "Use case name",
+    "name": "Use case name (1 clear business goal)",
     "role": { "id": "...", "name": "...", "description": "..." },
-    "goal": "...",
-    "reason": "...",
-    "tasks": [...],
+    "goal": "Clear, specific business goal",
+    "reason": "Reason for this use case",
+    "tasks": ["Deployable task 1-3 days", "Business logic task", "NOT UI-step"],
     "inputs": [...],
     "outputs": [...],
-    "context": "...",
+    "context": "Module/domain",
     "priority": "high|medium|low",
     "feedback": "...",
-    "rules": [...],
-    "triggers": [...],
+    "rules": ["Valid business rule", "NOT empty, NOT formal"],
+    "triggers": ["Business trigger", "NOT 'click button'"],
     "preconditions": [...],
     "postconditions": [...],
-    "exceptions": [...],
+    "exceptions": ["Valid exception", "NOT empty"],
     "stakeholders": [...],
     "constraints": [...],
     "related_usecases": []
@@ -435,9 +815,10 @@ ${estimatedTotal ? `- **IMPORTANT**: Total estimated use cases is ${estimatedTot
 ]
 
 **IMPORTANT**:
-- Return ONLY JSON array, no markdown
-- If content is exhausted → return empty array []
+- Return ONLY JSON array, no markdown, no code fence, no comments
+- If content exhausted → return empty array [] IMMEDIATELY
 - DO NOT add "id" field to response
+- Ensure 1 Use Case = 1 business goal, Task is business-level deployable
 `
     }
 };

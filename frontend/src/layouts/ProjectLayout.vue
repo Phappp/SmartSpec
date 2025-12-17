@@ -59,15 +59,15 @@
                   <span class="usecase-count-separator">/</span>
                   <span class="usecase-count-total">{{ process.batchProgress?.totalCount || process.estimateInfo?.estimated_count || 0 }}</span>
                 </div>
-                <!-- Close button for success/failed states -->
-                <button
-                  v-if="process.status === 'success' || process.status === 'failed'"
-                  class="close-process-btn"
-                  @click="removeProcess(process)"
-                  title="Close"
-                >
-                  <span class="material-symbols-outlined">close</span>
-                </button>
+              <!-- Close button for success/failed states -->
+              <button
+                v-if="process.status === 'success' || process.status === 'failed'"
+                class="close-process-btn"
+                @click="removeProcess(process)"
+                title="Close"
+              >
+                <span class="material-symbols-outlined">close</span>
+              </button>
               </div>
             </div>
             
@@ -128,8 +128,8 @@
                   <span class="material-symbols-outlined stage-icon pulsing">auto_awesome</span>
                   <div class="stage-text-container">
                     <span class="stage-text stage-title">
-                      Generating Batch {{ process.batchProgress.currentBatch }}/{{ process.batchProgress.totalBatches }}
-                    </span>
+                    Generating Batch {{ process.batchProgress.currentBatch }}/{{ process.batchProgress.totalBatches }}
+                  </span>
                   </div>
                 </div>
               </div>
