@@ -31,28 +31,28 @@ export interface AgentContext {
     modelName?: string;
     userId?: string;
     projectId?: string;
-    
+
     // Estimate results
     estimatedCount?: number;
     estimatedBatches?: number;
     summary?: string;
-    
+
     // Batch planning
     batchPlan?: BatchPlan[];
     currentBatchIndex?: number;
-    
+
     // Generation results
     generatedUsecases?: any[];
     savedUsecases?: any[];
-    
+
     // Verification results
     missingCount?: number;
     invalidUsecases?: InvalidUsecase[];
-    
+
     // Retry tracking
     retryAttempts?: number;
     maxRetryAttempts?: number;
-    
+
     // Resume state (khi có lỗi retryable)
     resumeState?: {
         state: AgentState;
@@ -92,12 +92,12 @@ export class UsecaseGenerationAgent {
     private state: AgentState;
     private DEFAULT_BATCH_SIZE = 15;
     private MAX_RETRY_ATTEMPTS = 3;
-    
+
     // ✅ Public getter để truy cập context (đặc biệt là resumeState)
     getContext(): AgentContext {
         return this.context;
     }
-    
+
     getResumeState() {
         return this.context.resumeState;
     }
@@ -108,7 +108,7 @@ export class UsecaseGenerationAgent {
     ) {
         this.gemini = gemini;
         this.context = context;
-        
+
         // ✅ Kiểm tra resume state: nếu có resumeState, tiếp tục từ đó
         if (this.context.resumeState) {
             console.log(`🔄 [AGENT] Resuming from saved state: ${this.context.resumeState.state}`);
@@ -119,7 +119,7 @@ export class UsecaseGenerationAgent {
         } else {
             this.state = AgentState.ESTIMATE_USECASE_COUNT;
         }
-        
+
         this.context.retryAttempts = 0;
         this.context.maxRetryAttempts = this.MAX_RETRY_ATTEMPTS;
     }
@@ -138,7 +138,7 @@ export class UsecaseGenerationAgent {
         if (this.context.resumeState) {
             const savedCount = await Usecase.countDocuments({ version_id: this.context.versionId });
             console.log(`💾 [AGENT] Resuming: ${savedCount} usecases already saved. Continuing from batch ${this.context.resumeState.currentBatchIndex + 1}`);
-            
+
             // Restore savedUsecases count (không cần lấy full data, chỉ cần count)
             this.context.savedUsecases = new Array(savedCount).fill(null); // Placeholder array
         }
@@ -149,38 +149,38 @@ export class UsecaseGenerationAgent {
                     case AgentState.ESTIMATE_USECASE_COUNT:
                         await this.estimateUsecaseCount();
                         break;
-                    
+
                     case AgentState.BATCH_PLANNING:
                         await this.batchPlanning();
                         break;
-                    
+
                     case AgentState.GENERATE_BATCH:
                         await this.generateBatch();
                         break;
-                    
+
                     case AgentState.VERIFY_RESULTS:
                         await this.verifyResults();
                         break;
-                    
+
                     case AgentState.REPLAN_MISSING:
                         await this.replanMissing();
                         break;
-                    
+
                     case AgentState.GENERATE_RETRY:
                         await this.generateRetry();
                         break;
-                    
+
                     default:
                         throw new Error(`Unknown state: ${this.state}`);
                 }
             } catch (error: any) {
                 console.error(`❌ [AGENT] Error in state ${this.state}:`, error.message);
-                
+
                 // ✅ Nếu có resumeState và lỗi không phải retryable, vẫn throw
                 // Nhưng nếu lỗi là retryable và đã được xử lý trong generateBatch/generateRetry, không throw
                 const { analyzeApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
                 const errorInfo = analyzeApiKeyError(error);
-                
+
                 // Nếu lỗi retryable và đã có resumeState, không throw (đã được xử lý)
                 if (this.context.resumeState && (errorInfo.retryable || errorInfo.type === 'QUOTA_EXCEEDED' || errorInfo.type === 'RATE_LIMIT')) {
                     console.log(`⚠️ [AGENT] Retryable error handled. State saved. Can resume later.`);
@@ -192,7 +192,7 @@ export class UsecaseGenerationAgent {
                         totalGenerated: partialUsecases.length
                     };
                 }
-                
+
                 throw error;
             }
         }
@@ -253,7 +253,7 @@ export class UsecaseGenerationAgent {
                 this.context.userId,
                 estimate
             );
-            
+
             // Broadcast estimate completion với message
             inputSocketService.emitIncrementalProgress(
                 this.context.projectId,
@@ -397,7 +397,7 @@ export class UsecaseGenerationAgent {
 
             // Normalize và save batch
             const saved = await this.saveBatch(batchUseCases, currentBatch.batchNumber);
-            
+
             if (this.context.generatedUsecases) {
                 this.context.generatedUsecases.push(...batchUseCases);
             }
@@ -416,11 +416,11 @@ export class UsecaseGenerationAgent {
             // ✅ Xử lý lỗi LLM (quota, rate limit, etc.)
             const { analyzeApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
             const errorInfo = analyzeApiKeyError(error);
-            
+
             // Kiểm tra xem lỗi có thể retry được không
             if (errorInfo.retryable || errorInfo.type === 'QUOTA_EXCEEDED' || errorInfo.type === 'RATE_LIMIT') {
                 console.warn(`⚠️ [GENERATE_BATCH] Retryable error in batch ${currentBatch.batchNumber}: ${errorInfo.message}`);
-                
+
                 // Lưu state để có thể resume sau
                 const currentSavedCount = await Usecase.countDocuments({ version_id: this.context.versionId });
                 this.context.resumeState = {
@@ -430,7 +430,7 @@ export class UsecaseGenerationAgent {
                     errorMessage: errorInfo.userFriendlyMessage.vi || errorInfo.message,
                     errorType: errorInfo.type
                 };
-                
+
                 // Broadcast lỗi với message hướng dẫn continue
                 if (inputSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
                     inputSocketService.emitIncrementalProgress(
@@ -452,7 +452,7 @@ export class UsecaseGenerationAgent {
                         `⚠️ ${errorInfo.userFriendlyMessage.vi || errorInfo.message}. Đã lưu ${currentSavedCount}/${this.context.estimatedCount || 0} usecases. Có thể tiếp tục sau...`
                     );
                 }
-                
+
                 // Không throw error, để có thể continue sau
                 // State giữ nguyên GENERATE_BATCH để có thể retry batch này
                 console.log(`💾 [GENERATE_BATCH] State saved. Current progress: ${currentSavedCount}/${this.context.estimatedCount || 0} usecases. Can resume from batch ${currentBatch.batchNumber}.`);
@@ -504,7 +504,7 @@ export class UsecaseGenerationAgent {
         if (verification.hasMissing || verification.hasInvalid) {
             if (this.context.retryAttempts! >= this.context.maxRetryAttempts!) {
                 console.warn(`⚠️ [VERIFY_RESULTS] Max retry attempts (${this.context.maxRetryAttempts}) reached. Stopping.`);
-                
+
                 // Broadcast max retry reached
                 if (inputSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
                     inputSocketService.emitIncrementalProgress(
@@ -520,12 +520,12 @@ export class UsecaseGenerationAgent {
                         `Đã đạt max retry (${this.context.maxRetryAttempts}). Còn thiếu ${verification.missingCount} usecases.`
                     );
                 }
-                
+
                 this.state = AgentState.DONE;
             } else {
                 this.context.retryAttempts!++;
                 console.log(`🔄 [VERIFY_RESULTS] Missing/invalid detected. Starting retry attempt ${this.context.retryAttempts}/${this.context.maxRetryAttempts}`);
-                
+
                 // Broadcast retry needed
                 if (inputSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
                     inputSocketService.emitIncrementalProgress(
@@ -541,13 +541,13 @@ export class UsecaseGenerationAgent {
                         `Phát hiện thiếu/invalid: ${verification.missingCount} usecases. Bắt đầu retry lần ${this.context.retryAttempts}/${this.context.maxRetryAttempts}...`
                     );
                 }
-                
+
                 this.state = AgentState.REPLAN_MISSING;
             }
         } else {
             // Không có missing/invalid → hoàn thành
             console.log(`✅ [VERIFY_RESULTS] All usecases generated successfully!`);
-            
+
             // Broadcast verification success
             if (inputSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
                 inputSocketService.emitIncrementalProgress(
@@ -563,7 +563,7 @@ export class UsecaseGenerationAgent {
                     `✅ Đã verify thành công: ${verification.totalGenerated}/${verification.totalExpected} usecases`
                 );
             }
-            
+
             this.state = AgentState.DONE;
         }
     }
@@ -711,7 +711,7 @@ export class UsecaseGenerationAgent {
 
             // Normalize và save batch
             const saved = await this.saveBatch(batchUseCases, currentBatch.batchNumber);
-            
+
             if (this.context.generatedUsecases) {
                 this.context.generatedUsecases.push(...batchUseCases);
             }
@@ -729,11 +729,11 @@ export class UsecaseGenerationAgent {
             // ✅ Xử lý lỗi LLM (quota, rate limit, etc.) trong retry
             const { analyzeApiKeyError } = await import("../../../shared/apiKeyErrorHandler");
             const errorInfo = analyzeApiKeyError(error);
-            
+
             // Kiểm tra xem lỗi có thể retry được không
             if (errorInfo.retryable || errorInfo.type === 'QUOTA_EXCEEDED' || errorInfo.type === 'RATE_LIMIT') {
                 console.warn(`⚠️ [GENERATE_RETRY] Retryable error in retry batch ${currentRetryBatchIndex + 1}: ${errorInfo.message}`);
-                
+
                 // Lưu state để có thể resume sau
                 const currentSavedCount = await Usecase.countDocuments({ version_id: this.context.versionId });
                 this.context.resumeState = {
@@ -743,7 +743,7 @@ export class UsecaseGenerationAgent {
                     errorMessage: errorInfo.userFriendlyMessage.vi || errorInfo.message,
                     errorType: errorInfo.type
                 };
-                
+
                 // Broadcast lỗi với message hướng dẫn continue
                 if (inputSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
                     const retryProgress = 93 + Math.floor(((currentRetryBatchIndex + 1) / retryPlan.length) * 5);
@@ -766,7 +766,7 @@ export class UsecaseGenerationAgent {
                         `⚠️ ${errorInfo.userFriendlyMessage.vi || errorInfo.message}. Đã lưu ${currentSavedCount}/${this.context.estimatedCount || 0} usecases. Có thể tiếp tục sau...`
                     );
                 }
-                
+
                 // Không throw error, để có thể continue sau
                 // State giữ nguyên GENERATE_RETRY để có thể retry batch này
                 console.log(`💾 [GENERATE_RETRY] State saved. Current progress: ${currentSavedCount}/${this.context.estimatedCount || 0} usecases. Can resume from retry batch ${currentRetryBatchIndex + 1}.`);
@@ -796,13 +796,13 @@ export class UsecaseGenerationAgent {
                 const allForRelations = this.context.mode === 'incremental'
                     ? [...previousRequirements, ...(this.context.savedUsecases || []), ...normalized]
                     : [...(this.context.savedUsecases || []), ...normalized];
-                
+
                 withRelations = await this.gemini.addRelatedUseCases(
                     allForRelations,
                     { incremental: this.context.mode === "incremental" },
                     this.context.language
                 );
-                
+
                 if (this.context.mode === 'incremental') {
                     withRelations = withRelations.slice(previousRequirements.length + (this.context.savedUsecases?.length || 0));
                 } else {
@@ -859,7 +859,7 @@ export class UsecaseGenerationAgent {
         const existingUsecases = await Usecase.find({ version_id: this.context.versionId })
             .select('name goal')
             .lean();
-        
+
         const existingNames = new Set(existingUsecases.map(uc => (uc.name as string)?.toLowerCase().trim()));
         const existingGoals = new Set(existingUsecases.map(uc => (uc.goal as string)?.toLowerCase().trim()));
 
@@ -877,11 +877,11 @@ export class UsecaseGenerationAgent {
             // ✅ Check duplicate: tên hoặc mục đích trùng
             const ucNameLower = uc.name?.toLowerCase().trim();
             const ucGoalLower = uc.goal?.toLowerCase().trim();
-            
+
             if (ucNameLower && existingNames.has(ucNameLower)) {
                 errors.push(`duplicate name: "${uc.name}" đã tồn tại`);
             }
-            
+
             if (ucGoalLower && existingGoals.has(ucGoalLower)) {
                 errors.push(`duplicate goal: mục đích "${uc.goal.substring(0, 50)}..." đã tồn tại`);
             }
@@ -906,16 +906,16 @@ export class UsecaseGenerationAgent {
         try {
             const result = await Usecase.insertMany(validUsecases, { ordered: false });
             console.log(`✅ [SAVE_BATCH] Saved ${result.length} usecases in batch ${batchNumber}`);
-            
+
             // ✅ Cập nhật savedUsecases trước khi broadcast
             if (!this.context.savedUsecases) {
                 this.context.savedUsecases = [];
             }
             this.context.savedUsecases.push(...result);
-            
+
             // ✅ Query lại từ DB để đảm bảo savedCount chính xác
             const actualSavedCount = await Usecase.countDocuments({ version_id: this.context.versionId });
-            
+
             // Broadcast progress với savedCount chính xác
             const { inputSocketService } = await import("../../input/domain/input.socket.service");
             if (inputSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
@@ -967,7 +967,7 @@ export class UsecaseGenerationAgent {
     private async performVerification(): Promise<VerificationResult> {
         const expectedCount = this.context.estimatedCount || 0;
         const actualCount = await Usecase.countDocuments({ version_id: this.context.versionId });
-        
+
         // Tính missing count: nếu actual < expected thì có missing
         // Nhưng cũng cần xem xét rằng có thể đã generate đủ nhưng một số bị invalid
         const savedCount = this.context.savedUsecases?.length || 0;
@@ -1015,29 +1015,29 @@ export class UsecaseGenerationAgent {
         const missingCount = this.context.missingCount || 0;
         const invalidUsecases = this.context.invalidUsecases || [];
         const totalToRegenerate = missingCount + invalidUsecases.length;
-        
+
         // ✅ Lấy danh sách usecases đã có để LLM tránh trùng lặp
         const existingUsecases = await Usecase.find({ version_id: this.context.versionId })
             .select('name goal')
             .lean()
             .limit(100); // Giới hạn để không quá dài
-        
+
         let retryInfo = `**RETRY GENERATION - CẦN GENERATE LẠI CÁC USE CASES CÒN THIẾU/HỢP LỆ**\n\n`;
-        
+
         retryInfo += `**QUAN TRỌNG**: Đây là batch RETRY để generate lại các usecases còn thiếu. KHÔNG phải tiếp tục từ batch trước.\n\n`;
-        
+
         if (missingCount > 0) {
             retryInfo += `- Còn thiếu ${missingCount} use case(s) so với estimate ban đầu (${this.context.estimatedCount} use cases)\n`;
             retryInfo += `- Cần generate ${missingCount} use case(s) MỚI để bù vào số lượng còn thiếu\n`;
         }
-        
+
         if (invalidUsecases.length > 0) {
             retryInfo += `- Có ${invalidUsecases.length} use case(s) bị lỗi validation:\n`;
             invalidUsecases.forEach((uc, idx) => {
                 retryInfo += `  ${idx + 1}. "${uc.name}" - Lỗi: ${uc.errors.join(', ')}\n`;
             });
         }
-        
+
         // ✅ Hiển thị danh sách usecases đã có để LLM tránh trùng lặp
         if (existingUsecases.length > 0) {
             retryInfo += `\n**CÁC USE CASES ĐÃ CÓ (${existingUsecases.length} usecases) - KHÔNG được generate lại:**\n`;
@@ -1049,7 +1049,7 @@ export class UsecaseGenerationAgent {
             }
             retryInfo += `\n**QUAN TRỌNG**: Các usecases bạn generate PHẢI KHÁC với danh sách trên. KHÔNG được trùng lặp về mục đích/chức năng.\n`;
         }
-        
+
         if (batchSize) {
             retryInfo += `\n**YÊU CẦU CỤ THỂ**:\n`;
             retryInfo += `- Generate CHÍNH XÁC ${batchSize} use case(s) MỚI trong batch retry này\n`;
@@ -1058,9 +1058,9 @@ export class UsecaseGenerationAgent {
             retryInfo += `- Đảm bảo các usecases mới bù vào số lượng còn thiếu (${missingCount} usecases)\n`;
             retryInfo += `- KHÔNG generate lại các usecases đã có, dù tên gọi khác nhưng mục đích giống\n`;
         }
-        
+
         retryInfo += `\n**VĂN BẢN GỐC**:\n${this.context.mergedText}`;
-        
+
         return retryInfo;
     }
 

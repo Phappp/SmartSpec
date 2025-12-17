@@ -53,8 +53,8 @@
                 <span class="process-name">{{ getProcessName(process.type) }}</span>
               </div>
               <div class="progress-header-right">
-                <!-- Hiển thị số lượng usecase đã gen / ước tính ở góc trên bên phải -->
-                <div v-if="process.type === 'usecase' && (process.batchProgress?.savedCount > 0 || process.batchProgress?.totalCount > 0 || process.estimateInfo?.estimated_count > 0)" class="usecase-count-display-header">
+                <!-- Hiển thị số lượng usecase/testcase đã gen / ước tính ở góc trên bên phải -->
+                <div v-if="(process.type === 'usecase' || process.type === 'testcase') && (process.batchProgress?.savedCount > 0 || process.batchProgress?.totalCount > 0 || process.estimateInfo?.estimated_count > 0)" class="usecase-count-display-header">
                   <span class="usecase-count-number">{{ process.batchProgress?.savedCount || 0 }}</span>
                   <span class="usecase-count-separator">/</span>
                   <span class="usecase-count-total">{{ process.batchProgress?.totalCount || process.estimateInfo?.estimated_count || 0 }}</span>
@@ -489,11 +489,12 @@ export default {
     const getAgentStateTitle = (state) => {
       const titles = {
         'ESTIMATE_USECASE_COUNT': 'Đang ước tính usecases',
+        'ESTIMATE_TESTCASE_COUNT': 'Đang ước tính testcases',
         'BATCH_PLANNING': 'Đang lập kế hoạch batches',
-        'GENERATE_BATCH': 'Đang generate usecases',
+        'GENERATE_BATCH': 'Đang generate',
         'VERIFY_RESULTS': 'Đang kiểm tra kết quả',
         'REPLAN_MISSING': 'Đang lập kế hoạch retry',
-        'GENERATE_RETRY': 'Đang retry usecases',
+        'GENERATE_RETRY': 'Đang retry',
         'DONE': 'Hoàn thành'
       }
       return titles[state] || 'Đang xử lý...'
@@ -503,6 +504,7 @@ export default {
     const getAgentStateIcon = (state) => {
       const icons = {
         'ESTIMATE_USECASE_COUNT': 'calculate',
+        'ESTIMATE_TESTCASE_COUNT': 'calculate',
         'BATCH_PLANNING': 'list_alt',
         'GENERATE_BATCH': 'auto_awesome',
         'VERIFY_RESULTS': 'verified',
@@ -667,7 +669,12 @@ export default {
         
         // Check if process completed successfully (chỉ khi không phải failed và không có errors)
         // ✅ QUAN TRỌNG: Kiểm tra hasErrors và hasErrorMessage TRƯỚC khi set success
-        if (!event.isProcessing && progress >= 100 && stage !== 'failed' && stage !== 'error' && !hasErrors && !hasErrorMessage) {
+        // ✅ Cũng kiểm tra agentState === 'DONE' hoặc stage === 'completed'
+        const isCompleted = (!event.isProcessing && progress >= 100 && stage !== 'failed' && stage !== 'error' && !hasErrors && !hasErrorMessage) ||
+                           (event.agentState === 'DONE') ||
+                           (stage === 'completed' && !hasErrors && !hasErrorMessage)
+        
+        if (isCompleted) {
           llmProcesses.value[processKey] = {
             userId,
             type: processType,
@@ -676,7 +683,7 @@ export default {
             progress: 100,
             stage: 'completed',
             agentState: 'DONE', // ✅ Set agentState khi hoàn thành
-            agentMessage: existingProcess?.agentMessage || 'Hoàn thành', // ✅ Giữ agentMessage
+            agentMessage: event.message || existingProcess?.agentMessage || 'Hoàn thành', // ✅ Giữ agentMessage
             estimateInfo: existingProcess?.estimateInfo || null,
             batchProgress: existingProcess?.batchProgress || null,
             timestamp: existingProcess?.timestamp || Date.now(),
@@ -719,6 +726,9 @@ export default {
             totalBatches: event.batchInfo?.totalBatches || existingProcess?.batchProgress?.totalBatches || existingProcess?.estimateInfo?.estimated_batches || 0,
             savedCount: savedCount, // ✅ Sử dụng savedCount đã tính
             totalCount: event.batchInfo?.totalCount || existingProcess?.batchProgress?.totalCount || existingProcess?.estimateInfo?.estimated_count || 0,
+            // ✅ Thêm testcasesInBatch cho testcase type
+            testcasesInBatch: event.batchInfo?.testcasesInBatch || 0,
+            usecasesInBatch: event.batchInfo?.usecasesInBatch || 0,
           },
           timestamp: existingProcess?.timestamp || Date.now(),
         }

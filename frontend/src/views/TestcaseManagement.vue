@@ -1697,6 +1697,37 @@ export default {
       }
     }
 
+    // ✅ Handle testcase socket events để tự refresh khi có testcase mới
+    const handleTestcaseEvent = (event) => {
+      console.log('📥 [TestcaseManagement] Received testcase event:', event.type, event)
+      
+      // Chỉ xử lý nếu cùng versionId
+      if (event.versionId && event.versionId !== selectedVersionId.value) {
+        console.log('⚠️ [TestcaseManagement] Event versionId mismatch, ignoring:', event.versionId, 'vs', selectedVersionId.value)
+        return
+      }
+      
+      // Nếu testcase generation hoàn thành (completed hoặc DONE), refresh list
+      if (event.type === 'TESTCASE_PROGRESS') {
+        // Kiểm tra nếu đã hoàn thành (stage = completed hoặc agentState = DONE hoặc progress = 100 và không processing)
+        const isCompleted = event.stage === 'completed' || 
+                           event.agentState === 'DONE' || 
+                           (!event.isProcessing && event.progress >= 100) ||
+                           (event.message && event.message.includes('Hoàn thành'))
+        
+        if (isCompleted) {
+          console.log('✅ [TestcaseManagement] Testcase generation completed, refreshing list...')
+          // Delay một chút để đảm bảo backend đã save xong
+          setTimeout(() => {
+            loadTestCases()
+          }, 1500)
+        }
+      } else if (event.type === 'ESTIMATE_RECEIVED') {
+        // Khi nhận estimate, không cần refresh nhưng có thể log
+        console.log('📊 [TestcaseManagement] Estimate received:', event.estimate)
+      }
+    }
+
     // Lifecycle
     onMounted(async () => {
       await loadAllData()
@@ -1710,6 +1741,8 @@ export default {
           socket.emit('join_project', project.value._id)
         }
         socket.on('version_event', handleVersionEvent)
+        // ✅ Thêm listener cho testcase events
+        socket.on('testcase_event', handleTestcaseEvent)
         console.log('✅ Version socket listeners initialized for TestcaseManagement')
       }
 
@@ -1728,6 +1761,8 @@ export default {
       // Cleanup version socket listeners
       if (socket) {
         socket.off('version_event', handleVersionEvent)
+        // ✅ Cleanup testcase event listener
+        socket.off('testcase_event', handleTestcaseEvent)
       }
 
       // Remove click outside listener
@@ -1861,6 +1896,7 @@ export default {
       toggleColumn,
       resetColumns,
       openExportModal,
+      handleTestcaseEvent, // ✅ Export handleTestcaseEvent để có thể cleanup
     }
   },
 }
@@ -2505,23 +2541,29 @@ th {
   font-size: 0.875rem;
   border-bottom: 1px solid var(--border-color);
   white-space: nowrap;
+  position: relative;
 }
 
 td {
   padding: 1rem;
   border-bottom: 1px solid var(--border-color);
+  position: relative;
 }
 
 .checkbox-column {
-  width: 40px;
+  width: 50px;
+  min-width: 50px;
   text-align: center;
+  padding: 1rem 0.5rem;
 }
 
 .id-column {
-  width: 60px;
+  width: 70px;
+  min-width: 70px;
   text-align: center;
   font-weight: 500;
   color: var(--text-secondary);
+  padding: 1rem 0.5rem;
 }
 
 .title-column {

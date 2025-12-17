@@ -525,11 +525,18 @@ export class TestcaseGeminiService {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const prompt = testcasePrompts[lang].estimateTestCasesCount(requirementsJson, testType);
 
-        // ✅ Sử dụng LLMService để lấy recommended model
-        const effectiveModelName = modelName || await this.llmService.getRecommendedModel();
+        // ✅ Sử dụng LLMService để lấy recommended model (ưu tiên modelName được truyền vào, sau đó user selected model)
+        let effectiveModelName = modelName;
+        if (!effectiveModelName && userId) {
+            // Nếu không có modelName, thử lấy từ user selection
+            effectiveModelName = await this.llmService.getRecommendedModel(undefined, userId);
+        } else if (!effectiveModelName) {
+            // Fallback: lấy recommended model
+            effectiveModelName = await this.llmService.getRecommendedModel();
+        }
 
         try {
-            console.log(`📊 [ESTIMATE] Estimating test cases count for ${requirements.length} requirements, testType: ${testType}`);
+            console.log(`📊 [ESTIMATE] Estimating test cases count for ${requirements.length} requirements, testType: ${testType}, model: ${effectiveModelName}`);
 
             const response = await this.llmService.callLLM({
                 prompt: prompt,
@@ -537,7 +544,8 @@ export class TestcaseGeminiService {
                 userId: userId,
                 projectId: projectId,
                 endpoint: 'estimateTestCasesCount',
-                isProductionFreeMode: true
+                isProductionFreeMode: true,
+                forceModel: !!modelName // ✅ Nếu có modelName được chỉ định, force sử dụng nó
             });
 
             let text: string = response.text || "{}";
@@ -614,7 +622,8 @@ export class TestcaseGeminiService {
         estimatedTotal?: number,
         modelName?: string,
         userId?: string,
-        projectId?: string
+        projectId?: string,
+        existingTitles?: string[] // ✅ Thêm parameter để tránh duplicate
     ): Promise<any[]> {
         try {
             console.log(`📦 [BATCH ${batchNumber}/${totalBatches}] Generating test cases ${offset + 1} to ${offset + batchSize} (estimated total: ${estimatedTotal || 'unknown'})...`);
@@ -626,6 +635,16 @@ export class TestcaseGeminiService {
 
             // Sử dụng prompt hiện tại nhưng thêm thông tin batch
             const basePrompt = testcasePrompts[lang].testcaseDesign(requirementsJson, databaseSchemaJson, testType);
+
+            // ✅ Thêm thông tin về existing testcases để tránh duplicate
+            const existingTitlesSection = existingTitles && existingTitles.length > 0
+                ? `\n**EXISTING TESTCASES (DO NOT DUPLICATE):**
+The following testcase titles already exist. DO NOT generate testcases with these titles:
+${existingTitles.map((title, idx) => `${idx + 1}. "${title}"`).join('\n')}
+
+**CRITICAL**: Generate NEW testcases that are DIFFERENT from the above list. Check the title carefully before generating.`
+                : '';
+
             const batchPrompt = `${basePrompt}
 
 **BATCH INFORMATION:**
@@ -633,12 +652,14 @@ export class TestcaseGeminiService {
 - Start from test case number: ${offset + 1}
 - Number of test cases to generate in this batch: ${batchSize}
 ${estimatedTotal ? `- **TOTAL ESTIMATED TEST CASES: ${estimatedTotal}** - DO NOT generate more than this!` : ''}
+${existingTitlesSection}
 
 **REQUIREMENTS:**
 - Generate exactly ${batchSize} test cases (or fewer if content is exhausted)
 ${estimatedTotal ? `- **IMPORTANT**: Total estimated test cases is ${estimatedTotal}. Currently generated ${offset} test cases. Only generate maximum ${estimatedTotal - offset} test cases in this batch.` : ''}
 - Start from test case number ${offset + 1}
 - DO NOT repeat test cases already generated in previous batches
+${existingTitles && existingTitles.length > 0 ? '- **CRITICAL**: DO NOT generate testcases with titles that already exist (see EXISTING TESTCASES list above)' : ''}
 - Each test case must have complete information
 
 **IMPORTANT:**
@@ -646,8 +667,17 @@ ${estimatedTotal ? `- **IMPORTANT**: Total estimated test cases is ${estimatedTo
 - If content is exhausted → return empty array []
 `;
 
-            // ✅ Sử dụng LLMService để lấy recommended model
-            const effectiveModelName = modelName || await this.llmService.getRecommendedModel();
+            // ✅ Sử dụng LLMService để lấy recommended model (ưu tiên modelName được truyền vào, sau đó user selected model)
+            let effectiveModelName = modelName;
+            if (!effectiveModelName && userId) {
+                // Nếu không có modelName, thử lấy từ user selection
+                effectiveModelName = await this.llmService.getRecommendedModel(undefined, userId);
+            } else if (!effectiveModelName) {
+                // Fallback: lấy recommended model
+                effectiveModelName = await this.llmService.getRecommendedModel();
+            }
+
+            console.log(`🔑 [BATCH ${batchNumber}/${totalBatches}] Calling LLM with model: ${effectiveModelName}${userId ? ` (user: ${userId})` : ''}`);
 
             const response = await this.llmService.callLLM({
                 prompt: batchPrompt,
@@ -655,7 +685,8 @@ ${estimatedTotal ? `- **IMPORTANT**: Total estimated test cases is ${estimatedTo
                 userId: userId,
                 projectId: projectId,
                 endpoint: 'generateTestCasesBatch',
-                isProductionFreeMode: true
+                isProductionFreeMode: true,
+                forceModel: !!modelName // ✅ Nếu có modelName được chỉ định, force sử dụng nó
             });
 
             let responseText: string = response.text || "{}";
