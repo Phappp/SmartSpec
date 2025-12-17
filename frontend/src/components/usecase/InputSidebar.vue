@@ -117,8 +117,6 @@
             </div>
           </div>
 
-          <!-- Processing Banner with Detailed Progress -->
-
           <!-- Incremental Analysis Button -->
           <div
             v-if="showIncrementalButton && !isProcessingIncremental && !isProcessingFailed"
@@ -376,6 +374,18 @@ export default {
         totalCount: 0
       }),
     },
+    agentState: {
+      type: String,
+      default: null,
+    },
+    agentMessage: {
+      type: String,
+      default: null,
+    },
+    processingProgress: {
+      type: Number,
+      default: 0,
+    },
   },
   data() {
     return {
@@ -547,6 +557,19 @@ export default {
       const text =
         input.cleaned_text || input.clean_text || input.raw_text || 'No content available'
       return text.length > maxLength ? text.substring(0, maxLength) + '...' : text
+    },
+
+    getAgentStateTitle(state) {
+      const titles = {
+        'ESTIMATE_USECASE_COUNT': 'Đang ước tính usecases',
+        'BATCH_PLANNING': 'Đang lập kế hoạch batches',
+        'GENERATE_BATCH': 'Đang generate usecases',
+        'VERIFY_RESULTS': 'Đang kiểm tra kết quả',
+        'REPLAN_MISSING': 'Đang lập kế hoạch retry',
+        'GENERATE_RETRY': 'Đang retry usecases',
+        'DONE': 'Hoàn thành'
+      }
+      return titles[state] || 'Đang xử lý...'
     },
 
     getLanguage(input) {
@@ -1530,6 +1553,102 @@ export default {
   color: white;
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
   margin-bottom: 12px;
+}
+
+.processing-banner {
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a8a 100%);
+  border-radius: 10px;
+  padding: 16px;
+  color: white;
+  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.15);
+  margin-bottom: 12px;
+}
+
+.processing-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.processing-icon {
+  font-size: 24px;
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+.processing-text {
+  flex: 1;
+}
+
+.processing-text h4 {
+  margin: 0 0 4px 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.processing-text p {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.9;
+  line-height: 1.4;
+}
+
+.processing-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #60a5fa 0%, #3b82f6 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.progress-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  min-width: 45px;
+  text-align: right;
+}
+
+.batch-info {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+.batch-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.batch-stat .material-symbols-outlined {
+  font-size: 16px;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 .error-content {

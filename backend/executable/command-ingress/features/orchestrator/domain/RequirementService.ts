@@ -3,6 +3,7 @@ import Input from "../../../../../internal/model/input";
 import Version from "../../../../../internal/model/version";
 import Usecase from "../../../../../internal/model/usecase";
 import { GeminiService } from "./GeminiService";
+import { UsecaseGenerationAgent, AgentContext } from "./UsecaseGenerationAgent";
 
 export class RequirementService {
     /**
@@ -707,30 +708,83 @@ ${mergedText.substring(0, 3000)}
         console.log(`📝 Processing text: ${validation.originalLength} -> ${validation.cleanedLength} characters`);
 
         try {
-            // 3. ESTIMATE PHASE
-            const estimate = await this.estimatePhase(
-                mergedText,
-                gemini,
-                language,
-                modelName,
-                userId,
-                projectId,
-                versionId
-            );
+            // 3. Xóa usecases cũ nếu full mode
+            if (mode === 'full') {
+                console.log(`🗑️ [FINALIZE] Deleting old use cases for full mode...`);
+                await Usecase.deleteMany({ version_id: versionId });
+            }
 
-            // 4. GENERATE & SAVE PHASE
-            const result = await this.generateAndSaveBatches(
+            // 4. Sử dụng Agent để generate usecases với state machine
+            // ✅ Kiểm tra xem có resumeState trong version không (nếu đã lưu từ lần trước)
+            const version = await Version.findById(versionId).lean();
+            let resumeState = null;
+            if (version && (version as any).resumeState) {
+                resumeState = (version as any).resumeState;
+                console.log(`🔄 [FINALIZE] Found resume state: ${resumeState.state}, savedCount: ${resumeState.savedCount}`);
+            }
+
+            const agentContext: AgentContext = {
                 versionId,
                 mergedText,
-                estimate.estimated_count,
-                estimate.estimated_batches,
-                gemini,
                 language,
                 mode,
                 modelName,
                 userId,
-                projectId
-            );
+                projectId,
+                resumeState: resumeState || undefined
+            };
+
+            const agent = new UsecaseGenerationAgent(gemini, agentContext);
+            const result = await agent.run();
+
+            // ✅ Nếu agent có resumeState sau khi chạy (do lỗi retryable), lưu vào version
+            const agentResumeState = agent.getResumeState();
+            if (agentResumeState) {
+                const currentAgentContext = agent.getContext();
+                await Version.findByIdAndUpdate(versionId, {
+                    $set: {
+                        resumeState: agentResumeState,
+                        status: "paused", // ✅ Status paused thay vì failed
+                        stage: "paused",
+                        is_processing: false
+                    }
+                });
+                console.log(`💾 [FINALIZE] Saved resume state for later continuation`);
+
+                // Broadcast paused status
+                const { inputSocketService } = await import("../../input/domain/input.socket.service");
+                if (inputSocketService && projectId && versionId && userId) {
+                    inputSocketService.emitIncrementalProgress(
+                        projectId,
+                        versionId,
+                        userId,
+                        Math.floor((result.totalGenerated / (currentAgentContext.estimatedCount || 1)) * 100),
+                        "paused",
+                        false, // isProcessing = false vì đã pause
+                        undefined,
+                        [agentResumeState.errorMessage],
+                        undefined,
+                        `⚠️ Đã tạm dừng: ${agentResumeState.errorMessage}. Đã lưu ${result.totalGenerated} usecases. Có thể tiếp tục sau...`
+                    );
+                }
+
+                // Trả về partial results với thông báo có thể continue
+                return {
+                    version_id: versionId,
+                    usecases: result.usecases,
+                    newRequirements: result.usecases.slice(previousRequirements.length),
+                    canResume: true,
+                    resumeState: agentResumeState
+                };
+            }
+
+            // ✅ Xóa resumeState nếu đã hoàn thành thành công
+            if (resumeState) {
+                await Version.findByIdAndUpdate(versionId, {
+                    $unset: { resumeState: "" }
+                });
+                console.log(`✅ [FINALIZE] Cleared resume state after successful completion`);
+            }
 
             // 5. Mark inputs as processed
             if (markAsProcessed.length > 0) {

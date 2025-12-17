@@ -132,6 +132,10 @@ export class UpdateProfileRequestBody extends RequestDto {
   @IsOptional()
   status?: string;
 
+  @IsString()
+  @IsOptional()
+  selectedModel?: string; // ✅ MỚI: Model LLM được user chọn
+
   constructor(body: any) {
     super();
     if (body) {
@@ -147,6 +151,7 @@ export class UpdateProfileRequestBody extends RequestDto {
       }
       this.avatar_url = body.avatar_url;
       this.status = body.status;
+      this.selectedModel = body.selectedModel; // ✅ MỚI: Thêm selectedModel
     }
   }
 

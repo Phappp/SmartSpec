@@ -257,8 +257,9 @@ export class OrchestratorService {
         );
 
         try {
-            // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
-            const modelName = await this.llmService.getRecommendedModel();
+            // ✅ Sử dụng LLMService để lấy model (ưu tiên model user đã chọn)
+            const modelName = await this.llmService.getRecommendedModel(undefined, userId);
+            console.log(`🔑 [ORCHESTRATOR] Using model: ${modelName}${userId ? ` (for user: ${userId})` : ''}`);
 
             const result = await this.requirementService.finalize(
                 versionId,
@@ -266,7 +267,7 @@ export class OrchestratorService {
                 inputs, // ✅ Sửa: dùng biến inputs thay vì inputsToProcess
                 this.gemini,
                 language,
-                modelName, // modelName
+                modelName, // modelName (có thể là model user đã chọn)
                 userId, // ✅ MỚI: userId để broadcast realtime
                 projectId // ✅ MỚI: projectId để broadcast realtime
             );

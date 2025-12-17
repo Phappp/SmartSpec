@@ -815,11 +815,11 @@ export class GeminiService {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const basePrompt = prompts[lang].relatedUseCases(simplified, options?.incremental);
 
-        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
-        const modelName = await this.llmService.getRecommendedModel();
+        // ✅ Sử dụng LLMService để lấy model (ưu tiên model user đã chọn)
+        const modelName = await this.llmService.getRecommendedModel(undefined, userId);
 
         try {
-            console.log(`🔑 Calling LLM for addRelatedUseCases with model: ${modelName}`);
+            console.log(`🔑 Calling LLM for addRelatedUseCases with model: ${modelName}${userId ? ` (user: ${userId})` : ''}`);
 
             const response = await this.llmService.callLLM({
                 prompt: basePrompt,
@@ -827,7 +827,8 @@ export class GeminiService {
                 userId: userId,
                 projectId: projectId,
                 endpoint: 'addRelatedUseCases',
-                isProductionFreeMode: true
+                isProductionFreeMode: true,
+                forceModel: true // ✅ Force sử dụng model user đã chọn
             });
 
             let text: string = response.text || "[]";
@@ -905,14 +906,14 @@ export class GeminiService {
         }
         // Text rất dài (> 2000 chars): không giới hạn (maxAllowed = 100, nhưng có thể cao hơn)
 
-        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
-        const effectiveModelName = modelName || await this.llmService.getRecommendedModel();
+        // ✅ Sử dụng LLMService để lấy model (ưu tiên model user đã chọn)
+        const effectiveModelName = modelName || await this.llmService.getRecommendedModel(undefined, userId);
 
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const prompt = prompts[lang].estimateUseCasesCount(text);
 
         try {
-            console.log(`🔑 Calling LLM for estimateUseCasesCount with model: ${effectiveModelName}`);
+            console.log(`🔑 Calling LLM for estimateUseCasesCount with model: ${effectiveModelName}${userId ? ` (user: ${userId})` : ''}`);
 
             const response = await this.llmService.callLLM({
                 prompt: prompt,
@@ -920,15 +921,30 @@ export class GeminiService {
                 userId: userId,
                 projectId: projectId,
                 endpoint: 'estimateUseCasesCount',
-                isProductionFreeMode: true
+                isProductionFreeMode: true,
+                forceModel: !!modelName // ✅ Nếu có modelName được chỉ định, force sử dụng nó
             });
 
             let text: string = response.text || "{}";
+
+            // ✅ Kiểm tra nếu response rỗng hoặc không hợp lệ
+            if (!text || text.trim().length === 0 || text.trim() === '{}') {
+                console.error(`❌ [ESTIMATE] Empty or invalid response from LLM`);
+                console.error(`   Model: ${effectiveModelName}`);
+                console.error(`   Response text: "${text}"`);
+                throw new Error(`LLM returned empty or invalid response. The model "${effectiveModelName}" may not be working correctly. Please try a different model.`);
+            }
 
             // Log raw response for debugging
             console.log(`🔍 [ESTIMATE] Raw response (first 500 chars): ${text.substring(0, 500)}`);
 
             text = this.cleanJsonString(text);
+
+            // ✅ Kiểm tra lại sau khi clean
+            if (!text || text.trim().length === 0 || text.trim() === '{}') {
+                console.error(`❌ [ESTIMATE] Response is still empty after cleaning`);
+                throw new Error(`LLM returned empty response after cleaning. The model "${effectiveModelName}" may not be working correctly.`);
+            }
 
             // Try to parse as JSON object (not array)
             let parsed: any = null;
@@ -956,10 +972,17 @@ export class GeminiService {
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                 const estimate = parsed as any;
 
+                // ✅ Kiểm tra nếu parsed object rỗng
+                if (Object.keys(estimate).length === 0) {
+                    console.error(`❌ [ESTIMATE] Parsed object is empty:`, estimate);
+                    throw new Error(`LLM returned empty JSON object. The model "${effectiveModelName}" may not be working correctly. Please try a different model.`);
+                }
+
                 // Validate required fields
                 if (typeof estimate.estimated_count !== 'number' || estimate.estimated_count < 1) {
                     console.error(`❌ [ESTIMATE] Invalid estimated_count: ${estimate.estimated_count}`);
-                    throw new Error(`Invalid estimated_count: must be a positive number, got ${estimate.estimated_count}`);
+                    console.error(`❌ [ESTIMATE] Full parsed object:`, JSON.stringify(estimate, null, 2));
+                    throw new Error(`Invalid estimated_count: must be a positive number, got ${estimate.estimated_count}. The model "${effectiveModelName}" may not be following the prompt format correctly.`);
                 }
 
                 let estimated_count = Math.max(1, Math.floor(estimate.estimated_count || 1));
@@ -1009,14 +1032,14 @@ export class GeminiService {
     ): Promise<any[]> {
         console.log(`📦 [BATCH ${batchNumber}/${totalBatches}] Generating use cases ${offset + 1} to ${offset + batchSize}${estimatedTotal ? ` (estimated total: ${estimatedTotal})` : ''}`);
 
-        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
-        const effectiveModelName = modelName || await this.llmService.getRecommendedModel();
+        // ✅ Sử dụng LLMService để lấy model (ưu tiên model user đã chọn)
+        const effectiveModelName = modelName || await this.llmService.getRecommendedModel(undefined, userId);
 
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const prompt = prompts[lang].generateBatchUseCases(text, batchNumber, totalBatches, offset, batchSize, estimatedTotal);
 
         try {
-            console.log(`🔑 Calling LLM for generateUseCasesBatch with model: ${effectiveModelName}`);
+            console.log(`🔑 Calling LLM for generateUseCasesBatch with model: ${effectiveModelName}${userId ? ` (user: ${userId})` : ''}`);
 
             const response = await this.llmService.callLLM({
                 prompt: prompt,
@@ -1024,7 +1047,8 @@ export class GeminiService {
                 userId: userId,
                 projectId: projectId,
                 endpoint: 'generateUseCasesBatch',
-                isProductionFreeMode: true
+                isProductionFreeMode: true,
+                forceModel: !!modelName // ✅ Nếu có modelName được chỉ định, force sử dụng nó
             });
 
             let responseText: string = response.text || "[]";
@@ -1074,9 +1098,9 @@ export class GeminiService {
         const chunkLabel = chunkIndex ? `[Chunk ${chunkIndex}${totalChunks ? `/${totalChunks}` : ''}]` : '';
         console.log(`${chunkLabel} Analyzing text with LLM (lang: ${language}). Text length: ${cleanText?.length ?? 0}`);
 
-        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
+        // ✅ Sử dụng LLMService để lấy model (ưu tiên model user đã chọn)
         const { getModelConfig, estimateTokens, determineStrategy } = await import("../../../shared/tokenManager");
-        const modelName = await this.llmService.getRecommendedModel();
+        const modelName = await this.llmService.getRecommendedModel(undefined, userId);
         const modelConfig = getModelConfig(modelName, undefined);
         const estimatedTokens = estimateTokens(cleanText, modelConfig);
         const strategy = determineStrategy(cleanText, modelConfig);
@@ -1121,7 +1145,8 @@ export class GeminiService {
                 userId: userId,
                 projectId: projectId,
                 endpoint: 'analyzeRequirements',
-                isProductionFreeMode: true
+                isProductionFreeMode: true,
+                forceModel: true // ✅ Force sử dụng model user đã chọn
             });
 
             let text: string = response.text || "";
@@ -1203,7 +1228,8 @@ export class GeminiService {
                         userId: userId,
                         projectId: projectId,
                         endpoint: 'analyzeRequirements',
-                        isProductionFreeMode: true
+                        isProductionFreeMode: true,
+                        forceModel: true // ✅ Force sử dụng model user đã chọn
                     });
 
                     let text: string = response.text || "";
@@ -1404,11 +1430,11 @@ export class GeminiService {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const prompt = prompts[lang].conflictCheck(textA, textB);
 
-        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
-        const modelName = await this.llmService.getRecommendedModel();
+        // ✅ Sử dụng LLMService để lấy model (ưu tiên model user đã chọn)
+        const modelName = await this.llmService.getRecommendedModel(undefined, userId);
 
         try {
-            console.log(`🔑 Calling LLM for checkConflict with model: ${modelName}`);
+            console.log(`🔑 Calling LLM for checkConflict with model: ${modelName}${userId ? ` (user: ${userId})` : ''}`);
 
             const response = await this.llmService.callLLM({
                 prompt: prompt,
@@ -1416,7 +1442,8 @@ export class GeminiService {
                 userId: userId,
                 projectId: projectId,
                 endpoint: 'checkConflict',
-                isProductionFreeMode: true
+                isProductionFreeMode: true,
+                forceModel: true // ✅ Force sử dụng model user đã chọn
             });
 
             let text: string = response.text || "{}";
@@ -1457,11 +1484,11 @@ export class GeminiService {
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         const prompt = prompts[lang].groupConflicts(JSON.stringify(simplifiedUseCases, null, 2));
 
-        // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
-        const modelName = await this.llmService.getRecommendedModel();
+        // ✅ Sử dụng LLMService để lấy model (ưu tiên model user đã chọn)
+        const modelName = await this.llmService.getRecommendedModel(undefined, userId);
 
         try {
-            console.log(`🔑 Calling LLM for findConflictGroups with model: ${modelName}`);
+            console.log(`🔑 Calling LLM for findConflictGroups with model: ${modelName}${userId ? ` (user: ${userId})` : ''}`);
 
             const response = await this.llmService.callLLM({
                 prompt: prompt,
@@ -1469,7 +1496,8 @@ export class GeminiService {
                 userId: userId,
                 projectId: projectId,
                 endpoint: 'findConflictGroups',
-                isProductionFreeMode: true
+                isProductionFreeMode: true,
+                forceModel: true // ✅ Force sử dụng model user đã chọn
             });
 
             let text: string = response.text || "[]";

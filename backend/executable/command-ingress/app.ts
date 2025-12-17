@@ -106,6 +106,8 @@ import initStatsRoute from "./features/stats/adapter/route";
 import { StatsController } from "./features/stats/adapter/controller";
 import { StatsService } from "./features/stats/domain/service";
 
+import initLLMRoute from "./features/llm/adapter/route";
+
 
 const app = express();
 
@@ -269,6 +271,7 @@ const createHttpServer = (redisClient: any) => {
   );
   app.use("/api/logs", initLogRoute(new LogController(new LogService())));
   app.use("/api/versions",initVersionRoute(new VersionController(new VersionService())))
+  app.use("/api/llm", initLLMRoute());
   app.use(recoverMiddleware);
   app.use(
     "/api/stats",

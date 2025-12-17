@@ -43,7 +43,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     },
     'qwen3-235b-a22b': {
         provider: 'qwen',
-        modelName: 'qwen/qwen3-235b-a22b',
+        modelName: 'qwen/qwen3-235b-a22b:free',
         category: 'agent',
         contextWindow: 200000,
         strategy: 'compress-long',

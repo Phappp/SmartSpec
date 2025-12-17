@@ -47,6 +47,9 @@
           :is-adding-input="isAddingInput"
           :estimate-info="estimateInfo"
           :batch-progress="batchProgress"
+          :agent-state="agentState"
+          :agent-message="agentMessage"
+          :processing-progress="processingProgress"
           @delete-input="openDeleteSpecificModal"
           @input-added="handleInputAdded"
           @input-deleted="handleInputDeleted"
@@ -163,6 +166,9 @@ export default {
         totalBatches: 0,
         usecasesInBatch: 0
       },
+      agentState: null, // ✅ Agent state từ backend
+      agentMessage: null, // ✅ Message từ agent
+      processingProgress: 0, // ✅ Progress percentage
 
       // ========== CONFLICT RESOLUTION STATE ==========
       hasConflicts: false,
@@ -1621,6 +1627,10 @@ export default {
 
     clearIncrementalState() {
       localStorage.removeItem(`incremental_${this.project._id}`)
+      // ✅ Reset agent state và message
+      this.agentState = null
+      this.agentMessage = null
+      this.processingProgress = 0
       console.log('🗑️ Cleared incremental state from localStorage')
     },
 
@@ -2007,6 +2017,17 @@ export default {
 
       // Cập nhật UI state
       this.isProcessingIncremental = event.isProcessing
+
+      // ✅ Cập nhật agent state và message
+      if (event.agentState) {
+        this.agentState = event.agentState
+      }
+      if (event.message) {
+        this.agentMessage = event.message
+      }
+      if (event.progress !== undefined) {
+        this.processingProgress = event.progress
+      }
 
       // Cập nhật estimate info nếu đang estimating
       if (event.stage === 'estimating') {
