@@ -63,27 +63,27 @@ Mỗi use case PHẢI có đầy đủ các trường sau (KHÔNG bao gồm fiel
         "step": 1,
         "actor": "User",
         "action": "Truy cập trang đăng nhập",
-        "expected_result": "Trang đăng nhập được hiển thị"
+        "expected_result": "Hệ thống hiển thị trang đăng nhập với form username/password"
       },
       {
         "step": 2,
         "actor": "User",
-        "action": "Nhập tên đăng nhập và mật khẩu",
+        "action": "Nhập tên đăng nhập và mật khẩu, gửi yêu cầu đăng nhập",
         "inputs": ["username", "password"],
-        "expected_result": "Thông tin đăng nhập được gửi lên hệ thống"
+        "expected_result": "Hệ thống nhận và bắt đầu xác thực thông tin"
       },
       {
         "step": 3,
         "actor": "System",
-        "action": "Xác thực thông tin đăng nhập",
+        "action": "Xác thực thông tin đăng nhập theo các quy tắc bảo mật",
         "rules_applied": ["R1", "R2"],
-        "expected_result": "Thông tin đăng nhập hợp lệ"
+        "expected_result": "Thông tin đăng nhập hợp lệ, user được xác thực"
       },
       {
         "step": 4,
         "actor": "System",
-        "action": "Tạo phiên đăng nhập và chuyển hướng người dùng",
-        "expected_result": "Người dùng được chuyển đến trang chủ"
+        "action": "Tạo phiên đăng nhập (session/token) và chuyển hướng người dùng",
+        "expected_result": "Người dùng được chuyển đến trang chủ với session hợp lệ"
       }
     ],
     "alternative_flows": [
@@ -152,13 +152,19 @@ Mỗi use case PHẢI có đầy đủ các trường sau (KHÔNG bao gồm fiel
       }
     ],
     "postconditions": [
-      "Người dùng được đăng nhập vào hệ thống",
-      "Phiên đăng nhập (session/token) được tạo"
+      "[SUCCESS] Người dùng được đăng nhập vào hệ thống với session hợp lệ",
+      "[SUCCESS] Phiên đăng nhập (session/token) được tạo và lưu trữ",
+      "[SUCCESS] Quyền truy cập được cấp theo role của user",
+      "[FAILURE] Người dùng không được đăng nhập, hiển thị thông báo lỗi",
+      "[FAILURE] Số lần thử đăng nhập thất bại được ghi nhận"
     ],
     "non_functional_constraints": [
-      "Bảo mật thông tin đăng nhập",
-      "Không lưu mật khẩu dạng plaintext",
-      "Hỗ trợ đa nền tảng"
+      "[Performance] Xác thực phải hoàn thành trong vòng 2 giây",
+      "[Security] Mật khẩu phải được mã hóa, không lưu plaintext",
+      "[Security] Hỗ trợ HTTPS/TLS cho truyền tải dữ liệu",
+      "[Security] Giới hạn số lần thử đăng nhập sai",
+      "[Availability] Hệ thống xác thực phải có uptime 99.9%",
+      "[Compatibility] Hỗ trợ đa nền tảng (Web, Mobile)"
     ],
     "stakeholders": [
       "Người dùng",
@@ -234,16 +240,48 @@ VIII. CHẤT LƯỢNG NỘI DUNG:
 • KHÔNG được tạo use case mới nếu đã phân tích hết nội dung
 • KHÔNG được lặp lại các use case đã trả về ở các batch trước
 
+ **HƯỚNG DẪN CHI TIẾT CHO TỪNG FIELD**:
+
+📌 MAIN_FLOW:
+• Mỗi step phải có actor rõ ràng: "User" hoặc "System"
+• User step: hành động của người dùng → expected_result mô tả system response
+• System step: xử lý nội bộ → expected_result mô tả kết quả xử lý
+• Inputs trong step: tham chiếu tên input được sử dụng (ví dụ: ["username", "password"])
+• Rules_applied: tham chiếu ID rule được áp dụng (ví dụ: ["R1", "R2"])
+
+📌 INPUTS & OUTPUTS:
+• KHÔNG được để trống nếu use case có dữ liệu đầu vào/ra
+• Mỗi input/output cần: name (tên field), type (kiểu dữ liệu), required/optional
+• Ví dụ login: inputs = [{"name": "username", "type": "string", "required": true}]
+
+📌 POSTCONDITIONS:
+• Phải cover cả SUCCESS và FAILURE cases
+• Format: "[SUCCESS] mô tả kết quả thành công" hoặc "[FAILURE] mô tả kết quả thất bại"
+• Ví dụ: "[SUCCESS] User session được tạo", "[FAILURE] Access denied"
+
+📌 NON_FUNCTIONAL_CONSTRAINTS:
+• Phân loại theo category: [Performance], [Security], [Availability], [Compatibility], [Scalability]
+• Format: "[Category] mô tả constraint"
+• Ví dụ: "[Performance] Response time < 2s", "[Security] OWASP compliant"
+
+📌 RULES:
+• Mỗi rule có id (R1, R2...) và description
+• Rules_applied trong main_flow tham chiếu tới id của rules
+• Đảm bảo tất cả rules được tham chiếu trong flow hoặc exceptions
+
  **KIỂM TRA CUỐI**:
 ✓ KHÔNG có thao tác thủ công ngoài đời
 ✓ CHỈ có tương tác phần mềm
 ✓ Actor là object đầy đủ {id, name, description}
-✓ Main_flow là array các object với step, actor, action, expected_result
-✓ Alternative_flows và exceptions là array các object với id, at_step, condition/description, system_response
-✓ Rules là array các object với id, description
-✓ Inputs và outputs là array các object với name, type, required/optional
+✓ Main_flow: mỗi step có actor (User/System), action, expected_result
+✓ Main_flow: User steps có expected_result là system response
+✓ Inputs & Outputs: KHÔNG để trống nếu có dữ liệu, có đầy đủ name/type/required
+✓ Postconditions: cover cả [SUCCESS] và [FAILURE] cases
+✓ Non_functional_constraints: có category prefix [Performance], [Security], etc.
+✓ Rules: được tham chiếu trong main_flow hoặc exceptions qua rules_applied
+✓ Alternative_flows và exceptions: có id, at_step, system_response
 ✓ Tất cả trường đều theo đúng schema (không thêm, không thiếu)
-✓ KHÔNG có field "id" trong response
+✓ KHÔNG có field "id" trong response (hệ thống tự sinh)
 ✓ Related usecases để mảng rỗng [] (sẽ được xử lý sau)
 ✓ 1 Use Case = 1 mục tiêu nghiệp vụ rõ ràng
 ✓ Task là business-level, deployable (không phải UI-step)
@@ -542,9 +580,9 @@ VIII. CHẤT LƯỢNG NỘI DUNG:
  **CORRECT SOFTWARE BEHAVIORS**:
 • "System verifies digital signature" →  CORRECT
 • "Upload electronic documents" →  CORRECT
-• "Send notifications via system" →  CORRECT
+• "Send notifications via system" →  CORRECT 
 
- **OUTPUT REQUIREMENTS**:
+ **OUTPUT REQUIREMENTS**: 
 • Return ONLY valid JSON array
 • NO explanations, NO markdown, NO code fence, NO comments
 • Immediately parseable with JSON.parse()

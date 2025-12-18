@@ -36,8 +36,26 @@
 
       <!-- Content -->
       <div class="modal-body">
+        <!-- Header Meta Info -->
+        <div class="usecase-meta-header">
+          <span class="usecase-name">{{ useCase.name }}</span>
+          <div class="meta-badges">
+            <span v-if="useCase.type" class="meta-badge type-badge">{{ useCase.type }}</span>
+            <span v-if="useCase.level" class="meta-badge level-badge">{{ useCase.level }}</span>
+            <span v-if="useCase.status" class="meta-badge status-badge" :class="`status-${useCase.status}`">{{ useCase.status }}</span>
+            <span v-if="useCase.frequency" class="meta-badge frequency-badge">freq: {{ useCase.frequency }}</span>
+          </div>
+        </div>
+        
+        <!-- Actor Details -->
+        <div v-if="useCase.actor && typeof useCase.actor === 'object'" class="actor-details">
+          <span class="actor-label">Actor:</span>
+          <span class="actor-name">{{ useCase.actor.name }}</span>
+          <span v-if="useCase.actor.description" class="actor-desc">- {{ useCase.actor.description }}</span>
+        </div>
+        
         <div class="details-grid">
-          <!-- Row 1: Goal, Description, Context -->
+          <!-- Row 1: Goal, Description, Business Reason, Context -->
           <div class="detail-row">
             <div class="detail-section">
               <h5>Goal</h5>
@@ -53,27 +71,66 @@
             </div>
             <div class="detail-section">
               <h5>Context</h5>
-              <p>{{ (typeof useCase.context === 'object' ? (useCase.context.module || useCase.context.scope || useCase.context.system || '') : useCase.context) || 'No context specified' }}</p>
+              <p>{{ contextDisplayText }}</p>
             </div>
           </div>
 
-          <!-- Row 2: Main Flow (Full Width) -->
+          <!-- Row 2: Main Flow (Full Width) - Enhanced -->
           <div class="detail-row">
             <div class="detail-section full-width">
               <h5>Main Flow</h5>
-              <ol class="task-list">
+              <div class="main-flow-container">
                 <template v-if="useCase.main_flow && Array.isArray(useCase.main_flow) && useCase.main_flow.length > 0">
-                  <li v-for="(step, i) in useCase.main_flow" :key="i">
-                    <strong>Step {{ step.step || (i + 1) }}:</strong> 
-                    {{ step.action || step }}
-                    <span v-if="step.expected_result" class="step-result"> → {{ step.expected_result }}</span>
-                  </li>
+                  <div v-for="(step, i) in useCase.main_flow" :key="i" class="flow-step" :class="{ 'system-step': step.actor === 'System' }">
+                    <div class="step-header">
+                      <span class="step-number">{{ step.step || (i + 1) }}</span>
+                      <span class="step-actor" :class="step.actor === 'System' ? 'actor-system' : 'actor-user'">
+                        {{ step.actor || 'User' }}
+                      </span>
+                    </div>
+                    <div class="step-content">
+                      <div class="step-action">{{ step.action || step }}</div>
+                      <div v-if="step.inputs && step.inputs.length > 0" class="step-inputs">
+                        <span class="step-label">Inputs:</span>
+                        <span v-for="(inp, idx) in step.inputs" :key="idx" class="step-input-tag">{{ inp }}</span>
+                      </div>
+                      <div v-if="step.rules_applied && step.rules_applied.length > 0" class="step-rules">
+                        <span class="step-label">Rules:</span>
+                        <span v-for="(rule, idx) in step.rules_applied" :key="idx" class="step-rule-tag">{{ rule }}</span>
+                      </div>
+                      <div v-if="step.expected_result" class="step-result">
+                        <span class="result-arrow">→</span> {{ step.expected_result }}
+                      </div>
+                    </div>
+                  </div>
                 </template>
                 <template v-else-if="useCase.tasks && Array.isArray(useCase.tasks) && useCase.tasks.length > 0">
-                  <li v-for="(task, i) in useCase.tasks" :key="i">{{ task }}</li>
+                  <ol class="task-list">
+                    <li v-for="(task, i) in useCase.tasks" :key="i">{{ task }}</li>
+                  </ol>
                 </template>
-                <li v-else>No tasks defined</li>
-              </ol>
+                <div v-else class="no-data">No main flow defined</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Row 2b: Alternative Flows -->
+          <div v-if="useCase.alternative_flows && useCase.alternative_flows.length > 0" class="detail-row">
+            <div class="detail-section full-width">
+              <h5>Alternative Flows</h5>
+              <div class="alt-flows-container">
+                <div v-for="(af, i) in useCase.alternative_flows" :key="i" class="alt-flow-item">
+                  <div class="alt-flow-header">
+                    <span class="alt-flow-id">{{ af.id || `AF${i + 1}` }}</span>
+                    <span class="alt-flow-step">at Step {{ af.at_step }}</span>
+                  </div>
+                  <div class="alt-flow-content">
+                    <div class="alt-flow-condition"><strong>If:</strong> {{ af.condition }}</div>
+                    <div class="alt-flow-response"><strong>Then:</strong> {{ af.system_response }}</div>
+                    <div class="alt-flow-end"><strong>End State:</strong> {{ af.end_state }}</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -139,7 +196,7 @@
                   <li v-if="useCase.trigger.source"><strong>Source:</strong> {{ useCase.trigger.source }}</li>
                 </template>
                 <template v-else-if="useCase.triggers && Array.isArray(useCase.triggers) && useCase.triggers.length > 0">
-                  <li v-for="(item, i) in useCase.triggers" :key="i">{{ item }}</li>
+                <li v-for="(item, i) in useCase.triggers" :key="i">{{ item }}</li>
                 </template>
                 <li v-else>None</li>
               </ul>
@@ -162,7 +219,7 @@
                   <li v-for="(item, i) in useCase.non_functional_constraints" :key="i">{{ item }}</li>
                 </template>
                 <template v-else-if="useCase.constraints && Array.isArray(useCase.constraints) && useCase.constraints.length > 0">
-                  <li v-for="(item, i) in useCase.constraints" :key="i">{{ item }}</li>
+                <li v-for="(item, i) in useCase.constraints" :key="i">{{ item }}</li>
                 </template>
                 <li v-else>None</li>
               </ul>
@@ -175,14 +232,14 @@
               <h5>Exceptions</h5>
               <ul class="exception-list">
                 <template v-if="useCase.exceptions && Array.isArray(useCase.exceptions) && useCase.exceptions.length > 0">
-                  <li v-for="(item, i) in useCase.exceptions" :key="i">
-                    <span class="material-symbols-outlined">warning</span>
+                <li v-for="(item, i) in useCase.exceptions" :key="i">
+                  <span class="material-symbols-outlined">warning</span>
                     <template v-if="typeof item === 'object'">
                       <strong>Step {{ item.at_step }}:</strong> {{ item.description || item.type || 'Exception' }}
                       <span v-if="item.system_response"> → {{ item.system_response }}</span>
                     </template>
                     <template v-else>{{ item }}</template>
-                  </li>
+                </li>
                 </template>
                 <li v-else>No exceptions defined</li>
               </ul>
@@ -223,7 +280,7 @@
             </div>
           </div>
 
-          <!-- Row 8: Priority & Role -->
+          <!-- Row 8: Priority & Context Details -->
           <div class="detail-row">
             <div class="detail-section">
               <h5>Priority</h5>
@@ -233,9 +290,17 @@
                 </span>
               </p>
             </div>
-            <div class="detail-section">
-              <h5>Actor</h5>
-              <p>{{ (useCase.actor?.name || useCase.role?.name || useCase.role) || 'No actor specified' }}</p>
+            <div v-if="useCase.context && typeof useCase.context === 'object'" class="detail-section">
+              <h5>Module</h5>
+              <p>{{ useCase.context.module || 'N/A' }}</p>
+            </div>
+            <div v-if="useCase.context && typeof useCase.context === 'object'" class="detail-section">
+              <h5>Scope</h5>
+              <p>{{ useCase.context.scope || 'N/A' }}</p>
+            </div>
+            <div v-if="useCase.context && typeof useCase.context === 'object'" class="detail-section">
+              <h5>System</h5>
+              <p>{{ useCase.context.system || 'N/A' }}</p>
             </div>
           </div>
         </div>
@@ -280,6 +345,20 @@ export default {
     },
   },
   emits: ['close', 'skip-conflict', 'select-usecase'],
+  computed: {
+    contextDisplayText() {
+      if (!this.useCase.context) return 'No context specified'
+      if (typeof this.useCase.context === 'object') {
+        const parts = [
+          this.useCase.context.module,
+          this.useCase.context.scope,
+          this.useCase.context.system
+        ].filter(Boolean)
+        return parts.length > 0 ? parts.join(' / ') : 'No context specified'
+      }
+      return this.useCase.context || 'No context specified'
+    }
+  }
 }
 </script>
 
@@ -581,6 +660,269 @@ export default {
 .close-button:hover {
   background: #2d5aa0;
   transform: translateY(-1px);
+}
+
+/* Usecase Meta Header */
+.usecase-meta-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.usecase-meta-header .usecase-name {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.meta-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.meta-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.type-badge {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.level-badge {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.status-inactive {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.status-badge.status-deprecated {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.frequency-badge {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+/* Actor Details */
+.actor-details {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border-left: 4px solid #3b82f6;
+}
+
+.actor-label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+.actor-name {
+  color: #3b82f6;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.actor-desc {
+  color: #6b7280;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+/* Main Flow Enhanced */
+.main-flow-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.flow-step {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.flow-step:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+}
+
+.flow-step.system-step {
+  background: #f0f9ff;
+  border-left: 3px solid #0ea5e9;
+}
+
+.step-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 60px;
+}
+
+.step-number {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #3b82f6;
+  color: white;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.step-actor {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.actor-user {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.actor-system {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.step-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.step-action {
+  color: #1f2937;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.step-inputs, .step-rules {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.step-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.step-input-tag {
+  padding: 2px 8px;
+  background: #e0e7ff;
+  color: #3730a3;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.step-rule-tag {
+  padding: 2px 8px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.step-result {
+  color: #059669;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.result-arrow {
+  color: #10b981;
+  font-weight: 600;
+}
+
+/* Alternative Flows */
+.alt-flows-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.alt-flow-item {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.alt-flow-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #fef3c7;
+}
+
+.alt-flow-id {
+  font-weight: 700;
+  color: #92400e;
+  font-size: 0.85rem;
+}
+
+.alt-flow-step {
+  font-size: 0.75rem;
+  color: #b45309;
+}
+
+.alt-flow-content {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alt-flow-condition, .alt-flow-response, .alt-flow-end {
+  font-size: 0.85rem;
+  color: #1f2937;
+}
+
+.no-data {
+  color: #9ca3af;
+  font-style: italic;
+  padding: 12px;
+  text-align: center;
 }
 
 .button-spinner-small {

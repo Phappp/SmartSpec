@@ -816,6 +816,19 @@ export class UsecaseGenerationAgent {
         // Normalize lại sau khi addRelatedUseCases
         withRelations = this.normalizeActorStructure(withRelations);
 
+        // 🔍 Debug: Log withRelations after addRelatedUseCases
+        console.log(`🔍 [SAVE_BATCH] After addRelatedUseCases: ${withRelations.length} usecases`);
+        if (withRelations.length > 0) {
+            console.log(`🔍 [SAVE_BATCH] First raw usecase from LLM:`, JSON.stringify({
+                name: withRelations[0]?.name,
+                actor: withRelations[0]?.actor,
+                role: withRelations[0]?.role, // Check if LLM still using old field
+                goal: withRelations[0]?.goal,
+                main_flow: withRelations[0]?.main_flow?.length,
+                tasks: withRelations[0]?.tasks?.length, // Check if LLM still using old field
+            }, null, 2));
+        }
+
         // Map to database format (schema mới)
         const usecasesToCreate = withRelations.map((uc: any) => {
             const relatedIds = (uc.related_usecases || [])
@@ -860,51 +873,75 @@ export class UsecaseGenerationAgent {
             }
 
             // Normalize alternative_flows (array of objects)
-            const alternativeFlows = Array.isArray(uc.alternative_flows) ? uc.alternative_flows : [];
-
-            // Normalize exceptions (array of objects)
-            let exceptions = Array.isArray(uc.exceptions) ? uc.exceptions : [];
-            if (exceptions.length === 0 && Array.isArray(uc.exceptions) && typeof uc.exceptions[0] === 'string') {
-                // Fallback: convert string array to exception objects
-                exceptions = uc.exceptions.map((exc: string, index: number) => ({
-                    id: `E${index + 1}`,
-                    at_step: mainFlow.length,
-                    type: 'System',
-                    description: exc,
-                    system_response: `Handle exception: ${exc}`
+            let alternativeFlows = Array.isArray(uc.alternative_flows) ? uc.alternative_flows : [];
+            // Convert string array to object array if needed
+            if (alternativeFlows.length > 0 && typeof alternativeFlows[0] === 'string') {
+                alternativeFlows = alternativeFlows.map((af: string, index: number) => ({
+                    id: `AF${index + 1}`,
+                    at_step: 1,
+                    condition: af,
+                    system_response: af,
+                    end_state: 'Alternative path completed'
                 }));
+            }
+
+            // Normalize exceptions (array of objects) - FIX: convert string to object
+            let exceptions: any[] = [];
+            if (Array.isArray(uc.exceptions) && uc.exceptions.length > 0) {
+                if (typeof uc.exceptions[0] === 'string') {
+                    // Convert string array to exception objects
+                    exceptions = uc.exceptions.map((exc: string, index: number) => ({
+                        id: `E${index + 1}`,
+                        at_step: mainFlow.length || 1,
+                        type: 'System',
+                        description: exc,
+                        system_response: `Handle: ${exc}`
+                    }));
+                } else {
+                    // Already objects
+                    exceptions = uc.exceptions;
+                }
             }
 
             // Normalize rules (array of objects)
-            let rules = Array.isArray(uc.rules) ? uc.rules : [];
-            if (rules.length > 0 && typeof rules[0] === 'string') {
-                // Fallback: convert string array to rule objects
-                rules = rules.map((rule: string, index: number) => ({
-                    id: `R${index + 1}`,
-                    description: rule
-                }));
+            let rules: any[] = [];
+            if (Array.isArray(uc.rules) && uc.rules.length > 0) {
+                if (typeof uc.rules[0] === 'string') {
+                    rules = uc.rules.map((rule: string, index: number) => ({
+                        id: `R${index + 1}`,
+                        description: rule
+                    }));
+                } else {
+                    rules = uc.rules;
+                }
             }
 
             // Normalize inputs (array of objects)
-            let inputs = Array.isArray(uc.inputs) ? uc.inputs : [];
-            if (inputs.length > 0 && typeof inputs[0] === 'string') {
-                // Fallback: convert string array to input objects
-                inputs = inputs.map((input: string) => ({
-                    name: input,
-                    type: 'string',
-                    required: true
-                }));
+            let inputs: any[] = [];
+            if (Array.isArray(uc.inputs) && uc.inputs.length > 0) {
+                if (typeof uc.inputs[0] === 'string') {
+                    inputs = uc.inputs.map((input: string) => ({
+                        name: input,
+                        type: 'string',
+                        required: true
+                    }));
+                } else {
+                    inputs = uc.inputs;
+                }
             }
 
             // Normalize outputs (array of objects)
-            let outputs = Array.isArray(uc.outputs) ? uc.outputs : [];
-            if (outputs.length > 0 && typeof outputs[0] === 'string') {
-                // Fallback: convert string array to output objects
-                outputs = outputs.map((output: string) => ({
-                    name: output,
-                    type: 'string',
-                    optional: false
-                }));
+            let outputs: any[] = [];
+            if (Array.isArray(uc.outputs) && uc.outputs.length > 0) {
+                if (typeof uc.outputs[0] === 'string') {
+                    outputs = uc.outputs.map((output: string) => ({
+                        name: output,
+                        type: 'string',
+                        optional: false
+                    }));
+                } else {
+                    outputs = uc.outputs;
+                }
             }
 
             // Normalize priority và frequency
@@ -981,12 +1018,23 @@ export class UsecaseGenerationAgent {
         const validUsecases: any[] = [];
         const invalidUsecases: Array<{ index: number; name: string; errors: string[] }> = [];
 
+        // 🔍 Debug: Log first usecase structure
+        if (usecasesToCreate.length > 0) {
+            console.log(`🔍 [SAVE_BATCH] First usecase structure (for debugging):`, JSON.stringify({
+                name: usecasesToCreate[0].name,
+                goal: usecasesToCreate[0].goal,
+                actor: usecasesToCreate[0].actor,
+                main_flow_length: usecasesToCreate[0].main_flow?.length || 0,
+                main_flow_sample: usecasesToCreate[0].main_flow?.[0],
+            }, null, 2));
+        }
+
         usecasesToCreate.forEach((uc, index) => {
             const errors: string[] = [];
             if (!uc.name || uc.name.trim() === '') errors.push('missing name');
-            if (!uc.actor || !uc.actor.id || !uc.actor.name) errors.push('invalid actor');
+            if (!uc.actor || !uc.actor.id || !uc.actor.name) errors.push(`invalid actor: ${JSON.stringify(uc.actor)}`);
             if (!uc.goal || uc.goal.trim() === '') errors.push('missing goal');
-            if (!uc.main_flow || !Array.isArray(uc.main_flow) || uc.main_flow.length === 0) errors.push('missing main_flow');
+            if (!uc.main_flow || !Array.isArray(uc.main_flow) || uc.main_flow.length === 0) errors.push(`missing main_flow: got ${typeof uc.main_flow}, length=${uc.main_flow?.length || 0}`);
 
             // ✅ Check duplicate: tên hoặc mục đích trùng (sử dụng normalized name)
             const ucNameNormalized = normalizeName(uc.name || '');
@@ -1019,12 +1067,32 @@ export class UsecaseGenerationAgent {
 
         if (validUsecases.length === 0) {
             console.warn(`⚠️ [SAVE_BATCH] All ${usecasesToCreate.length} usecases failed validation in batch ${batchNumber}`);
+            console.warn(`⚠️ [SAVE_BATCH] Invalid usecases details:`, JSON.stringify(invalidUsecases, null, 2));
             return [];
         }
 
+        console.log(`✅ [SAVE_BATCH] ${validUsecases.length} usecases passed validation, attempting to save...`);
+        console.log(`🔍 [SAVE_BATCH] First valid usecase to insert:`, JSON.stringify(validUsecases[0], null, 2).substring(0, 1000));
+
         // Save to database
         try {
+            console.log(`🔍 [SAVE_BATCH] Calling insertMany with ${validUsecases.length} usecases...`);
+
+            // ✅ Validate với Mongoose trước khi insert để bắt lỗi chi tiết
+            for (let i = 0; i < validUsecases.length; i++) {
+                const doc = new Usecase(validUsecases[i]);
+                const validationError = doc.validateSync();
+                if (validationError) {
+                    console.error(`❌ [SAVE_BATCH] Mongoose validation failed for usecase ${i + 1} ("${validUsecases[i].name}"):`, validationError.message);
+                    // Log chi tiết từng field bị lỗi
+                    for (const [field, error] of Object.entries(validationError.errors || {})) {
+                        console.error(`   - ${field}: ${(error as any).message}`);
+                    }
+                }
+            }
+
             const result = await Usecase.insertMany(validUsecases, { ordered: false });
+            console.log(`✅ [SAVE_BATCH] insertMany returned ${result.length} documents`);
             console.log(`✅ [SAVE_BATCH] Saved ${result.length} usecases in batch ${batchNumber}`);
 
             // ✅ Cập nhật savedUsecases trước khi broadcast
@@ -1195,7 +1263,7 @@ export class UsecaseGenerationAgent {
         return useCases.map((uc: any) => {
             // Hỗ trợ cả actor (mới) và role (cũ)
             const actorOrRole = uc.actor || uc.role;
-            
+
             if (!actorOrRole) {
                 uc.actor = { id: 'actor_user', name: 'Người dùng hệ thống', description: 'Người dùng sử dụng hệ thống' };
             } else if (typeof actorOrRole === 'string') {
@@ -1211,12 +1279,12 @@ export class UsecaseGenerationAgent {
                     description: actorOrRole.description || ''
                 };
             }
-            
+
             // Xóa role cũ nếu có (đã chuyển sang actor)
             if (uc.role && uc.actor) {
                 delete uc.role;
             }
-            
+
             return uc;
         });
     }

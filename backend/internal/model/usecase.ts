@@ -1,14 +1,13 @@
 import { InferSchemaType, model, Schema } from "mongoose";
 import { randomUUID } from "crypto";
 
-// Schema cho Actor (thay thế role)
+// Schema cho Actor (thay thế role) - relaxed validation
 export const actorSchema = new Schema({
     id: {
         type: String,
-        required: true,
         default: () => randomUUID()
     },
-    name: { type: String, required: true },
+    name: { type: String, default: "User" },
     description: { type: String, default: "" }
 }, { _id: false });
 
@@ -19,60 +18,59 @@ export const contextSchema = new Schema({
     system: { type: String, default: "" }
 }, { _id: false });
 
-// Schema cho Trigger
+// Schema cho Trigger - relaxed validation
 export const triggerSchema = new Schema({
-    event: { type: String, required: true },
+    event: { type: String, default: "" },
     source: { type: String, default: "UI" }
 }, { _id: false });
 
-// Schema cho Main Flow Step
+// Schema cho Main Flow Step - relaxed validation
 export const mainFlowStepSchema = new Schema({
-    step: { type: Number, required: true },
-    actor: { type: String, required: true },
-    action: { type: String, required: true },
+    step: { type: Number, default: 1 },
+    actor: { type: String, default: "User" },
+    action: { type: String, default: "" },
     inputs: { type: [String], default: [] },
     rules_applied: { type: [String], default: [] },
-    expected_result: { type: String, required: true }
+    expected_result: { type: String, default: "" }
 }, { _id: false });
 
-// Schema cho Alternative Flow
+// Schema cho Alternative Flow - relaxed validation
 export const alternativeFlowSchema = new Schema({
-    id: { type: String, required: true },
-    at_step: { type: Number, required: true },
-    condition: { type: String, required: true },
-    system_response: { type: String, required: true },
-    end_state: { type: String, required: true }
+    id: { type: String, default: "" },
+    at_step: { type: Number, default: 1 },
+    condition: { type: String, default: "" },
+    system_response: { type: String, default: "" },
+    end_state: { type: String, default: "" }
 }, { _id: false });
 
-// Schema cho Exception
+// Schema cho Exception - relaxed validation
 export const exceptionSchema = new Schema({
-    id: { type: String, required: true },
-    at_step: { type: Number, required: true },
-    type: { type: String, required: true }, // Network, System, Business, etc.
-    description: { type: String, required: true },
-    system_response: { type: String, required: true }
+    id: { type: String, default: "" },
+    at_step: { type: Number, default: 1 },
+    type: { type: String, default: "System" }, // Network, System, Business, etc.
+    description: { type: String, default: "" },
+    system_response: { type: String, default: "" }
 }, { _id: false });
 
-// Schema cho Rule
+// Schema cho Rule - relaxed validation
 export const ruleSchema = new Schema({
-    id: { type: String, required: true },
-    description: { type: String, required: true }
+    id: { type: String, default: "" },
+    description: { type: String, default: "" }
 }, { _id: false });
 
-// Schema cho Input/Output
+// Schema cho Input/Output - relaxed validation
 export const inputOutputSchema = new Schema({
-    name: { type: String, required: true },
-    type: { type: String, required: true },
+    name: { type: String, default: "" },
+    type: { type: String, default: "string" },
     required: { type: Boolean, default: true },
     optional: { type: Boolean, default: false }
 }, { _id: false });
 
-// Schema cho Audit
+// Schema cho Audit - relaxed validation
 export const auditSchema = new Schema({
     created_by: {
         type: Schema.Types.ObjectId,
-        ref: "users",
-        required: true
+        ref: "users"
     },
     created_at: { type: Date, default: Date.now },
     updated_by: {
@@ -127,21 +125,21 @@ const usecaseSchema = new Schema({
     },
     description: {
         type: String,
-        required: true,
+        default: "",
         trim: true
     },
     actor: {
         type: actorSchema,
-        required: true
+        default: () => ({ id: "user", name: "User", description: "" })
     },
     goal: {
         type: String,
-        required: true,
+        default: "",
         trim: true
     },
     business_reason: {
         type: String,
-        required: true,
+        default: "",
         trim: true
     },
 
@@ -155,7 +153,7 @@ const usecaseSchema = new Schema({
     priority: {
         type: String,
         enum: ["low", "medium", "high"],
-        required: true,
+        default: "medium",
         index: true
     },
     frequency: {
@@ -167,7 +165,7 @@ const usecaseSchema = new Schema({
     // === TRIGGER ===
     trigger: {
         type: triggerSchema,
-        required: true
+        default: () => ({ event: "", source: "UI" })
     },
 
     // === FLOWS ===
@@ -177,7 +175,7 @@ const usecaseSchema = new Schema({
     },
     main_flow: {
         type: [mainFlowStepSchema],
-        required: true
+        default: []
     },
     alternative_flows: {
         type: [alternativeFlowSchema],
@@ -228,7 +226,7 @@ const usecaseSchema = new Schema({
     // === AUDIT TRAIL ===
     audit: {
         type: auditSchema,
-        required: true
+        default: () => ({ created_at: new Date(), updated_at: new Date() })
     }
 }, {
     timestamps: false // Sử dụng audit.created_at và audit.updated_at thay vì timestamps

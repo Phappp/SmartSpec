@@ -13,7 +13,7 @@ export class RequirementService {
         return useCases.map((uc: any) => {
             // Hỗ trợ cả actor (mới) và role (cũ)
             const actorOrRole = uc.actor || uc.role;
-            
+
             if (!actorOrRole) {
                 uc.actor = { id: 'actor_user', name: 'Người dùng hệ thống', description: 'Người dùng sử dụng hệ thống' };
             } else if (typeof actorOrRole === 'string') {
@@ -29,12 +29,12 @@ export class RequirementService {
                     description: actorOrRole.description || ''
                 };
             }
-            
+
             // Xóa role cũ nếu có (đã chuyển sang actor)
             if (uc.role && uc.actor) {
                 delete uc.role;
             }
-            
+
             return uc;
         });
     }
@@ -286,7 +286,7 @@ export class RequirementService {
 
                     // Normalize alternative_flows, exceptions, rules, inputs, outputs
                     const alternativeFlows = Array.isArray(uc.alternative_flows) ? uc.alternative_flows : [];
-                    
+
                     let exceptions = Array.isArray(uc.exceptions) ? uc.exceptions : [];
                     if (exceptions.length > 0 && typeof exceptions[0] === 'string') {
                         exceptions = exceptions.map((exc: string, index: number) => ({

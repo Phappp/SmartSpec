@@ -569,7 +569,7 @@
                             </li>
                           </template>
                           <template v-else-if="uc.tasks && Array.isArray(uc.tasks) && uc.tasks.length > 0">
-                            <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                          <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
                           </template>
                           <li v-else>No tasks defined</li>
                         </ol>
@@ -596,9 +596,9 @@
 
                     <!-- Row 4: Inputs & Outputs -->
                     <div class="detail-row">
-                    <div class="detail-section">
-                      <h5>Inputs</h5>
-                      <div class="tag-list">
+                      <div class="detail-section">
+                        <h5>Inputs</h5>
+                        <div class="tag-list">
                         <template v-if="uc.inputs && Array.isArray(uc.inputs) && uc.inputs.length > 0">
                           <span 
                             v-for="(item, i) in uc.inputs" 
@@ -609,11 +609,11 @@
                           </span>
                         </template>
                         <span v-else class="tag tag-meta">None</span>
+                        </div>
                       </div>
-                    </div>
-                    <div class="detail-section">
-                      <h5>Outputs</h5>
-                      <div class="tag-list">
+                      <div class="detail-section">
+                        <h5>Outputs</h5>
+                        <div class="tag-list">
                         <template v-if="uc.outputs && Array.isArray(uc.outputs) && uc.outputs.length > 0">
                           <span 
                             v-for="(item, i) in uc.outputs" 
@@ -624,8 +624,8 @@
                           </span>
                         </template>
                         <span v-else class="tag tag-meta">None</span>
+                        </div>
                       </div>
-                    </div>
                     </div>
 
                     <!-- Row 5: Triggers, Business Rules & Constraints -->
@@ -638,7 +638,7 @@
                             <li v-if="uc.trigger.source"><strong>Source:</strong> {{ uc.trigger.source }}</li>
                           </template>
                           <template v-else-if="uc.triggers && Array.isArray(uc.triggers) && uc.triggers.length > 0">
-                            <li v-for="(item, i) in uc.triggers" :key="i">{{ item }}</li>
+                          <li v-for="(item, i) in uc.triggers" :key="i">{{ item }}</li>
                           </template>
                           <li v-else>None</li>
                         </ul>
@@ -661,7 +661,7 @@
                             <li v-for="(item, i) in uc.non_functional_constraints" :key="i">{{ item }}</li>
                           </template>
                           <template v-else-if="uc.constraints && Array.isArray(uc.constraints) && uc.constraints.length > 0">
-                            <li v-for="(item, i) in uc.constraints" :key="i">{{ item }}</li>
+                          <li v-for="(item, i) in uc.constraints" :key="i">{{ item }}</li>
                           </template>
                           <li v-else>None</li>
                         </ul>
@@ -674,14 +674,14 @@
                         <h5>Exceptions</h5>
                         <ul class="exception-list">
                           <template v-if="uc.exceptions && Array.isArray(uc.exceptions) && uc.exceptions.length > 0">
-                            <li v-for="(item, i) in uc.exceptions" :key="i">
-                              <span class="material-symbols-outlined">warning</span>
+                          <li v-for="(item, i) in uc.exceptions" :key="i">
+                            <span class="material-symbols-outlined">warning</span>
                               <template v-if="typeof item === 'object'">
                                 <strong>Step {{ item.at_step }}:</strong> {{ item.description || item.type || 'Exception' }}
                                 <span v-if="item.system_response"> → {{ item.system_response }}</span>
                               </template>
                               <template v-else>{{ item }}</template>
-                            </li>
+                          </li>
                           </template>
                           <li v-else>No exceptions defined</li>
                         </ul>
@@ -788,7 +788,7 @@
                       </li>
                     </template>
                     <template v-else-if="uc.tasks && Array.isArray(uc.tasks) && uc.tasks.length > 0">
-                      <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                    <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
                     </template>
                     <li v-else>No tasks defined</li>
                   </ol>
@@ -862,7 +862,7 @@
                       </li>
                     </template>
                     <template v-else-if="uc.tasks && Array.isArray(uc.tasks) && uc.tasks.length > 0">
-                      <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                    <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
                     </template>
                     <li v-else>No tasks defined</li>
                   </ol>
@@ -908,7 +908,7 @@
                     </li>
                   </template>
                   <template v-else-if="uc.tasks && Array.isArray(uc.tasks) && uc.tasks.length > 0">
-                    <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                  <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
                   </template>
                   <li v-else>No tasks defined</li>
                 </ol>
@@ -1075,14 +1075,26 @@
               <h4 class="usecase-name">{{ viewingUsecase.name }}</h4>
             </div>
             <div class="detail-header-meta">
+              <!-- Type, Level, Status badges -->
+              <span v-if="viewingUsecase.type" class="type-badge">{{ viewingUsecase.type }}</span>
+              <span v-if="viewingUsecase.level" class="level-badge">{{ viewingUsecase.level }}</span>
+              <span v-if="viewingUsecase.status" class="status-badge" :class="`status-${viewingUsecase.status}`">{{ viewingUsecase.status }}</span>
               <span
                 class="priority-badge"
                 :class="`priority-${viewingUsecase.priority || 'medium'}`"
               >
                 {{ viewingUsecase.priority || 'medium' }}
               </span>
+              <span v-if="viewingUsecase.frequency" class="frequency-badge">freq: {{ viewingUsecase.frequency }}</span>
               <span class="role-badge">{{ (viewingUsecase.actor?.name || viewingUsecase.role?.name) || 'Undefined' }}</span>
             </div>
+          </div>
+          
+          <!-- Actor Details -->
+          <div v-if="viewingUsecase.actor && typeof viewingUsecase.actor === 'object'" class="actor-details">
+            <span class="actor-label">Actor:</span>
+            <span class="actor-name">{{ viewingUsecase.actor.name }}</span>
+            <span v-if="viewingUsecase.actor.description" class="actor-desc">- {{ viewingUsecase.actor.description }}</span>
           </div>
 
           <div class="details-grid expanded-content">
@@ -1106,23 +1118,62 @@
               </div>
             </div>
 
-            <!-- Row 2: Main Flow (Full Width) -->
+            <!-- Row 2: Main Flow (Full Width) - Enhanced -->
             <div class="detail-row">
               <div class="detail-section full-width">
                 <h5>Main Flow</h5>
-                <ol class="task-list">
+                <div class="main-flow-container">
                   <template v-if="viewingUsecase.main_flow && Array.isArray(viewingUsecase.main_flow) && viewingUsecase.main_flow.length > 0">
-                    <li v-for="(step, i) in viewingUsecase.main_flow" :key="i">
-                      <strong>Step {{ step.step || (i + 1) }}:</strong> 
-                      {{ step.action || step }}
-                      <span v-if="step.expected_result" class="step-result"> → {{ step.expected_result }}</span>
-                    </li>
+                    <div v-for="(step, i) in viewingUsecase.main_flow" :key="i" class="flow-step" :class="{ 'system-step': step.actor === 'System' }">
+                      <div class="step-header">
+                        <span class="step-number">{{ step.step || (i + 1) }}</span>
+                        <span class="step-actor" :class="step.actor === 'System' ? 'actor-system' : 'actor-user'">
+                          {{ step.actor || 'User' }}
+                        </span>
+                      </div>
+                      <div class="step-content">
+                        <div class="step-action">{{ step.action || step }}</div>
+                        <div v-if="step.inputs && step.inputs.length > 0" class="step-inputs">
+                          <span class="step-label">Inputs:</span>
+                          <span v-for="(inp, idx) in step.inputs" :key="idx" class="step-input-tag">{{ inp }}</span>
+                        </div>
+                        <div v-if="step.rules_applied && step.rules_applied.length > 0" class="step-rules">
+                          <span class="step-label">Rules:</span>
+                          <span v-for="(rule, idx) in step.rules_applied" :key="idx" class="step-rule-tag">{{ rule }}</span>
+                        </div>
+                        <div v-if="step.expected_result" class="step-result">
+                          <span class="result-arrow">→</span> {{ step.expected_result }}
+                        </div>
+                      </div>
+                    </div>
                   </template>
                   <template v-else-if="viewingUsecase.tasks && Array.isArray(viewingUsecase.tasks) && viewingUsecase.tasks.length > 0">
-                    <li v-for="(task, i) in viewingUsecase.tasks" :key="i">{{ task }}</li>
+                    <ol class="task-list">
+                      <li v-for="(task, i) in viewingUsecase.tasks" :key="i">{{ task }}</li>
+                    </ol>
                   </template>
-                  <li v-else>No tasks defined</li>
-                </ol>
+                  <div v-else class="no-data">No main flow defined</div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Row 2b: Alternative Flows -->
+            <div v-if="viewingUsecase.alternative_flows && viewingUsecase.alternative_flows.length > 0" class="detail-row">
+              <div class="detail-section full-width">
+                <h5>Alternative Flows</h5>
+                <div class="alt-flows-container">
+                  <div v-for="(af, i) in viewingUsecase.alternative_flows" :key="i" class="alt-flow-item">
+                    <div class="alt-flow-header">
+                      <span class="alt-flow-id">{{ af.id || `AF${i + 1}` }}</span>
+                      <span class="alt-flow-step">at Step {{ af.at_step }}</span>
+                    </div>
+                    <div class="alt-flow-content">
+                      <div class="alt-flow-condition"><strong>If:</strong> {{ af.condition }}</div>
+                      <div class="alt-flow-response"><strong>Then:</strong> {{ af.system_response }}</div>
+                      <div class="alt-flow-end"><strong>End State:</strong> {{ af.end_state }}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1162,7 +1213,7 @@
                 <h5>Inputs</h5>
                 <div class="tag-list">
                   <template v-if="viewingUsecase.inputs && Array.isArray(viewingUsecase.inputs) && viewingUsecase.inputs.length > 0">
-                    <span 
+                  <span
                       v-for="(item, i) in viewingUsecase.inputs" 
                       :key="i" 
                       class="tag tag-input"
@@ -1177,7 +1228,7 @@
                 <h5>Outputs</h5>
                 <div class="tag-list">
                   <template v-if="viewingUsecase.outputs && Array.isArray(viewingUsecase.outputs) && viewingUsecase.outputs.length > 0">
-                    <span 
+                  <span
                       v-for="(item, i) in viewingUsecase.outputs" 
                       :key="i" 
                       class="tag tag-output"
@@ -1200,7 +1251,7 @@
                     <li v-if="viewingUsecase.trigger.source"><strong>Source:</strong> {{ viewingUsecase.trigger.source }}</li>
                   </template>
                   <template v-else-if="viewingUsecase.triggers && Array.isArray(viewingUsecase.triggers) && viewingUsecase.triggers.length > 0">
-                    <li v-for="(item, i) in viewingUsecase.triggers" :key="i">{{ item }}</li>
+                  <li v-for="(item, i) in viewingUsecase.triggers" :key="i">{{ item }}</li>
                   </template>
                   <li v-else>None</li>
                 </ul>
@@ -1223,7 +1274,7 @@
                     <li v-for="(item, i) in viewingUsecase.non_functional_constraints" :key="i">{{ item }}</li>
                   </template>
                   <template v-else-if="viewingUsecase.constraints && Array.isArray(viewingUsecase.constraints) && viewingUsecase.constraints.length > 0">
-                    <li v-for="(item, i) in viewingUsecase.constraints" :key="i">{{ item }}</li>
+                  <li v-for="(item, i) in viewingUsecase.constraints" :key="i">{{ item }}</li>
                   </template>
                   <li v-else>None</li>
                 </ul>
@@ -1236,14 +1287,16 @@
                 <h5>Exceptions</h5>
                 <ul class="exception-list">
                   <template v-if="viewingUsecase.exceptions && Array.isArray(viewingUsecase.exceptions) && viewingUsecase.exceptions.length > 0">
-                    <li v-for="(item, i) in viewingUsecase.exceptions" :key="i">
-                      <span class="material-symbols-outlined">warning</span>
+                  <li v-for="(item, i) in viewingUsecase.exceptions" :key="i">
+                    <span class="material-symbols-outlined">warning</span>
                       <template v-if="typeof item === 'object'">
                         <strong>Step {{ item.at_step }}:</strong> {{ item.description || item.type || 'Exception' }}
-                        <span v-if="item.system_response"> → {{ item.system_response }}</span>
+                        <span v-if="item.system_response"> 
+                        <!-- → {{ item.system_response }} -->
+                        </span>
                       </template>
                       <template v-else>{{ item }}</template>
-                    </li>
+                  </li>
                   </template>
                   <li v-else>No exceptions defined</li>
                 </ul>
@@ -1292,6 +1345,22 @@
                     >None</span
                   >
                 </div>
+              </div>
+            </div>
+            
+            <!-- Row 8: Context Details (if object) -->
+            <div v-if="viewingUsecase.context && typeof viewingUsecase.context === 'object'" class="detail-row">
+              <div class="detail-section">
+                <h5>Module</h5>
+                <p>{{ viewingUsecase.context.module || 'N/A' }}</p>
+              </div>
+              <div class="detail-section">
+                <h5>Scope</h5>
+                <p>{{ viewingUsecase.context.scope || 'N/A' }}</p>
+              </div>
+              <div class="detail-section">
+                <h5>System</h5>
+                <p>{{ viewingUsecase.context.system || 'N/A' }}</p>
               </div>
             </div>
 
@@ -4163,6 +4232,260 @@ td {
 .bulk-buttons .btn-secondary.danger:hover {
   background: #dc2626;
   color: white;
+}
+
+/* Type, Level, Status, Frequency Badges */
+.type-badge {
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.level-badge {
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge {
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.status-inactive {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.status-badge.status-deprecated {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.frequency-badge {
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: lowercase;
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+/* Actor Details */
+.actor-details {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border-left: 4px solid #3b82f6;
+}
+
+.actor-label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.85rem;
+}
+
+.actor-name {
+  color: #3b82f6;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.actor-desc {
+  color: #6b7280;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+/* Main Flow Enhanced */
+.main-flow-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.flow-step {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.flow-step:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+}
+
+.flow-step.system-step {
+  background: #f0f9ff;
+  border-left: 3px solid #0ea5e9;
+}
+
+.step-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 55px;
+}
+
+.step-number {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #3b82f6;
+  color: white;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.step-actor {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.actor-user {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.actor-system {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.step-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.step-action {
+  color: #1f2937;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.step-inputs, .step-rules {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.step-label {
+  font-size: 0.7rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.step-input-tag {
+  padding: 2px 6px;
+  background: #e0e7ff;
+  color: #3730a3;
+  border-radius: 8px;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.step-rule-tag {
+  padding: 2px 6px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 8px;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.step-result {
+  color: #059669;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.result-arrow {
+  color: #10b981;
+  font-weight: 600;
+}
+
+/* Alternative Flows */
+.alt-flows-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alt-flow-item {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.alt-flow-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #fef3c7;
+}
+
+.alt-flow-id {
+  font-weight: 700;
+  color: #92400e;
+  font-size: 0.8rem;
+}
+
+.alt-flow-step {
+  font-size: 0.7rem;
+  color: #b45309;
+}
+
+.alt-flow-content {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alt-flow-condition, .alt-flow-response, .alt-flow-end {
+  font-size: 0.8rem;
+  color: #1f2937;
+}
+
+.no-data {
+  color: #9ca3af;
+  font-style: italic;
+  padding: 12px;
+  text-align: center;
 }
 
 /* Form Styles for Modals */
