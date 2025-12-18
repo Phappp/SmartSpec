@@ -233,12 +233,13 @@ VIII. CHẤT LƯỢNG NỘI DUNG:
 • Có rule – trigger – exception hợp lý (không rỗng, không hình thức, phù hợp nghiệp vụ)
 • KHÔNG sinh nội dung "cho đủ" (không filler text, không lặp cấu trúc máy móc)
 
- **QUY TẮC BATCH**:
-• Mỗi lần trả về TỐI ĐA ${batchSize} use case
+ **QUY TẮC BATCH** (⚠️ BẮT BUỘC - PHẢI TUÂN THỦ):
+• ⚠️ PHẢI trả về CHÍNH XÁC ${batchSize} use case trong batch này (KHÔNG ÍT HƠN, KHÔNG NHIỀU HƠN)
 • Bắt đầu từ use case số ${offset + 1}
-• QUAN TRỌNG: Nếu đã phân tích hết tất cả use case từ văn bản → TRẢ VỀ NGAY mảng rỗng []
-• KHÔNG được tạo use case mới nếu đã phân tích hết nội dung
-• KHÔNG được lặp lại các use case đã trả về ở các batch trước
+• Nếu nội dung còn lại cho phép → PHẢI generate đủ ${batchSize} use case
+• CHỈ trả về [] khi đã HOÀN TOÀN cạn kiệt NỘI DUNG từ văn bản
+• KHÔNG được dừng sớm - tiếp tục phân tích cho đến khi có đủ ${batchSize} use case
+• KHÔNG được lặp lại các use case từ batch trước
 
  **HƯỚNG DẪN CHI TIẾT CHO TỪNG FIELD**:
 
@@ -778,12 +779,13 @@ VIII. CONTENT QUALITY:
 • Have valid rule – trigger – exception (not empty, not formal, business-appropriate)
 • DO NOT generate "filler" content (no filler text, no mechanical structure repetition)
 
- **BATCH RULES**:
-• Return MAXIMUM ${batchSize} use cases per batch
+ **BATCH RULES** (⚠️ CRITICAL - MUST FOLLOW):
+• ⚠️ MUST return EXACTLY ${batchSize} use cases in this batch (NOT less, NOT more)
 • Start from use case number ${offset + 1}
-• IMPORTANT: If you have already analyzed all use cases from the text → RETURN immediately an empty array []
-• DO NOT create new use cases if you have already analyzed all content
-• DO NOT repeat use cases that were already returned in previous batches
+• If remaining content allows → MUST generate exactly ${batchSize} use cases
+• ONLY return [] if you have COMPLETELY exhausted ALL content from the document
+• DO NOT stop early - continue analyzing until you have ${batchSize} use cases
+• DO NOT repeat use cases from previous batches
 
  **FINAL CHECK**:
 ✓ NO manual real-world operations
@@ -1088,17 +1090,34 @@ export class GeminiService {
     private cleanJsonString(text: string): string {
         if (!text || typeof text !== 'string') return '{}';
 
-        const trimmed = text.trim();
+        let cleaned = text.trim();
 
         // Remove markdown code fences (```json ... ``` or ``` ... ```)
         const codeFencePattern = /```(?:json)?\s*([\s\S]*?)\s*```/g;
-        const codeFenceMatch = codeFencePattern.exec(trimmed);
+        const codeFenceMatch = codeFencePattern.exec(cleaned);
         if (codeFenceMatch) {
-            return codeFenceMatch[1].trim();
+            cleaned = codeFenceMatch[1].trim();
         }
 
-        // If no code fence, return trimmed text
-        return trimmed;
+        // ✅ Remove common LLM suffixes/prefixes that break JSON
+        // Remove \end{response}, \end{json}, etc.
+        cleaned = cleaned.replace(/\\end\{[^}]*\}/gi, '');
+        cleaned = cleaned.replace(/\\begin\{[^}]*\}/gi, '');
+        // Remove trailing text after valid JSON (find last } or ])
+        const lastBrace = Math.max(cleaned.lastIndexOf('}'), cleaned.lastIndexOf(']'));
+        if (lastBrace > 0) {
+            cleaned = cleaned.substring(0, lastBrace + 1);
+        }
+        // Remove leading text before valid JSON (find first { or [)
+        const firstBrace = Math.min(
+            cleaned.indexOf('{') >= 0 ? cleaned.indexOf('{') : Infinity,
+            cleaned.indexOf('[') >= 0 ? cleaned.indexOf('[') : Infinity
+        );
+        if (firstBrace !== Infinity && firstBrace > 0) {
+            cleaned = cleaned.substring(firstBrace);
+        }
+
+        return cleaned.trim();
     }
 
     private tryParseWhole(text: string): any[] | null {

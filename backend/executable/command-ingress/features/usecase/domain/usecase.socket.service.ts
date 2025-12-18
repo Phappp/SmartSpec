@@ -15,7 +15,7 @@ export class UsecaseSocketService {
      */
     broadcastToProject(projectId: string, event: UsecaseEvent): void {
         io.to(`project_${projectId}`).emit('usecase_event', event);
-        console.log(`📢 Broadcast usecase event to project ${projectId}:`, event.type);
+        //console.log(`📢 Broadcast usecase event to project ${projectId}:`, event.type);
     }
 
     /**
@@ -23,7 +23,7 @@ export class UsecaseSocketService {
      */
     joinProjectRoom(socket: any, projectId: string): void {
         socket.join(`project_${projectId}`);
-        console.log(`✅ User ${socket.id} joined project room: project_${projectId}`);
+        //console.log(`✅ User ${socket.id} joined project room: project_${projectId}`);
     }
 
     /**
@@ -31,7 +31,7 @@ export class UsecaseSocketService {
      */
     leaveProjectRoom(socket: any, projectId: string): void {
         socket.leave(`project_${projectId}`);
-        console.log(`🚪 User ${socket.id} left project room: project_${projectId}`);
+        //console.log(`🚪 User ${socket.id} left project room: project_${projectId}`);
     }
 
     // Các helper methods cho từng loại event

@@ -17,9 +17,9 @@ export function initSocket(server: HttpServer) {
     const socketProjects = new Map<string, Set<string>>();
 
     io.on('connection', (socket) => {
-        console.log(`✅ User connected: ${socket.id}, userId: ${socket.handshake.auth.userId}`);
+        //console.log(`✅ User connected: ${socket.id}, userId: ${socket.handshake.auth.userId}`);
         socket.on('join_system_logs', () => {
-            console.log(`🧩 User ${socket.id} joined global system log room`);
+            //console.log(`🧩 User ${socket.id} joined global system log room`);
             logSocketService.joinSystemRoom(socket);
             });
         // Initialize projects set for this socket
@@ -40,7 +40,7 @@ export function initSocket(server: HttpServer) {
                 return;
             }
 
-            console.log(`🎯 User ${userId} joining project ${projectId}`);
+            //console.log(`🎯 User ${userId} joining project ${projectId}`);
 
             // Track this project for the socket
             socketProjects.get(socket.id)?.add(projectId);
@@ -52,10 +52,10 @@ export function initSocket(server: HttpServer) {
             // ✅ Join presence tracking
             try {
                 const userInfo = await getUserInfo(userId);
-                console.log(`👤 Retrieved user info for ${userId}:`, userInfo?.name);
+                //console.log(`👤 Retrieved user info for ${userId}:`, userInfo?.name);
                 presenceSocketService.joinProjectRoom(socket, projectId, userId, userInfo);
             } catch (error) {
-                console.error('Error joining presence room:', error);
+                //console.error('Error joining presence room:', error);
                 // Fallback với basic info
                 const fallbackUserInfo = {
                     name: 'Unknown User',
@@ -71,7 +71,7 @@ export function initSocket(server: HttpServer) {
         // ✅ Leave project room
         socket.on('leave_project', (projectId: string) => {
             const userId = socket.handshake.auth.userId;
-            console.log(`🚪 User ${userId} leaving project ${projectId}`);
+            //console.log(`🚪 User ${userId} leaving project ${projectId}`);
 
             // Remove from tracking
             socketProjects.get(socket.id)?.delete(projectId);
@@ -84,12 +84,12 @@ export function initSocket(server: HttpServer) {
         });
 
         socket.on('disconnect', (reason) => {
-            console.log(`❌ User disconnected: ${socket.id}, reason: ${reason}`);
+            //console.log(`❌ User disconnected: ${socket.id}, reason: ${reason}`);
 
             // ✅ Auto cleanup on disconnect - Leave all projects
             const userProjects = socketProjects.get(socket.id);
             if (userProjects) {
-                console.log(`🧹 Cleaning up ${userProjects.size} projects for disconnected user`);
+                //console.log(`🧹 Cleaning up ${userProjects.size} projects for disconnected user`);
                 userProjects.forEach(projectId => {
                     presenceSocketService.leaveProjectRoom(socket, projectId);
                     usecaseSocketService.leaveProjectRoom(socket, projectId);
@@ -115,7 +115,7 @@ async function getUserInfo(userId: string) {
         const user = await User.findById(userId).select('name email avatar_url');
         
         if (!user) {
-            console.warn(`⚠️ User not found: ${userId}`);
+            //console.warn(`⚠️ User not found: ${userId}`);
             return null;
         }
         

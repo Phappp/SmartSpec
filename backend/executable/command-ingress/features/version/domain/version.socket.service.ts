@@ -14,7 +14,7 @@ export class VersionSocketService {
    */
   broadcastToProject(projectId: string, event: VersionEvent): void {
     io.to(`project_${projectId}`).emit('version_event', event);
-    console.log(`📢 Broadcast version event to project ${projectId}:`, event.type);
+    //console.log(`📢 Broadcast version event to project ${projectId}:`, event.type);
   }
 
   /**
@@ -22,7 +22,7 @@ export class VersionSocketService {
    */
   joinProjectRoom(socket: any, projectId: string): void {
     socket.join(`project_${projectId}`);
-    console.log(`✅ User ${socket.id} joined project room: project_${projectId}`);
+    //console.log(`✅ User ${socket.id} joined project room: project_${projectId}`);
   }
 
   /**
@@ -30,7 +30,7 @@ export class VersionSocketService {
    */
   leaveProjectRoom(socket: any, projectId: string): void {
     socket.leave(`project_${projectId}`);
-    console.log(`🚪 User ${socket.id} left project room: project_${projectId}`);
+    //console.log(`🚪 User ${socket.id} left project room: project_${projectId}`);
   }
 
   /**

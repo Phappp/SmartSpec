@@ -1211,47 +1211,43 @@ export class UsecaseGenerationAgent {
         // ✅ Lấy danh sách usecases đã có để LLM tránh trùng lặp
         const existingUsecases = await Usecase.find({ version_id: this.context.versionId })
             .select('name goal')
-            .lean()
-            .limit(100); // Giới hạn để không quá dài
+            .lean();
 
-        let retryInfo = `**RETRY GENERATION - CẦN GENERATE LẠI CÁC USE CASES CÒN THIẾU/HỢP LỆ**\n\n`;
+        let retryInfo = `⚠️ **CRITICAL RETRY - GENERATE ${batchSize || totalToRegenerate} COMPLETELY NEW USE CASES** ⚠️\n\n`;
 
-        retryInfo += `**QUAN TRỌNG**: Đây là batch RETRY để generate lại các usecases còn thiếu. KHÔNG phải tiếp tục từ batch trước.\n\n`;
+        retryInfo += `🚫 **BLACKLIST - CẤM TUYỆT ĐỐI GENERATE CÁC USE CASE SAU:**\n`;
+        retryInfo += `────────────────────────────────────────\n`;
 
-        if (missingCount > 0) {
-            retryInfo += `- Còn thiếu ${missingCount} use case(s) so với estimate ban đầu (${this.context.estimatedCount} use cases)\n`;
-            retryInfo += `- Cần generate ${missingCount} use case(s) MỚI để bù vào số lượng còn thiếu\n`;
-        }
+        // Liệt kê TẤT CẢ usecases đã có (không giới hạn)
+        existingUsecases.forEach((uc, idx) => {
+            retryInfo += `❌ ${idx + 1}. "${(uc.name as string) || 'Unnamed'}"\n`;
+        });
+        retryInfo += `────────────────────────────────────────\n\n`;
+
+        retryInfo += `✅ **YÊU CẦU BẮT BUỘC:**\n`;
+        retryInfo += `1. Generate CHÍNH XÁC ${batchSize || totalToRegenerate} use case(s) HOÀN TOÀN MỚI\n`;
+        retryInfo += `2. Tên và mục đích PHẢI KHÁC 100% với ${existingUsecases.length} usecases trong BLACKLIST\n`;
+        retryInfo += `3. Tìm các chức năng CHƯA ĐƯỢC ĐỀ CẬP trong văn bản gốc\n`;
+        retryInfo += `4. Nếu không tìm thấy chức năng mới → generate các use case phụ trợ/mở rộng\n\n`;
+
+        retryInfo += `💡 **GỢI Ý HƯỚNG TÌM USE CASE MỚI:**\n`;
+        retryInfo += `- Các chức năng quản trị (Admin functions)\n`;
+        retryInfo += `- Các chức năng báo cáo/thống kê (Reports/Analytics)\n`;
+        retryInfo += `- Các chức năng cài đặt/cấu hình (Settings/Configuration)\n`;
+        retryInfo += `- Các chức năng import/export khác\n`;
+        retryInfo += `- Các chức năng tích hợp bên ngoài (External integrations)\n`;
+        retryInfo += `- Các chức năng thông báo/notification\n`;
+        retryInfo += `- Các chức năng audit/logging\n\n`;
 
         if (invalidUsecases.length > 0) {
-            retryInfo += `- Có ${invalidUsecases.length} use case(s) bị lỗi validation:\n`;
+            retryInfo += `⚠️ **CÁC USE CASE BỊ LỖI (cần sửa hoặc thay thế):**\n`;
             invalidUsecases.forEach((uc, idx) => {
                 retryInfo += `  ${idx + 1}. "${uc.name}" - Lỗi: ${uc.errors.join(', ')}\n`;
             });
+            retryInfo += `\n`;
         }
 
-        // ✅ Hiển thị danh sách usecases đã có để LLM tránh trùng lặp
-        if (existingUsecases.length > 0) {
-            retryInfo += `\n**CÁC USE CASES ĐÃ CÓ (${existingUsecases.length} usecases) - KHÔNG được generate lại:**\n`;
-            existingUsecases.slice(0, 50).forEach((uc, idx) => {
-                retryInfo += `  ${idx + 1}. "${(uc.name as string) || 'Unnamed'}" - ${((uc.goal as string) || '').substring(0, 60)}...\n`;
-            });
-            if (existingUsecases.length > 50) {
-                retryInfo += `  ... và ${existingUsecases.length - 50} usecases khác\n`;
-            }
-            retryInfo += `\n**QUAN TRỌNG**: Các usecases bạn generate PHẢI KHÁC với danh sách trên. KHÔNG được trùng lặp về mục đích/chức năng.\n`;
-        }
-
-        if (batchSize) {
-            retryInfo += `\n**YÊU CẦU CỤ THỂ**:\n`;
-            retryInfo += `- Generate CHÍNH XÁC ${batchSize} use case(s) MỚI trong batch retry này\n`;
-            retryInfo += `- Tổng cần retry: ${totalToRegenerate} usecases (đã chia thành ${Math.ceil(totalToRegenerate / this.DEFAULT_BATCH_SIZE)} batch(es))\n`;
-            retryInfo += `- Mỗi usecase phải có mục đích/chức năng KHÁC với các usecases đã có ở trên\n`;
-            retryInfo += `- Đảm bảo các usecases mới bù vào số lượng còn thiếu (${missingCount} usecases)\n`;
-            retryInfo += `- KHÔNG generate lại các usecases đã có, dù tên gọi khác nhưng mục đích giống\n`;
-        }
-
-        retryInfo += `\n**VĂN BẢN GỐC**:\n${this.context.mergedText}`;
+        retryInfo += `📄 **VĂN BẢN GỐC:**\n${this.context.mergedText}`;
 
         return retryInfo;
     }

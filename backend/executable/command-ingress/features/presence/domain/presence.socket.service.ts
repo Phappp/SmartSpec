@@ -16,8 +16,8 @@ export class PresenceSocketService {
      * User join project room - FIXED ACTIVE MEMBER COUNT
      */
     joinProjectRoom(socket: any, projectId: string, userId: string, userInfo: any): void {
-        console.log(`🔍 [JOIN] User ${userId} joining project ${projectId}`);
-        console.log(`🔍 [JOIN] Current active users before:`, this.getActiveUsersInProject(projectId).length);
+        //console.log(`🔍 [JOIN] User ${userId} joining project ${projectId}`);
+        //console.log(`🔍 [JOIN] Current active users before:`, this.getActiveUsersInProject(projectId).length);
 
         const activeUser: ActiveUser = {
             userId,
@@ -33,31 +33,31 @@ export class PresenceSocketService {
         socket.join(`project_${projectId}`);
 
         const currentActiveUsers = this.getActiveUsersInProject(projectId);
-        console.log(`🔍 [JOIN] Active users after join:`, currentActiveUsers.length);
-        console.log(`🔍 [JOIN] Users details:`, currentActiveUsers.map(u => ({ userId: u.userId, name: u.userInfo.name })));
+        //console.log(`🔍 [JOIN] Active users after join:`, currentActiveUsers.length);
+        //console.log(`🔍 [JOIN] Users details:`, currentActiveUsers.map(u => ({ userId: u.userId, name: u.userInfo.name })));
 
         // Broadcast user joined event với accurate count
         this.broadcastUserJoined(projectId, userId, userInfo);
 
-        console.log(`✅ User ${userId} joined project room: project_${projectId}`);
+        //console.log(`✅ User ${userId} joined project room: project_${projectId}`);
     }
 
     /**
      * User leave project room - FIXED ACTIVE MEMBER COUNT
      */
     leaveProjectRoom(socket: any, projectId: string): void {
-        console.log(`🔍 [LEAVE] Socket ${socket.id} leaving project ${projectId}`);
-        console.log(`🔍 [LEAVE] Current active users before:`, this.getActiveUsersInProject(projectId).length);
+        //console.log(`🔍 [LEAVE] Socket ${socket.id} leaving project ${projectId}`);
+        //console.log(`🔍 [LEAVE] Current active users before:`, this.getActiveUsersInProject(projectId).length);
 
         const activeUser = this.activeUsers.get(socket.id);
 
         if (activeUser) {
             this.activeUsers.delete(socket.id);
-            console.log(`🔍 [LEAVE] After deletion - Total active users in system: ${this.activeUsers.size}`);
+            //console.log(`🔍 [LEAVE] After deletion - Total active users in system: ${this.activeUsers.size}`);
 
             const remainingUsers = this.getActiveUsersInProject(projectId);
-            console.log(`🔍 [LEAVE] Remaining users in project ${projectId}:`, remainingUsers.length);
-            console.log(`🔍 [LEAVE] Remaining users details:`, remainingUsers.map(u => ({ userId: u.userId, name: u.userInfo.name })));
+            //console.log(`🔍 [LEAVE] Remaining users in project ${projectId}:`, remainingUsers.length);
+            //console.log(`🔍 [LEAVE] Remaining users details:`, remainingUsers.map(u => ({ userId: u.userId, name: u.userInfo.name })));
 
             // Broadcast với remaining users chính xác
             this.broadcastUserLeft(projectId, activeUser.userId, activeUser.userInfo, remainingUsers);
@@ -89,7 +89,7 @@ export class PresenceSocketService {
 
         const uniqueUsers = Array.from(uniqueUsersMap.values());
         
-        console.log(`🔍 [ACTIVE_USERS] Project ${projectId}: ${uniqueUsers.length} unique users`);
+        //console.log(`🔍 [ACTIVE_USERS] Project ${projectId}: ${uniqueUsers.length} unique users`);
         
         return uniqueUsers;
     }
@@ -107,8 +107,8 @@ export class PresenceSocketService {
             joinedAt: user.joinedAt
         }));
 
-        console.log(`📤 [BROADCAST_JOIN] Project ${projectId} - Active users:`, activeUsersData.length);
-        console.log(`📤 [BROADCAST_JOIN] Users:`, activeUsersData.map(u => u.userId));
+        //console.log(`📤 [BROADCAST_JOIN] Project ${projectId} - Active users:`, activeUsersData.length);
+        //console.log(`📤 [BROADCAST_JOIN] Users:`, activeUsersData.map(u => u.userId));
 
         io.to(`project_${projectId}`).emit('user_joined', {
             type: 'USER_JOINED',
@@ -137,8 +137,8 @@ export class PresenceSocketService {
             joinedAt: user.joinedAt
         }));
 
-        console.log(`📤 [BROADCAST_LEFT] Project ${projectId} - Remaining users:`, activeUsersData.length);
-        console.log(`📤 [BROADCAST_LEFT] Users:`, activeUsersData.map(u => u.userId));
+        //console.log(`📤 [BROADCAST_LEFT] Project ${projectId} - Remaining users:`, activeUsersData.length);
+        //console.log(`📤 [BROADCAST_LEFT] Users:`, activeUsersData.map(u => u.userId));
 
         io.to(`project_${projectId}`).emit('user_left', {
             type: 'USER_LEFT',

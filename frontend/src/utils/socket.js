@@ -21,20 +21,20 @@ export function initSocketConnection() {
         // ✅ Tham gia room cá nhân (nếu có userId)
         if (userId) {
             socket.emit("notification", userId);
-            console.log("✅ Joined socket room:", `user_${userId}`);
+            //console.log("✅ Joined socket room:", `user_${userId}`);
         }
 
         // ✅ Tham gia room hệ thống (để nhận log toàn hệ thống)
         socket.emit("join_system_logs");
-        console.log("🌍 Joined global system log room");
+        //console.log("🌍 Joined global system log room");
     });
 
     // ✅ Lắng nghe tất cả log realtime (từ BE)
     socket.on("log_event", (event) => {
         if (event.projectId) {
-            console.log("📘 [Project Log Event]:", event);
+            //console.log("📘 [Project Log Event]:", event);
         } else {
-            console.log("🌍 [System Log Event]:", event);
+            //console.log("🌍 [System Log Event]:", event);
         }
     });
 

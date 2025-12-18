@@ -73,7 +73,7 @@ export function useActiveMembers() {
     const joinProjectRoom = (projectId) => {
         if (socket && projectId) {
             socket.emit('join_project', projectId)
-            console.log(`✅ Joined project room: project_${projectId}`)
+            //console.log(`✅ Joined project room: project_${projectId}`)
         }
     }
 
