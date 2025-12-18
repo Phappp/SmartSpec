@@ -483,7 +483,7 @@ export class ShareProjectService {
       },
     ]);
 
-    console.log('🔍 getUserInvites result:', JSON.stringify(invites, null, 2));
+    //console.log('🔍 getUserInvites result:', JSON.stringify(invites, null, 2));
 
     return new ServiceResponse(ResponseStatus.Success, "OK", invites, 200);
   }

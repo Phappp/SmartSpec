@@ -188,16 +188,23 @@ II. USE CASE SEMANTIC:
 • KHÔNG sinh 2 use case cùng mục tiêu (nếu khác tên nhưng cùng ý → conflict)
 • Đúng cấp độ trừu tượng: Use Case = Nghiệp vụ hệ thống (KHÔNG phải UI-level)
 
-**QUY TẮC GOM CRUD OPERATIONS (QUAN TRỌNG)**:
-• Khi có các chức năng CRUD (Create, Read, Update, Delete) cho CÙNG MỘT ENTITY → GOM LẠI thành 1 usecase quản lý
-• Ví dụ: "Add project", "Delete project", "Update project", "View project" → GOM thành "Quản lý Dự án (CRUD)"
-• Ví dụ: "Create user", "Edit user", "Remove user", "List users" → GOM thành "Quản lý Người dùng (CRUD)"
-• Ví dụ: "Add order", "Update order", "Delete order", "View order" → GOM thành "Quản lý Đơn hàng (CRUD)"
-• Tasks của usecase quản lý sẽ bao gồm các operations CRUD: ["Tạo entity", "Xem danh sách entity", "Xem chi tiết entity", "Cập nhật entity", "Xóa entity"]
-• Goal sẽ là: "Quản lý [entity] với đầy đủ các thao tác CRUD"
-• Name sẽ là: "Quản lý [Entity] (CRUD)" hoặc "[Entity] Management (CRUD)"
-• KHÔNG tách CRUD thành nhiều usecase riêng lẻ cho cùng một entity
-• Nếu chỉ có 1-2 operations (ví dụ: chỉ có "View" và "Create") → vẫn có thể gom lại nếu chúng thuộc cùng entity
+**QUY TẮC TÁCH RIÊNG CÁC OPERATIONS (QUAN TRỌNG)**:
+• KHÔNG gom CRUD thành 1 usecase quản lý chung
+• TÁCH RIÊNG từng operation thành usecase độc lập:
+  - "Thêm Input" (Add Input)
+  - "Xóa Input" (Delete Input)  
+  - "Tìm kiếm Input" (Search Input)
+  - "Lọc Input" (Filter Input)
+  - "Cập nhật Input" (Update Input)
+  - "Xem chi tiết Input" (View Input Detail)
+• Mỗi operation = 1 usecase với goal riêng biệt
+• Ví dụ cho entity "Input":
+  - ✅ "Thêm Input mới" - goal: Cho phép người dùng thêm input mới vào hệ thống
+  - ✅ "Xóa Input" - goal: Cho phép người dùng xóa input khỏi hệ thống
+  - ✅ "Tìm kiếm Input" - goal: Cho phép người dùng tìm kiếm input theo từ khóa
+  - ✅ "Lọc Input theo loại" - goal: Cho phép người dùng lọc input theo loại/trạng thái
+  - ❌ "Quản lý Input (CRUD)" - SAI, không gom lại
+• Điều này giúp mỗi usecase có main_flow, preconditions, postconditions riêng biệt và rõ ràng
 
 III. TASK QUALITY:
 • Task phải deployable (có thể giao cho dev, thời gian 1-3 ngày)
@@ -499,14 +506,13 @@ III. USE CASE SEMANTIC:
 - KHÔNG sinh 2 use case cùng mục tiêu (nếu khác tên nhưng cùng ý → conflict)
 - Đúng cấp độ trừu tượng: Use Case = Nghiệp vụ hệ thống (KHÔNG phải UI-level)
 
-**QUY TẮC GOM CRUD OPERATIONS**:
-- Khi có các chức năng CRUD (Create, Read, Update, Delete) cho CÙNG MỘT ENTITY → GOM LẠI thành 1 usecase quản lý
-- Ví dụ: "Add project", "Delete project", "Update project", "View project" → GOM thành "Project Management (CRUD)"
-- Ví dụ: "Create user", "Edit user", "Remove user", "List users" → GOM thành "User Management (CRUD)"
-- Ví dụ: "Add order", "Update order", "Delete order", "View order" → GOM thành "Order Management (CRUD)"
-- Tasks của usecase quản lý sẽ bao gồm các operations CRUD: ["Create entity", "Read/View entity", "Update entity", "Delete entity"]
-- Goal sẽ là: "Quản lý [entity] với đầy đủ các thao tác CRUD"
-- KHÔNG tách CRUD thành nhiều usecase riêng lẻ cho cùng một entity
+**QUY TẮC TÁCH RIÊNG CÁC OPERATIONS**:
+- KHÔNG gom CRUD thành 1 usecase quản lý chung
+- TÁCH RIÊNG từng operation thành usecase độc lập
+- Ví dụ cho entity "Input": "Thêm Input", "Xóa Input", "Tìm kiếm Input", "Lọc Input", "Cập nhật Input"
+- Mỗi operation = 1 usecase với goal, main_flow, preconditions riêng biệt
+- ❌ SAI: "Input Management (CRUD)" 
+- ✅ ĐÚNG: "Add Input", "Delete Input", "Search Input", "Filter Input", "Update Input"
 
 IV. TASK QUALITY:
 - Task phải deployable (có thể giao cho dev, thời gian 1-3 ngày)
@@ -1004,14 +1010,13 @@ III. USE CASE SEMANTIC:
 - DO NOT generate 2 use cases with same goal (if different names but same meaning → conflict)
 - Correct abstraction level: Use Case = System business (NOT UI-level)
 
-**CRUD OPERATIONS GROUPING RULE**:
-- When there are CRUD operations (Create, Read, Update, Delete) for the SAME ENTITY → GROUP them into 1 management usecase
-- Example: "Add project", "Delete project", "Update project", "View project" → GROUP into "Project Management (CRUD)"
-- Example: "Create user", "Edit user", "Remove user", "List users" → GROUP into "User Management (CRUD)"
-- Example: "Add order", "Update order", "Delete order", "View order" → GROUP into "Order Management (CRUD)"
-- Tasks of management usecase will include CRUD operations: ["Create entity", "Read/View entity", "Update entity", "Delete entity"]
-- Goal will be: "Manage [entity] with full CRUD operations"
-- DO NOT split CRUD into multiple separate usecases for the same entity
+**SEPARATE OPERATIONS RULE**:
+- DO NOT group CRUD into 1 management usecase
+- SEPARATE each operation into independent usecase
+- Example for entity "Input": "Add Input", "Delete Input", "Search Input", "Filter Input", "Update Input"
+- Each operation = 1 usecase with separate goal, main_flow, preconditions
+- ❌ WRONG: "Input Management (CRUD)"
+- ✅ CORRECT: "Add Input", "Delete Input", "Search Input", "Filter Input", "Update Input"
 
 IV. TASK QUALITY:
 - Task must be deployable (can be assigned to dev, 1-3 days duration)
@@ -2167,6 +2172,456 @@ export class GeminiService {
         } catch (err: any) {
             console.error("❌ LLM findConflictGroups error:", err);
             throw err;
+        }
+    }
+
+    // =========================================================================
+    // V2 METHODS - For UsecaseGenerationAgentV2
+    // =========================================================================
+
+    /**
+     * V2: Estimate với commitment - LLM cam kết danh sách usecase sẽ generate
+     */
+    async estimateWithCommitment(
+        text: string,
+        language: string = 'vi-VN',
+        modelName?: string,
+        userId?: string,
+        projectId?: string
+    ): Promise<{
+        estimated_count: number;
+        summary: string;
+        committed_usecases: Array<{ key: string; name: string; desc: string; module?: string }>;
+    }> {
+        console.log(`📊 [ESTIMATE_V2] Estimating with commitment...`);
+
+        const effectiveModelName = modelName || await this.llmService.getRecommendedModel(undefined, userId);
+        const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+
+        const prompt = lang === 'vi-VN'
+            ? this.getEstimateWithCommitmentPromptVI(text)
+            : this.getEstimateWithCommitmentPromptEN(text);
+
+        try {
+            console.log(`🔑 Calling LLM for estimateWithCommitment with model: ${effectiveModelName}`);
+
+            const response = await this.llmService.callLLM({
+                prompt: prompt,
+                modelName: effectiveModelName,
+                userId: userId,
+                projectId: projectId,
+                endpoint: 'estimateWithCommitment',
+                isProductionFreeMode: true,
+                forceModel: !!modelName
+            });
+
+            let responseText: string = response.text || "{}";
+            responseText = this.cleanJsonString(responseText);
+
+            const parsed = JSON.parse(responseText);
+
+            // Validate response
+            if (!parsed.committed_usecases || !Array.isArray(parsed.committed_usecases)) {
+                throw new Error("Invalid response: missing committed_usecases array");
+            }
+
+            // Normalize committed usecases - add key if missing
+            const committed = parsed.committed_usecases.map((uc: any, index: number) => ({
+                key: uc.key || `UC${String(index + 1).padStart(3, '0')}`,
+                name: uc.name || `Usecase ${index + 1}`,
+                desc: uc.desc || uc.description || '',
+                module: uc.module || ''
+            }));
+
+            console.log(`✅ [ESTIMATE_V2] Committed ${committed.length} usecases`);
+
+            return {
+                estimated_count: committed.length,
+                summary: parsed.summary || `${committed.length} usecases`,
+                committed_usecases: committed
+            };
+
+        } catch (err: any) {
+            console.error(`❌ [ESTIMATE_V2] Error:`, err.message);
+            throw err;
+        }
+    }
+
+    private getEstimateWithCommitmentPromptVI(text: string): string {
+        return `**MỤC TIÊU**: Phân tích văn bản và CAM KẾT danh sách các use case sẽ generate.
+
+**VĂN BẢN**:
+${text}
+
+**YÊU CẦU**:
+1. Phân tích văn bản và liệt kê TẤT CẢ các use case có thể extract
+2. Mỗi use case phải có key duy nhất (UC001, UC002, ...)
+3. CHỈ liệt kê các use case PHẦN MỀM, KHÔNG liệt kê thủ tục giấy tờ
+4. Gom các CRUD operations cho cùng entity thành 1 use case quản lý
+5. Mỗi use case = 1 mục tiêu nghiệp vụ rõ ràng
+
+**QUY TẮC TÁCH RIÊNG OPERATIONS**:
+- KHÔNG gom CRUD, TÁCH RIÊNG từng operation
+- Ví dụ: "Thêm Input", "Xóa Input", "Tìm kiếm Input", "Lọc Input", "Cập nhật Input"
+- Mỗi operation = 1 usecase độc lập với goal riêng
+
+**OUTPUT FORMAT** (JSON only, no markdown):
+{
+    "summary": "Mô tả ngắn về hệ thống",
+    "committed_usecases": [
+        {
+            "key": "UC001",
+            "name": "Tên use case",
+            "desc": "Mô tả ngắn gọn mục tiêu",
+            "module": "Tên module"
+        }
+    ]
+}
+
+**QUAN TRỌNG**: 
+- Đây là CAM KẾT - bạn PHẢI generate đầy đủ chi tiết cho TẤT CẢ các use case này sau đó
+- KHÔNG được bỏ sót use case nào
+- KHÔNG được thêm use case mới khi generate chi tiết
+
+Trả về JSON:`;
+    }
+
+    private getEstimateWithCommitmentPromptEN(text: string): string {
+        return `**OBJECTIVE**: Analyze text and COMMIT to a list of use cases to generate.
+
+**TEXT**:
+${text}
+
+**REQUIREMENTS**:
+1. Analyze text and list ALL extractable use cases
+2. Each use case must have unique key (UC001, UC002, ...)
+3. ONLY list SOFTWARE use cases, NOT paperwork procedures
+4. Group CRUD operations for same entity into 1 management use case
+5. Each use case = 1 clear business goal
+
+**SEPARATE OPERATIONS RULES**:
+- DO NOT group CRUD, SEPARATE each operation
+- Example: "Add Input", "Delete Input", "Search Input", "Filter Input", "Update Input"
+- Each operation = 1 independent usecase with separate goal
+
+**OUTPUT FORMAT** (JSON only, no markdown):
+{
+    "summary": "Brief system description",
+    "committed_usecases": [
+        {
+            "key": "UC001",
+            "name": "Use case name",
+            "desc": "Brief goal description",
+            "module": "Module name"
+        }
+    ]
+}
+
+**IMPORTANT**: 
+- This is a COMMITMENT - you MUST generate full details for ALL these use cases later
+- DO NOT skip any use case
+- DO NOT add new use cases when generating details
+
+Return JSON:`;
+    }
+
+    /**
+     * V2: Generate batch từ committed usecases
+     */
+    async generateBatchFromCommitment(
+        originalText: string,
+        committedUsecases: Array<{ key: string; name: string; desc: string; module?: string }>,
+        batchNumber: number,
+        totalBatches: number,
+        language: string = 'vi-VN',
+        modelName?: string,
+        userId?: string,
+        projectId?: string
+    ): Promise<any[]> {
+        console.log(`📦 [BATCH_V2] Generating batch ${batchNumber}/${totalBatches} (${committedUsecases.length} usecases)`);
+
+        const effectiveModelName = modelName || await this.llmService.getRecommendedModel(undefined, userId);
+        const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+
+        const prompt = lang === 'vi-VN'
+            ? this.getGenerateBatchPromptVI(originalText, committedUsecases, batchNumber, totalBatches)
+            : this.getGenerateBatchPromptEN(originalText, committedUsecases, batchNumber, totalBatches);
+
+        try {
+            console.log(`🔑 Calling LLM for generateBatchFromCommitment with model: ${effectiveModelName}`);
+
+            const response = await this.llmService.callLLM({
+                prompt: prompt,
+                modelName: effectiveModelName,
+                userId: userId,
+                projectId: projectId,
+                endpoint: 'generateBatchFromCommitment',
+                isProductionFreeMode: true,
+                forceModel: !!modelName
+            });
+
+            let responseText: string = response.text || "[]";
+            responseText = this.cleanJsonString(responseText);
+
+            const parsed = this.safeJsonParseRobust(responseText);
+            const useCases = parsed.items || [];
+
+            console.log(`✅ [BATCH_V2] Generated ${useCases.length}/${committedUsecases.length} usecases`);
+
+            return useCases;
+
+        } catch (err: any) {
+            console.error(`❌ [BATCH_V2] Error:`, err.message);
+            throw err;
+        }
+    }
+
+    private getGenerateBatchPromptVI(
+        text: string,
+        committed: Array<{ key: string; name: string; desc: string; module?: string }>,
+        batchNumber: number,
+        totalBatches: number
+    ): string {
+        const committedList = committed.map(uc =>
+            `- ${uc.key}: "${uc.name}" - ${uc.desc} (Module: ${uc.module || 'N/A'})`
+        ).join('\n');
+
+        return `**MỤC TIÊU**: Generate chi tiết cho CHÍNH XÁC ${committed.length} use cases đã cam kết.
+
+**BATCH**: ${batchNumber}/${totalBatches}
+
+**DANH SÁCH USE CASES CẦN GENERATE** (ĐÃ CAM KẾT - PHẢI GENERATE ĐỦ):
+${committedList}
+
+**VĂN BẢN GỐC** (để tham khảo chi tiết):
+${text}
+
+**YÊU CẦU NGHIÊM NGẶT**:
+1. PHẢI generate CHÍNH XÁC ${committed.length} use cases (không thiếu, không thừa)
+2. Mỗi use case PHẢI có key tương ứng (${committed.map(c => c.key).join(', ')})
+3. Giữ nguyên tên và mục tiêu đã cam kết
+4. Bổ sung chi tiết: actor, main_flow, preconditions, postconditions, etc.
+
+**SCHEMA USE CASE**:
+{
+    "key": "UC001",
+    "name": "Tên use case",
+    "actor": { "id": "user", "name": "Người dùng", "description": "..." },
+    "goal": "Mục tiêu",
+    "business_reason": "Lý do nghiệp vụ",
+    "context": { "module": "Module", "scope": "", "system": "" },
+    "trigger": { "event": "Sự kiện trigger", "source": "UI" },
+    "preconditions": ["Điều kiện tiên quyết"],
+    "main_flow": [
+        { "step": 1, "actor": "Người dùng", "action": "Hành động", "expected_result": "Kết quả" }
+    ],
+    "alternative_flows": [],
+    "exceptions": [],
+    "postconditions": ["Kết quả sau khi hoàn thành"],
+    "rules": [{ "id": "R1", "description": "Quy tắc" }],
+    "inputs": [{ "name": "field", "type": "string", "required": true }],
+    "outputs": [{ "name": "result", "type": "string", "optional": false }],
+    "non_functional_constraints": ["Ràng buộc phi chức năng"]
+}
+
+**OUTPUT**: JSON array với ${committed.length} use cases. KHÔNG markdown, KHÔNG giải thích.
+
+[`;
+    }
+
+    private getGenerateBatchPromptEN(
+        text: string,
+        committed: Array<{ key: string; name: string; desc: string; module?: string }>,
+        batchNumber: number,
+        totalBatches: number
+    ): string {
+        const committedList = committed.map(uc =>
+            `- ${uc.key}: "${uc.name}" - ${uc.desc} (Module: ${uc.module || 'N/A'})`
+        ).join('\n');
+
+        return `**OBJECTIVE**: Generate details for EXACTLY ${committed.length} committed use cases.
+
+**BATCH**: ${batchNumber}/${totalBatches}
+
+**USE CASES TO GENERATE** (COMMITTED - MUST GENERATE ALL):
+${committedList}
+
+**ORIGINAL TEXT** (for reference):
+${text}
+
+**STRICT REQUIREMENTS**:
+1. MUST generate EXACTLY ${committed.length} use cases (no less, no more)
+2. Each use case MUST have corresponding key (${committed.map(c => c.key).join(', ')})
+3. Keep committed name and goal
+4. Add details: actor, main_flow, preconditions, postconditions, etc.
+
+**USE CASE SCHEMA**:
+{
+    "key": "UC001",
+    "name": "Use case name",
+    "actor": { "id": "user", "name": "User", "description": "..." },
+    "goal": "Goal",
+    "business_reason": "Business reason",
+    "context": { "module": "Module", "scope": "", "system": "" },
+    "trigger": { "event": "Trigger event", "source": "UI" },
+    "preconditions": ["Precondition"],
+    "main_flow": [
+        { "step": 1, "actor": "User", "action": "Action", "expected_result": "Result" }
+    ],
+    "alternative_flows": [],
+    "exceptions": [],
+    "postconditions": ["Postcondition"],
+    "rules": [{ "id": "R1", "description": "Rule" }],
+    "inputs": [{ "name": "field", "type": "string", "required": true }],
+    "outputs": [{ "name": "result", "type": "string", "optional": false }],
+    "non_functional_constraints": ["Non-functional constraint"]
+}
+
+**OUTPUT**: JSON array with ${committed.length} use cases. NO markdown, NO explanations.
+
+[`;
+    }
+
+    /**
+     * V2: Retry generate missing usecases
+     */
+    async retryGenerateMissing(
+        originalText: string,
+        missingUsecases: Array<{ key: string; name: string; desc: string; module?: string }>,
+        language: string = 'vi-VN',
+        modelName?: string,
+        userId?: string,
+        projectId?: string
+    ): Promise<any[]> {
+        console.log(`🔄 [RETRY_V2] Retrying ${missingUsecases.length} missing usecases`);
+
+        const effectiveModelName = modelName || await this.llmService.getRecommendedModel(undefined, userId);
+
+        const missingList = missingUsecases.map(uc =>
+            `- ${uc.key}: "${uc.name}" - ${uc.desc}`
+        ).join('\n');
+
+        const prompt = language === 'vi-VN'
+            ? `**RETRY - GENERATE LẠI CÁC USE CASES BỊ THIẾU**
+
+**DANH SÁCH USE CASES CẦN GENERATE** (BẮT BUỘC):
+${missingList}
+
+**VĂN BẢN GỐC**:
+${originalText}
+
+**YÊU CẦU**:
+1. PHẢI generate đầy đủ ${missingUsecases.length} use cases
+2. Giữ đúng key và tên đã cam kết
+3. Bổ sung chi tiết đầy đủ theo schema
+
+Trả về JSON array với ${missingUsecases.length} use cases:
+[`
+            : `**RETRY - REGENERATE MISSING USE CASES**
+
+**USE CASES TO GENERATE** (REQUIRED):
+${missingList}
+
+**ORIGINAL TEXT**:
+${originalText}
+
+**REQUIREMENTS**:
+1. MUST generate all ${missingUsecases.length} use cases
+2. Keep committed key and name
+3. Add full details per schema
+
+Return JSON array with ${missingUsecases.length} use cases:
+[`;
+
+        try {
+            const response = await this.llmService.callLLM({
+                prompt: prompt,
+                modelName: effectiveModelName,
+                userId: userId,
+                projectId: projectId,
+                endpoint: 'retryGenerateMissing',
+                isProductionFreeMode: true,
+                forceModel: !!modelName
+            });
+
+            let responseText: string = response.text || "[]";
+            responseText = this.cleanJsonString(responseText);
+
+            const parsed = this.safeJsonParseRobust(responseText);
+            return parsed.items || [];
+
+        } catch (err: any) {
+            console.error(`❌ [RETRY_V2] Error:`, err.message);
+            throw err;
+        }
+    }
+
+    /**
+     * V2: Repair broken usecase với LLM
+     */
+    async repairUsecase(brokenUsecase: any, errorMessage: string): Promise<any | null> {
+        console.log(`🔧 [REPAIR] Attempting to fix: ${brokenUsecase.name}`);
+
+        const effectiveModelName = await this.llmService.getRecommendedModel();
+
+        const prompt = `🔧 **SỬA USE CASE BỊ LỖI**
+
+**DỮ LIỆU BỊ LỖI:**
+${JSON.stringify(brokenUsecase, null, 2)}
+
+**LỖI:**
+${errorMessage}
+
+**SCHEMA ĐÚNG:**
+{
+    "name": "string (bắt buộc)",
+    "actor": { "id": "string", "name": "string", "description": "string" },
+    "goal": "string (bắt buộc)",
+    "main_flow": [{ "step": number, "actor": "string", "action": "string", "expected_result": "string" }],
+    "business_reason": "string",
+    "context": { "module": "string", "scope": "string", "system": "string" },
+    "trigger": { "event": "string", "source": "string" },
+    "preconditions": ["string"],
+    "postconditions": ["string"],
+    "exceptions": [{ "id": "string", "at_step": number, "type": "string", "description": "string", "system_response": "string" }],
+    "rules": [{ "id": "string", "description": "string" }],
+    "inputs": [{ "name": "string", "type": "string", "required": boolean }],
+    "outputs": [{ "name": "string", "type": "string", "optional": boolean }],
+    "non_functional_constraints": ["string"]
+}
+
+**YÊU CẦU:**
+1. Sửa lỗi nhưng giữ nguyên ý nghĩa ban đầu
+2. Đảm bảo tất cả các trường bắt buộc có giá trị hợp lệ
+3. CHỈ trả về JSON hợp lệ, KHÔNG giải thích
+
+**TRẢ VỀ JSON ĐÃ SỬA:**`;
+
+        try {
+            const response = await this.llmService.callLLM({
+                prompt: prompt,
+                modelName: effectiveModelName,
+                endpoint: 'repairUsecase',
+                isProductionFreeMode: true
+            });
+
+            let responseText: string = response.text || "{}";
+            responseText = this.cleanJsonString(responseText);
+
+            const fixed = JSON.parse(responseText);
+
+            // Validate fixed usecase
+            if (!fixed.name || !fixed.goal || !fixed.main_flow || !Array.isArray(fixed.main_flow)) {
+                console.warn(`⚠️ [REPAIR] Fixed usecase still invalid`);
+                return null;
+            }
+
+            console.log(`✅ [REPAIR] Successfully fixed: ${fixed.name}`);
+            return fixed;
+
+        } catch (err: any) {
+            console.error(`❌ [REPAIR] Error:`, err.message);
+            return null;
         }
     }
 }

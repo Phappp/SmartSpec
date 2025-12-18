@@ -88,7 +88,7 @@ export function useActiveMembers() {
             // Leave project room
             if (projectId) {
                 socket.emit('leave_project', projectId)
-                console.log(`🚪 Left project room: project_${projectId}`)
+                //console.log(`🚪 Left project room: project_${projectId}`)
             }
         }
     }

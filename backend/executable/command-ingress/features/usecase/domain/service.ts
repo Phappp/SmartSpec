@@ -202,7 +202,7 @@ export class UsecaseService {
 
     // Clean array fields (string arrays)
     const stringArrayFields = [
-      'preconditions', 'postconditions', 'non_functional_constraints', 'stakeholders', 'related_usecases'
+      'preconditions', 'postconditions', 'non_functional_constraints', 'stakeholders'
     ];
 
     stringArrayFields.forEach(field => {
@@ -254,10 +254,10 @@ export class UsecaseService {
 
       // ✅ Nếu version không phải temporary → bump trước
       if (version.version_temporary === false) {
-          const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
-          if (!bumpRes.data) throw new Error("Auto bump failed");
-          version = bumpRes.data.newVersion;
-          versionId = version._id.toString();
+        const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
+        if (!bumpRes.data) throw new Error("Auto bump failed");
+        version = bumpRes.data.newVersion;
+        versionId = version._id.toString();
       }
 
       // Kiểm tra project & quyền truy cập
@@ -275,11 +275,6 @@ export class UsecaseService {
       // Lấy danh sách usecases hiện có để normalize actor
       const existingUsecases = await Usecase.find({ version_id: version._id }).lean();
       const normalizedActor = this.normalizeActor(cleanedData.actor, existingUsecases);
-
-      // Map related_usecases từ string sang ObjectId
-      const relatedUsecaseIds = (cleanedData.related_usecases || [])
-        .filter((id: string) => id && Types.ObjectId.isValid(id))
-        .map((id: string) => new Types.ObjectId(id));
 
       // Tạo usecase mới trong collection (schema mới)
       const newUsecase = await Usecase.create([{
@@ -307,7 +302,6 @@ export class UsecaseService {
         outputs: cleanedData.outputs || [],
         non_functional_constraints: cleanedData.non_functional_constraints || [],
         stakeholders: cleanedData.stakeholders || [],
-        related_usecases: relatedUsecaseIds,
         audit: {
           created_by: new Types.ObjectId(userId),
           created_at: new Date(),
@@ -349,7 +343,7 @@ export class UsecaseService {
           after: newUsecase,
           message: `${userId} created usecases ${newUsecase.map(uc => uc.name).join(', ')} in version ${version.version_number}`
         },
-        performed_by_ai:true
+        performed_by_ai: true
       });
 
       await session.commitTransaction();
@@ -405,10 +399,10 @@ export class UsecaseService {
 
       // ✅ Nếu version không phải temporary → bump trước
       if (version.version_temporary === false) {
-          const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
-          if (!bumpRes.data) throw new Error("Auto bump failed");
-          version = bumpRes.data.newVersion;
-          versionId = version._id.toString();
+        const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
+        if (!bumpRes.data) throw new Error("Auto bump failed");
+        version = bumpRes.data.newVersion;
+        versionId = version._id.toString();
       }
 
       // 🔍 2. Kiểm tra project & quyền truy cập
@@ -421,11 +415,11 @@ export class UsecaseService {
       }
 
       // Tìm usecase cần cập nhật
-      const originalUsecase = await Usecase.findOne({ 
-        _id: usecaseId, 
-        version_id: version._id 
+      const originalUsecase = await Usecase.findOne({
+        _id: usecaseId,
+        version_id: version._id
       }).session(session);
-      
+
       if (!originalUsecase) {
         throw new Error(`Usecase not found (ID=${usecaseId})`);
       }
@@ -436,7 +430,7 @@ export class UsecaseService {
       // Normalize actor với cơ chế mapping (loại trừ UC đang update)
       let normalizedActor;
       if (cleanedData.actor) {
-        const otherUsecases = await Usecase.find({ 
+        const otherUsecases = await Usecase.find({
           version_id: version._id,
           _id: { $ne: usecaseId }
         }).lean().session(session);
@@ -456,16 +450,10 @@ export class UsecaseService {
         }
       }
 
-      // Map related_usecases từ string sang ObjectId
-      const relatedUsecaseIds = cleanedData.related_usecases
-        .filter((id: string) => id && Types.ObjectId.isValid(id))
-        .map((id: string) => new Types.ObjectId(id));
-
       // Cập nhật usecase (schema mới)
       const updateData: any = {
         ...cleanedData,
-        actor: normalizedActor,
-        related_usecases: relatedUsecaseIds
+        actor: normalizedActor
       };
 
       // Cập nhật audit
@@ -491,11 +479,6 @@ export class UsecaseService {
         updateData,
         { new: true, session }
       );
-
-      // Đồng bộ related usecases nếu có thay đổi
-      if (Array.isArray(cleanedData.related_usecases)) {
-        await this.syncRelatedUsecases(version._id, usecaseId, relatedUsecaseIds, session);
-      }
 
       // Cập nhật version metadata
       version.updated_at = new Date();
@@ -582,10 +565,10 @@ export class UsecaseService {
 
       // ✅ Nếu version không phải temporary → bump trước
       if (version.version_temporary === false) {
-          const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
-          if (!bumpRes.data) throw new Error("Auto bump failed");
-          version = bumpRes.data.newVersion;
-          versionId = version._id.toString();
+        const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
+        if (!bumpRes.data) throw new Error("Auto bump failed");
+        version = bumpRes.data.newVersion;
+        versionId = version._id.toString();
       }
 
       // 🔍 Bước 2: Kiểm tra project & quyền truy cập
@@ -598,17 +581,14 @@ export class UsecaseService {
       }
 
       // Tìm usecase cần xóa
-      const deletedUsecase = await Usecase.findOne({ 
-        _id: usecaseId, 
-        version_id: version._id 
+      const deletedUsecase = await Usecase.findOne({
+        _id: usecaseId,
+        version_id: version._id
       }).session(session);
-      
+
       if (!deletedUsecase) {
         throw new Error("Usecase not found");
       }
-
-      // Xóa references trong các UC khác
-      await this.removeUsecaseReferences(version._id, usecaseId, session);
 
       // Xóa usecase
       await Usecase.findByIdAndDelete(usecaseId, { session });
@@ -700,7 +680,6 @@ export class UsecaseService {
 
       // Lấy usecases từ collection
       const usecases = await Usecase.find({ version_id: version._id })
-        .populate('related_usecases', 'name goal')
         .lean();
 
       return new ServiceResponse(
@@ -716,82 +695,7 @@ export class UsecaseService {
     }
   }
 
-  /**
-   * Đồng bộ related usecases
-   */
-  private async syncRelatedUsecases(
-    versionId: Types.ObjectId, 
-    usecaseId: string, 
-    newRelatedUsecaseIds: Types.ObjectId[],
-    session?: mongoose.ClientSession
-  ): Promise<void> {
-    // Lấy danh sách usecases trong version
-    const allUsecases = await Usecase.find({ version_id: versionId })
-      .select('_id related_usecases')
-      .session(session || null)
-      .lean();
 
-    const validIds = new Set(allUsecases.map(uc => String(uc._id)));
-    const usecaseObjectId = new Types.ObjectId(usecaseId);
-
-    // Lọc self-reference và invalid IDs
-    const filteredRelated = newRelatedUsecaseIds
-      .filter(id => id && !id.equals(usecaseObjectId) && validIds.has(String(id)));
-
-    // Cập nhật usecase hiện tại
-    await Usecase.findByIdAndUpdate(
-      usecaseId,
-      { related_usecases: filteredRelated },
-      { session: session || undefined }
-    );
-
-    // Cập nhật two-way references
-    for (const uc of allUsecases) {
-      const currentId = String(uc._id);
-      if (currentId !== usecaseId) {
-        const currentRelated = (uc.related_usecases || []).map((id: any) => String(id));
-        const isRelated = filteredRelated.some(id => String(id) === currentId);
-
-        if (isRelated) {
-          // Thêm reference nếu chưa có
-          if (!currentRelated.includes(usecaseId)) {
-            await Usecase.findByIdAndUpdate(
-              uc._id,
-              { $addToSet: { related_usecases: usecaseObjectId } },
-              { session: session || undefined }
-            );
-          }
-        } else {
-          // Xóa reference nếu không còn liên quan
-          if (currentRelated.includes(usecaseId)) {
-            await Usecase.findByIdAndUpdate(
-              uc._id,
-              { $pull: { related_usecases: usecaseObjectId } },
-              { session: session || undefined }
-            );
-          }
-        }
-      }
-    }
-  }
-
-  /**
-   * Xóa references đến usecase bị xóa
-   */
-  private async removeUsecaseReferences(
-    versionId: Types.ObjectId, 
-    deletedUsecaseId: string,
-    session?: mongoose.ClientSession
-  ): Promise<void> {
-    const deletedUsecaseObjectId = new Types.ObjectId(deletedUsecaseId);
-    
-    // Xóa reference từ tất cả usecases trong version
-    await Usecase.updateMany(
-      { version_id: versionId },
-      { $pull: { related_usecases: deletedUsecaseObjectId } },
-      { session: session || undefined }
-    );
-  }
 
   /**
    * Cập nhật references sau khi normalize IDs (không cần nữa vì dùng _id)

@@ -217,11 +217,6 @@ const usecaseSchema = new Schema({
     },
 
     // === RELATED USE CASES ===
-    related_usecases: [{
-        type: Schema.Types.ObjectId,
-        ref: "usecases",
-        index: true
-    }],
 
     // === AUDIT TRAIL ===
     audit: {

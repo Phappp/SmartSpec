@@ -3,7 +3,7 @@ import Input from "../../../../../internal/model/input";
 import Version from "../../../../../internal/model/version";
 import Usecase from "../../../../../internal/model/usecase";
 import { GeminiService } from "./GeminiService";
-import { UsecaseGenerationAgent, AgentContext } from "./UsecaseGenerationAgent";
+import { UsecaseGenerationAgentV2, AgentContextV2 } from "./UsecaseGenerationAgentV2";
 
 export class RequirementService {
     /**
@@ -908,14 +908,20 @@ ${mergedText.substring(0, 3000)}
 
             // 4. Sử dụng Agent để generate usecases với state machine
             // ✅ Kiểm tra xem có resumeState trong version không (nếu đã lưu từ lần trước)
-            const version = await Version.findById(versionId).lean();
+            const versionData = await Version.findById(versionId).lean();
             let resumeState = null;
-            if (version && (version as any).resumeState) {
-                resumeState = (version as any).resumeState;
+            if (versionData && (versionData as any).resumeState) {
+                resumeState = (versionData as any).resumeState;
                 console.log(`🔄 [FINALIZE] Found resume state: ${resumeState.state}, savedCount: ${resumeState.savedCount}`);
             }
 
-            const agentContext: AgentContext = {
+            let result: any;
+            let agentResumeState: any = null;
+
+            // ✅ Sử dụng Agent V2 (luồng mới với commitment + temp storage + atomic save)
+            console.log(`🤖 [FINALIZE] Using Agent V2`);
+
+            const agentContextV2: Partial<AgentContextV2> = {
                 versionId,
                 mergedText,
                 language,
@@ -926,13 +932,28 @@ ${mergedText.substring(0, 3000)}
                 resumeState: resumeState || undefined
             };
 
-            const agent = new UsecaseGenerationAgent(gemini, agentContext);
-            const result = await agent.run();
+            const agentV2 = new UsecaseGenerationAgentV2(gemini, agentContextV2);
+            const resultV2 = await agentV2.run();
+
+            result = {
+                version_id: resultV2.version_id,
+                usecases: resultV2.usecases,
+                totalGenerated: resultV2.totalGenerated
+            };
+            agentResumeState = agentV2.getResumeState();
+
+            // Log save result
+            if (resultV2.saveResult) {
+                console.log(`📊 [FINALIZE] Save result:`, {
+                    saved: resultV2.saveResult.saved,
+                    repaired: resultV2.saveResult.repaired_by_llm,
+                    skipped: resultV2.saveResult.skipped,
+                    failed: resultV2.saveResult.failed.length
+                });
+            }
 
             // ✅ Nếu agent có resumeState sau khi chạy (do lỗi retryable), lưu vào version
-            const agentResumeState = agent.getResumeState();
             if (agentResumeState) {
-                const currentAgentContext = agent.getContext();
                 await Version.findByIdAndUpdate(versionId, {
                     $set: {
                         resumeState: agentResumeState,
@@ -950,7 +971,7 @@ ${mergedText.substring(0, 3000)}
                         projectId,
                         versionId,
                         userId,
-                        Math.floor((result.totalGenerated / (currentAgentContext.estimatedCount || 1)) * 100),
+                        Math.floor((result.totalGenerated / 100) * 100),
                         "paused",
                         false, // isProcessing = false vì đã pause
                         undefined,

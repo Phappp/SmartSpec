@@ -488,14 +488,6 @@ export class VersionService {
         const newId = new Types.ObjectId();
         usecaseMap.set(String(uc._id), String(newId));
 
-        // Map related_usecases từ id cũ sang id mới
-        const mappedRelatedUsecases = (uc.related_usecases || [])
-          .map((relatedId: any) => {
-            const oldId = String(relatedId);
-            const newRelatedId = usecaseMap.get(oldId);
-            return newRelatedId ? new Types.ObjectId(newRelatedId) : null;
-          })
-          .filter((id: any) => id !== null);
 
         // Hỗ trợ cả schema mới và schema cũ (backward compatibility)
         const ucAny = uc as any;
@@ -520,7 +512,7 @@ export class VersionService {
           system: ''
         };
         const nonFunctionalConstraints = ucAny.non_functional_constraints || ucAny.constraints || [];
-        
+
         // Xử lý audit - hỗ trợ cả audit object (mới) và created_by/created_at/updated_by (cũ)
         let audit;
         if (ucAny.audit && typeof ucAny.audit === 'object') {
@@ -569,63 +561,62 @@ export class VersionService {
             uc.exceptions.length > 0 && typeof uc.exceptions[0] === 'object' && 'description' in uc.exceptions[0]
               ? uc.exceptions
               : (uc.exceptions as any[]).map((exc: any, index: number) => {
-                  if (typeof exc === 'string') {
-                    return {
-                      id: `E${index + 1}`,
-                      at_step: mainFlow.length,
-                      type: 'System',
-                      description: exc,
-                      system_response: `Handle exception: ${exc}`
-                    };
-                  }
-                  return exc;
-                })
+                if (typeof exc === 'string') {
+                  return {
+                    id: `E${index + 1}`,
+                    at_step: mainFlow.length,
+                    type: 'System',
+                    description: exc,
+                    system_response: `Handle exception: ${exc}`
+                  };
+                }
+                return exc;
+              })
           ) : [],
           postconditions: uc.postconditions || [],
           rules: Array.isArray(uc.rules) ? (
             uc.rules.length > 0 && typeof uc.rules[0] === 'object' && 'description' in uc.rules[0]
               ? uc.rules
               : (uc.rules as any[]).map((rule: any, index: number) => {
-                  if (typeof rule === 'string') {
-                    return {
-                      id: `R${index + 1}`,
-                      description: rule
-                    };
-                  }
-                  return rule;
-                })
+                if (typeof rule === 'string') {
+                  return {
+                    id: `R${index + 1}`,
+                    description: rule
+                  };
+                }
+                return rule;
+              })
           ) : [],
           inputs: Array.isArray(uc.inputs) ? (
             uc.inputs.length > 0 && typeof uc.inputs[0] === 'object' && 'name' in uc.inputs[0]
               ? uc.inputs
               : (uc.inputs as any[]).map((input: any) => {
-                  if (typeof input === 'string') {
-                    return {
-                      name: input,
-                      type: 'string',
-                      required: true
-                    };
-                  }
-                  return input;
-                })
+                if (typeof input === 'string') {
+                  return {
+                    name: input,
+                    type: 'string',
+                    required: true
+                  };
+                }
+                return input;
+              })
           ) : [],
           outputs: Array.isArray(uc.outputs) ? (
             uc.outputs.length > 0 && typeof uc.outputs[0] === 'object' && 'name' in uc.outputs[0]
               ? uc.outputs
               : (uc.outputs as any[]).map((output: any) => {
-                  if (typeof output === 'string') {
-                    return {
-                      name: output,
-                      type: 'string',
-                      optional: false
-                    };
-                  }
-                  return output;
-                })
+                if (typeof output === 'string') {
+                  return {
+                    name: output,
+                    type: 'string',
+                    optional: false
+                  };
+                }
+                return output;
+              })
           ) : [],
           non_functional_constraints: nonFunctionalConstraints,
           stakeholders: uc.stakeholders || [],
-          related_usecases: mappedRelatedUsecases,
           audit: audit,
           _id: newId
         }]);

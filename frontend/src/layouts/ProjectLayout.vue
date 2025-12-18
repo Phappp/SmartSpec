@@ -485,9 +485,10 @@ export default {
       return names[type] || 'Processing'
     }
 
-    // ✅ Helper: Get agent state title
+    // ✅ Helper: Get agent state title (V1 + V2)
     const getAgentStateTitle = (state) => {
       const titles = {
+        // V1 States
         'ESTIMATE_USECASE_COUNT': 'Đang ước tính usecases',
         'ESTIMATE_TESTCASE_COUNT': 'Đang ước tính testcases',
         'BATCH_PLANNING': 'Đang lập kế hoạch batches',
@@ -495,14 +496,20 @@ export default {
         'VERIFY_RESULTS': 'Đang kiểm tra kết quả',
         'REPLAN_MISSING': 'Đang lập kế hoạch retry',
         'GENERATE_RETRY': 'Đang retry',
-        'DONE': 'Hoàn thành'
+        'DONE': 'Hoàn thành',
+        // V2 States
+        'ESTIMATE_WITH_COMMITMENT': 'Đang ước tính',
+        'RETRY_MISSING': 'Đang retry usecases thiếu',
+        'FINAL_VALIDATION': 'Đang validate toàn bộ',
+        'ATOMIC_SAVE': 'Đang lưu vào database'
       }
       return titles[state] || 'Đang xử lý...'
     }
 
-    // ✅ Helper: Get agent state icon
+    // ✅ Helper: Get agent state icon (V1 + V2)
     const getAgentStateIcon = (state) => {
       const icons = {
+        // V1 States
         'ESTIMATE_USECASE_COUNT': 'calculate',
         'ESTIMATE_TESTCASE_COUNT': 'calculate',
         'BATCH_PLANNING': 'list_alt',
@@ -510,17 +517,23 @@ export default {
         'VERIFY_RESULTS': 'verified',
         'REPLAN_MISSING': 'refresh',
         'GENERATE_RETRY': 'sync',
-        'DONE': 'check_circle'
+        'DONE': 'check_circle',
+        // V2 States
+        'ESTIMATE_WITH_COMMITMENT': 'fact_check',
+        'RETRY_MISSING': 'replay',
+        'FINAL_VALIDATION': 'verified_user',
+        'ATOMIC_SAVE': 'save'
       }
       return icons[state] || 'sync'
     }
 
-    // ✅ Helper: Get agent state icon class
+    // ✅ Helper: Get agent state icon class (V1 + V2)
     const getAgentStateIconClass = (state) => {
       if (state === 'DONE') return 'success'
-      if (state === 'GENERATE_RETRY' || state === 'REPLAN_MISSING') return 'pulsing'
+      if (state === 'GENERATE_RETRY' || state === 'REPLAN_MISSING' || state === 'RETRY_MISSING') return 'pulsing'
       if (state === 'GENERATE_BATCH') return 'pulsing'
-      if (state === 'VERIFY_RESULTS') return 'spinning'
+      if (state === 'VERIFY_RESULTS' || state === 'FINAL_VALIDATION') return 'spinning'
+      if (state === 'ATOMIC_SAVE') return 'spinning'
       return 'spinning'
     }
 

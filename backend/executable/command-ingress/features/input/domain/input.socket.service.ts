@@ -29,7 +29,7 @@ export class InputSocketService {
      */
     joinProjectRoom(socket: any, projectId: string): void {
         socket.join(`project_${projectId}`);
-        console.log(`✅ User ${socket.id} joined project room: project_${projectId}`);
+        //console.log(`✅ User ${socket.id} joined project room: project_${projectId}`);
     }
 
     /**
@@ -37,7 +37,7 @@ export class InputSocketService {
      */
     leaveProjectRoom(socket: any, projectId: string): void {
         socket.leave(`project_${projectId}`);
-        console.log(`🚪 User ${socket.id} left project room: project_${projectId}`);
+        //console.log(`🚪 User ${socket.id} left project room: project_${projectId}`);
     }
 
     // Các helper methods cho từng loại event
