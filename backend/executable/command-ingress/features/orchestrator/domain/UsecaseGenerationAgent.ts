@@ -785,8 +785,8 @@ export class UsecaseGenerationAgent {
         const version = await Version.findById(this.context.versionId).lean();
         if (!version) throw new Error("Version not found");
 
-        // Normalize role structure
-        const normalized = this.normalizeRoleStructure(batchUseCases);
+        // Normalize actor structure (hỗ trợ cả actor và role - backward compatibility)
+        const normalized = this.normalizeActorStructure(batchUseCases);
 
         // Add related usecases (nếu cần)
         let withRelations = normalized;
@@ -814,44 +814,138 @@ export class UsecaseGenerationAgent {
         }
 
         // Normalize lại sau khi addRelatedUseCases
-        withRelations = this.normalizeRoleStructure(withRelations);
+        withRelations = this.normalizeActorStructure(withRelations);
 
-        // Map to database format
+        // Map to database format (schema mới)
         const usecasesToCreate = withRelations.map((uc: any) => {
             const relatedIds = (uc.related_usecases || [])
                 .filter((id: any) => id && Types.ObjectId.isValid(String(id)))
                 .map((id: any) => new Types.ObjectId(String(id)));
 
-            const normalizedTasks = Array.isArray(uc.tasks) && uc.tasks.length > 0 ? uc.tasks : ['Complete the use case'];
-            const normalizedReason = (uc.reason || uc.goal || 'No reason provided').trim();
+            // Normalize actor (thay vì role)
+            const actor = uc.actor || uc.role; // Support cả actor và role (backward compatibility)
+            const normalizedActor = actor ? {
+                id: actor.id || `actor_${(actor.name || 'unknown').toLowerCase().replace(/\s+/g, '_')}`,
+                name: actor.name || 'Unknown',
+                description: actor.description || ''
+            } : {
+                id: 'actor_user',
+                name: 'Người dùng hệ thống',
+                description: 'Người dùng sử dụng hệ thống'
+            };
+
+            // Normalize context (object thay vì string)
+            const contextObj = typeof uc.context === 'object' ? uc.context : {
+                module: uc.context || '',
+                scope: '',
+                system: ''
+            };
+
+            // Normalize trigger (object thay vì array)
+            const triggerObj = typeof uc.trigger === 'object' && uc.trigger.event ? uc.trigger : {
+                event: Array.isArray(uc.triggers) && uc.triggers.length > 0 ? uc.triggers[0] : 'User initiates action',
+                source: 'UI'
+            };
+
+            // Normalize main_flow (array of objects)
+            let mainFlow = Array.isArray(uc.main_flow) ? uc.main_flow : [];
+            if (mainFlow.length === 0 && Array.isArray(uc.tasks) && uc.tasks.length > 0) {
+                // Fallback: convert tasks to main_flow steps
+                mainFlow = uc.tasks.map((task: string, index: number) => ({
+                    step: index + 1,
+                    actor: normalizedActor.name,
+                    action: task,
+                    expected_result: `Task ${index + 1} completed`
+                }));
+            }
+
+            // Normalize alternative_flows (array of objects)
+            const alternativeFlows = Array.isArray(uc.alternative_flows) ? uc.alternative_flows : [];
+
+            // Normalize exceptions (array of objects)
+            let exceptions = Array.isArray(uc.exceptions) ? uc.exceptions : [];
+            if (exceptions.length === 0 && Array.isArray(uc.exceptions) && typeof uc.exceptions[0] === 'string') {
+                // Fallback: convert string array to exception objects
+                exceptions = uc.exceptions.map((exc: string, index: number) => ({
+                    id: `E${index + 1}`,
+                    at_step: mainFlow.length,
+                    type: 'System',
+                    description: exc,
+                    system_response: `Handle exception: ${exc}`
+                }));
+            }
+
+            // Normalize rules (array of objects)
+            let rules = Array.isArray(uc.rules) ? uc.rules : [];
+            if (rules.length > 0 && typeof rules[0] === 'string') {
+                // Fallback: convert string array to rule objects
+                rules = rules.map((rule: string, index: number) => ({
+                    id: `R${index + 1}`,
+                    description: rule
+                }));
+            }
+
+            // Normalize inputs (array of objects)
+            let inputs = Array.isArray(uc.inputs) ? uc.inputs : [];
+            if (inputs.length > 0 && typeof inputs[0] === 'string') {
+                // Fallback: convert string array to input objects
+                inputs = inputs.map((input: string) => ({
+                    name: input,
+                    type: 'string',
+                    required: true
+                }));
+            }
+
+            // Normalize outputs (array of objects)
+            let outputs = Array.isArray(uc.outputs) ? uc.outputs : [];
+            if (outputs.length > 0 && typeof outputs[0] === 'string') {
+                // Fallback: convert string array to output objects
+                outputs = outputs.map((output: string) => ({
+                    name: output,
+                    type: 'string',
+                    optional: false
+                }));
+            }
+
+            // Normalize priority và frequency
             const normalizedPriority = (uc.priority && ['low', 'medium', 'high'].includes(uc.priority)) ? uc.priority : 'medium';
+            const normalizedFrequency = (uc.frequency && ['low', 'medium', 'high'].includes(uc.frequency)) ? uc.frequency : 'medium';
+
+            // Normalize business_reason (thay vì reason)
+            const businessReason = uc.business_reason || uc.reason || uc.goal || 'No reason provided';
 
             return {
                 project_id: version.project_id,
                 version_id: new Types.ObjectId(this.context.versionId),
+                type: uc.type || 'use_case',
+                level: uc.level || 'system',
+                status: uc.status || 'active',
                 name: uc.name ? uc.name.trim() : '',
-                role: uc.role ? {
-                    id: uc.role.id || `role_${uc.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`,
-                    name: uc.role.name || 'Unknown',
-                    description: uc.role.description || ''
-                } : null,
+                description: uc.description || uc.name || '',
+                actor: normalizedActor,
                 goal: uc.goal ? uc.goal.trim() : '',
-                reason: normalizedReason,
-                tasks: normalizedTasks,
-                inputs: Array.isArray(uc.inputs) ? uc.inputs : [],
-                outputs: Array.isArray(uc.outputs) ? uc.outputs : [],
-                context: (uc.context || '').trim(),
+                business_reason: businessReason.trim(),
+                context: contextObj,
                 priority: normalizedPriority,
-                feedback: uc.feedback || null,
-                rules: Array.isArray(uc.rules) ? uc.rules : [],
-                triggers: Array.isArray(uc.triggers) ? uc.triggers : [],
+                frequency: normalizedFrequency,
+                trigger: triggerObj,
                 preconditions: Array.isArray(uc.preconditions) ? uc.preconditions : [],
+                main_flow: mainFlow,
+                alternative_flows: alternativeFlows,
+                exceptions: exceptions,
                 postconditions: Array.isArray(uc.postconditions) ? uc.postconditions : [],
-                exceptions: Array.isArray(uc.exceptions) ? uc.exceptions : [],
+                rules: rules,
+                inputs: inputs,
+                outputs: outputs,
+                non_functional_constraints: Array.isArray(uc.non_functional_constraints) ? uc.non_functional_constraints : (Array.isArray(uc.constraints) ? uc.constraints : []),
                 stakeholders: Array.isArray(uc.stakeholders) ? uc.stakeholders : [],
-                constraints: Array.isArray(uc.constraints) ? uc.constraints : [],
                 related_usecases: relatedIds,
-                created_by: version.created_by
+                audit: {
+                    created_by: version.created_by || new Types.ObjectId(this.context.userId || ''),
+                    created_at: new Date(),
+                    updated_by: version.created_by || new Types.ObjectId(this.context.userId || ''),
+                    updated_at: new Date()
+                }
             };
         });
 
@@ -890,9 +984,9 @@ export class UsecaseGenerationAgent {
         usecasesToCreate.forEach((uc, index) => {
             const errors: string[] = [];
             if (!uc.name || uc.name.trim() === '') errors.push('missing name');
-            if (!uc.role || !uc.role.id || !uc.role.name) errors.push('invalid role');
+            if (!uc.actor || !uc.actor.id || !uc.actor.name) errors.push('invalid actor');
             if (!uc.goal || uc.goal.trim() === '') errors.push('missing goal');
-            if (!uc.tasks || !Array.isArray(uc.tasks) || uc.tasks.length === 0) errors.push('missing tasks');
+            if (!uc.main_flow || !Array.isArray(uc.main_flow) || uc.main_flow.length === 0) errors.push('missing main_flow');
 
             // ✅ Check duplicate: tên hoặc mục đích trùng (sử dụng normalized name)
             const ucNameNormalized = normalizeName(uc.name || '');
@@ -1007,9 +1101,13 @@ export class UsecaseGenerationAgent {
         for (const uc of allUsecases) {
             const errors: string[] = [];
             if (!uc.name || (uc.name as string).trim() === '') errors.push('missing name');
-            if (!uc.role || !(uc.role as any).id || !(uc.role as any).name) errors.push('invalid role');
+            // Hỗ trợ cả actor (mới) và role (cũ - backward compatibility)
+            const actor = (uc as any).actor || (uc as any).role;
+            if (!actor || !(actor as any).id || !(actor as any).name) errors.push('invalid actor');
             if (!uc.goal || (uc.goal as string).trim() === '') errors.push('missing goal');
-            if (!uc.tasks || !Array.isArray(uc.tasks) || uc.tasks.length === 0) errors.push('missing tasks');
+            // Hỗ trợ cả main_flow (mới) và tasks (cũ - backward compatibility)
+            const mainFlow = (uc as any).main_flow || (uc as any).tasks;
+            if (!mainFlow || !Array.isArray(mainFlow) || mainFlow.length === 0) errors.push('missing main_flow');
 
             if (errors.length > 0) {
                 invalidUsecases.push({
@@ -1091,20 +1189,34 @@ export class UsecaseGenerationAgent {
     }
 
     /**
-     * Helper: Normalize role structure
+     * Helper: Normalize actor structure (hỗ trợ cả actor và role - backward compatibility)
      */
-    private normalizeRoleStructure(useCases: any[]): any[] {
+    private normalizeActorStructure(useCases: any[]): any[] {
         return useCases.map((uc: any) => {
-            if (!uc.role) {
-                uc.role = { id: 'role_unknown', name: 'Unknown' };
-            } else if (typeof uc.role === 'string') {
-                uc.role = {
-                    id: `role_${uc.role.toLowerCase().replace(/\s+/g, '_')}`,
-                    name: uc.role
+            // Hỗ trợ cả actor (mới) và role (cũ)
+            const actorOrRole = uc.actor || uc.role;
+            
+            if (!actorOrRole) {
+                uc.actor = { id: 'actor_user', name: 'Người dùng hệ thống', description: 'Người dùng sử dụng hệ thống' };
+            } else if (typeof actorOrRole === 'string') {
+                uc.actor = {
+                    id: `actor_${actorOrRole.toLowerCase().replace(/\s+/g, '_')}`,
+                    name: actorOrRole,
+                    description: ''
                 };
-            } else if (uc.role && typeof uc.role === 'object' && !uc.role.id) {
-                uc.role.id = `role_${uc.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`;
+            } else if (actorOrRole && typeof actorOrRole === 'object') {
+                uc.actor = {
+                    id: actorOrRole.id || `actor_${(actorOrRole.name || 'unknown').toLowerCase().replace(/\s+/g, '_')}`,
+                    name: actorOrRole.name || 'Unknown',
+                    description: actorOrRole.description || ''
+                };
             }
+            
+            // Xóa role cũ nếu có (đã chuyển sang actor)
+            if (uc.role && uc.actor) {
+                delete uc.role;
+            }
+            
             return uc;
         });
     }

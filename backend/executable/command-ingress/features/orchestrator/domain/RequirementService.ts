@@ -7,20 +7,34 @@ import { UsecaseGenerationAgent, AgentContext } from "./UsecaseGenerationAgent";
 
 export class RequirementService {
     /**
-     * ✅ MỚI: Normalize role structure
+     * ✅ MỚI: Normalize actor structure (schema mới - hỗ trợ cả actor và role - backward compatibility)
      */
-    private normalizeRoleStructure(useCases: any[]): any[] {
+    private normalizeActorStructure(useCases: any[]): any[] {
         return useCases.map((uc: any) => {
-            if (!uc.role) {
-                uc.role = { id: 'role_unknown', name: 'Unknown' };
-            } else if (typeof uc.role === 'string') {
-                uc.role = {
-                    id: `role_${uc.role.toLowerCase().replace(/\s+/g, '_')}`,
-                    name: uc.role
+            // Hỗ trợ cả actor (mới) và role (cũ)
+            const actorOrRole = uc.actor || uc.role;
+            
+            if (!actorOrRole) {
+                uc.actor = { id: 'actor_user', name: 'Người dùng hệ thống', description: 'Người dùng sử dụng hệ thống' };
+            } else if (typeof actorOrRole === 'string') {
+                uc.actor = {
+                    id: `actor_${actorOrRole.toLowerCase().replace(/\s+/g, '_')}`,
+                    name: actorOrRole,
+                    description: ''
                 };
-            } else if (uc.role && typeof uc.role === 'object' && !uc.role.id) {
-                uc.role.id = `role_${uc.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`;
+            } else if (actorOrRole && typeof actorOrRole === 'object') {
+                uc.actor = {
+                    id: actorOrRole.id || `actor_${(actorOrRole.name || 'unknown').toLowerCase().replace(/\s+/g, '_')}`,
+                    name: actorOrRole.name || 'Unknown',
+                    description: actorOrRole.description || ''
+                };
             }
+            
+            // Xóa role cũ nếu có (đã chuyển sang actor)
+            if (uc.role && uc.actor) {
+                delete uc.role;
+            }
+            
             return uc;
         });
     }
@@ -188,8 +202,8 @@ export class RequirementService {
                     console.warn(`⚠️ [BATCH ${batchNumber}/${estimatedBatches}] Generated ${batchUseCases.length} use cases, but only ${remaining} remaining to reach estimate (${estimatedCount}). Limiting to ${useCasesToProcess.length}.`);
                 }
 
-                // Normalize role structure (sử dụng useCasesToProcess thay vì batchUseCases)
-                const normalized = this.normalizeRoleStructure(useCasesToProcess);
+                // Normalize actor structure (sử dụng useCasesToProcess thay vì batchUseCases)
+                const normalized = this.normalizeActorStructure(useCasesToProcess);
 
                 // Add related use cases
                 let withRelations = normalized;
@@ -214,8 +228,8 @@ export class RequirementService {
                     }
                 }
 
-                // ✅ FIX: Normalize lại role structure sau khi addRelatedUseCases (có thể LLM đã thay đổi format)
-                withRelations = this.normalizeRoleStructure(withRelations);
+                // ✅ FIX: Normalize lại actor structure sau khi addRelatedUseCases (có thể LLM đã thay đổi format)
+                withRelations = this.normalizeActorStructure(withRelations);
 
                 // Map to database format (không throw error, sẽ validate sau)
                 const usecasesToCreate = withRelations.map((uc: any, index: number) => {
@@ -226,38 +240,126 @@ export class RequirementService {
                     // ✅ FIX: Không throw error trong map, chỉ normalize và return
                     // Validation sẽ được thực hiện sau để có thể skip những usecases không hợp lệ
 
-                    // Normalize các field với default values
-                    const normalizedTasks = Array.isArray(uc.tasks) && uc.tasks.length > 0 ? uc.tasks : ['Complete the use case'];
-                    const normalizedReason = (uc.reason || uc.goal || 'No reason provided').trim();
+                    // Normalize actor (hỗ trợ cả actor và role - backward compatibility)
+                    const actorOrRole = uc.actor || uc.role;
+                    const normalizedActor = actorOrRole ? {
+                        id: actorOrRole.id || `actor_${(actorOrRole.name || 'unknown').toLowerCase().replace(/\s+/g, '_')}`,
+                        name: actorOrRole.name || 'Unknown',
+                        description: actorOrRole.description || ''
+                    } : {
+                        id: 'actor_user',
+                        name: 'Người dùng hệ thống',
+                        description: 'Người dùng sử dụng hệ thống'
+                    };
+
+                    // Normalize context (object)
+                    const contextObj = typeof uc.context === 'object' && uc.context !== null ? uc.context : {
+                        module: typeof uc.context === 'string' ? uc.context : '',
+                        scope: '',
+                        system: ''
+                    };
+
+                    // Normalize trigger (object)
+                    const triggerObj = typeof uc.trigger === 'object' && uc.trigger?.event ? uc.trigger : {
+                        event: Array.isArray(uc.triggers) && uc.triggers.length > 0 ? uc.triggers[0] : 'User initiates action',
+                        source: 'UI'
+                    };
+
+                    // Normalize main_flow (array of objects)
+                    let mainFlow = Array.isArray(uc.main_flow) ? uc.main_flow : [];
+                    if (mainFlow.length === 0 && Array.isArray(uc.tasks) && uc.tasks.length > 0) {
+                        mainFlow = uc.tasks.map((task: string, index: number) => ({
+                            step: index + 1,
+                            actor: normalizedActor.name,
+                            action: task,
+                            expected_result: `Task ${index + 1} completed`
+                        }));
+                    }
+                    if (mainFlow.length === 0) {
+                        mainFlow = [{
+                            step: 1,
+                            actor: normalizedActor.name,
+                            action: 'Complete the use case',
+                            expected_result: 'Use case completed'
+                        }];
+                    }
+
+                    // Normalize alternative_flows, exceptions, rules, inputs, outputs
+                    const alternativeFlows = Array.isArray(uc.alternative_flows) ? uc.alternative_flows : [];
+                    
+                    let exceptions = Array.isArray(uc.exceptions) ? uc.exceptions : [];
+                    if (exceptions.length > 0 && typeof exceptions[0] === 'string') {
+                        exceptions = exceptions.map((exc: string, index: number) => ({
+                            id: `E${index + 1}`,
+                            at_step: mainFlow.length,
+                            type: 'System',
+                            description: exc,
+                            system_response: `Handle exception: ${exc}`
+                        }));
+                    }
+
+                    let rules = Array.isArray(uc.rules) ? uc.rules : [];
+                    if (rules.length > 0 && typeof rules[0] === 'string') {
+                        rules = rules.map((rule: string, index: number) => ({
+                            id: `R${index + 1}`,
+                            description: rule
+                        }));
+                    }
+
+                    let inputs = Array.isArray(uc.inputs) ? uc.inputs : [];
+                    if (inputs.length > 0 && typeof inputs[0] === 'string') {
+                        inputs = inputs.map((input: string) => ({
+                            name: input,
+                            type: 'string',
+                            required: true
+                        }));
+                    }
+
+                    let outputs = Array.isArray(uc.outputs) ? uc.outputs : [];
+                    if (outputs.length > 0 && typeof outputs[0] === 'string') {
+                        outputs = outputs.map((output: string) => ({
+                            name: output,
+                            type: 'string',
+                            optional: false
+                        }));
+                    }
+
                     const normalizedPriority = (uc.priority && ['low', 'medium', 'high'].includes(uc.priority)) ? uc.priority : 'medium';
+                    const businessReason = uc.business_reason || uc.reason || uc.goal || 'No reason provided';
 
                     return {
                         _originalIndex: index, // Lưu index gốc để map lại với withRelations
                         project_id: version.project_id,
                         version_id: new Types.ObjectId(versionId),
+                        type: uc.type || 'use_case',
+                        level: uc.level || 'system',
+                        status: uc.status || 'active',
                         name: uc.name ? uc.name.trim() : '',
-                        role: uc.role ? {
-                            id: uc.role.id || `role_${uc.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`,
-                            name: uc.role.name || 'Unknown',
-                            description: uc.role.description || ''
-                        } : null,
+                        description: uc.description || uc.name || '',
+                        actor: normalizedActor,
                         goal: uc.goal ? uc.goal.trim() : '',
-                        reason: normalizedReason,
-                        tasks: normalizedTasks,
-                        inputs: Array.isArray(uc.inputs) ? uc.inputs : [],
-                        outputs: Array.isArray(uc.outputs) ? uc.outputs : [],
-                        context: (uc.context || '').trim(),
+                        business_reason: businessReason.trim(),
+                        context: contextObj,
                         priority: normalizedPriority,
-                        feedback: uc.feedback || null,
-                        rules: Array.isArray(uc.rules) ? uc.rules : [],
-                        triggers: Array.isArray(uc.triggers) ? uc.triggers : [],
+                        frequency: uc.frequency || 'medium',
+                        trigger: triggerObj,
                         preconditions: Array.isArray(uc.preconditions) ? uc.preconditions : [],
+                        main_flow: mainFlow,
+                        alternative_flows: alternativeFlows,
+                        exceptions: exceptions,
                         postconditions: Array.isArray(uc.postconditions) ? uc.postconditions : [],
-                        exceptions: Array.isArray(uc.exceptions) ? uc.exceptions : [],
+                        rules: rules,
+                        inputs: inputs,
+                        outputs: outputs,
+                        non_functional_constraints: Array.isArray(uc.non_functional_constraints) ? uc.non_functional_constraints : (Array.isArray(uc.constraints) ? uc.constraints : []),
                         stakeholders: Array.isArray(uc.stakeholders) ? uc.stakeholders : [],
-                        constraints: Array.isArray(uc.constraints) ? uc.constraints : [],
                         related_usecases: relatedIds,
-                        created_by: version.created_by
+                        audit: {
+                            created_by: version.created_by || new Types.ObjectId(),
+                            created_at: new Date(),
+                            updated_by: version.created_by || new Types.ObjectId(),
+                            updated_at: new Date()
+                        }
                     };
                 });
 
@@ -277,14 +379,16 @@ export class RequirementService {
                             if (!uc.name || uc.name.trim() === '') {
                                 errors.push('missing name');
                             }
-                            if (!uc.role || !uc.role.id || !uc.role.name) {
-                                errors.push('invalid role');
+                            // Kiểm tra actor (đã được normalize trong mapping)
+                            if (!uc.actor || !uc.actor.id || !uc.actor.name) {
+                                errors.push('invalid actor');
                             }
                             if (!uc.goal || uc.goal.trim() === '') {
                                 errors.push('missing goal');
                             }
-                            if (!uc.tasks || !Array.isArray(uc.tasks) || uc.tasks.length === 0) {
-                                errors.push('missing tasks');
+                            // Kiểm tra main_flow (đã được normalize trong mapping)
+                            if (!uc.main_flow || !Array.isArray(uc.main_flow) || uc.main_flow.length === 0) {
+                                errors.push('missing main_flow');
                             }
 
                             if (errors.length > 0) {
@@ -556,11 +660,13 @@ ${mergedText.substring(0, 3000)}
 - Regenerate exactly ${invalidUsecases.length} use case(s) with COMPLETE and VALID information
 - Each use case MUST have:
   * name: A clear, descriptive name (REQUIRED, cannot be empty)
-  * role: An object with "id", "name", and optional "description" (REQUIRED)
+  * description: A detailed description (REQUIRED, cannot be empty)
+  * actor: An object with "id", "name", and optional "description" (REQUIRED - NOT "role")
   * goal: A clear goal statement (REQUIRED, cannot be empty)
-  * tasks: An array with at least one task (REQUIRED, cannot be empty)
-  * reason: A reason for the use case (can use goal if not provided)
+  * business_reason: A business reason (REQUIRED - NOT "reason")
+  * main_flow: An array of objects with step, actor, action, expected_result (REQUIRED - NOT "tasks")
   * priority: "low", "medium", or "high" (default: "medium")
+  * trigger: An object with "event" and "source" (REQUIRED - NOT "triggers" array)
 - Fix all validation errors mentioned above
 - Ensure all required fields are present and valid
 
@@ -578,10 +684,10 @@ ${mergedText.substring(0, 3000)}
 - Regenerate chính xác ${invalidUsecases.length} use case với thông tin ĐẦY ĐỦ và HỢP LỆ
 - Mỗi use case PHẢI có:
   * name: Tên rõ ràng, mô tả (BẮT BUỘC, không được để trống)
-  * role: Một object có "id", "name", và tùy chọn "description" (BẮT BUỘC)
+  * actor: Một object có "id", "name", và tùy chọn "description" (BẮT BUỘC - KHÔNG phải "role")
   * goal: Mục tiêu rõ ràng (BẮT BUỘC, không được để trống)
-  * tasks: Một mảng có ít nhất một task (BẮT BUỘC, không được để trống)
-  * reason: Lý do cho use case (có thể dùng goal nếu không có)
+  * main_flow: Một mảng các object với step, actor, action, expected_result (BẮT BUỘC - KHÔNG phải "tasks")
+  * business_reason: Lý do nghiệp vụ (BẮT BUỘC - KHÔNG phải "reason")
   * priority: "low", "medium", hoặc "high" (mặc định: "medium")
 - Sửa tất cả các lỗi validation đã nêu ở trên
 - Đảm bảo tất cả các field bắt buộc đều có và hợp lệ
@@ -608,40 +714,126 @@ ${mergedText.substring(0, 3000)}
             // Validate và lưu các usecases đã regenerate
             for (const uc of regeneratedBatch) {
                 try {
-                    // Normalize role structure
-                    const normalized = this.normalizeRoleStructure([uc])[0];
+                    // Normalize actor structure
+                    const normalized = this.normalizeActorStructure([uc])[0];
 
-                    // Map to database format
+                    // Map to database format (schema mới)
                     const relatedIds = (normalized.related_usecases || [])
                         .filter((id: any) => id && Types.ObjectId.isValid(String(id)))
                         .map((id: any) => new Types.ObjectId(String(id)));
 
+                    // Normalize actor
+                    const actorOrRole = normalized.actor || normalized.role;
+                    const normalizedActor = actorOrRole ? {
+                        id: actorOrRole.id || `actor_${(actorOrRole.name || 'unknown').toLowerCase().replace(/\s+/g, '_')}`,
+                        name: actorOrRole.name || 'Unknown',
+                        description: actorOrRole.description || ''
+                    } : {
+                        id: 'actor_user',
+                        name: 'Người dùng hệ thống',
+                        description: 'Người dùng sử dụng hệ thống'
+                    };
+
+                    // Normalize context, trigger, main_flow, etc. (tương tự như trong mapping chính)
+                    const contextObj = typeof normalized.context === 'object' && normalized.context !== null ? normalized.context : {
+                        module: typeof normalized.context === 'string' ? normalized.context : '',
+                        scope: '',
+                        system: ''
+                    };
+
+                    const triggerObj = typeof normalized.trigger === 'object' && normalized.trigger?.event ? normalized.trigger : {
+                        event: Array.isArray(normalized.triggers) && normalized.triggers.length > 0 ? normalized.triggers[0] : 'User initiates action',
+                        source: 'UI'
+                    };
+
+                    let mainFlow = Array.isArray(normalized.main_flow) ? normalized.main_flow : [];
+                    if (mainFlow.length === 0 && Array.isArray(normalized.tasks) && normalized.tasks.length > 0) {
+                        mainFlow = normalized.tasks.map((task: string, index: number) => ({
+                            step: index + 1,
+                            actor: normalizedActor.name,
+                            action: task,
+                            expected_result: `Task ${index + 1} completed`
+                        }));
+                    }
+                    if (mainFlow.length === 0) {
+                        mainFlow = [{
+                            step: 1,
+                            actor: normalizedActor.name,
+                            action: 'Complete the use case',
+                            expected_result: 'Use case completed'
+                        }];
+                    }
+
+                    // Normalize các field khác (tương tự như mapping chính)
+                    let exceptions = Array.isArray(normalized.exceptions) ? normalized.exceptions : [];
+                    if (exceptions.length > 0 && typeof exceptions[0] === 'string') {
+                        exceptions = exceptions.map((exc: string, index: number) => ({
+                            id: `E${index + 1}`,
+                            at_step: mainFlow.length,
+                            type: 'System',
+                            description: exc,
+                            system_response: `Handle exception: ${exc}`
+                        }));
+                    }
+
+                    let rules = Array.isArray(normalized.rules) ? normalized.rules : [];
+                    if (rules.length > 0 && typeof rules[0] === 'string') {
+                        rules = rules.map((rule: string, index: number) => ({
+                            id: `R${index + 1}`,
+                            description: rule
+                        }));
+                    }
+
+                    let inputs = Array.isArray(normalized.inputs) ? normalized.inputs : [];
+                    if (inputs.length > 0 && typeof inputs[0] === 'string') {
+                        inputs = inputs.map((input: string) => ({
+                            name: input,
+                            type: 'string',
+                            required: true
+                        }));
+                    }
+
+                    let outputs = Array.isArray(normalized.outputs) ? normalized.outputs : [];
+                    if (outputs.length > 0 && typeof outputs[0] === 'string') {
+                        outputs = outputs.map((output: string) => ({
+                            name: output,
+                            type: 'string',
+                            optional: false
+                        }));
+                    }
+
                     const usecaseToCreate = {
                         project_id: version.project_id,
                         version_id: new Types.ObjectId(versionId),
+                        type: normalized.type || 'use_case',
+                        level: normalized.level || 'system',
+                        status: normalized.status || 'active',
                         name: normalized.name?.trim() || 'Unnamed Use Case',
-                        role: normalized.role ? {
-                            id: normalized.role.id || `role_${normalized.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`,
-                            name: normalized.role.name || 'Unknown',
-                            description: normalized.role.description || ''
-                        } : { id: 'role_unknown', name: 'Unknown', description: '' },
+                        description: normalized.description || normalized.name || '',
+                        actor: normalizedActor,
                         goal: normalized.goal?.trim() || 'No goal specified',
-                        reason: (normalized.reason || normalized.goal || 'No reason provided').trim(),
-                        tasks: Array.isArray(normalized.tasks) && normalized.tasks.length > 0 ? normalized.tasks : ['Complete the use case'],
-                        inputs: Array.isArray(normalized.inputs) ? normalized.inputs : [],
-                        outputs: Array.isArray(normalized.outputs) ? normalized.outputs : [],
-                        context: (normalized.context || '').trim(),
+                        business_reason: normalized.business_reason || normalized.reason || normalized.goal || 'No reason provided',
+                        context: contextObj,
                         priority: (normalized.priority && ['low', 'medium', 'high'].includes(normalized.priority)) ? normalized.priority : 'medium',
-                        feedback: normalized.feedback || null,
-                        rules: Array.isArray(normalized.rules) ? normalized.rules : [],
-                        triggers: Array.isArray(normalized.triggers) ? normalized.triggers : [],
+                        frequency: normalized.frequency || 'medium',
+                        trigger: triggerObj,
                         preconditions: Array.isArray(normalized.preconditions) ? normalized.preconditions : [],
+                        main_flow: mainFlow,
+                        alternative_flows: Array.isArray(normalized.alternative_flows) ? normalized.alternative_flows : [],
+                        exceptions: exceptions,
                         postconditions: Array.isArray(normalized.postconditions) ? normalized.postconditions : [],
-                        exceptions: Array.isArray(normalized.exceptions) ? normalized.exceptions : [],
+                        rules: rules,
+                        inputs: inputs,
+                        outputs: outputs,
+                        non_functional_constraints: Array.isArray(normalized.non_functional_constraints) ? normalized.non_functional_constraints : (Array.isArray(normalized.constraints) ? normalized.constraints : []),
                         stakeholders: Array.isArray(normalized.stakeholders) ? normalized.stakeholders : [],
-                        constraints: Array.isArray(normalized.constraints) ? normalized.constraints : [],
                         related_usecases: relatedIds,
-                        created_by: version.created_by
+                        audit: {
+                            created_by: version.created_by || new Types.ObjectId(),
+                            created_at: new Date(),
+                            updated_by: version.created_by || new Types.ObjectId(),
+                            updated_at: new Date()
+                        }
                     };
 
                     // Validate

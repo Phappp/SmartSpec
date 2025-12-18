@@ -497,32 +497,137 @@ export class VersionService {
           })
           .filter((id: any) => id !== null);
 
+        // Hỗ trợ cả schema mới và schema cũ (backward compatibility)
+        const ucAny = uc as any;
+        const actor = ucAny.actor || ucAny.role;
+        const businessReason = ucAny.business_reason || ucAny.reason || uc.goal || '';
+        const mainFlow = ucAny.main_flow || (ucAny.tasks && Array.isArray(ucAny.tasks) ? ucAny.tasks.map((task: string, index: number) => ({
+          step: index + 1,
+          actor: actor?.name || 'User',
+          action: task,
+          expected_result: `Task ${index + 1} completed`
+        })) : []);
+        const trigger = ucAny.trigger || (ucAny.triggers && Array.isArray(ucAny.triggers) && ucAny.triggers.length > 0 ? {
+          event: ucAny.triggers[0],
+          source: 'UI'
+        } : {
+          event: 'User initiates action',
+          source: 'UI'
+        });
+        const contextObj = typeof ucAny.context === 'object' && ucAny.context !== null ? ucAny.context : {
+          module: typeof ucAny.context === 'string' ? ucAny.context : '',
+          scope: '',
+          system: ''
+        };
+        const nonFunctionalConstraints = ucAny.non_functional_constraints || ucAny.constraints || [];
+        
+        // Xử lý audit - hỗ trợ cả audit object (mới) và created_by/created_at/updated_by (cũ)
+        let audit;
+        if (ucAny.audit && typeof ucAny.audit === 'object') {
+          audit = {
+            created_by: ucAny.audit.created_by || newVersion.created_by,
+            created_at: ucAny.audit.created_at || new Date(),
+            updated_by: ucAny.audit.updated_by || newVersion.created_by,
+            updated_at: ucAny.audit.updated_at || new Date()
+          };
+        } else {
+          audit = {
+            created_by: ucAny.created_by || newVersion.created_by,
+            created_at: ucAny.created_at || new Date(),
+            updated_by: ucAny.updated_by || newVersion.created_by,
+            updated_at: new Date()
+          };
+        }
+
         await Usecase.create([{
           project_id: uc.project_id,
           version_id: newVersion._id,
+          type: (uc as any).type || 'use_case',
+          level: (uc as any).level || 'system',
+          status: (uc as any).status || 'active',
           name: uc.name,
-          role: uc.role,
+          description: (uc as any).description || uc.name || '',
+          actor: actor ? {
+            id: actor.id || `actor_${(actor.name || 'unknown').toLowerCase().replace(/\s+/g, '_')}`,
+            name: actor.name || 'Unknown',
+            description: actor.description || ''
+          } : {
+            id: 'actor_user',
+            name: 'Người dùng hệ thống',
+            description: 'Người dùng sử dụng hệ thống'
+          },
           goal: uc.goal,
-          reason: uc.reason,
-          tasks: uc.tasks,
-          inputs: uc.inputs,
-          outputs: uc.outputs,
-          context: uc.context,
-          priority: uc.priority,
-          feedback: uc.feedback,
-          rules: uc.rules,
-          triggers: uc.triggers,
-          preconditions: uc.preconditions,
-          postconditions: uc.postconditions,
-          exceptions: uc.exceptions,
-          stakeholders: uc.stakeholders,
-          constraints: uc.constraints,
+          business_reason: businessReason,
+          context: contextObj,
+          priority: uc.priority || 'medium',
+          frequency: (uc as any).frequency || 'medium',
+          trigger: trigger,
+          preconditions: uc.preconditions || [],
+          main_flow: mainFlow,
+          alternative_flows: (uc as any).alternative_flows || [],
+          exceptions: Array.isArray(uc.exceptions) ? (
+            uc.exceptions.length > 0 && typeof uc.exceptions[0] === 'object' && 'description' in uc.exceptions[0]
+              ? uc.exceptions
+              : (uc.exceptions as any[]).map((exc: any, index: number) => {
+                  if (typeof exc === 'string') {
+                    return {
+                      id: `E${index + 1}`,
+                      at_step: mainFlow.length,
+                      type: 'System',
+                      description: exc,
+                      system_response: `Handle exception: ${exc}`
+                    };
+                  }
+                  return exc;
+                })
+          ) : [],
+          postconditions: uc.postconditions || [],
+          rules: Array.isArray(uc.rules) ? (
+            uc.rules.length > 0 && typeof uc.rules[0] === 'object' && 'description' in uc.rules[0]
+              ? uc.rules
+              : (uc.rules as any[]).map((rule: any, index: number) => {
+                  if (typeof rule === 'string') {
+                    return {
+                      id: `R${index + 1}`,
+                      description: rule
+                    };
+                  }
+                  return rule;
+                })
+          ) : [],
+          inputs: Array.isArray(uc.inputs) ? (
+            uc.inputs.length > 0 && typeof uc.inputs[0] === 'object' && 'name' in uc.inputs[0]
+              ? uc.inputs
+              : (uc.inputs as any[]).map((input: any) => {
+                  if (typeof input === 'string') {
+                    return {
+                      name: input,
+                      type: 'string',
+                      required: true
+                    };
+                  }
+                  return input;
+                })
+          ) : [],
+          outputs: Array.isArray(uc.outputs) ? (
+            uc.outputs.length > 0 && typeof uc.outputs[0] === 'object' && 'name' in uc.outputs[0]
+              ? uc.outputs
+              : (uc.outputs as any[]).map((output: any) => {
+                  if (typeof output === 'string') {
+                    return {
+                      name: output,
+                      type: 'string',
+                      optional: false
+                    };
+                  }
+                  return output;
+                })
+          ) : [],
+          non_functional_constraints: nonFunctionalConstraints,
+          stakeholders: uc.stakeholders || [],
           related_usecases: mappedRelatedUsecases,
-          created_by: uc.created_by,
-          updated_by: uc.updated_by,
-          _id: newId,
-          created_at: new Date(),
-          updated_at: new Date()
+          audit: audit,
+          _id: newId
         }]);
       }
 

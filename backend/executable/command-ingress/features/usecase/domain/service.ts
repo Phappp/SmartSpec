@@ -14,58 +14,61 @@ export class UsecaseService {
   private versionService = new VersionService();
 
   /**
-   * Normalize role structure với cơ chế mapping thông minh
-   * Role ID theo số thứ tự: role_1, role_2, role_3...
-   * Mapping name → ID: Mỗi role name được ánh xạ cố định đến một role ID
+   * Normalize actor structure với cơ chế mapping thông minh (schema mới)
+   * Actor ID theo số thứ tự: actor_1, actor_2, actor_3...
+   * Mapping name → ID: Mỗi actor name được ánh xạ cố định đến một actor ID
+   * Hỗ trợ cả actor (mới) và role (cũ - backward compatibility)
    */
-  private normalizeRole(role: any, existingUsecases: any[]): { id: string; name: string } {
-    if (!role) {
-      return { id: 'role_unknown', name: 'Unknown' };
+  private normalizeActor(actor: any, existingUsecases: any[]): { id: string; name: string; description: string } {
+    if (!actor) {
+      return { id: 'actor_user', name: 'Người dùng hệ thống', description: 'Người dùng sử dụng hệ thống' };
     }
 
-    const roleName = typeof role === 'string' ? role.trim() : (role.name?.trim() || 'Unknown');
+    const actorName = typeof actor === 'string' ? actor.trim() : (actor.name?.trim() || 'Người dùng hệ thống');
+    const actorDescription = typeof actor === 'string' ? '' : (actor.description?.trim() || '');
 
-    if (!roleName) {
-      return { id: 'role_unknown', name: 'Unknown' };
+    if (!actorName) {
+      return { id: 'actor_user', name: 'Người dùng hệ thống', description: 'Người dùng sử dụng hệ thống' };
     }
 
-    // 🔍 Bước 1: Thu thập tất cả roles hiện có từ tất cả use cases
-    const allExistingRoles: { id: string, name: string }[] = [];
+    // 🔍 Bước 1: Thu thập tất cả actors hiện có từ tất cả use cases (hỗ trợ cả actor và role)
+    const allExistingActors: { id: string, name: string }[] = [];
     existingUsecases.forEach(uc => {
-      if (uc.role && uc.role.id && uc.role.name) {
-        // Chỉ lấy roles có ID hợp lệ (role_1, role_2, ...)
-        if (uc.role.id.match(/^role_\d+$/)) {
-          allExistingRoles.push({
-            id: uc.role.id,
-            name: uc.role.name.trim()
+      const actorOrRole = (uc as any).actor || uc.role;
+      if (actorOrRole && actorOrRole.id && actorOrRole.name) {
+        // Chỉ lấy actors có ID hợp lệ (actor_1, actor_2, ... hoặc role_1, role_2, ...)
+        if (actorOrRole.id.match(/^(actor|role)_\d+$/)) {
+          allExistingActors.push({
+            id: actorOrRole.id,
+            name: actorOrRole.name.trim()
           });
         }
       }
     });
 
-    // 🔍 Bước 2: Tìm role trùng name (exact match - phân biệt hoa thường)
-    const existingRole = allExistingRoles.find(r => r.name === roleName);
+    // 🔍 Bước 2: Tìm actor trùng name (exact match - phân biệt hoa thường)
+    const existingActor = allExistingActors.find(r => r.name === actorName);
 
-    if (existingRole) {
+    if (existingActor) {
       // ✅ Trùng name → dùng ID cũ
-      console.log(`🔄 Role mapping: "${roleName}" → ${existingRole.id} (existing)`);
-      return { id: existingRole.id, name: roleName };
+      console.log(`🔄 Actor mapping: "${actorName}" → ${existingActor.id} (existing)`);
+      return { id: existingActor.id, name: actorName, description: actorDescription };
     }
 
     // 🔍 Bước 3: Tạo ID mới theo số thứ tự
-    const roleIds = allExistingRoles.map(r => r.id);
-    const roleNumbers = roleIds
+    const actorIds = allExistingActors.map(r => r.id);
+    const actorNumbers = actorIds
       .map(id => {
-        const match = id.match(/^role_(\d+)$/);
-        return match ? parseInt(match[1]) : NaN;
+        const match = id.match(/^(actor|role)_(\d+)$/);
+        return match ? parseInt(match[2]) : NaN;
       })
       .filter(num => !isNaN(num));
 
-    const maxNumber = roleNumbers.length > 0 ? Math.max(...roleNumbers) : 0;
-    const newRoleId = `role_${maxNumber + 1}`;
+    const maxNumber = actorNumbers.length > 0 ? Math.max(...actorNumbers) : 0;
+    const newActorId = `actor_${maxNumber + 1}`;
 
-    console.log(`🆕 New role: "${roleName}" → ${newRoleId}`);
-    return { id: newRoleId, name: roleName };
+    console.log(`🆕 New actor: "${actorName}" → ${newActorId}`);
+    return { id: newActorId, name: actorName, description: actorDescription };
   }
 
   /**
@@ -89,18 +92,120 @@ export class UsecaseService {
   }
 
   /**
-   * Clean và validate form data
+   * Clean và validate form data (schema mới)
    */
   private cleanUsecaseData(data: any): any {
     const cleaned = { ...data };
 
-    // Clean array fields - đảm bảo luôn là array và có ít nhất một item cho tasks
-    const arrayFields = [
-      'tasks', 'inputs', 'outputs', 'preconditions', 'postconditions',
-      'triggers', 'rules', 'constraints', 'exceptions', 'stakeholders', 'related_usecases'
+    // Đảm bảo type, level, status hợp lệ
+    if (!cleaned.type || !['use_case', 'epic', 'feature'].includes(cleaned.type)) {
+      cleaned.type = 'use_case';
+    }
+    if (!cleaned.level || !['system', 'module', 'component'].includes(cleaned.level)) {
+      cleaned.level = 'system';
+    }
+    if (!cleaned.status || !['active', 'inactive', 'deprecated'].includes(cleaned.status)) {
+      cleaned.status = 'active';
+    }
+
+    // Đảm bảo priority và frequency hợp lệ
+    if (!['low', 'medium', 'high'].includes(cleaned.priority)) {
+      cleaned.priority = 'medium';
+    }
+    if (!cleaned.frequency || !['low', 'medium', 'high'].includes(cleaned.frequency)) {
+      cleaned.frequency = 'medium';
+    }
+
+    // Clean context (object)
+    if (!cleaned.context || typeof cleaned.context !== 'object') {
+      cleaned.context = { module: '', scope: '', system: '' };
+    }
+
+    // Clean trigger (object)
+    if (!cleaned.trigger || typeof cleaned.trigger !== 'object' || !cleaned.trigger.event) {
+      cleaned.trigger = { event: 'User initiates action', source: 'UI' };
+    }
+
+    // Clean main_flow (array of objects) - REQUIRED
+    if (!Array.isArray(cleaned.main_flow) || cleaned.main_flow.length === 0) {
+      // Fallback: nếu có tasks (schema cũ), convert sang main_flow
+      if (Array.isArray(cleaned.tasks) && cleaned.tasks.length > 0) {
+        cleaned.main_flow = cleaned.tasks.map((task: string, index: number) => ({
+          step: index + 1,
+          actor: cleaned.actor?.name || 'User',
+          action: task,
+          expected_result: `Task ${index + 1} completed`
+        }));
+      } else {
+        cleaned.main_flow = [{
+          step: 1,
+          actor: cleaned.actor?.name || 'User',
+          action: 'Complete the use case',
+          expected_result: 'Use case completed'
+        }];
+      }
+    }
+
+    // Clean alternative_flows (array of objects)
+    if (!Array.isArray(cleaned.alternative_flows)) {
+      cleaned.alternative_flows = [];
+    }
+
+    // Clean exceptions (array of objects)
+    if (!Array.isArray(cleaned.exceptions)) {
+      cleaned.exceptions = [];
+    } else if (cleaned.exceptions.length > 0 && typeof cleaned.exceptions[0] === 'string') {
+      // Convert string array to exception objects
+      cleaned.exceptions = cleaned.exceptions.map((exc: string, index: number) => ({
+        id: `E${index + 1}`,
+        at_step: cleaned.main_flow.length,
+        type: 'System',
+        description: exc,
+        system_response: `Handle exception: ${exc}`
+      }));
+    }
+
+    // Clean rules (array of objects)
+    if (!Array.isArray(cleaned.rules)) {
+      cleaned.rules = [];
+    } else if (cleaned.rules.length > 0 && typeof cleaned.rules[0] === 'string') {
+      // Convert string array to rule objects
+      cleaned.rules = cleaned.rules.map((rule: string, index: number) => ({
+        id: `R${index + 1}`,
+        description: rule
+      }));
+    }
+
+    // Clean inputs (array of objects)
+    if (!Array.isArray(cleaned.inputs)) {
+      cleaned.inputs = [];
+    } else if (cleaned.inputs.length > 0 && typeof cleaned.inputs[0] === 'string') {
+      // Convert string array to input objects
+      cleaned.inputs = cleaned.inputs.map((input: string) => ({
+        name: input,
+        type: 'string',
+        required: true
+      }));
+    }
+
+    // Clean outputs (array of objects)
+    if (!Array.isArray(cleaned.outputs)) {
+      cleaned.outputs = [];
+    } else if (cleaned.outputs.length > 0 && typeof cleaned.outputs[0] === 'string') {
+      // Convert string array to output objects
+      cleaned.outputs = cleaned.outputs.map((output: string) => ({
+        name: output,
+        type: 'string',
+        optional: false
+      }));
+    }
+
+    // Clean array fields (string arrays)
+    const stringArrayFields = [
+      'preconditions', 'postconditions', 'non_functional_constraints', 'stakeholders', 'related_usecases'
     ];
 
-    arrayFields.forEach(field => {
+    stringArrayFields.forEach(field => {
       if (!Array.isArray(cleaned[field])) {
         cleaned[field] = [];
       } else {
@@ -110,23 +215,22 @@ export class UsecaseService {
       }
     });
 
-    // Đảm bảo tasks có ít nhất một item
-    if (cleaned.tasks.length === 0) {
-      cleaned.tasks = [''];
+    // Clean constraints (backward compatibility - map to non_functional_constraints)
+    if (cleaned.constraints && !cleaned.non_functional_constraints) {
+      cleaned.non_functional_constraints = Array.isArray(cleaned.constraints) ? cleaned.constraints : [];
+    }
+    if (!cleaned.non_functional_constraints) {
+      cleaned.non_functional_constraints = [];
     }
 
-    // Đảm bảo priority hợp lệ
-    if (!['low', 'medium', 'high'].includes(cleaned.priority)) {
-      cleaned.priority = 'medium';
+    // Đảm bảo description có giá trị
+    if (!cleaned.description || cleaned.description.trim() === '') {
+      cleaned.description = cleaned.name || '';
     }
 
-    // Clean optional fields
-    if (!cleaned.context || cleaned.context.trim() === '') {
-      cleaned.context = '';
-    }
-
-    if (!cleaned.feedback || cleaned.feedback.trim() === '') {
-      cleaned.feedback = null;
+    // Đảm bảo business_reason có giá trị (backward compatibility với reason)
+    if (!cleaned.business_reason) {
+      cleaned.business_reason = cleaned.reason || cleaned.goal || '';
     }
 
     return cleaned;
@@ -168,38 +272,48 @@ export class UsecaseService {
       // Clean và validate data
       const cleanedData = this.cleanUsecaseData(data);
 
-      // Lấy danh sách usecases hiện có để normalize role
+      // Lấy danh sách usecases hiện có để normalize actor
       const existingUsecases = await Usecase.find({ version_id: version._id }).lean();
-      const normalizedRole = this.normalizeRole(cleanedData.role, existingUsecases);
+      const normalizedActor = this.normalizeActor(cleanedData.actor, existingUsecases);
 
       // Map related_usecases từ string sang ObjectId
-      const relatedUsecaseIds = cleanedData.related_usecases
+      const relatedUsecaseIds = (cleanedData.related_usecases || [])
         .filter((id: string) => id && Types.ObjectId.isValid(id))
         .map((id: string) => new Types.ObjectId(id));
 
-      // Tạo usecase mới trong collection
+      // Tạo usecase mới trong collection (schema mới)
       const newUsecase = await Usecase.create([{
         project_id: version.project_id,
         version_id: version._id,
+        type: cleanedData.type || 'use_case',
+        level: cleanedData.level || 'system',
+        status: cleanedData.status || 'active',
         name: cleanedData.name,
-        role: normalizedRole,
+        description: cleanedData.description || cleanedData.name,
+        actor: normalizedActor,
         goal: cleanedData.goal,
-        reason: cleanedData.reason,
+        business_reason: cleanedData.business_reason,
+        context: cleanedData.context || { module: '', scope: '', system: '' },
         priority: cleanedData.priority,
-        tasks: cleanedData.tasks,
-        inputs: cleanedData.inputs,
-        outputs: cleanedData.outputs,
-        context: cleanedData.context,
-        feedback: cleanedData.feedback,
-        rules: cleanedData.rules,
-        triggers: cleanedData.triggers,
-        preconditions: cleanedData.preconditions,
-        postconditions: cleanedData.postconditions,
-        exceptions: cleanedData.exceptions,
-        stakeholders: cleanedData.stakeholders,
-        constraints: cleanedData.constraints,
+        frequency: cleanedData.frequency || 'medium',
+        trigger: cleanedData.trigger || { event: 'User initiates action', source: 'UI' },
+        preconditions: cleanedData.preconditions || [],
+        main_flow: cleanedData.main_flow,
+        alternative_flows: cleanedData.alternative_flows || [],
+        exceptions: cleanedData.exceptions || [],
+        postconditions: cleanedData.postconditions || [],
+        rules: cleanedData.rules || [],
+        inputs: cleanedData.inputs || [],
+        outputs: cleanedData.outputs || [],
+        non_functional_constraints: cleanedData.non_functional_constraints || [],
+        stakeholders: cleanedData.stakeholders || [],
         related_usecases: relatedUsecaseIds,
-        created_by: new Types.ObjectId(userId)
+        audit: {
+          created_by: new Types.ObjectId(userId),
+          created_at: new Date(),
+          updated_by: new Types.ObjectId(userId),
+          updated_at: new Date()
+        }
       }], { session });
 
       const savedUsecase = newUsecase[0];
@@ -319,16 +433,27 @@ export class UsecaseService {
       // Clean và validate data
       const cleanedData = this.cleanUsecaseData(data);
 
-      // Normalize role với cơ chế mapping (loại trừ UC đang update)
-      let normalizedRole;
-      if (cleanedData.role) {
+      // Normalize actor với cơ chế mapping (loại trừ UC đang update)
+      let normalizedActor;
+      if (cleanedData.actor) {
         const otherUsecases = await Usecase.find({ 
           version_id: version._id,
           _id: { $ne: usecaseId }
         }).lean().session(session);
-        normalizedRole = this.normalizeRole(cleanedData.role, otherUsecases);
+        normalizedActor = this.normalizeActor(cleanedData.actor, otherUsecases);
       } else {
-        normalizedRole = originalUsecase.role;
+        // Hỗ trợ cả actor (mới) và role (cũ)
+        const originalUsecaseAny = originalUsecase as any;
+        const actorOrRole = originalUsecaseAny.actor || originalUsecaseAny.role;
+        if (actorOrRole) {
+          normalizedActor = {
+            id: actorOrRole.id || 'actor_user',
+            name: actorOrRole.name || 'Người dùng hệ thống',
+            description: actorOrRole.description || ''
+          };
+        } else {
+          normalizedActor = { id: 'actor_user', name: 'Người dùng hệ thống', description: 'Người dùng sử dụng hệ thống' };
+        }
       }
 
       // Map related_usecases từ string sang ObjectId
@@ -336,15 +461,34 @@ export class UsecaseService {
         .filter((id: string) => id && Types.ObjectId.isValid(id))
         .map((id: string) => new Types.ObjectId(id));
 
-      // Cập nhật usecase
+      // Cập nhật usecase (schema mới)
+      const updateData: any = {
+        ...cleanedData,
+        actor: normalizedActor,
+        related_usecases: relatedUsecaseIds
+      };
+
+      // Cập nhật audit
+      if (originalUsecase.audit) {
+        updateData.audit = {
+          ...originalUsecase.audit,
+          updated_by: new Types.ObjectId(userId),
+          updated_at: new Date()
+        };
+      } else {
+        // Fallback: tạo audit mới nếu chưa có (hỗ trợ cả audit object và các field cũ)
+        const originalUsecaseAny = originalUsecase as any;
+        updateData.audit = {
+          created_by: originalUsecase.audit?.created_by || originalUsecaseAny.created_by || new Types.ObjectId(userId),
+          created_at: originalUsecase.audit?.created_at || originalUsecaseAny.created_at || new Date(),
+          updated_by: new Types.ObjectId(userId),
+          updated_at: new Date()
+        };
+      }
+
       const updatedUsecase = await Usecase.findByIdAndUpdate(
         usecaseId,
-        {
-          ...cleanedData,
-          role: normalizedRole,
-          related_usecases: relatedUsecaseIds,
-          updated_by: new Types.ObjectId(userId)
-        },
+        updateData,
         { new: true, session }
       );
 

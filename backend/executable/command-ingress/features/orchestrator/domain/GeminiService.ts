@@ -27,39 +27,143 @@ const prompts = {
 • KHÔNG thêm field ngoài schema, KHÔNG thiếu field bắt buộc
 
 🛠 **CẤU TRÚC USE CASE BẮT BUỘC** (SCHEMA TUYỆT ĐỐI BẤT BIẾN):
-Mỗi use case PHẢI có đầy đủ các trường sau (KHÔNG bao gồm field "id" - hệ thống sẽ tự tạo):
+Mỗi use case PHẢI có đầy đủ các trường sau (KHÔNG bao gồm field "_id", "project_id", "version_id", "audit" - hệ thống sẽ tự tạo):
 [
   {
-    "name": "Đăng ký tài khoản hệ thống",
-    "role": {
-      "id": "guest",
-      "name": "Người dùng chưa đăng ký",
-      "description": "Người dùng chưa có tài khoản trong hệ thống"
+    "type": "use_case",
+    "level": "system",
+    "status": "active",
+    "name": "Đăng nhập hệ thống",
+    "description": "Cho phép người dùng xác thực và truy cập vào hệ thống theo quyền đã được cấp.",
+    "actor": {
+      "id": "role_1",
+      "name": "Người dùng hệ thống",
+      "description": "Người sử dụng hệ thống có tài khoản hợp lệ"
     },
-    "goal": "Tạo tài khoản truy cập hệ thống",
-    "reason": "Cho phép người dùng sử dụng các chức năng được bảo vệ",
-    "tasks": [
-      "Xác thực thông tin đăng ký",
-      "Tạo tài khoản trong database",
-      "Gửi email xác nhận", 
-      "Kích hoạt tài khoản"
-    ],
-    "inputs": ["email", "mật khẩu", "họ tên", "số điện thoại"],
-    "outputs": ["tài khoản đã kích hoạt", "email xác nhận", "thông báo thành công"],
-    "context": "Module quản lý người dùng",
+    "goal": "Truy cập vào hệ thống với quyền đã được cấp",
+    "business_reason": "Cho phép người dùng sử dụng các chức năng được phép sau khi xác thực",
+    "context": {
+      "module": "Authentication",
+      "scope": "Web / Mobile",
+      "system": "User Management System"
+    },
     "priority": "high",
-    "feedback": "Giao diện thân thiện, hướng dẫn rõ ràng",
-    "rules": [
-      "Email phải có định dạng hợp lệ",
-      "Mật khẩu tối thiểu 8 ký tự",
-      "Không trùng email đã đăng ký"
+    "frequency": "high",
+    "trigger": {
+      "event": "User clicks Login button",
+      "source": "UI"
+    },
+    "preconditions": [
+      "Người dùng đã có tài khoản hợp lệ",
+      "Hệ thống hoạt động bình thường",
+      "Hệ thống có kết nối tới cơ sở dữ liệu xác thực"
     ],
-    "triggers": ["Người dùng yêu cầu đăng ký tài khoản"],
-    "preconditions": ["Người dùng chưa có tài khoản", "Hệ thống hoạt động bình thường"],
-    "postconditions": ["Tài khoản được tạo", "Email xác nhận được gửi"],
-    "exceptions": ["Email đã tồn tại", "Mất kết nối mạng", "Server lỗi"],
-    "stakeholders": ["Người dùng mới", "Quản trị viên hệ thống"],
-    "constraints": ["Hỗ trợ đa ngôn ngữ", "Tương thích mobile"],
+    "main_flow": [
+      {
+        "step": 1,
+        "actor": "User",
+        "action": "Truy cập trang đăng nhập",
+        "expected_result": "Trang đăng nhập được hiển thị"
+      },
+      {
+        "step": 2,
+        "actor": "User",
+        "action": "Nhập tên đăng nhập và mật khẩu",
+        "inputs": ["username", "password"],
+        "expected_result": "Thông tin đăng nhập được gửi lên hệ thống"
+      },
+      {
+        "step": 3,
+        "actor": "System",
+        "action": "Xác thực thông tin đăng nhập",
+        "rules_applied": ["R1", "R2"],
+        "expected_result": "Thông tin đăng nhập hợp lệ"
+      },
+      {
+        "step": 4,
+        "actor": "System",
+        "action": "Tạo phiên đăng nhập và chuyển hướng người dùng",
+        "expected_result": "Người dùng được chuyển đến trang chủ"
+      }
+    ],
+    "alternative_flows": [
+      {
+        "id": "AF1",
+        "at_step": 3,
+        "condition": "Tên đăng nhập hoặc mật khẩu không chính xác",
+        "system_response": "Hiển thị thông báo lỗi đăng nhập",
+        "end_state": "Login Failed"
+      },
+      {
+        "id": "AF2",
+        "at_step": 3,
+        "condition": "Tài khoản bị khóa",
+        "system_response": "Thông báo tài khoản bị khóa",
+        "end_state": "Login Failed"
+      }
+    ],
+    "exceptions": [
+      {
+        "id": "E1",
+        "at_step": 2,
+        "type": "Network",
+        "description": "Mất kết nối mạng",
+        "system_response": "Hiển thị thông báo lỗi kết nối"
+      },
+      {
+        "id": "E2",
+        "at_step": 3,
+        "type": "System",
+        "description": "Server lỗi",
+        "system_response": "Hiển thị thông báo hệ thống tạm thời không khả dụng"
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "description": "Tên đăng nhập và mật khẩu phải chính xác"
+      },
+      {
+        "id": "R2",
+        "description": "Tài khoản không bị khóa"
+      }
+    ],
+    "inputs": [
+      {
+        "name": "username",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "password",
+        "type": "string",
+        "required": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "authentication_result",
+        "type": "success | failure"
+      },
+      {
+        "name": "error_message",
+        "type": "string",
+        "optional": true
+      }
+    ],
+    "postconditions": [
+      "Người dùng được đăng nhập vào hệ thống",
+      "Phiên đăng nhập (session/token) được tạo"
+    ],
+    "non_functional_constraints": [
+      "Bảo mật thông tin đăng nhập",
+      "Không lưu mật khẩu dạng plaintext",
+      "Hỗ trợ đa nền tảng"
+    ],
+    "stakeholders": [
+      "Người dùng",
+      "Quản trị viên hệ thống"
+    ],
     "related_usecases": []
   }
 ]
@@ -96,10 +200,11 @@ III. TASK QUALITY:
 • KHÔNG: "Click nút", "Nhập form", "Mở màn hình" (UI-level)
 • ĐÚNG: "Xác thực thông tin", "Tạo record trong database", "Gửi email" (Business logic)
 
-IV. ROLE & ACTOR:
-• Role LUÔN là object đầy đủ {id, name, description}
-• Không rõ role → fallback chuẩn: {"id": "user", "name": "Người dùng hệ thống", "description": "Người dùng sử dụng hệ thống"}
+IV. ACTOR (thay vì ROLE):
+• Actor LUÔN là object đầy đủ {id, name, description}
+• Không rõ actor → fallback chuẩn: {"id": "user", "name": "Người dùng hệ thống", "description": "Người dùng sử dụng hệ thống"}
 • KHÔNG tự sáng tạo vai trò mới nếu không có trong văn bản
+• Field tên là "actor" (KHÔNG phải "role")
 
 V. CẤP ĐỘ TRỪU TƯỢNG (KHÔNG ĐẢO TẦNG):
 • Use Case = Nghiệp vụ hệ thống (business-level)
@@ -132,7 +237,11 @@ VIII. CHẤT LƯỢNG NỘI DUNG:
  **KIỂM TRA CUỐI**:
 ✓ KHÔNG có thao tác thủ công ngoài đời
 ✓ CHỈ có tương tác phần mềm
-✓ Role là object đầy đủ {id, name, description}
+✓ Actor là object đầy đủ {id, name, description}
+✓ Main_flow là array các object với step, actor, action, expected_result
+✓ Alternative_flows và exceptions là array các object với id, at_step, condition/description, system_response
+✓ Rules là array các object với id, description
+✓ Inputs và outputs là array các object với name, type, required/optional
 ✓ Tất cả trường đều theo đúng schema (không thêm, không thiếu)
 ✓ KHÔNG có field "id" trong response
 ✓ Related usecases để mảng rỗng [] (sẽ được xử lý sau)
@@ -442,41 +551,143 @@ VIII. CHẤT LƯỢNG NỘI DUNG:
 • DO NOT add fields outside schema, DO NOT miss required fields
 
 🛠 **REQUIRED USE CASE STRUCTURE** (ABSOLUTELY IMMUTABLE SCHEMA):
-Each use case MUST have the following fields (DO NOT include "id" field - system will auto-generate):
-
-**EXAMPLE 1: Single usecase**
+Each use case MUST have the following fields (DO NOT include "_id", "project_id", "version_id", "audit" - system will auto-generate):
 [
   {
-    "name": "System Account Registration",
-    "role": {
-      "id": "guest",
-      "name": "Unregistered User",
-      "description": "User without system account"
+    "type": "use_case",
+    "level": "system",
+    "status": "active",
+    "name": "System Login",
+    "description": "Allows users to authenticate and access the system according to granted permissions.",
+    "actor": {
+      "id": "role_1",
+      "name": "System User",
+      "description": "User with valid system account"
     },
-    "goal": "Create system access account",
-    "reason": "Allow users to use protected features",
-    "tasks": [
-      "Validate registration information",
-      "Create account in database",
-      "Send confirmation email",
-      "Activate account"
-    ],
-    "inputs": ["email", "password", "full name", "phone number"],
-    "outputs": ["activated account", "confirmation email", "success notification"],
-    "context": "User management module",
+    "goal": "Access the system with granted permissions",
+    "business_reason": "Allow users to use permitted features after authentication",
+    "context": {
+      "module": "Authentication",
+      "scope": "Web / Mobile",
+      "system": "User Management System"
+    },
     "priority": "high",
-    "feedback": "User-friendly interface, clear instructions",
-    "rules": [
-      "Email must have valid format",
-      "Minimum 8-character password",
-      "No duplicate email registration"
+    "frequency": "high",
+    "trigger": {
+      "event": "User clicks Login button",
+      "source": "UI"
+    },
+    "preconditions": [
+      "User has valid account",
+      "System is operational",
+      "System has connection to authentication database"
     ],
-    "triggers": ["User requests account registration"],
-    "preconditions": ["User has no account", "System is operational"],
-    "postconditions": ["Account created", "Confirmation email sent"],
-    "exceptions": ["Email already exists", "Network connection lost", "Server error"],
-    "stakeholders": ["New user", "System administrator"],
-    "constraints": ["Multi-language support", "Mobile compatibility"],
+    "main_flow": [
+      {
+        "step": 1,
+        "actor": "User",
+        "action": "Access login page",
+        "expected_result": "Login page is displayed"
+      },
+      {
+        "step": 2,
+        "actor": "User",
+        "action": "Enter username and password",
+        "inputs": ["username", "password"],
+        "expected_result": "Login information is sent to system"
+      },
+      {
+        "step": 3,
+        "actor": "System",
+        "action": "Authenticate login information",
+        "rules_applied": ["R1", "R2"],
+        "expected_result": "Login information is valid"
+      },
+      {
+        "step": 4,
+        "actor": "System",
+        "action": "Create login session and redirect user",
+        "expected_result": "User is redirected to home page"
+      }
+    ],
+    "alternative_flows": [
+      {
+        "id": "AF1",
+        "at_step": 3,
+        "condition": "Username or password is incorrect",
+        "system_response": "Display login error message",
+        "end_state": "Login Failed"
+      },
+      {
+        "id": "AF2",
+        "at_step": 3,
+        "condition": "Account is locked",
+        "system_response": "Display account locked message",
+        "end_state": "Login Failed"
+      }
+    ],
+    "exceptions": [
+      {
+        "id": "E1",
+        "at_step": 2,
+        "type": "Network",
+        "description": "Network connection lost",
+        "system_response": "Display connection error message"
+      },
+      {
+        "id": "E2",
+        "at_step": 3,
+        "type": "System",
+        "description": "Server error",
+        "system_response": "Display system temporarily unavailable message"
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "description": "Username and password must be correct"
+      },
+      {
+        "id": "R2",
+        "description": "Account must not be locked"
+      }
+    ],
+    "inputs": [
+      {
+        "name": "username",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "password",
+        "type": "string",
+        "required": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "authentication_result",
+        "type": "success | failure"
+      },
+      {
+        "name": "error_message",
+        "type": "string",
+        "optional": true
+      }
+    ],
+    "postconditions": [
+      "User is logged into the system",
+      "Login session (session/token) is created"
+    ],
+    "non_functional_constraints": [
+      "Secure login information",
+      "Do not store password in plaintext",
+      "Multi-platform support"
+    ],
+    "stakeholders": [
+      "User",
+      "System administrator"
+    ],
     "related_usecases": []
   }
 ]
@@ -502,10 +713,11 @@ III. TASK QUALITY:
 • ❌ FORBIDDEN: "Click button", "Enter form", "Open screen" (UI-level)
 • ✅ CORRECT: "Validate information", "Create record in database", "Send email" (Business logic)
 
-IV. ROLE & ACTOR:
-• Role ALWAYS complete object {id, name, description}
-• Unclear role → standard fallback: {"id": "user", "name": "System User", "description": "User using the system"}
+IV. ACTOR (instead of ROLE):
+• Actor ALWAYS complete object {id, name, description}
+• Unclear actor → standard fallback: {"id": "user", "name": "System User", "description": "User using the system"}
 • DO NOT create new roles if not in text
+• Field name is "actor" (NOT "role")
 
 V. ABSTRACTION LEVEL (NO LEVEL MIXING):
 • Use Case = System business (business-level)
@@ -768,10 +980,11 @@ IV. TASK QUALITY:
 - ❌ FORBIDDEN: "Click button", "Enter form", "Open screen", "Access page" (UI-level)
 - ✅ CORRECT: "Validate information", "Create record in database", "Send email", "Calculate price" (Business logic)
 
-V. ROLE & ACTOR:
-- Role ALWAYS complete object {id, name, description}
-- Unclear role → standard fallback: {"id": "user", "name": "System User", "description": "User using the system"}
+V. ACTOR (instead of ROLE):
+- Actor ALWAYS complete object {id, name, description}
+- Unclear actor → standard fallback: {"id": "user", "name": "System User", "description": "User using the system"}
 - DO NOT create new roles if not in text
+- Field name is "actor" (NOT "role")
 
 VI. ABSTRACTION LEVEL (NO LEVEL MIXING):
 - Use Case = System business (business-level)
@@ -791,28 +1004,30 @@ VIII. CONTENT QUALITY:
 - Each use case must have complete information (~400-500 tokens)
 
 **USE CASE STRUCTURE** (ABSOLUTELY IMMUTABLE SCHEMA):
-[
-  {
-    "name": "Use case name (1 clear business goal)",
-    "role": { "id": "...", "name": "...", "description": "..." },
-    "goal": "Clear, specific business goal",
-    "reason": "Reason for this use case",
-    "tasks": ["Deployable task 1-3 days", "Business logic task", "NOT UI-step"],
-    "inputs": [...],
-    "outputs": [...],
-    "context": "Module/domain",
-    "priority": "high|medium|low",
-    "feedback": "...",
-    "rules": ["Valid business rule", "NOT empty, NOT formal"],
-    "triggers": ["Business trigger", "NOT 'click button'"],
-    "preconditions": [...],
-    "postconditions": [...],
-    "exceptions": ["Valid exception", "NOT empty"],
-    "stakeholders": [...],
-    "constraints": [...],
-    "related_usecases": []
-  }
-]
+Each use case MUST follow the exact structure as in schemaDescription above, with fields:
+- type: "use_case" (default)
+- level: "system" | "module" | "component" (default "system")
+- status: "active" (default)
+- name: Use case name
+- description: Detailed use case description
+- actor: {id, name, description} (NOT "role")
+- goal: Business goal
+- business_reason: Business reason (NOT "reason")
+- context: {module, scope, system}
+- priority: "low" | "medium" | "high"
+- frequency: "low" | "medium" | "high" (default "medium")
+- trigger: {event, source}
+- preconditions: [string array]
+- main_flow: [{step, actor, action, expected_result, inputs?, rules_applied?}]
+- alternative_flows: [{id, at_step, condition, system_response, end_state}]
+- exceptions: [{id, at_step, type, description, system_response}]
+- rules: [{id, description}]
+- inputs: [{name, type, required}]
+- outputs: [{name, type, optional?}]
+- postconditions: [string array]
+- non_functional_constraints: [string array] (NOT "constraints")
+- stakeholders: [string array]
+- related_usecases: [] (empty array, will be processed later)
 
 **IMPORTANT**:
 - Return ONLY JSON array, no markdown, no code fence, no comments

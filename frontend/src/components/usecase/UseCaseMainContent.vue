@@ -362,7 +362,7 @@
                     <span class="goal-text">{{ uc.goal || 'No goal specified' }}</span>
                   </td>
                   <td v-if="visibleColumns.role" class="role-column">
-                    <span class="role-badge">{{ uc.role?.name || 'Undefined' }}</span>
+                    <span class="role-badge">{{ (uc.actor?.name || uc.role?.name) || 'Undefined' }}</span>
                   </td>
                   <td v-if="visibleColumns.priority" class="priority-column">
                     <span class="priority-badge" :class="`priority-${uc.priority || 'medium'}`">
@@ -370,7 +370,7 @@
                     </span>
                   </td>
                   <td v-if="visibleColumns.tasks" class="tasks-column">
-                    <span class="tasks-count">{{ uc.tasks?.length || 0 }} tasks</span>
+                    <span class="tasks-count">{{ (uc.main_flow || uc.tasks || []).length }} tasks</span>
                   </td>
                   <td class="actions-column">
                     <div class="action-buttons">
@@ -544,11 +544,15 @@
                       </div>
                       <div class="detail-section">
                         <h5>Description</h5>
-                        <p>{{ uc.reason || 'No description available' }}</p>
+                        <p>{{ (uc.description || uc.business_reason || uc.reason) || 'No description available' }}</p>
+                      </div>
+                      <div class="detail-section">
+                        <h5>Business Reason</h5>
+                        <p>{{ (uc.business_reason || uc.reason) || 'No business reason specified' }}</p>
                       </div>
                       <div class="detail-section">
                         <h5>Context</h5>
-                        <p>{{ uc.context || 'No context specified' }}</p>
+                        <p>{{ (typeof uc.context === 'object' ? (uc.context.module || uc.context.scope || uc.context.system || '') : uc.context) || 'No context specified' }}</p>
                       </div>
                     </div>
 
@@ -557,8 +561,17 @@
                       <div class="detail-section full-width">
                         <h5>Main Flow</h5>
                         <ol class="task-list">
-                          <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
-                          <li v-if="!uc.tasks || uc.tasks.length === 0">No tasks defined</li>
+                          <template v-if="uc.main_flow && Array.isArray(uc.main_flow) && uc.main_flow.length > 0">
+                            <li v-for="(step, i) in uc.main_flow" :key="i">
+                              <strong>Step {{ step.step || (i + 1) }}:</strong> 
+                              {{ step.action || step }}
+                              <span v-if="step.expected_result" class="step-result"> → {{ step.expected_result }}</span>
+                            </li>
+                          </template>
+                          <template v-else-if="uc.tasks && Array.isArray(uc.tasks) && uc.tasks.length > 0">
+                            <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                          </template>
+                          <li v-else>No tasks defined</li>
                         </ol>
                       </div>
                     </div>
@@ -583,51 +596,74 @@
 
                     <!-- Row 4: Inputs & Outputs -->
                     <div class="detail-row">
-                      <div class="detail-section">
-                        <h5>Inputs</h5>
-                        <div class="tag-list">
-                          <span v-for="item in uc.inputs" :key="item" class="tag tag-input">{{
-                            item
-                          }}</span>
-                          <span v-if="!uc.inputs || uc.inputs.length === 0" class="tag tag-meta"
-                            >None</span
+                    <div class="detail-section">
+                      <h5>Inputs</h5>
+                      <div class="tag-list">
+                        <template v-if="uc.inputs && Array.isArray(uc.inputs) && uc.inputs.length > 0">
+                          <span 
+                            v-for="(item, i) in uc.inputs" 
+                            :key="i" 
+                            class="tag tag-input"
                           >
-                        </div>
+                            {{ typeof item === 'object' ? item.name : item }}
+                          </span>
+                        </template>
+                        <span v-else class="tag tag-meta">None</span>
                       </div>
-                      <div class="detail-section">
-                        <h5>Outputs</h5>
-                        <div class="tag-list">
-                          <span v-for="item in uc.outputs" :key="item" class="tag tag-output">{{
-                            item
-                          }}</span>
-                          <span v-if="!uc.outputs || uc.outputs.length === 0" class="tag tag-meta"
-                            >None</span
+                    </div>
+                    <div class="detail-section">
+                      <h5>Outputs</h5>
+                      <div class="tag-list">
+                        <template v-if="uc.outputs && Array.isArray(uc.outputs) && uc.outputs.length > 0">
+                          <span 
+                            v-for="(item, i) in uc.outputs" 
+                            :key="i" 
+                            class="tag tag-output"
                           >
-                        </div>
+                            {{ typeof item === 'object' ? item.name : item }}
+                          </span>
+                        </template>
+                        <span v-else class="tag tag-meta">None</span>
                       </div>
+                    </div>
                     </div>
 
                     <!-- Row 5: Triggers, Business Rules & Constraints -->
                     <div class="detail-row">
                       <div class="detail-section">
-                        <h5>Triggers</h5>
+                        <h5>Trigger</h5>
                         <ul class="condition-list">
-                          <li v-for="(item, i) in uc.triggers" :key="i">{{ item }}</li>
-                          <li v-if="!uc.triggers || uc.triggers.length === 0">None</li>
+                          <template v-if="uc.trigger && typeof uc.trigger === 'object'">
+                            <li><strong>Event:</strong> {{ uc.trigger.event || 'N/A' }}</li>
+                            <li v-if="uc.trigger.source"><strong>Source:</strong> {{ uc.trigger.source }}</li>
+                          </template>
+                          <template v-else-if="uc.triggers && Array.isArray(uc.triggers) && uc.triggers.length > 0">
+                            <li v-for="(item, i) in uc.triggers" :key="i">{{ item }}</li>
+                          </template>
+                          <li v-else>None</li>
                         </ul>
                       </div>
                       <div class="detail-section">
                         <h5>Business Rules</h5>
                         <ul class="condition-list">
-                          <li v-for="(item, i) in uc.rules" :key="i">{{ item }}</li>
-                          <li v-if="!uc.rules || uc.rules.length === 0">None</li>
+                          <template v-if="uc.rules && Array.isArray(uc.rules) && uc.rules.length > 0">
+                            <li v-for="(item, i) in uc.rules" :key="i">
+                              {{ typeof item === 'object' ? item.description : item }}
+                            </li>
+                          </template>
+                          <li v-else>None</li>
                         </ul>
                       </div>
                       <div class="detail-section">
-                        <h5>Constraints</h5>
+                        <h5>Non-functional Constraints</h5>
                         <ul class="condition-list">
-                          <li v-for="(item, i) in uc.constraints" :key="i">{{ item }}</li>
-                          <li v-if="!uc.constraints || uc.constraints.length === 0">None</li>
+                          <template v-if="uc.non_functional_constraints && Array.isArray(uc.non_functional_constraints) && uc.non_functional_constraints.length > 0">
+                            <li v-for="(item, i) in uc.non_functional_constraints" :key="i">{{ item }}</li>
+                          </template>
+                          <template v-else-if="uc.constraints && Array.isArray(uc.constraints) && uc.constraints.length > 0">
+                            <li v-for="(item, i) in uc.constraints" :key="i">{{ item }}</li>
+                          </template>
+                          <li v-else>None</li>
                         </ul>
                       </div>
                     </div>
@@ -637,13 +673,17 @@
                       <div class="detail-section full-width">
                         <h5>Exceptions</h5>
                         <ul class="exception-list">
-                          <li v-for="(item, i) in uc.exceptions" :key="i">
-                            <span class="material-symbols-outlined">warning</span>
-                            {{ item }}
-                          </li>
-                          <li v-if="!uc.exceptions || uc.exceptions.length === 0">
-                            No exceptions defined
-                          </li>
+                          <template v-if="uc.exceptions && Array.isArray(uc.exceptions) && uc.exceptions.length > 0">
+                            <li v-for="(item, i) in uc.exceptions" :key="i">
+                              <span class="material-symbols-outlined">warning</span>
+                              <template v-if="typeof item === 'object'">
+                                <strong>Step {{ item.at_step }}:</strong> {{ item.description || item.type || 'Exception' }}
+                                <span v-if="item.system_response"> → {{ item.system_response }}</span>
+                              </template>
+                              <template v-else>{{ item }}</template>
+                            </li>
+                          </template>
+                          <li v-else>No exceptions defined</li>
                         </ul>
                       </div>
                     </div>
@@ -687,13 +727,6 @@
                       </div>
                     </div>
 
-                    <!-- Row 8: Feedback -->
-                    <div v-if="uc.feedback" class="detail-row">
-                      <div class="detail-section full-width">
-                        <h5>Feedback</h5>
-                        <p>{{ uc.feedback }}</p>
-                      </div>
-                    </div>
                   </div>
 
                   <!-- Action Buttons -->
@@ -733,7 +766,7 @@
                 <span class="priority-badge" :class="`priority-${uc.priority}`">
                   {{ uc.priority }}
                 </span>
-                <span class="role-badge">{{ uc.role?.name || 'Undefined' }}</span>
+                <span class="role-badge">{{ (uc.actor?.name || uc.role?.name) || 'Undefined' }}</span>
               </div>
             </div>
             <div v-if="expandedUseCaseId === getUsecaseId(uc)" class="grid-card-details">
@@ -744,13 +777,20 @@
                 </div>
                 <div class="detail-section">
                   <h5>Description</h5>
-                  <p>{{ uc.reason || 'No description available' }}</p>
+                  <p>{{ (uc.description || uc.business_reason || uc.reason) || 'No description available' }}</p>
                 </div>
                 <div class="detail-section">
                   <h5>Main Flow</h5>
                   <ol class="task-list">
-                    <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
-                    <li v-if="!uc.tasks || uc.tasks.length === 0">No tasks defined</li>
+                    <template v-if="uc.main_flow && Array.isArray(uc.main_flow) && uc.main_flow.length > 0">
+                      <li v-for="(step, i) in uc.main_flow" :key="i">
+                        <strong>Step {{ step.step || (i + 1) }}:</strong> {{ step.action || step }}
+                      </li>
+                    </template>
+                    <template v-else-if="uc.tasks && Array.isArray(uc.tasks) && uc.tasks.length > 0">
+                      <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                    </template>
+                    <li v-else>No tasks defined</li>
                   </ol>
                 </div>
               </div>
@@ -792,7 +832,7 @@
                 <span class="priority-badge" :class="`priority-${uc.priority}`">
                   {{ uc.priority }}
                 </span>
-                <span class="role-badge">{{ uc.role?.name || 'Undefined' }}</span>
+                <span class="role-badge">{{ (uc.actor?.name || uc.role?.name) || 'Undefined' }}</span>
                 <div class="list-item-actions" @click.stop>
                   <button class="btn-icon" @click="showEditUsecaseModal(uc)" title="Edit">
                     <span class="material-symbols-outlined">edit</span>
@@ -807,17 +847,24 @@
               <div class="list-details-grid">
                 <div class="detail-section">
                   <h5>Description</h5>
-                  <p>{{ uc.reason || 'No description available' }}</p>
+                  <p>{{ (uc.description || uc.business_reason || uc.reason) || 'No description available' }}</p>
                 </div>
                 <div class="detail-section">
                   <h5>Context</h5>
-                  <p>{{ uc.context || 'No context specified' }}</p>
+                  <p>{{ (typeof uc.context === 'object' ? (uc.context.module || uc.context.scope || uc.context.system || '') : uc.context) || 'No context specified' }}</p>
                 </div>
                 <div class="detail-section full-width">
                   <h5>Main Flow</h5>
                   <ol class="task-list">
-                    <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
-                    <li v-if="!uc.tasks || uc.tasks.length === 0">No tasks defined</li>
+                    <template v-if="uc.main_flow && Array.isArray(uc.main_flow) && uc.main_flow.length > 0">
+                      <li v-for="(step, i) in uc.main_flow" :key="i">
+                        <strong>Step {{ step.step || (i + 1) }}:</strong> {{ step.action || step }}
+                      </li>
+                    </template>
+                    <template v-else-if="uc.tasks && Array.isArray(uc.tasks) && uc.tasks.length > 0">
+                      <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                    </template>
+                    <li v-else>No tasks defined</li>
                   </ol>
                 </div>
               </div>
@@ -852,10 +899,18 @@
             </div>
             <div v-if="expandedUseCaseId === getUsecaseId(uc)" class="compact-item-details">
               <div class="compact-details-content">
-                <p><strong>Description:</strong> {{ uc.reason || 'N/A' }}</p>
+                <p><strong>Description:</strong> {{ (uc.description || uc.business_reason || uc.reason) || 'N/A' }}</p>
                 <p><strong>Main Flow:</strong></p>
                 <ol class="task-list">
-                  <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                  <template v-if="uc.main_flow && Array.isArray(uc.main_flow) && uc.main_flow.length > 0">
+                    <li v-for="(step, i) in uc.main_flow" :key="i">
+                      <strong>Step {{ step.step || (i + 1) }}:</strong> {{ step.action || step }}
+                    </li>
+                  </template>
+                  <template v-else-if="uc.tasks && Array.isArray(uc.tasks) && uc.tasks.length > 0">
+                    <li v-for="(task, i) in uc.tasks" :key="i">{{ task }}</li>
+                  </template>
+                  <li v-else>No tasks defined</li>
                 </ol>
               </div>
               <div class="compact-item-actions" @click.stop>
@@ -1026,12 +1081,12 @@
               >
                 {{ viewingUsecase.priority || 'medium' }}
               </span>
-              <span class="role-badge">{{ viewingUsecase.role?.name || 'Undefined' }}</span>
+              <span class="role-badge">{{ (viewingUsecase.actor?.name || viewingUsecase.role?.name) || 'Undefined' }}</span>
             </div>
           </div>
 
           <div class="details-grid expanded-content">
-            <!-- Row 1: Goal, Description, Context -->
+            <!-- Row 1: Goal, Description, Business Reason, Context -->
             <div class="detail-row">
               <div class="detail-section">
                 <h5>Goal</h5>
@@ -1039,11 +1094,15 @@
               </div>
               <div class="detail-section">
                 <h5>Description</h5>
-                <p>{{ viewingUsecase.reason || 'No description available' }}</p>
+                <p>{{ (viewingUsecase.description || viewingUsecase.business_reason || viewingUsecase.reason) || 'No description available' }}</p>
+              </div>
+              <div class="detail-section">
+                <h5>Business Reason</h5>
+                <p>{{ (viewingUsecase.business_reason || viewingUsecase.reason) || 'No business reason specified' }}</p>
               </div>
               <div class="detail-section">
                 <h5>Context</h5>
-                <p>{{ viewingUsecase.context || 'No context specified' }}</p>
+                <p>{{ (typeof viewingUsecase.context === 'object' ? (viewingUsecase.context.module || viewingUsecase.context.scope || viewingUsecase.context.system || '') : viewingUsecase.context) || 'No context specified' }}</p>
               </div>
             </div>
 
@@ -1052,10 +1111,17 @@
               <div class="detail-section full-width">
                 <h5>Main Flow</h5>
                 <ol class="task-list">
-                  <li v-for="(task, i) in viewingUsecase.tasks" :key="i">{{ task }}</li>
-                  <li v-if="!viewingUsecase.tasks || viewingUsecase.tasks.length === 0">
-                    No tasks defined
-                  </li>
+                  <template v-if="viewingUsecase.main_flow && Array.isArray(viewingUsecase.main_flow) && viewingUsecase.main_flow.length > 0">
+                    <li v-for="(step, i) in viewingUsecase.main_flow" :key="i">
+                      <strong>Step {{ step.step || (i + 1) }}:</strong> 
+                      {{ step.action || step }}
+                      <span v-if="step.expected_result" class="step-result"> → {{ step.expected_result }}</span>
+                    </li>
+                  </template>
+                  <template v-else-if="viewingUsecase.tasks && Array.isArray(viewingUsecase.tasks) && viewingUsecase.tasks.length > 0">
+                    <li v-for="(task, i) in viewingUsecase.tasks" :key="i">{{ task }}</li>
+                  </template>
+                  <li v-else>No tasks defined</li>
                 </ol>
               </div>
             </div>
@@ -1095,56 +1161,71 @@
               <div class="detail-section">
                 <h5>Inputs</h5>
                 <div class="tag-list">
-                  <span v-for="item in viewingUsecase.inputs" :key="item" class="tag tag-input">{{
-                    item
-                  }}</span>
-                  <span
-                    v-if="!viewingUsecase.inputs || viewingUsecase.inputs.length === 0"
-                    class="tag tag-meta"
-                    >None</span
-                  >
+                  <template v-if="viewingUsecase.inputs && Array.isArray(viewingUsecase.inputs) && viewingUsecase.inputs.length > 0">
+                    <span 
+                      v-for="(item, i) in viewingUsecase.inputs" 
+                      :key="i" 
+                      class="tag tag-input"
+                    >
+                      {{ typeof item === 'object' ? item.name : item }}
+                    </span>
+                  </template>
+                  <span v-else class="tag tag-meta">None</span>
                 </div>
               </div>
               <div class="detail-section">
                 <h5>Outputs</h5>
                 <div class="tag-list">
-                  <span v-for="item in viewingUsecase.outputs" :key="item" class="tag tag-output">{{
-                    item
-                  }}</span>
-                  <span
-                    v-if="!viewingUsecase.outputs || viewingUsecase.outputs.length === 0"
-                    class="tag tag-meta"
-                    >None</span
-                  >
+                  <template v-if="viewingUsecase.outputs && Array.isArray(viewingUsecase.outputs) && viewingUsecase.outputs.length > 0">
+                    <span 
+                      v-for="(item, i) in viewingUsecase.outputs" 
+                      :key="i" 
+                      class="tag tag-output"
+                    >
+                      {{ typeof item === 'object' ? item.name : item }}
+                    </span>
+                  </template>
+                  <span v-else class="tag tag-meta">None</span>
                 </div>
               </div>
             </div>
 
-            <!-- Row 5: Triggers, Business Rules & Constraints -->
+            <!-- Row 5: Trigger, Business Rules & Non-functional Constraints -->
             <div class="detail-row">
               <div class="detail-section">
-                <h5>Triggers</h5>
+                <h5>Trigger</h5>
                 <ul class="condition-list">
-                  <li v-for="(item, i) in viewingUsecase.triggers" :key="i">{{ item }}</li>
-                  <li v-if="!viewingUsecase.triggers || viewingUsecase.triggers.length === 0">
-                    None
-                  </li>
+                  <template v-if="viewingUsecase.trigger && typeof viewingUsecase.trigger === 'object'">
+                    <li><strong>Event:</strong> {{ viewingUsecase.trigger.event || 'N/A' }}</li>
+                    <li v-if="viewingUsecase.trigger.source"><strong>Source:</strong> {{ viewingUsecase.trigger.source }}</li>
+                  </template>
+                  <template v-else-if="viewingUsecase.triggers && Array.isArray(viewingUsecase.triggers) && viewingUsecase.triggers.length > 0">
+                    <li v-for="(item, i) in viewingUsecase.triggers" :key="i">{{ item }}</li>
+                  </template>
+                  <li v-else>None</li>
                 </ul>
               </div>
               <div class="detail-section">
                 <h5>Business Rules</h5>
                 <ul class="condition-list">
-                  <li v-for="(item, i) in viewingUsecase.rules" :key="i">{{ item }}</li>
-                  <li v-if="!viewingUsecase.rules || viewingUsecase.rules.length === 0">None</li>
+                  <template v-if="viewingUsecase.rules && Array.isArray(viewingUsecase.rules) && viewingUsecase.rules.length > 0">
+                    <li v-for="(item, i) in viewingUsecase.rules" :key="i">
+                      {{ typeof item === 'object' ? item.description : item }}
+                    </li>
+                  </template>
+                  <li v-else>None</li>
                 </ul>
               </div>
               <div class="detail-section">
-                <h5>Constraints</h5>
+                <h5>Non-functional Constraints</h5>
                 <ul class="condition-list">
-                  <li v-for="(item, i) in viewingUsecase.constraints" :key="i">{{ item }}</li>
-                  <li v-if="!viewingUsecase.constraints || viewingUsecase.constraints.length === 0">
-                    None
-                  </li>
+                  <template v-if="viewingUsecase.non_functional_constraints && Array.isArray(viewingUsecase.non_functional_constraints) && viewingUsecase.non_functional_constraints.length > 0">
+                    <li v-for="(item, i) in viewingUsecase.non_functional_constraints" :key="i">{{ item }}</li>
+                  </template>
+                  <template v-else-if="viewingUsecase.constraints && Array.isArray(viewingUsecase.constraints) && viewingUsecase.constraints.length > 0">
+                    <li v-for="(item, i) in viewingUsecase.constraints" :key="i">{{ item }}</li>
+                  </template>
+                  <li v-else>None</li>
                 </ul>
               </div>
             </div>
@@ -1154,13 +1235,17 @@
               <div class="detail-section full-width">
                 <h5>Exceptions</h5>
                 <ul class="exception-list">
-                  <li v-for="(item, i) in viewingUsecase.exceptions" :key="i">
-                    <span class="material-symbols-outlined">warning</span>
-                    {{ item }}
-                  </li>
-                  <li v-if="!viewingUsecase.exceptions || viewingUsecase.exceptions.length === 0">
-                    No exceptions defined
-                  </li>
+                  <template v-if="viewingUsecase.exceptions && Array.isArray(viewingUsecase.exceptions) && viewingUsecase.exceptions.length > 0">
+                    <li v-for="(item, i) in viewingUsecase.exceptions" :key="i">
+                      <span class="material-symbols-outlined">warning</span>
+                      <template v-if="typeof item === 'object'">
+                        <strong>Step {{ item.at_step }}:</strong> {{ item.description || item.type || 'Exception' }}
+                        <span v-if="item.system_response"> → {{ item.system_response }}</span>
+                      </template>
+                      <template v-else>{{ item }}</template>
+                    </li>
+                  </template>
+                  <li v-else>No exceptions defined</li>
                 </ul>
               </div>
             </div>
@@ -1210,13 +1295,6 @@
               </div>
             </div>
 
-            <!-- Row 8: Feedback -->
-            <div v-if="viewingUsecase.feedback" class="detail-row">
-              <div class="detail-section full-width">
-                <h5>Feedback</h5>
-                <p>{{ viewingUsecase.feedback }}</p>
-              </div>
-            </div>
           </div>
         </div>
         <div class="modal-actions">
@@ -1376,11 +1454,12 @@ export default {
       }
 
       const groups = this.useCases.reduce((groups, uc) => {
-        const role = uc.role.name || 'Undefined'
-        if (!groups[role]) {
-          groups[role] = []
+        // Hỗ trợ cả actor (mới) và role (cũ)
+        const actorName = (uc.actor?.name || uc.role?.name || 'Undefined')
+        if (!groups[actorName]) {
+          groups[actorName] = []
         }
-        groups[role].push(uc)
+        groups[actorName].push(uc)
         return groups
       }, {})
 
@@ -1437,16 +1516,21 @@ export default {
       return this.useCases.filter((uc) => uc.priority === 'high').length
     },
     completedCount() {
-      return this.useCases.filter((uc) => uc.name && uc.goal && uc.tasks && uc.tasks.length > 0)
-        .length
+      return this.useCases.filter((uc) => {
+        const mainFlow = uc.main_flow || uc.tasks || []
+        return uc.name && uc.goal && mainFlow.length > 0
+      }).length
     },
     // Filtered use cases for non-grouped views
     filteredUseCases() {
       let filtered = [...this.useCases]
 
-      // Apply role filter
+      // Apply role filter (hỗ trợ cả actor và role)
       if (this.roleFilter) {
-        filtered = filtered.filter((uc) => (uc.role?.name || 'Undefined') === this.roleFilter)
+        filtered = filtered.filter((uc) => {
+          const actorName = (uc.actor?.name || uc.role?.name || 'Undefined')
+          return actorName === this.roleFilter
+        })
       }
 
       // Apply search filter
@@ -1486,8 +1570,9 @@ export default {
           aValue = priorityOrder[a.priority] || 0
           bValue = priorityOrder[b.priority] || 0
         } else if (this.sortBy === 'role') {
-          aValue = a.role?.name || 'Undefined'
-          bValue = b.role?.name || 'Undefined'
+          // Hỗ trợ cả actor (mới) và role (cũ)
+          aValue = (a.actor?.name || a.role?.name || 'Undefined')
+          bValue = (b.actor?.name || b.role?.name || 'Undefined')
         } else {
           aValue = a[this.sortBy] || ''
           bValue = b[this.sortBy] || ''
@@ -1708,23 +1793,29 @@ export default {
     getEmptyForm() {
       return {
         name: '',
-        role: '',
+        description: '',
+        actor: { name: '', description: '' },
         goal: '',
-        reason: '',
+        business_reason: '',
         priority: 'medium',
-        context: '',
-        tasks: [''],
+        context: { module: '', scope: '', system: '' },
+        trigger: { event: '', source: 'UI' },
+        main_flow: [{ step: 1, actor: '', action: '', expected_result: '' }],
         inputs: [],
         outputs: [],
         preconditions: [],
         postconditions: [],
-        triggers: [],
         rules: [],
-        constraints: [],
+        non_functional_constraints: [],
         exceptions: [],
         stakeholders: [],
         related_usecases: [],
-        feedback: '',
+        // Backward compatibility fields
+        role: '',
+        reason: '',
+        tasks: [''],
+        triggers: [],
+        constraints: [],
       }
     },
 
@@ -1917,11 +2008,12 @@ export default {
               continue
             }
 
-            // Prepare update data with role
+            // Prepare update data with actor (hỗ trợ cả actor và role)
             const updateData = {
               ...usecase,
-              role: {
+              actor: {
                 name: roleToUpdate,
+                description: usecase.actor?.description || usecase.role?.description || ''
               },
             }
 

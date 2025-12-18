@@ -304,7 +304,7 @@ export default {
       }
       
       // Check if uc is a populated usecase object
-      const hasDescription = uc && (uc.reason || uc.description)
+      const hasDescription = uc && (uc.description || uc.business_reason || uc.reason)
       const isString = typeof uc === 'string'
       const isObjectId = uc && typeof uc === 'object' && !hasDescription
       
@@ -319,7 +319,7 @@ export default {
         return 'Use case details are being loaded...'
       }
       
-      return uc.reason || uc.description || 'No description provided.'
+      return uc.description || uc.business_reason || uc.reason || 'No description provided.'
     },
     // Helper: Format conflict ID to short readable format
     formatConflictId(conflictId) {

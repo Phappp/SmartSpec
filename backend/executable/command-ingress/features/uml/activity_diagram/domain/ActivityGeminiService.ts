@@ -124,16 +124,16 @@ export class ActivityGeminiService {
     const simplified = requirements.map(r => ({
       name: r.name,
       goal: r.goal,
-      tasks: r.tasks,
+      main_flow: (r as any).main_flow || r.tasks, // Hỗ trợ cả main_flow (mới) và tasks (cũ)
       inputs: r.inputs,
       outputs: r.outputs,
-      context: r.context,
+      context: typeof r.context === 'object' ? r.context : { module: r.context || '', scope: '', system: '' },
       rules: r.rules,
-      triggers: r.triggers,
+      trigger: (r as any).trigger || (r.triggers ? { event: r.triggers[0] || 'User initiates action', source: 'UI' } : { event: 'User initiates action', source: 'UI' }),
       preconditions: r.preconditions,
       postconditions: r.postconditions,
       exceptions: r.exceptions,
-      constraints: r.constraints
+      non_functional_constraints: (r as any).non_functional_constraints || r.constraints || []
     }));
 
     const lang = language === 'en-US' ? 'en-US' : 'vi-VN';

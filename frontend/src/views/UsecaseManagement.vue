@@ -936,32 +936,141 @@ export default {
           return
         }
 
-        // 🔥 VALIDATION PHÍA FE TRƯỚC KHI GỬI - CẬP NHẬT CHO ROLE MỚI
-        const requiredFields = ['name', 'goal', 'reason', 'priority']
+        // 🔥 VALIDATION PHÍA FE TRƯỚC KHI GỬI - CẬP NHẬT CHO SCHEMA MỚI
+        const requiredFields = ['name', 'goal', 'description', 'business_reason', 'priority']
         const missingFields = requiredFields.filter((field) => !data[field])
 
-        // Kiểm tra role riêng vì giờ là object
-        if (!data.role || !data.role.name || !data.role.name.trim()) {
-          missingFields.push('role')
+        // Kiểm tra actor (hỗ trợ cả actor và role - backward compatibility)
+        const actorOrRole = data.actor || data.role
+        if (!actorOrRole || (typeof actorOrRole === 'object' && !actorOrRole.name) || (typeof actorOrRole === 'string' && !actorOrRole.trim())) {
+          missingFields.push('actor')
+        }
+
+        // Kiểm tra main_flow (hỗ trợ cả main_flow và tasks - backward compatibility)
+        const mainFlow = data.main_flow || data.tasks
+        if (!mainFlow || !Array.isArray(mainFlow) || mainFlow.length === 0) {
+          missingFields.push('main_flow')
         }
 
         // if (missingFields.length > 0) {
         //   throw new Error(`Please fill in all required fields: ${missingFields.join(', ')}`)
         // }
 
-        // if (!data.tasks || data.tasks.length === 0 || !data.tasks[0]?.trim()) {
-        //   throw new Error('At least one task is required')
-        // }
-
-        // 🔥 ĐẢM BẢO ROLE CÓ CẤU TRÚC ĐÚNG TRƯỚC KHI GỬI
+        // 🔥 CHUẨN HÓA PAYLOAD CHO SCHEMA MỚI (hỗ trợ backward compatibility)
         const payload = {
           ...data,
-          role: {
-            id:
-              data.role?.id ||
-              `role_${data.role?.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`,
-            name: data.role?.name || '',
-          },
+        }
+
+        // Normalize actor (hỗ trợ cả actor và role)
+        if (data.actor) {
+          payload.actor = {
+            id: data.actor.id || `actor_${(data.actor.name || 'unknown').toLowerCase().replace(/\s+/g, '_')}`,
+            name: data.actor.name || '',
+            description: data.actor.description || ''
+          }
+        } else if (data.role) {
+          // Convert role (cũ) sang actor (mới)
+          if (typeof data.role === 'string') {
+            payload.actor = {
+              id: `actor_${data.role.toLowerCase().replace(/\s+/g, '_')}`,
+              name: data.role,
+              description: ''
+            }
+          } else {
+            payload.actor = {
+              id: data.role.id || `actor_${(data.role.name || 'unknown').toLowerCase().replace(/\s+/g, '_')}`,
+              name: data.role.name || '',
+              description: data.role.description || ''
+            }
+          }
+        }
+
+        // Normalize main_flow (hỗ trợ cả main_flow và tasks)
+        if (data.main_flow && Array.isArray(data.main_flow) && data.main_flow.length > 0) {
+          payload.main_flow = data.main_flow
+        } else if (data.tasks && Array.isArray(data.tasks) && data.tasks.length > 0) {
+          // Convert tasks (cũ) sang main_flow (mới)
+          payload.main_flow = data.tasks.map((task, index) => ({
+            step: index + 1,
+            actor: payload.actor?.name || 'User',
+            action: task,
+            expected_result: `Task ${index + 1} completed`
+          }))
+        }
+
+        // Normalize business_reason (hỗ trợ cả business_reason và reason)
+        if (!payload.business_reason && data.reason) {
+          payload.business_reason = data.reason
+        }
+
+        // Normalize description
+        if (!payload.description && data.name) {
+          payload.description = data.name
+        }
+
+        // Normalize context (hỗ trợ cả object và string)
+        if (!payload.context || typeof payload.context === 'string') {
+          payload.context = {
+            module: typeof payload.context === 'string' ? payload.context : '',
+            scope: '',
+            system: ''
+          }
+        }
+
+        // Normalize trigger (hỗ trợ cả trigger object và triggers array)
+        if (!payload.trigger || typeof payload.trigger !== 'object') {
+          if (data.triggers && Array.isArray(data.triggers) && data.triggers.length > 0) {
+            payload.trigger = {
+              event: data.triggers[0],
+              source: 'UI'
+            }
+          } else {
+            payload.trigger = {
+              event: 'User initiates action',
+              source: 'UI'
+            }
+          }
+        }
+
+        // Normalize non_functional_constraints (hỗ trợ cả non_functional_constraints và constraints)
+        if (!payload.non_functional_constraints && data.constraints) {
+          payload.non_functional_constraints = data.constraints
+        }
+
+        // Normalize inputs và outputs (hỗ trợ cả object array và string array)
+        if (payload.inputs && Array.isArray(payload.inputs) && payload.inputs.length > 0 && typeof payload.inputs[0] === 'string') {
+          payload.inputs = payload.inputs.map((input) => ({
+            name: input,
+            type: 'string',
+            required: true
+          }))
+        }
+
+        if (payload.outputs && Array.isArray(payload.outputs) && payload.outputs.length > 0 && typeof payload.outputs[0] === 'string') {
+          payload.outputs = payload.outputs.map((output) => ({
+            name: output,
+            type: 'string',
+            optional: false
+          }))
+        }
+
+        // Normalize rules (hỗ trợ cả object array và string array)
+        if (payload.rules && Array.isArray(payload.rules) && payload.rules.length > 0 && typeof payload.rules[0] === 'string') {
+          payload.rules = payload.rules.map((rule, index) => ({
+            id: `R${index + 1}`,
+            description: rule
+          }))
+        }
+
+        // Normalize exceptions (hỗ trợ cả object array và string array)
+        if (payload.exceptions && Array.isArray(payload.exceptions) && payload.exceptions.length > 0 && typeof payload.exceptions[0] === 'string') {
+          payload.exceptions = payload.exceptions.map((exc, index) => ({
+            id: `E${index + 1}`,
+            at_step: payload.main_flow?.length || 1,
+            type: 'System',
+            description: exc,
+            system_response: `Handle exception: ${exc}`
+          }))
         }
 
         // 🔥 FIX: Loại bỏ các trường không cần thiết

@@ -67,9 +67,10 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
         }
         throw new Error(errorMsg);
       }
-      // Kiểm tra xem usecase có 'tasks' không (GeminiService sẽ làm, nhưng check ở đây tốt hơn)
-      if (!useCaseContext.tasks || useCaseContext.tasks.length === 0) {
-        const errorMsg = "This Usecase has no steps (tasks) defined to generate a sequence diagram.";
+      // Kiểm tra xem usecase có 'main_flow' hoặc 'tasks' không (hỗ trợ cả schema mới và cũ)
+      const mainFlow = useCaseContext.main_flow || useCaseContext.tasks;
+      if (!mainFlow || !Array.isArray(mainFlow) || mainFlow.length === 0) {
+        const errorMsg = "This Usecase has no steps (main_flow/tasks) defined to generate a sequence diagram.";
         if (umlSocketService && projectId && versionId && userId) {
           umlSocketService.emitProgress(projectId, versionId, userId, 'sequence', 100, 'failed', false, [errorMsg]);
         }

@@ -511,11 +511,11 @@ export class DatabaseGeminiService {
     language: string
   ): Promise<any> {
     const simplifiedRequirements = requirements.map((r) => ({
-      id: r.id,
+      id: r.id || r._id,
       name: r.name,
-      role: r.role,
+      actor: (r as any).actor || r.role, // Hỗ trợ cả actor (mới) và role (cũ)
       goal: r.goal,
-      tasks: r.tasks,
+      main_flow: (r as any).main_flow || r.tasks, // Hỗ trợ cả main_flow (mới) và tasks (cũ)
       inputs: r.inputs,
       outputs: r.outputs,
     }));

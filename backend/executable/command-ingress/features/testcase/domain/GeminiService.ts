@@ -814,12 +814,15 @@ ${existingTitles && existingTitles.length > 0 ? '- **CRITICAL**: DO NOT generate
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
         // Ensure id is set correctly - use _id if id doesn't exist
         const requirementId = requirement.id || requirement._id ? String(requirement._id || requirement.id) : '';
+        // Hỗ trợ cả schema mới và cũ
+        const actorOrRole = (requirement as any).actor || requirement.role;
+        const mainFlow = (requirement as any).main_flow || requirement.tasks;
         const simplifiedRequirement = {
             id: requirementId,
             name: requirement.name,
-            role: requirement.role,
+            actor: actorOrRole, // Hỗ trợ cả actor (mới) và role (cũ)
             goal: requirement.goal,
-            tasks: requirement.tasks,
+            main_flow: mainFlow, // Hỗ trợ cả main_flow (mới) và tasks (cũ)
             priority: requirement.priority
         };
 
@@ -834,16 +837,21 @@ ${existingTitles && existingTitles.length > 0 ? '- **CRITICAL**: DO NOT generate
      */
     private async processBatch(requirements: any[], databaseSchema: any, language: string, testType: string): Promise<any[]> {
         // Ensure each requirement has a valid id field (use _id if id doesn't exist)
-        const simplifiedRequirements = requirements.map(req => ({
-            id: req.id || (req._id ? String(req._id) : ''),
-            name: req.name,
-            role: req.role,
-            goal: req.goal,
-            tasks: req.tasks,
-            inputs: req.inputs,
-            outputs: req.outputs,
-            priority: req.priority
-        }));
+        // Hỗ trợ cả schema mới và cũ
+        const simplifiedRequirements = requirements.map(req => {
+            const actorOrRole = (req as any).actor || req.role;
+            const mainFlow = (req as any).main_flow || req.tasks;
+            return {
+                id: req.id || (req._id ? String(req._id) : ''),
+                name: req.name,
+                actor: actorOrRole, // Hỗ trợ cả actor (mới) và role (cũ)
+                goal: req.goal,
+                main_flow: mainFlow, // Hỗ trợ cả main_flow (mới) và tasks (cũ)
+                inputs: req.inputs,
+                outputs: req.outputs,
+                priority: req.priority
+            };
+        });
 
         const enhancedDatabase = {
             tables: databaseSchema.tables?.map((table: any) => ({
