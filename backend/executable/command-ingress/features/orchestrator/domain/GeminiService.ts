@@ -733,9 +733,9 @@ VI. ACTOR:
  **CORRECT SOFTWARE BEHAVIORS**:
 • "System verifies digital signature" →  CORRECT
 • "Upload electronic documents" →  CORRECT
-• "Send notifications via system" →  CORRECT 
+• "Send notifications via system" →  CORRECT
 
- **OUTPUT REQUIREMENTS**: 
+ **OUTPUT REQUIREMENTS**:
 • Return ONLY valid JSON array
 • NO explanations, NO markdown, NO code fence, NO comments
 • Immediately parseable with JSON.parse()
@@ -1205,7 +1205,7 @@ XIII. CONTENT QUALITY:
 
 **USE CASE STRUCTURE** (ABSOLUTELY IMMUTABLE SCHEMA):
 Each use case MUST follow the exact structure below:
-{
+  {
     "type": "use_case",
     "level": "system",
     "status": "active",
@@ -1253,7 +1253,7 @@ Each use case MUST follow the exact structure below:
     "outputs": [{ "name": "result", "type": "string", "optional": false }],
     "non_functional_constraints": ["[Performance] Constraint", "[Security] Constraint"],
     "stakeholders": ["Stakeholder 1", "Stakeholder 2"]
-}
+  }
 
 **IMPORTANT**:
 - Return ONLY JSON array, no markdown, no code fence, no comments
@@ -2614,6 +2614,10 @@ Return JSON:`;
     /**
      * V2: Retry generate missing usecases
      */
+    /**
+     * Retry generate missing với blacklist để tránh trùng lặp
+     * ✅ Method này thay thế retryGenerateMissing cũ, luôn có blacklist để tránh trùng lặp
+     */
     async retryGenerateMissing(
         originalText: string,
         missingUsecases: Array<{ key: string; name: string; desc: string; module?: string }>,
@@ -2622,7 +2626,31 @@ Return JSON:`;
         userId?: string,
         projectId?: string
     ): Promise<any[]> {
-        console.log(`🔄 [RETRY_V2] Retrying ${missingUsecases.length} missing usecases`);
+        // ✅ Forward to retryGenerateMissingWithBlacklist với empty blacklist (backward compatibility)
+        return this.retryGenerateMissingWithBlacklist(
+            originalText,
+            missingUsecases,
+            [], // Empty blacklist for backward compatibility
+            language,
+            modelName,
+            userId,
+            projectId
+        );
+    }
+
+    /**
+     * Retry generate missing với blacklist để tránh trùng lặp
+     */
+    async retryGenerateMissingWithBlacklist(
+        originalText: string,
+        missingUsecases: Array<{ key: string; name: string; desc: string; module?: string }>,
+        existingUsecases: Array<{ key: string; name: string }>,
+        language: string = 'vi-VN',
+        modelName?: string,
+        userId?: string,
+        projectId?: string
+    ): Promise<any[]> {
+        console.log(`🔄 [RETRY_V2] Retrying ${missingUsecases.length} missing usecases with blacklist (${existingUsecases.length} existing)`);
 
         const effectiveModelName = modelName || await this.llmService.getRecommendedModel(undefined, userId);
 
@@ -2630,36 +2658,157 @@ Return JSON:`;
             `- ${uc.key}: "${uc.name}" - ${uc.desc}`
         ).join('\n');
 
-        const prompt = language === 'vi-VN'
-            ? `**RETRY - GENERATE LẠI CÁC USE CASES BỊ THIẾU**
+        // ✅ Blacklist: Liệt kê các usecases đã có để tránh trùng lặp
+        const blacklist = existingUsecases.length > 0
+            ? existingUsecases.map(uc => `❌ ${uc.key}: "${uc.name}"`).join('\n')
+            : '(Không có usecase nào đã được generate)';
 
-**DANH SÁCH USE CASES CẦN GENERATE** (BẮT BUỘC):
+        const prompt = language === 'vi-VN'
+            ? `**RETRY - GENERATE LẠI CÁC USE CASES BỊ THIẾU (KHÔNG TRÙNG LẶP)**
+
+**DANH SÁCH USE CASES CẦN GENERATE** (BẮT BUỘC - PHẢI GIỮ ĐÚNG KEY):
 ${missingList}
+
+**⚠️ BLACKLIST - CÁC USE CASES ĐÃ CÓ (TUYỆT ĐỐI KHÔNG ĐƯỢC TRÙNG LẶP)**:
+${blacklist}
 
 **VĂN BẢN GỐC**:
 ${originalText}
 
-**YÊU CẦU**:
-1. PHẢI generate đầy đủ ${missingUsecases.length} use cases
-2. Giữ đúng key và tên đã cam kết
-3. Bổ sung chi tiết đầy đủ theo schema
+**YÊU CẦU NGHIÊM NGẶT**:
+1. PHẢI generate đầy đủ CHÍNH XÁC ${missingUsecases.length} use cases (không thiếu, không thừa)
+2. **QUAN TRỌNG**: Mỗi use case PHẢI có field "key" đúng với key đã cam kết (${missingUsecases.map(c => c.key).join(', ')})
+3. **TUYỆT ĐỐI KHÔNG TRÙNG LẶP**: Các use cases trong BLACKLIST đã tồn tại, KHÔNG được generate lại
+4. Giữ đúng tên đã cam kết
+5. Bổ sung chi tiết đầy đủ theo schema bên dưới (từ văn bản gốc, KHÔNG dùng mock data)
 
-Trả về JSON array với ${missingUsecases.length} use cases:
+**SCHEMA USE CASE** (TUYỆT ĐỐI BẤT BIẾN - PHẢI CÓ FIELD "key"):
+{
+    "key": "UC001",  // ⚠️ BẮT BUỘC: Phải có field "key" đúng với key đã cam kết
+    "name": "Tên use case",
+    "type": "use_case",
+    "level": "system",
+    "status": "active",
+    "description": "Mô tả chi tiết use case",
+    "actor": { "id": "user", "name": "Người dùng hệ thống", "description": "..." },
+    "goal": "Mục tiêu nghiệp vụ rõ ràng",
+    "business_reason": "Lý do nghiệp vụ",
+    "context": { "module": "Module", "scope": "", "system": "" },
+    "priority": "high|medium|low",
+    "frequency": "high|medium|low",
+    "trigger": { "event": "Sự kiện trigger", "source": "UI" },
+    "preconditions": ["Điều kiện tiên quyết"],
+    "main_flow": [
+        { 
+            "step": 1, 
+            "actor": "User|System", 
+            "action": "Hành động business logic", 
+            "inputs": ["input_name"],
+            "rules_applied": ["R1"],
+            "expected_result": "Kết quả mong đợi" 
+        }
+    ],
+    "alternative_flows": [
+        {
+            "id": "AF1",
+            "at_step": 1,
+            "condition": "Điều kiện thay thế",
+            "system_response": "Phản hồi của hệ thống",
+            "end_state": "Trạng thái kết thúc"
+        }
+    ],
+    "exceptions": [
+        {
+            "id": "E1",
+            "at_step": 1,
+            "type": "Network|System|Business",
+            "description": "Mô tả exception",
+            "system_response": "Phản hồi của hệ thống"
+        }
+    ],
+    "postconditions": ["[SUCCESS] Kết quả thành công", "[FAILURE] Kết quả thất bại"],
+    "rules": [{ "id": "R1", "description": "Quy tắc nghiệp vụ" }],
+    "inputs": [{ "name": "field", "type": "string", "required": true }],
+    "outputs": [{ "name": "result", "type": "string", "optional": false }],
+    "non_functional_constraints": ["[Performance] Constraint", "[Security] Constraint"],
+    "stakeholders": ["Stakeholder 1", "Stakeholder 2"]
+}
+
+**OUTPUT**: JSON array với CHÍNH XÁC ${missingUsecases.length} use cases. KHÔNG markdown, KHÔNG giải thích, KHÔNG code fence. Mỗi use case PHẢI có field "key" đúng. TUYỆT ĐỐI KHÔNG TRÙNG LẶP với BLACKLIST.
+
 [`
-            : `**RETRY - REGENERATE MISSING USE CASES**
+            : `**RETRY - REGENERATE MISSING USE CASES (NO DUPLICATES)**
 
-**USE CASES TO GENERATE** (REQUIRED):
+**USE CASES TO GENERATE** (REQUIRED - MUST KEEP EXACT KEY):
 ${missingList}
+
+**⚠️ BLACKLIST - EXISTING USE CASES (ABSOLUTELY NO DUPLICATES)**:
+${blacklist}
 
 **ORIGINAL TEXT**:
 ${originalText}
 
-**REQUIREMENTS**:
-1. MUST generate all ${missingUsecases.length} use cases
-2. Keep committed key and name
-3. Add full details per schema
+**STRICT REQUIREMENTS**:
+1. MUST generate EXACTLY ${missingUsecases.length} use cases (no less, no more)
+2. **CRITICAL**: Each use case MUST have "key" field matching committed key (${missingUsecases.map(c => c.key).join(', ')})
+3. **ABSOLUTELY NO DUPLICATES**: Use cases in BLACKLIST already exist, MUST NOT generate duplicates
+4. Keep committed name
+5. Add complete details per schema below (from original text, NO mock data)
 
-Return JSON array with ${missingUsecases.length} use cases:
+**USE CASE SCHEMA** (ABSOLUTELY IMMUTABLE - MUST INCLUDE "key" FIELD):
+{
+    "key": "UC001",  // ⚠️ REQUIRED: Must have "key" field matching committed key
+    "name": "Use case name",
+    "type": "use_case",
+    "level": "system",
+    "status": "active",
+    "description": "Detailed use case description",
+    "actor": { "id": "user", "name": "System User", "description": "..." },
+    "goal": "Clear business goal",
+    "business_reason": "Business reason",
+    "context": { "module": "Module", "scope": "", "system": "" },
+    "priority": "high|medium|low",
+    "frequency": "high|medium|low",
+    "trigger": { "event": "Trigger event", "source": "UI" },
+    "preconditions": ["Precondition"],
+    "main_flow": [
+        { 
+            "step": 1, 
+            "actor": "User|System", 
+            "action": "Business logic action", 
+            "inputs": ["input_name"],
+            "rules_applied": ["R1"],
+            "expected_result": "Expected result" 
+        }
+    ],
+    "alternative_flows": [
+        {
+            "id": "AF1",
+            "at_step": 1,
+            "condition": "Alternative condition",
+            "system_response": "System response",
+            "end_state": "End state"
+        }
+    ],
+    "exceptions": [
+        {
+            "id": "E1",
+            "at_step": 1,
+            "type": "Network|System|Business",
+            "description": "Exception description",
+            "system_response": "System response"
+        }
+    ],
+    "postconditions": ["[SUCCESS] Success result", "[FAILURE] Failure result"],
+    "rules": [{ "id": "R1", "description": "Business rule" }],
+    "inputs": [{ "name": "field", "type": "string", "required": true }],
+    "outputs": [{ "name": "result", "type": "string", "optional": false }],
+    "non_functional_constraints": ["[Performance] Constraint", "[Security] Constraint"],
+    "stakeholders": ["Stakeholder 1", "Stakeholder 2"]
+}
+
+**OUTPUT**: JSON array with EXACTLY ${missingUsecases.length} use cases. NO markdown, NO explanations, NO code fence. Each use case MUST have "key" field. ABSOLUTELY NO DUPLICATES with BLACKLIST.
+
 [`;
 
         try {
@@ -2668,7 +2817,7 @@ Return JSON array with ${missingUsecases.length} use cases:
                 modelName: effectiveModelName,
                 userId: userId,
                 projectId: projectId,
-                endpoint: 'retryGenerateMissing',
+                endpoint: 'retryGenerateMissingWithBlacklist',
                 isProductionFreeMode: true,
                 forceModel: !!modelName
             });
