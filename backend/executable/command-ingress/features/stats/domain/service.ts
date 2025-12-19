@@ -2,13 +2,46 @@ import ApiUsage from '../../../../../internal/model/api_usage';
 import User from '../../../../../internal/model/user';
 import Project from '../../../../../internal/model/project';
 import Key from '../../../../../internal/model/api_key';
+import { StatsCacheService } from './stats.cache.service';
 
 export class StatsService {
+  private cacheService: StatsCacheService | null = null;
+
+  /**
+   * Khởi tạo cache service (gọi từ app.ts khi có Redis client)
+   */
+  setCacheService(cacheService: StatsCacheService): void {
+    this.cacheService = cacheService;
+  }
+
   /**
    * Tổng hợp usage (tổng request/token, success/failed)
    * Hỗ trợ filter theo date range, provider, status để phục vụ bộ lọc ở dashboard
+   * ✅ CÓ REDIS CACHE
    */
   async fetchUsageSummary(filters?: {
+    dateFrom?: string;
+    dateTo?: string;
+    provider?: string;
+    status?: 'success' | 'failed' | 'timeout';
+  }) {
+    // Nếu có cache, thử lấy từ cache trước
+    if (this.cacheService) {
+      const cacheKey = this.cacheService.getUsageSummaryKey(filters);
+      return await this.cacheService.getOrCompute(
+        cacheKey,
+        async () => {
+          return await this._fetchUsageSummaryFromDB(filters);
+        },
+        300 // 5 phút cache
+      );
+    }
+
+    // Fallback: query trực tiếp từ DB
+    return await this._fetchUsageSummaryFromDB(filters);
+  }
+
+  private async _fetchUsageSummaryFromDB(filters?: {
     dateFrom?: string;
     dateTo?: string;
     provider?: string;
@@ -180,6 +213,23 @@ export class StatsService {
   }
 
   async fetchQuickStats() {
+    // Nếu có cache, thử lấy từ cache trước
+    if (this.cacheService) {
+      const cacheKey = this.cacheService.getQuickStatsKey();
+      return await this.cacheService.getOrCompute(
+        cacheKey,
+        async () => {
+          return await this._fetchQuickStatsFromDB();
+        },
+        300 // 5 phút cache
+      );
+    }
+
+    // Fallback: query trực tiếp từ DB
+    return await this._fetchQuickStatsFromDB();
+  }
+
+  private async _fetchQuickStatsFromDB() {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -267,6 +317,23 @@ export class StatsService {
   }
 
   async fetchSystemStats() {
+    // Nếu có cache, thử lấy từ cache trước
+    if (this.cacheService) {
+      const cacheKey = this.cacheService.getSystemStatsKey();
+      return await this.cacheService.getOrCompute(
+        cacheKey,
+        async () => {
+          return await this._fetchSystemStatsFromDB();
+        },
+        600 // 10 phút cache (system stats ít thay đổi)
+      );
+    }
+
+    // Fallback: query trực tiếp từ DB
+    return await this._fetchSystemStatsFromDB();
+  }
+
+  private async _fetchSystemStatsFromDB() {
     // System metrics vẫn có thể mock hoặc lấy từ system monitoring
     // Nếu có monitoring service thì tích hợp sau
     return {
@@ -315,8 +382,26 @@ export class StatsService {
 
   /**
    * Analytics người dùng: tổng, active, pending, mới, online hôm nay, timeline đăng ký
+   * ✅ CÓ REDIS CACHE
    */
   async fetchUserAnalytics(filters?: { rangeDays?: number }) {
+    // Nếu có cache, thử lấy từ cache trước
+    if (this.cacheService) {
+      const cacheKey = this.cacheService.getUserAnalyticsKey(filters);
+      return await this.cacheService.getOrCompute(
+        cacheKey,
+        async () => {
+          return await this._fetchUserAnalyticsFromDB(filters);
+        },
+        300 // 5 phút cache
+      );
+    }
+
+    // Fallback: query trực tiếp từ DB
+    return await this._fetchUserAnalyticsFromDB(filters);
+  }
+
+  private async _fetchUserAnalyticsFromDB(filters?: { rangeDays?: number }) {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -451,8 +536,32 @@ export class StatsService {
 
   /**
    * Lọc API usage với các filters
+   * ✅ CÓ REDIS CACHE
    */
   async fetchFilteredUsage(filters: {
+    dateFrom?: string;
+    dateTo?: string;
+    provider?: string;
+    status?: 'success' | 'failed' | 'timeout';
+    groupBy?: 'day' | 'month' | 'year';
+  }) {
+    // Nếu có cache, thử lấy từ cache trước
+    if (this.cacheService) {
+      const cacheKey = this.cacheService.getFilteredUsageKey(filters);
+      return await this.cacheService.getOrCompute(
+        cacheKey,
+        async () => {
+          return await this._fetchFilteredUsageFromDB(filters);
+        },
+        300 // 5 phút cache
+      );
+    }
+
+    // Fallback: query trực tiếp từ DB
+    return await this._fetchFilteredUsageFromDB(filters);
+  }
+
+  private async _fetchFilteredUsageFromDB(filters: {
     dateFrom?: string;
     dateTo?: string;
     provider?: string;
@@ -560,8 +669,31 @@ export class StatsService {
 
   /**
    * Lấy dữ liệu cho biểu đồ
+   * ✅ CÓ REDIS CACHE
    */
   async fetchChartData(filters: {
+    dateFrom?: string;
+    dateTo?: string;
+    provider?: string;
+    chartType: 'timeline' | 'provider' | 'status';
+  }) {
+    // Nếu có cache, thử lấy từ cache trước
+    if (this.cacheService) {
+      const cacheKey = this.cacheService.getChartDataKey(filters);
+      return await this.cacheService.getOrCompute(
+        cacheKey,
+        async () => {
+          return await this._fetchChartDataFromDB(filters);
+        },
+        300 // 5 phút cache
+      );
+    }
+
+    // Fallback: query trực tiếp từ DB
+    return await this._fetchChartDataFromDB(filters);
+  }
+
+  private async _fetchChartDataFromDB(filters: {
     dateFrom?: string;
     dateTo?: string;
     provider?: string;

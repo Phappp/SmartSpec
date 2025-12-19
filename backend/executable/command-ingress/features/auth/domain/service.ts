@@ -97,7 +97,7 @@ export class AuthServiceImpl implements AuthService {
   }
 
   async exchangeWithGoogleIDP(
-    request: ExchangeTokenRequest, ip?: string, userAgent?:string
+    request: ExchangeTokenRequest, ip?: string, userAgent?: string
   ): Promise<ExchangeTokenResult> {
     const { code } = request;
     const googleToken =
@@ -136,7 +136,7 @@ export class AuthServiceImpl implements AuthService {
       sub: String(user._id),
     };
   }
-  async logout(refreshToken: string,ip?: string,userAgent?: string): Promise<string> {
+  async logout(refreshToken: string, ip?: string, userAgent?: string): Promise<string> {
     const jwtClaims = jwt.verify(refreshToken, this.jwtRefreshSecret);
     const sid = jwtClaims["sid"];
     const sub = jwtClaims["sub"];
@@ -190,10 +190,10 @@ export class AuthServiceImpl implements AuthService {
     if (!user) {
       throw new Error("User not found");
     }
-    
+
     // Transform user object để đảm bảo dob được serialize đúng
     const userObj = user.toObject ? user.toObject() : user;
-    
+
     // Đảm bảo dob là Date object hoặc ISO string
     if (userObj.dob) {
       // Nếu là Date object, giữ nguyên (Express sẽ serialize thành ISO string)
@@ -203,7 +203,7 @@ export class AuthServiceImpl implements AuthService {
         userObj.dob = new Date(userObj.dob);
       }
     }
-    
+
     return userObj;
   }
 
@@ -241,7 +241,7 @@ export class AuthServiceImpl implements AuthService {
     isTwoFactorEnabled: boolean,
     dob: Date,
     gender: string,
-    ip?: string,userAgent?: string
+    ip?: string, userAgent?: string
   ): Promise<ExchangeTokenResult> {
     // ✨ FIX: Thêm bước kiểm tra mật khẩu trùng khớp.
     if (password !== confirmPassword) {
@@ -296,7 +296,7 @@ export class AuthServiceImpl implements AuthService {
   }
 
   // có chỉnh thêm tham số
-  async login(email: string, password: string,ip?: string,userAgent?: string): Promise<LoginResponse> {
+  async login(email: string, password: string, ip?: string, userAgent?: string): Promise<LoginResponse> {
     const user = await User.findOne({ email });
     if (!user) {
       await this.logService.createLog({
@@ -313,12 +313,12 @@ export class AuthServiceImpl implements AuthService {
     }
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-       await this.logService.createLog({
+      await this.logService.createLog({
         user_id: undefined,
         target_id: undefined,
         action: "failed_login",
         target_type: "system",
-       details: { message: `Failed login attempt for "${email}" — reason: "Invalid password"` },
+        details: { message: `Failed login attempt for "${email}" — reason: "Invalid password"` },
         level: "warning",
         ip: ip,
         user_agent: userAgent
@@ -376,7 +376,7 @@ export class AuthServiceImpl implements AuthService {
     email: string,
     otp: string,
     otpToken: string,
-    ip?: string, userAgent?:string
+    ip?: string, userAgent?: string
   ): Promise<ExchangeTokenResult> {
     const user = await User.findOne({ email });
     if (!user) {
@@ -447,7 +447,7 @@ export class AuthServiceImpl implements AuthService {
       return false;
     }
   }
-  async forgotPassword(email: string, ip?: string, userAgent?:string): Promise<string> {
+  async forgotPassword(email: string, ip?: string, userAgent?: string): Promise<string> {
     const user = await User.findOne({ email });
     if (!user) {
       throw new Error("Email not found");
@@ -474,9 +474,9 @@ export class AuthServiceImpl implements AuthService {
     return token;
   }
 
-  async resetPassword(token: string, newPassword: string,ip?: string,userAgent?: string): Promise<string> {
+  async resetPassword(token: string, newPassword: string, ip?: string, userAgent?: string): Promise<string> {
     try {
-      const payload = jwt.verify(token, this.jwtSecret) as { email: string }; 
+      const payload = jwt.verify(token, this.jwtSecret) as { email: string };
       const user = await User.findOne({ email: payload.email });
       if (!user) {
         throw new Error("User not found");
@@ -491,10 +491,10 @@ export class AuthServiceImpl implements AuthService {
         target_id: user._id.toString(),
         action: "update_user",
         target_type: "system",
-        details: { 
+        details: {
           before: { password: oldPasswordHash.slice(0, 10) + "..." },
           after: { password: hashedPassword.slice(0, 10) + "..." },
-          message: `User "${user.email}" reset password successfully (User ID: ${user._id}).` 
+          message: `User "${user.email}" reset password successfully (User ID: ${user._id}).`
         },
         level: "info",
         ip: ip,
@@ -506,7 +506,7 @@ export class AuthServiceImpl implements AuthService {
     }
   }
 
-  async toggleTwoFactorAuth(userId: string, enable: boolean,ip?: string,userAgent?: string): Promise<string> {
+  async toggleTwoFactorAuth(userId: string, enable: boolean, ip?: string, userAgent?: string): Promise<string> {
     try {
       const user = await User.findOne({ _id: userId });
       if (!user) {
@@ -520,10 +520,10 @@ export class AuthServiceImpl implements AuthService {
         target_id: userId,
         action: "update_user",
         target_type: "system",
-        details: { 
+        details: {
           before: { isTwoFactorEnabled: oldValue },
           after: { isTwoFactorEnabled: enable },
-          message: `User "${user.email}" ${enable ? "enabled" : "disabled"} Two-Factor Authentication (2FA).` 
+          message: `User "${user.email}" ${enable ? "enabled" : "disabled"} Two-Factor Authentication (2FA).`
         },
         level: "info",
         ip: ip,

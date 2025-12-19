@@ -1,5 +1,6 @@
 // 📄 features/presence/domain/presence.socket.service.ts
 import { io } from '../../../socket';
+import { PresenceRedisService } from './presence.redis.service';
 
 interface ActiveUser {
     userId: string;
@@ -10,15 +11,19 @@ interface ActiveUser {
 }
 
 export class PresenceSocketService {
-    private activeUsers = new Map<string, ActiveUser>();
+    private redisService: PresenceRedisService | null = null;
 
     /**
-     * User join project room - FIXED ACTIVE MEMBER COUNT
+     * Khởi tạo Redis service (gọi từ app.ts khi có Redis client)
      */
-    joinProjectRoom(socket: any, projectId: string, userId: string, userInfo: any): void {
-        //console.log(`🔍 [JOIN] User ${userId} joining project ${projectId}`);
-        //console.log(`🔍 [JOIN] Current active users before:`, this.getActiveUsersInProject(projectId).length);
+    setRedisService(redisService: PresenceRedisService): void {
+        this.redisService = redisService;
+    }
 
+    /**
+     * User join project room - REDIS-BACKED
+     */
+    async joinProjectRoom(socket: any, projectId: string, userId: string, userInfo: any): Promise<void> {
         const activeUser: ActiveUser = {
             userId,
             socketId: socket.id,
@@ -27,78 +32,63 @@ export class PresenceSocketService {
             joinedAt: new Date()
         };
 
-        // Remove any existing entry for this socket to avoid duplicates
-        this.activeUsers.delete(socket.id);
-        this.activeUsers.set(socket.id, activeUser);
+        // Lưu vào Redis nếu có Redis service
+        if (this.redisService) {
+            await this.redisService.addActiveUser(activeUser);
+        }
+
         socket.join(`project_${projectId}`);
 
-        const currentActiveUsers = this.getActiveUsersInProject(projectId);
-        //console.log(`🔍 [JOIN] Active users after join:`, currentActiveUsers.length);
-        //console.log(`🔍 [JOIN] Users details:`, currentActiveUsers.map(u => ({ userId: u.userId, name: u.userInfo.name })));
+        // Lấy danh sách active users (từ Redis hoặc fallback)
+        const currentActiveUsers = await this.getActiveUsersInProject(projectId);
 
         // Broadcast user joined event với accurate count
-        this.broadcastUserJoined(projectId, userId, userInfo);
-
-        //console.log(`✅ User ${userId} joined project room: project_${projectId}`);
+        await this.broadcastUserJoined(projectId, userId, userInfo);
     }
 
     /**
-     * User leave project room - FIXED ACTIVE MEMBER COUNT
+     * User leave project room - REDIS-BACKED
      */
-    leaveProjectRoom(socket: any, projectId: string): void {
-        //console.log(`🔍 [LEAVE] Socket ${socket.id} leaving project ${projectId}`);
-        //console.log(`🔍 [LEAVE] Current active users before:`, this.getActiveUsersInProject(projectId).length);
+    async leaveProjectRoom(socket: any, projectId: string): Promise<void> {
+        let activeUser: ActiveUser | null = null;
 
-        const activeUser = this.activeUsers.get(socket.id);
+        // Xóa khỏi Redis nếu có Redis service
+        if (this.redisService) {
+            activeUser = await this.redisService.removeActiveUser(socket.id);
+        }
 
         if (activeUser) {
-            this.activeUsers.delete(socket.id);
-            //console.log(`🔍 [LEAVE] After deletion - Total active users in system: ${this.activeUsers.size}`);
-
-            const remainingUsers = this.getActiveUsersInProject(projectId);
-            //console.log(`🔍 [LEAVE] Remaining users in project ${projectId}:`, remainingUsers.length);
-            //console.log(`🔍 [LEAVE] Remaining users details:`, remainingUsers.map(u => ({ userId: u.userId, name: u.userInfo.name })));
-
-            // Broadcast với remaining users chính xác
-            this.broadcastUserLeft(projectId, activeUser.userId, activeUser.userInfo, remainingUsers);
+            const remainingUsers = await this.getActiveUsersInProject(projectId);
+            await this.broadcastUserLeft(projectId, activeUser.userId, activeUser.userInfo, remainingUsers);
         } else {
-            console.log(`🚪 No active user found for socket ${socket.id}`);
+            // Không log warning vì đây là trường hợp bình thường:
+            // - Socket disconnect nhưng chưa join project
+            // - Socket đã bị cleanup trước đó (TTL hết hạn)
+            // - Socket disconnect được gọi nhiều lần (race condition)
+            // Chỉ log ở debug level nếu cần
+            // console.log(`🚪 No active user found for socket ${socket.id} - this is normal if socket was not in Redis`);
         }
 
         socket.leave(`project_${projectId}`);
     }
 
     /**
-     * Get active users in project - FIXED DUPLICATE HANDLING
+     * Get active users in project - REDIS-BACKED
      */
-    getActiveUsersInProject(projectId: string): ActiveUser[] {
-        const allUsers = Array.from(this.activeUsers.values());
-        
-        // Filter by project
-        const projectUsers = allUsers.filter(user => user.projectId === projectId);
-        
-        // Remove duplicates by userId - giữ user mới nhất
-        const uniqueUsersMap = new Map<string, ActiveUser>();
-        
-        projectUsers.forEach(user => {
-            const existing = uniqueUsersMap.get(user.userId);
-            if (!existing || user.joinedAt > existing.joinedAt) {
-                uniqueUsersMap.set(user.userId, user);
-            }
-        });
+    async getActiveUsersInProject(projectId: string): Promise<ActiveUser[]> {
+        if (this.redisService) {
+            return await this.redisService.getActiveUsersInProject(projectId);
+        }
 
-        const uniqueUsers = Array.from(uniqueUsersMap.values());
-        
-        //console.log(`🔍 [ACTIVE_USERS] Project ${projectId}: ${uniqueUsers.length} unique users`);
-        
-        return uniqueUsers;
+        // Fallback: trả về empty array nếu không có Redis
+        return [];
     }
 
     /**
-     * Broadcast user joined event - FIXED DATA CONSISTENCY
+     * Broadcast user joined event - REDIS-BACKED
      */
-    private broadcastUserJoined(projectId: string, userId: string, userInfo: any): void {
-        const activeUsers = this.getActiveUsersInProject(projectId);
+    private async broadcastUserJoined(projectId: string, userId: string, userInfo: any): Promise<void> {
+        const activeUsers = await this.getActiveUsersInProject(projectId);
         const activeUsersData = activeUsers.map(user => ({
             userId: user.userId,
             name: user.userInfo.name,
@@ -106,9 +96,6 @@ export class PresenceSocketService {
             avatar: user.userInfo.avatar_url,
             joinedAt: user.joinedAt
         }));
-
-        //console.log(`📤 [BROADCAST_JOIN] Project ${projectId} - Active users:`, activeUsersData.length);
-        //console.log(`📤 [BROADCAST_JOIN] Users:`, activeUsersData.map(u => u.userId));
 
         io.to(`project_${projectId}`).emit('user_joined', {
             type: 'USER_JOINED',
@@ -125,10 +112,10 @@ export class PresenceSocketService {
     }
 
     /**
-     * Broadcast user left event - FIXED DATA CONSISTENCY
+     * Broadcast user left event - REDIS-BACKED
      */
-    private broadcastUserLeft(projectId: string, userId: string, userInfo: any, remainingUsers?: ActiveUser[]): void {
-        const activeUsers = remainingUsers || this.getActiveUsersInProject(projectId);
+    private async broadcastUserLeft(projectId: string, userId: string, userInfo: any, remainingUsers?: ActiveUser[]): Promise<void> {
+        const activeUsers = remainingUsers || await this.getActiveUsersInProject(projectId);
         const activeUsersData = activeUsers.map(user => ({
             userId: user.userId,
             name: user.userInfo.name,
@@ -136,9 +123,6 @@ export class PresenceSocketService {
             avatar: user.userInfo.avatar_url,
             joinedAt: user.joinedAt
         }));
-
-        //console.log(`📤 [BROADCAST_LEFT] Project ${projectId} - Remaining users:`, activeUsersData.length);
-        //console.log(`📤 [BROADCAST_LEFT] Users:`, activeUsersData.map(u => u.userId));
 
         io.to(`project_${projectId}`).emit('user_left', {
             type: 'USER_LEFT',
