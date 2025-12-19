@@ -31,7 +31,7 @@
             <p>Failed</p>
           </div>
         </div>
-        <div class="stat-card pending">
+        <!--<div class="stat-card pending">
           <div class="stat-icon">
             <span class="material-symbols-outlined">schedule</span>
           </div>
@@ -39,8 +39,8 @@
             <h3>{{ statistics.not_executed || 0 }}</h3>
             <p>Not Executed</p>
           </div>
-        </div>
-        <div class="stat-card coverage">
+        </div>-->
+        <!--<div class="stat-card coverage">
           <div class="stat-icon">
             <span class="material-symbols-outlined"> full_coverage </span>
           </div>
@@ -48,7 +48,7 @@
             <h3>{{ coveragePercentage }}%</h3>
             <p>Requirement Coverage</p>
           </div>
-        </div>
+        </div>-->
       </div>
 
       <!-- Export Modal -->
@@ -647,9 +647,13 @@
               <span class="material-symbols-outlined">schedule</span>
               Mark as Not Executed
             </button>
-            <button class="btn-secondary" @click="bulkDelete" :disabled="loading">
+            <button class="btn-danger" @click="bulkDelete" :disabled="loading">
               <span class="material-symbols-outlined">delete</span>
               Delete Selected
+            </button>
+            <button class="btn-secondary" @click="clearSelection" :disabled="loading">
+              <span class="material-symbols-outlined">close</span>
+              Cancel
             </button>
           </div>
         </div>
@@ -1330,6 +1334,11 @@ export default {
       }
     }
 
+    const clearSelection = () => {
+      selectedTestCases.value = []
+      selectAll.value = false
+    }
+
     const deleteTestcase = async (testcaseId) => {
       if (!confirm('Are you sure you want to delete this test case?')) {
         return
@@ -1663,10 +1672,12 @@ export default {
     }
 
     const toggleColumn = (columnKey) => {
-      if (visibleColumns.value[columnKey] !== undefined) {
-        visibleColumns.value[columnKey] = !visibleColumns.value[columnKey]
-        saveColumnVisibility()
+      // Ensure the key exists, default to true if not set
+      if (visibleColumns.value[columnKey] === undefined) {
+        visibleColumns.value[columnKey] = true
       }
+      visibleColumns.value[columnKey] = !visibleColumns.value[columnKey]
+      saveColumnVisibility()
     }
 
     const resetColumns = () => {
@@ -1863,6 +1874,7 @@ export default {
       handleExecuteTestcase,
       bulkExecute,
       bulkDelete,
+      clearSelection,
       deleteTestcase,
       viewTestcase,
       editTestcase,
@@ -1997,13 +2009,19 @@ export default {
 }
 
 .btn-secondary {
-  background: var(--background-color);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background: #f8fafc;
+  color: #1f2937;
+  border: 1px solid #e5e7eb;
 }
 
-.btn-secondary:hover {
-  background: var(--border-color);
+.btn-secondary:hover:not(:disabled) {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-secondary.success {
@@ -2037,6 +2055,28 @@ export default {
 .btn-secondary.danger:hover {
   background: var(--error-color);
   color: white;
+}
+
+.btn-danger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.btn-danger:disabled {
+  background: #fca5a5;
+  cursor: not-allowed;
 }
 
 .btn-icon {
@@ -2442,21 +2482,14 @@ export default {
   display: flex;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1.5rem;
   padding: 1rem 1.5rem;
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(26, 54, 93, 0.12);
-  transition: box-shadow 0.3s ease;
-}
-
-.sorting-section:hover {
-  box-shadow: 0 8px 30px rgba(26, 54, 93, 0.15);
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .sort-label {
   font-weight: 500;
-  color: var(--text-secondary);
+  color: #6b7280;
   font-size: 0.875rem;
 }
 
@@ -2470,28 +2503,24 @@ export default {
   align-items: center;
   gap: 0.25rem;
   padding: 0.5rem 1rem;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
   background: white;
   color: #1a365d;
   font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
 }
 
 .sort-option:hover {
   border-color: #1a365d;
   color: #1a365d;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.15);
 }
 
 .sort-option.active {
-  background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
+  background: #1a365d;
   border-color: #1a365d;
   color: white;
-  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.25);
 }
 
 .sort-option.sort-desc .sort-icon {
@@ -2510,6 +2539,7 @@ export default {
   box-shadow: 0 4px 20px rgba(26, 54, 93, 0.12);
   overflow: hidden;
   transition: box-shadow 0.3s ease;
+  width: 100%;
 }
 
 .testcases-table:hover {
@@ -2519,11 +2549,15 @@ export default {
 .table-container {
   max-height: 600px;
   overflow-y: auto;
+  overflow-x: auto;
+  width: 100%;
 }
 
 table {
   width: 100%;
+  min-width: 0;
   border-collapse: collapse;
+  table-layout: auto;
 }
 
 thead {
@@ -2537,51 +2571,53 @@ th {
   padding: 1rem;
   text-align: left;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: #6b7280;
   font-size: 0.875rem;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid #e5e7eb;
   white-space: nowrap;
-  position: relative;
 }
 
 td {
   padding: 1rem;
-  border-bottom: 1px solid var(--border-color);
-  position: relative;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .checkbox-column {
-  width: 50px;
-  min-width: 50px;
+  width: 40px;
   text-align: center;
-  padding: 1rem 0.5rem;
 }
 
 .id-column {
-  width: 70px;
-  min-width: 70px;
+  width: 80px;
   text-align: center;
   font-weight: 500;
-  color: var(--text-secondary);
-  padding: 1rem 0.5rem;
+  color: #6b7280;
 }
 
 .title-column {
-  min-width: 250px;
+  min-width: 150px;
+  max-width: 300px;
 }
 
 .type-column,
-.priority-column,
-.status-column {
+.priority-column {
   width: 120px;
+  text-align: left;
+}
+
+.status-column {
+  width: 80px;
+  text-align: center;
 }
 
 .tables-column {
   min-width: 150px;
+  max-width: 250px;
 }
 
 .requirements-column {
   min-width: 150px;
+  max-width: 250px;
 }
 
 .date-column {
@@ -2589,27 +2625,11 @@ td {
 }
 
 .actions-column {
-  width: 160px;
+  width: 140px;
 }
 
 .testcase-row {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-}
-
-.testcase-row::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 0;
-  background: linear-gradient(135deg, rgba(26, 54, 93, 0.1) 0%, rgba(45, 74, 138, 0.1) 100%);
-  transition: width 0.3s ease;
-}
-
-.testcase-row:hover::before {
-  width: 4px;
+  transition: background-color 0.2s ease;
 }
 
 .testcase-row.row-even {
@@ -2621,32 +2641,37 @@ td {
 }
 
 .testcase-row:hover {
-  background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
-  transform: translateX(2px);
-  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.1);
+  background: #f1f5f9;
 }
 
 .testcase-row.selected {
-  background: linear-gradient(90deg, #e6f2ff 0%, #dbeafe 100%);
-  border-left: 4px solid #1a365d;
+  background: #dbeafe;
+}
+
+.testcase-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .testcase-title .title-main {
   font-weight: 500;
-  color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  color: #1f2937;
 }
 
 .testcase-title .title-desc {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
+  font-size: 0.75rem;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .testcase-id {
   font-weight: 500;
-  color: var(--text-secondary);
+  color: #1a365d;
   font-size: 0.875rem;
+  font-family: 'Courier New', monospace;
 }
 
 /* Status Icons */
@@ -2772,14 +2797,14 @@ td {
 .table-tag {
   display: inline-block;
   padding: 0.25rem 0.5rem;
-  background: var(--background-color);
-  color: var(--text-secondary);
+  background: #f3f4f6;
+  color: #6b7280;
   border-radius: 4px;
   font-size: 0.75rem;
 }
 
 .no-tables {
-  color: var(--text-tertiary);
+  color: #9ca3af;
   font-style: italic;
 }
 
@@ -2792,7 +2817,7 @@ td {
 .requirement-tag {
   display: inline-block;
   padding: 0.25rem 0.5rem;
-  background: var(--primary-light);
+  background: #dbeafe;
   color: #1a365d;
   border-radius: 4px;
   font-size: 0.75rem;
@@ -2800,13 +2825,13 @@ td {
 }
 
 .no-requirements {
-  color: var(--text-tertiary);
+  color: #9ca3af;
   font-style: italic;
 }
 
 .last-executed {
   font-size: 0.875rem;
-  color: var(--text-secondary);
+  color: #6b7280;
 }
 
 .action-buttons {
@@ -2950,8 +2975,8 @@ td {
   border-radius: 16px;
   box-shadow: 0 8px 30px rgba(26, 54, 93, 0.25);
   border: 2px solid #1a365d;
-  width: 70%;
-  max-width: 800px;
+  width: 80%;
+  max-width: 900px;
   z-index: 1000;
   animation: slideUp 0.3s ease-out;
 }
@@ -2978,6 +3003,17 @@ td {
 .bulk-buttons {
   display: flex;
   gap: 0.5rem;
+}
+
+.bulk-buttons .btn-danger {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #dc2626;
+}
+
+.bulk-buttons .btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+  color: white;
 }
 
 /* Pagination Styles */
@@ -3202,7 +3238,7 @@ td {
   background: white;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  border: 1px solid var(--border-color);
+  border: 1px solid #e5e7eb;
   min-width: 280px;
   z-index: 1000;
   animation: slideDown 0.2s ease-out;
@@ -3224,14 +3260,14 @@ td {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .column-menu-header h4 {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #1f2937;
 }
 
 .btn-close-menu {
@@ -3239,7 +3275,7 @@ td {
   border: none;
   padding: 4px;
   cursor: pointer;
-  color: var(--text-secondary);
+  color: #6b7280;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3248,8 +3284,8 @@ td {
 }
 
 .btn-close-menu:hover {
-  background: var(--background-color);
-  color: var(--text-primary);
+  background: #f3f4f6;
+  color: #1f2937;
 }
 
 .column-menu-content {
@@ -3291,28 +3327,28 @@ td {
 .column-label {
   flex: 1;
   font-size: 0.875rem;
-  color: var(--text-primary);
+  color: #1f2937;
   font-weight: 500;
 }
 
 .required-badge {
   font-size: 0.75rem;
-  color: var(--text-tertiary);
+  color: #9ca3af;
   font-style: italic;
 }
 
 .column-menu-footer {
   padding: 12px 20px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid #e5e7eb;
 }
 
 .btn-reset-columns {
   width: 100%;
   padding: 8px 16px;
-  background: var(--background-color);
-  border: 1px solid var(--border-color);
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
   border-radius: 6px;
-  color: var(--text-primary);
+  color: #1f2937;
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -3320,7 +3356,7 @@ td {
 }
 
 .btn-reset-columns:hover {
-  background: var(--border-color);
+  background: #e5e7eb;
   border-color: #1a365d;
   color: #1a365d;
 }

@@ -306,6 +306,19 @@
                   unfold_more
                 </span>
               </button>
+              <button
+                class="sort-option"
+                :class="{ active: sortBy === 'id' }"
+                @click="setSort('id')"
+              >
+                ID
+                <span
+                  class="material-symbols-outlined sort-icon"
+                  :class="{ 'sort-desc': sortOrder === 'desc' }"
+                >
+                  unfold_more
+                </span>
+              </button>
             </div>
           </div>
 
@@ -1642,6 +1655,12 @@ export default {
           // Hỗ trợ cả actor (mới) và role (cũ)
           aValue = (a.actor?.name || a.role?.name || 'Undefined')
           bValue = (b.actor?.name || b.role?.name || 'Undefined')
+        } else if (this.sortBy === 'id') {
+          // Sort by ID - convert to string for consistent comparison
+          const aId = String(a._id || a.id || '')
+          const bId = String(b._id || b.id || '')
+          aValue = aId.toLowerCase()
+          bValue = bId.toLowerCase()
         } else {
           aValue = a[this.sortBy] || ''
           bValue = b[this.sortBy] || ''
@@ -1827,8 +1846,9 @@ export default {
 
     editFromDetail() {
       if (this.viewingUsecase) {
+        const usecaseToEdit = { ...this.viewingUsecase }
         this.closeDetailModal()
-        this.showEditUsecaseModal(this.viewingUsecase)
+        this.showEditUsecaseModal(usecaseToEdit)
       }
     },
 
