@@ -198,7 +198,7 @@ export class UsecaseGenerationAgentV2 {
 
         // Get final usecases from DB
         const finalUsecases = await Usecase.find({ version_id: this.context.versionId }).lean();
-        
+
         return {
             version_id: this.context.versionId,
             usecases: finalUsecases,
@@ -241,7 +241,7 @@ export class UsecaseGenerationAgentV2 {
         });
 
         console.log(`✅ [PHASE 1] Committed ${result.committed_usecases.length} usecases`);
-        await this.broadcastProgress(15, "estimating", 
+        await this.broadcastProgress(15, "estimating",
             `Đã cam kết ${result.committed_usecases.length} usecases: ${result.summary}`);
 
         // Broadcast estimate
@@ -262,7 +262,7 @@ export class UsecaseGenerationAgentV2 {
 
         const committed = this.context.estimateResult.committed_usecases;
         const batchPlan: BatchPlanV2[] = [];
-        
+
         for (let i = 0; i < committed.length; i += this.DEFAULT_BATCH_SIZE) {
             const batchUsecases = committed.slice(i, i + this.DEFAULT_BATCH_SIZE);
             batchPlan.push({
@@ -298,7 +298,7 @@ export class UsecaseGenerationAgentV2 {
 
         console.log(`📦 [PHASE 3] Generating batch ${currentBatch.batchNumber}/${this.context.batchPlan.length}...`);
         const progress = 20 + Math.floor((currentBatch.batchNumber / this.context.batchPlan.length) * 50);
-        await this.broadcastProgress(progress, "generating", 
+        await this.broadcastProgress(progress, "generating",
             `Đang generate batch ${currentBatch.batchNumber}/${this.context.batchPlan.length} (${currentBatch.keys.length} usecases)...`);
 
         try {
@@ -319,8 +319,8 @@ export class UsecaseGenerationAgentV2 {
             let missingCount = 0;
 
             for (const committed of currentBatch.usecases) {
-                const generated = generatedUsecases.find((uc: any) => 
-                    uc.key === committed.key || 
+                const generated = generatedUsecases.find((uc: any) =>
+                    uc.key === committed.key ||
                     uc.name?.toLowerCase().includes(committed.name.toLowerCase().substring(0, 20))
                 );
 
@@ -339,7 +339,7 @@ export class UsecaseGenerationAgentV2 {
             }
 
             console.log(`✅ [PHASE 3] Batch ${currentBatch.batchNumber}: ${generatedCount} generated, ${missingCount} missing`);
-            await this.broadcastProgress(progress + 5, "saving", 
+            await this.broadcastProgress(progress + 5, "saving",
                 `Batch ${currentBatch.batchNumber}: ${generatedCount} generated, ${missingCount} missing`);
 
             // Next batch
@@ -378,12 +378,12 @@ export class UsecaseGenerationAgentV2 {
 
         this.context.retryAttempts++;
         console.log(`🔄 [PHASE 4] Retry attempt ${this.context.retryAttempts}/${this.context.maxRetryAttempts} for ${missingEntries.length} usecases`);
-        await this.broadcastProgress(75, "retrying", 
+        await this.broadcastProgress(75, "retrying",
             `Retry lần ${this.context.retryAttempts}: ${missingEntries.length} usecases còn thiếu`);
 
         // Retry generate cho missing usecases
         const missingCommitted = missingEntries.map(e => e.committed);
-        
+
         try {
             const retriedUsecases = await this.gemini.retryGenerateMissing(
                 this.context.mergedText,
@@ -462,7 +462,7 @@ export class UsecaseGenerationAgentV2 {
         });
 
         console.log(`✅ [PHASE 5] Validation complete: ${validCount} valid, ${invalidCount} invalid`);
-        await this.broadcastProgress(88, "validating", 
+        await this.broadcastProgress(88, "validating",
             `Validation: ${validCount} valid, ${invalidCount} invalid`);
 
         this.state = AgentStateV2.ATOMIC_SAVE;
@@ -504,7 +504,7 @@ export class UsecaseGenerationAgentV2 {
         this.context.saveResult = saveResult;
 
         console.log(`✅ [PHASE 6] Save complete:`, saveResult);
-        await this.broadcastProgress(100, "completed", 
+        await this.broadcastProgress(100, "completed",
             `Hoàn thành: ${saveResult.saved}/${saveResult.total_expected} usecases (${saveResult.repaired_by_llm} repaired by LLM)`);
 
         this.state = AgentStateV2.DONE;
@@ -515,7 +515,7 @@ export class UsecaseGenerationAgentV2 {
      */
     private async atomicSaveWithRepair(usecases: any[]): Promise<SaveResult> {
         const MAX_INSERT_RETRIES = 3;
-        
+
         let saved: any[] = [];
         let repaired = 0;
         let skipped = 0;
@@ -540,15 +540,15 @@ export class UsecaseGenerationAgentV2 {
                 if (error.name === 'BulkWriteError' || error.writeErrors) {
                     const writeErrors = error.writeErrors || [];
                     const insertedCount = toInsert.length - writeErrors.length;
-                    
+
                     console.log(`⚠️ [SAVE] Partial insert: ${insertedCount} succeeded, ${writeErrors.length} failed`);
 
                     // Get succeeded documents
                     const failedIndices = new Set(writeErrors.map((e: any) => e.index));
                     const succeededDocs = toInsert.filter((_, i) => !failedIndices.has(i));
-                    
+
                     // Query to get actual saved documents
-                    const savedDocs = await Usecase.find({ 
+                    const savedDocs = await Usecase.find({
                         version_id: this.context.versionId,
                         name: { $in: succeededDocs.map(d => d.name) }
                     }).lean();
@@ -566,7 +566,7 @@ export class UsecaseGenerationAgentV2 {
                             if (repairResult.success) {
                                 saved.push(repairResult.doc);
                                 repaired++;
-                                
+
                                 // Update temp storage
                                 const entry = this.context.tempStorage.get(tempKey);
                                 if (entry) entry.status = 'repaired';
@@ -615,13 +615,13 @@ export class UsecaseGenerationAgentV2 {
         for (let attempt = 1; attempt <= this.MAX_REPAIR_ATTEMPTS; attempt++) {
             try {
                 console.log(`🔧 [LLM REPAIR] Attempt ${attempt} for: ${brokenUC.name}`);
-                
+
                 const fixedUC = await this.gemini.repairUsecase(brokenUC, errorMsg);
                 if (fixedUC) {
                     // Add required fields
                     fixedUC.project_id = brokenUC.project_id;
                     fixedUC.version_id = brokenUC.version_id;
-                    
+
                     const doc = await Usecase.create(fixedUC);
                     console.log(`✅ [LLM REPAIR] Fixed: ${brokenUC.name}`);
                     return { success: true, doc };
@@ -784,7 +784,7 @@ export class UsecaseGenerationAgentV2 {
                 errorType: errorInfo.type
             };
 
-            await this.broadcastProgress(0, "paused", 
+            await this.broadcastProgress(0, "paused",
                 `⚠️ ${errorInfo.userFriendlyMessage.vi}. Có thể tiếp tục sau...`);
 
             // Don't throw, just stop
@@ -877,4 +877,5 @@ export class UsecaseGenerationAgentV2 {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
+
 

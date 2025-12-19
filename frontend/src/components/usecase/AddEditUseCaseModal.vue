@@ -907,7 +907,32 @@ export default {
           cleanedForm[field] = []
         } else {
           cleanedForm[field] = cleanedForm[field]
-            .map((item) => (typeof item === 'string' ? item.trim() : item))
+            .map((item) => {
+              if (typeof item === 'string') {
+                return item.trim()
+              } else if (typeof item === 'object' && item !== null) {
+                // Convert object thành string để tránh "[object Object]"
+                // Xử lý theo từng loại field
+                if (field === 'inputs' || field === 'outputs') {
+                  if (item.name) {
+                    let desc = item.name
+                    if (item.type) desc += ` (${item.type})`
+                    return desc
+                  }
+                } else if (field === 'rules') {
+                  return item.description || item.id || ''
+                } else if (field === 'exceptions') {
+                  const parts = []
+                  if (item.description) parts.push(item.description)
+                  else if (item.type) parts.push(`${item.type} exception`)
+                  if (item.at_step) parts.push(`at step ${item.at_step}`)
+                  return parts.length > 0 ? parts.join(' - ') : ''
+                }
+                // Fallback: convert object thành string
+                return JSON.stringify(item)
+              }
+              return String(item || '').trim()
+            })
             .filter((item) => item && item !== '')
         }
       })
@@ -917,14 +942,29 @@ export default {
         cleanedForm.tasks = ['']
       }
 
-      // Đảm bảo context có giá trị mặc định nếu empty
-      if (!cleanedForm.context || cleanedForm.context.trim() === '') {
+      // Đảm bảo context có giá trị mặc định nếu empty - kiểm tra type trước khi gọi trim()
+      if (typeof cleanedForm.context === 'string') {
+        if (!cleanedForm.context || cleanedForm.context.trim() === '') {
+          cleanedForm.context = ''
+        }
+      } else if (cleanedForm.context && typeof cleanedForm.context === 'object') {
+        // Context object từ backend: { module, scope, system }
+        const parts = []
+        if (cleanedForm.context.module) parts.push(`Module: ${cleanedForm.context.module}`)
+        if (cleanedForm.context.scope) parts.push(`Scope: ${cleanedForm.context.scope}`)
+        if (cleanedForm.context.system) parts.push(`System: ${cleanedForm.context.system}`)
+        cleanedForm.context = parts.join(', ').trim() || ''
+      } else {
         cleanedForm.context = ''
       }
 
-      // Đảm bảo feedback có giá trị phù hợp
-      if (!cleanedForm.feedback || cleanedForm.feedback.trim() === '') {
-        cleanedForm.feedback = null // hoặc '' tùy BE xử lý
+      // Đảm bảo feedback có giá trị phù hợp - kiểm tra type trước khi gọi trim()
+      if (typeof cleanedForm.feedback === 'string') {
+        if (!cleanedForm.feedback || cleanedForm.feedback.trim() === '') {
+          cleanedForm.feedback = null // hoặc '' tùy BE xử lý
+        }
+      } else {
+        cleanedForm.feedback = null
       }
 
       // Đảm bảo priority hợp lệ
@@ -956,29 +996,189 @@ export default {
     },
 
     normalizeFormData(data) {
-      if (data.role && typeof data.role === 'string') {
+      const normalized = { ...data }
+
+      // Normalize business_reason -> reason
+      if (normalized.business_reason && !normalized.reason) {
+        normalized.reason = normalized.business_reason
+      }
+
+      // Normalize role
+      if (normalized.role && typeof normalized.role === 'string') {
         // ✅ Đơn giản hóa - chỉ giữ name, để BE mapping ID
-        return {
-          ...data,
-          role: {
-            id: '', // Để BE tự động mapping
-            name: data.role,
-          },
+        normalized.role = {
+          id: '', // Để BE tự động mapping
+          name: normalized.role,
         }
-      }
-
-      if (data.role && typeof data.role === 'object' && !data.role.id) {
+      } else if (normalized.role && typeof normalized.role === 'object' && !normalized.role.id) {
         // ✅ Chỉ cần name, BE sẽ tạo ID đúng
-        return {
-          ...data,
-          role: {
-            id: '', // Để BE tự động mapping
-            name: data.role.name || '',
-          },
+        normalized.role = {
+          id: '', // Để BE tự động mapping
+          name: normalized.role.name || '',
         }
       }
 
-      return data
+      // Normalize context - convert từ object sang string nếu cần
+      if (normalized.context && typeof normalized.context === 'object') {
+        // Context object từ backend: { module, scope, system }
+        const parts = []
+        if (normalized.context.module) parts.push(`Module: ${normalized.context.module}`)
+        if (normalized.context.scope) parts.push(`Scope: ${normalized.context.scope}`)
+        if (normalized.context.system) parts.push(`System: ${normalized.context.system}`)
+        normalized.context = parts.join(', ').trim() || ''
+      } else if (!normalized.context || typeof normalized.context !== 'string') {
+        normalized.context = ''
+      }
+
+      // Normalize actor (backend có thể dùng actor thay vì role)
+      if (normalized.actor && !normalized.role) {
+        // Nếu có actor nhưng không có role, copy actor sang role
+        if (typeof normalized.actor === 'object') {
+          normalized.role = {
+            id: normalized.actor.id || '',
+            name: normalized.actor.name || '',
+          }
+        } else if (typeof normalized.actor === 'string') {
+          normalized.role = {
+            id: '',
+            name: normalized.actor,
+          }
+        }
+      }
+
+      // Normalize inputs: array of objects { name, type, required, optional } -> array of strings
+      if (Array.isArray(normalized.inputs)) {
+        normalized.inputs = normalized.inputs.map((item) => {
+          if (typeof item === 'string') return item
+          if (typeof item === 'object' && item !== null) {
+            // Extract name từ object, hoặc tạo string mô tả
+            if (item.name) {
+              let desc = item.name
+              if (item.type) desc += ` (${item.type})`
+              return desc
+            }
+            return JSON.stringify(item)
+          }
+          return String(item || '')
+        }).filter(Boolean)
+      } else if (!normalized.inputs) {
+        normalized.inputs = []
+      }
+
+      // Normalize outputs: array of objects { name, type, required, optional } -> array of strings
+      if (Array.isArray(normalized.outputs)) {
+        normalized.outputs = normalized.outputs.map((item) => {
+          if (typeof item === 'string') return item
+          if (typeof item === 'object' && item !== null) {
+            // Extract name từ object, hoặc tạo string mô tả
+            if (item.name) {
+              let desc = item.name
+              if (item.type) desc += ` (${item.type})`
+              return desc
+            }
+            return JSON.stringify(item)
+          }
+          return String(item || '')
+        }).filter(Boolean)
+      } else if (!normalized.outputs) {
+        normalized.outputs = []
+      }
+
+      // Normalize rules: array of objects { id, description } -> array of strings
+      if (Array.isArray(normalized.rules)) {
+        normalized.rules = normalized.rules.map((item) => {
+          if (typeof item === 'string') return item
+          if (typeof item === 'object' && item !== null) {
+            // Extract description từ object
+            return item.description || item.id || JSON.stringify(item)
+          }
+          return String(item || '')
+        }).filter(Boolean)
+      } else if (!normalized.rules) {
+        normalized.rules = []
+      }
+
+      // Normalize exceptions: array of objects { id, at_step, type, description, system_response } -> array of strings
+      if (Array.isArray(normalized.exceptions)) {
+        normalized.exceptions = normalized.exceptions.map((item) => {
+          if (typeof item === 'string') return item
+          if (typeof item === 'object' && item !== null) {
+            // Tạo string mô tả từ exception object
+            const parts = []
+            if (item.description) parts.push(item.description)
+            else if (item.type) parts.push(`${item.type} exception`)
+            if (item.at_step) parts.push(`at step ${item.at_step}`)
+            if (item.system_response) parts.push(`→ ${item.system_response}`)
+            return parts.length > 0 ? parts.join(' - ') : JSON.stringify(item)
+          }
+          return String(item || '')
+        }).filter(Boolean)
+      } else if (!normalized.exceptions) {
+        normalized.exceptions = []
+      }
+
+      // Normalize trigger: object { event, source } -> array of strings (triggers)
+      if (normalized.trigger && typeof normalized.trigger === 'object' && !Array.isArray(normalized.trigger)) {
+        // Convert trigger object thành array
+        const triggerStrings = []
+        if (normalized.trigger.event) {
+          triggerStrings.push(normalized.trigger.event)
+        }
+        if (normalized.trigger.source && normalized.trigger.source !== 'UI') {
+          triggerStrings.push(`Source: ${normalized.trigger.source}`)
+        }
+        normalized.triggers = triggerStrings.length > 0 ? triggerStrings : (normalized.triggers || [])
+        delete normalized.trigger
+      } else if (!normalized.triggers || !Array.isArray(normalized.triggers)) {
+        normalized.triggers = []
+      }
+
+      // Normalize main_flow: array of objects -> tasks array of strings
+      if (Array.isArray(normalized.main_flow) && normalized.main_flow.length > 0) {
+        // Convert main_flow objects thành tasks strings
+        normalized.tasks = normalized.main_flow.map((step) => {
+          if (typeof step === 'string') return step
+          if (typeof step === 'object' && step !== null) {
+            // Extract action từ step object
+            if (step.action) {
+              let taskDesc = step.action
+              if (step.expected_result) {
+                taskDesc += ` → ${step.expected_result}`
+              }
+              return taskDesc
+            }
+            return JSON.stringify(step)
+          }
+          return String(step || '')
+        }).filter(Boolean)
+      } else if (!normalized.tasks || !Array.isArray(normalized.tasks)) {
+        // Nếu không có main_flow, giữ nguyên tasks hoặc tạo mảng rỗng
+        normalized.tasks = normalized.tasks || ['']
+      }
+
+      // Normalize non_functional_constraints -> constraints
+      if (Array.isArray(normalized.non_functional_constraints)) {
+        normalized.constraints = normalized.non_functional_constraints.map((item) => {
+          return typeof item === 'string' ? item : String(item || '')
+        }).filter(Boolean)
+      } else if (!normalized.constraints || !Array.isArray(normalized.constraints)) {
+        normalized.constraints = []
+      }
+
+      // Đảm bảo các array fields khác là array
+      const arrayFields = ['preconditions', 'postconditions', 'stakeholders', 'related_usecases']
+      arrayFields.forEach((field) => {
+        if (!Array.isArray(normalized[field])) {
+          normalized[field] = []
+        }
+      })
+
+      // Đảm bảo tasks có ít nhất một item
+      if (!normalized.tasks || normalized.tasks.length === 0) {
+        normalized.tasks = ['']
+      }
+
+      return normalized
     },
 
     nextStep() {
@@ -1084,7 +1284,32 @@ export default {
           cleaned[field] = []
         } else {
           cleaned[field] = cleaned[field]
-            .map((item) => (typeof item === 'string' ? item.trim() : String(item).trim()))
+            .map((item) => {
+              if (typeof item === 'string') {
+                return item.trim()
+              } else if (typeof item === 'object' && item !== null) {
+                // Convert object thành string để tránh "[object Object]"
+                // Xử lý theo từng loại field
+                if (field === 'inputs' || field === 'outputs') {
+                  if (item.name) {
+                    let desc = item.name
+                    if (item.type) desc += ` (${item.type})`
+                    return desc
+                  }
+                } else if (field === 'rules') {
+                  return item.description || item.id || ''
+                } else if (field === 'exceptions') {
+                  const parts = []
+                  if (item.description) parts.push(item.description)
+                  else if (item.type) parts.push(`${item.type} exception`)
+                  if (item.at_step) parts.push(`at step ${item.at_step}`)
+                  return parts.length > 0 ? parts.join(' - ') : ''
+                }
+                // Fallback: convert object thành string
+                return JSON.stringify(item)
+              }
+              return String(item || '').trim()
+            })
             .filter((item) => item && item !== '')
         }
       })
@@ -1094,10 +1319,28 @@ export default {
         cleaned.tasks = ['']
       }
 
-      // Normalize string fields
+      // Normalize string fields - kiểm tra type trước khi gọi trim()
       const stringFields = ['name', 'goal', 'reason', 'context', 'feedback']
       stringFields.forEach((field) => {
-        cleaned[field] = (cleaned[field] || '').trim()
+        const value = cleaned[field]
+        if (typeof value === 'string') {
+          cleaned[field] = value.trim()
+        } else if (value != null && typeof value === 'object') {
+          // Nếu là object (ví dụ context từ backend), convert sang string
+          if (field === 'context') {
+            // Context object từ backend: { module, scope, system }
+            const parts = []
+            if (value.module) parts.push(`Module: ${value.module}`)
+            if (value.scope) parts.push(`Scope: ${value.scope}`)
+            if (value.system) parts.push(`System: ${value.system}`)
+            cleaned[field] = parts.join(', ').trim()
+          } else {
+            // Các object khác, convert sang empty string
+            cleaned[field] = ''
+          }
+        } else {
+          cleaned[field] = String(value || '').trim()
+        }
       })
 
       // Normalize priority
@@ -1120,8 +1363,36 @@ export default {
       // So sánh các trường cơ bản
       const basicFields = ['name', 'goal', 'reason', 'priority', 'context', 'feedback']
       for (const field of basicFields) {
-        const originalValue = (original[field] || '').trim()
-        const currentValue = (current[field] || '').trim()
+        // Xử lý an toàn - kiểm tra type trước khi gọi trim()
+        let originalValue = original[field]
+        let currentValue = current[field]
+        
+        if (typeof originalValue === 'string') {
+          originalValue = originalValue.trim()
+        } else if (originalValue != null && typeof originalValue === 'object' && field === 'context') {
+          // Context object từ backend
+          const parts = []
+          if (originalValue.module) parts.push(`Module: ${originalValue.module}`)
+          if (originalValue.scope) parts.push(`Scope: ${originalValue.scope}`)
+          if (originalValue.system) parts.push(`System: ${originalValue.system}`)
+          originalValue = parts.join(', ').trim()
+        } else {
+          originalValue = String(originalValue || '').trim()
+        }
+        
+        if (typeof currentValue === 'string') {
+          currentValue = currentValue.trim()
+        } else if (currentValue != null && typeof currentValue === 'object' && field === 'context') {
+          // Context object từ backend
+          const parts = []
+          if (currentValue.module) parts.push(`Module: ${currentValue.module}`)
+          if (currentValue.scope) parts.push(`Scope: ${currentValue.scope}`)
+          if (currentValue.system) parts.push(`System: ${currentValue.system}`)
+          currentValue = parts.join(', ').trim()
+        } else {
+          currentValue = String(currentValue || '').trim()
+        }
+        
         if (originalValue !== currentValue) {
           return true
         }

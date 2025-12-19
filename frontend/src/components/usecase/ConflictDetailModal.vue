@@ -105,9 +105,9 @@
                   </div>
                 </template>
                 <template v-else-if="useCase.tasks && Array.isArray(useCase.tasks) && useCase.tasks.length > 0">
-                  <ol class="task-list">
-                    <li v-for="(task, i) in useCase.tasks" :key="i">{{ task }}</li>
-                  </ol>
+              <ol class="task-list">
+                <li v-for="(task, i) in useCase.tasks" :key="i">{{ task }}</li>
+              </ol>
                 </template>
                 <div v-else class="no-data">No main flow defined</div>
               </div>
@@ -297,7 +297,7 @@
             <div v-if="useCase.context && typeof useCase.context === 'object'" class="detail-section">
               <h5>Scope</h5>
               <p>{{ useCase.context.scope || 'N/A' }}</p>
-            </div>
+          </div>
             <div v-if="useCase.context && typeof useCase.context === 'object'" class="detail-section">
               <h5>System</h5>
               <p>{{ useCase.context.system || 'N/A' }}</p>

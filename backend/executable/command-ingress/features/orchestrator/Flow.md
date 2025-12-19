@@ -148,48 +148,7 @@
 │  └────────────────────┘   │   └────────────────────┘            │
 │                           │                                     │
 └───────────────────────────┴─────────────────────────────────────┘
-```
 
-## Key Improvements (v2 vs v1):
-
-| Aspect | v1 (Current) | v2 (Proposed) |
-|--------|--------------|---------------|
-| **Estimate** | Chỉ trả về số lượng | Cam kết danh sách cụ thể |
-| **Tracking** | Không track từng UC | Track theo key (UC001, UC002...) |
-| **Save** | Save ngay mỗi batch | Lưu tạm → validate → save 1 lần |
-| **Missing** | Retry toàn bộ batch | Retry chính xác UC bị missing |
-| **Consistency** | Có thể partial save | Atomic save (all or nothing) |
-
-## Temp Storage Structure:
-
-```typescript
-interface TempStorage {
-  [key: string]: {
-    status: 'pending' | 'generated' | 'missing' | 'invalid';
-    committed: {
-      key: string;
-      name: string;
-      desc: string;
-    };
-    generated?: UsecaseData;
-    error?: string;
-    retryCount: number;
-  }
-}
-```
-
-## Benefits:
-
-1. **Traceability** - Biết chính xác UC nào missing, tại sao
-2. **Reliability** - Retry chính xác, không gen trùng
-3. **Consistency** - Save 1 lần, không có partial data
-4. **Debugging** - Dễ debug khi có lỗi
-
----
-
-## PHASE 6 DETAIL: Atomic Save với Retry + Fallback + LLM Self-Repair
-
-```
 ┌─────────────────────────────────────────────────────────────────┐
 │              PHASE 6: ATOMIC SAVE TO DATABASE                   │
 │                                                                 │
@@ -264,7 +223,48 @@ interface TempStorage {
 │                           │                                     │
 └───────────────────────────┴─────────────────────────────────────┘
 ```
+```
 
+## Key Improvements (v2 vs v1):
+
+| Aspect | v1 (Current) | v2 (Proposed) |
+|--------|--------------|---------------|
+| **Estimate** | Chỉ trả về số lượng | Cam kết danh sách cụ thể |
+| **Tracking** | Không track từng UC | Track theo key (UC001, UC002...) |
+| **Save** | Save ngay mỗi batch | Lưu tạm → validate → save 1 lần |
+| **Missing** | Retry toàn bộ batch | Retry chính xác UC bị missing |
+| **Consistency** | Có thể partial save | Atomic save (all or nothing) |
+
+## Temp Storage Structure:
+
+```typescript
+interface TempStorage {
+  [key: string]: {
+    status: 'pending' | 'generated' | 'missing' | 'invalid';
+    committed: {
+      key: string;
+      name: string;
+      desc: string;
+    };
+    generated?: UsecaseData;
+    error?: string;
+    retryCount: number;
+  }
+}
+```
+
+## Benefits:
+
+1. **Traceability** - Biết chính xác UC nào missing, tại sao
+2. **Reliability** - Retry chính xác, không gen trùng
+3. **Consistency** - Save 1 lần, không có partial data
+4. **Debugging** - Dễ debug khi có lỗi
+
+---
+
+## PHASE 6 DETAIL: Atomic Save với Retry + Fallback + LLM Self-Repair
+
+```
 ## LLM Self-Repair Prompt Template:
 
 ```typescript

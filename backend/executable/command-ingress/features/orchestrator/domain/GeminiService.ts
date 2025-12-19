@@ -169,8 +169,7 @@ Mỗi use case PHẢI có đầy đủ các trường sau (KHÔNG bao gồm fiel
     "stakeholders": [
       "Người dùng",
       "Quản trị viên hệ thống"
-    ],
-    "related_usecases": []
+    ]
   }
 ]
 
@@ -206,20 +205,30 @@ II. USE CASE SEMANTIC:
   - ❌ "Quản lý Input (CRUD)" - SAI, không gom lại
 • Điều này giúp mỗi usecase có main_flow, preconditions, postconditions riêng biệt và rõ ràng
 
-III. TASK QUALITY:
+III. ALTERNATIVE FLOWS (BẮT BUỘC):
+• Mỗi use case PHẢI có ít nhất 1-2 alternative_flows cho các trường hợp thay thế
+• Đối với CRUD operations, BẮT BUỘC có alternative flows:
+  - "Thêm X": alternative flow khi X đã tồn tại, dữ liệu không hợp lệ
+  - "Cập nhật X": alternative flow khi X không tồn tại, dữ liệu không hợp lệ
+  - "Xóa X": alternative flow khi X đang được sử dụng, không có quyền xóa
+  - "Tìm kiếm X": alternative flow khi không tìm thấy kết quả
+• alternative_flows KHÔNG được để rỗng [] (trừ use case cực kỳ đơn giản)
+• Mỗi alternative_flow phải có: id, at_step, condition, system_response, end_state
+
+IV. TASK QUALITY:
 • Task phải deployable (có thể giao cho dev, thời gian 1-3 ngày)
 • Task mô tả xử lý logic/nghiệp vụ, KHÔNG phải UI-step
 • Task KHÔNG được trùng vai trò Use Case (Task ≠ Use Case con, Task ≠ User journey)
 • KHÔNG: "Click nút", "Nhập form", "Mở màn hình" (UI-level)
 • ĐÚNG: "Xác thực thông tin", "Tạo record trong database", "Gửi email" (Business logic)
 
-IV. ACTOR (thay vì ROLE):
+V. ACTOR (thay vì ROLE):
 • Actor LUÔN là object đầy đủ {id, name, description}
 • Không rõ actor → fallback chuẩn: {"id": "user", "name": "Người dùng hệ thống", "description": "Người dùng sử dụng hệ thống"}
 • KHÔNG tự sáng tạo vai trò mới nếu không có trong văn bản
 • Field tên là "actor" (KHÔNG phải "role")
 
-V. CẤP ĐỘ TRỪU TƯỢNG (KHÔNG ĐẢO TẦNG):
+VI. CẤP ĐỘ TRỪU TƯỢNG (KHÔNG ĐẢO TẦNG):
 • Use Case = Nghiệp vụ hệ thống (business-level)
 • Task = Business-level execution (deployable unit)
 • Epic = Nhóm use case cùng domain (trừu tượng hơn use case)
@@ -229,11 +238,6 @@ VI. SCHEMA & JSON:
 • Schema tuyệt đối bất biến: KHÔNG thêm field, KHÔNG thiếu field, ĐÚNG type
 • JSON parse-safe: KHÔNG markdown, KHÔNG code fence, KHÔNG comment
 • KHÔNG sinh id: id do hệ thống backend quản lý, prompt cấm tuyệt đối thêm id
-
-VII. RELATED USE CASES:
-• related_usecases chỉ tham chiếu ID hợp lệ (chỉ dùng ID đã tồn tại)
-• KHÔNG tạo ID mới, KHÔNG tham chiếu vòng vô nghĩa
-• Mặc định để mảng rỗng [] (sẽ được xử lý sau)
 
 VIII. CHẤT LƯỢNG NỘI DUNG:
 • Mỗi use case phải tự đủ nghĩa (đọc riêng vẫn hiểu, không phụ thuộc ngữ cảnh ngoài)
@@ -296,30 +300,6 @@ VIII. CHẤT LƯỢNG NỘI DUNG:
 ✓ Không có filler text, không lặp cấu trúc máy móc
 
 `,
-        relatedUseCases: (simplified: any, incremental?: boolean) => `Đây là danh sách use case phần mềm đã có:\n${JSON.stringify(simplified, null, 2)}\n\n**TIÊU CHÍ RELATED USE CASES**:
-
-I. CHỈ THAM CHIẾU ID HỢP LỆ:
-- related_usecases[] chỉ tham chiếu tới use case trong danh sách trên
-- Format: Sử dụng chính xác ID từ field "id" trong danh sách trên (ví dụ: nếu id là "507f1f77bcf86cd799439011" thì dùng "507f1f77bcf86cd799439011")
-- KHÔNG tạo ID mới, KHÔNG tham chiếu vòng vô nghĩa
-- Nếu không có liên quan, để mảng rỗng []
-
-II. INCREMENTAL MODE AN TOÀN:
-${incremental ? `- KHÔNG được xóa hoặc ghi đè related_usecases cũ
-- Chỉ bổ sung liên kết giữa use case mới và use case cũ
-- Giữ nguyên tất cả related_usecases đã có` : `- Phân tích và sinh lại toàn bộ related_usecases cho tất cả use case
-- Đảm bảo chỉ tham chiếu ID hợp lệ từ danh sách trên`}
-
-Nhiệm vụ của bạn:
-${incremental ? `- KHÔNG được xóa hoặc ghi đè related_usecases cũ.\n- Chỉ bổ sung liên kết giữa use case mới và use case cũ.` : `- Phân tích và sinh lại toàn bộ related_usecases cho tất cả use case.`}
-
-YÊU CẦU:
-- related_usecases[] chỉ tham chiếu tới use case trong danh sách trên.
-- Format: Sử dụng chính xác ID từ field "id" trong danh sách trên (ví dụ: nếu id là "507f1f77bcf86cd799439011" thì dùng "507f1f77bcf86cd799439011").
-- Nếu không có liên quan, để mảng rỗng [].
-- Trả về toàn bộ danh sách use case với related_usecases được cập nhật.
-- Giữ nguyên cấu trúc và các field khác của mỗi use case.
-- KHÔNG tạo ID mới, KHÔNG tham chiếu vòng vô nghĩa.`,
         conflictCheck: (textA: string, textB: string) => `
 Bạn là một công cụ kiểm tra trùng lặp use case, cần đánh giá thật nghiêm ngặt.
 
@@ -514,56 +494,103 @@ III. USE CASE SEMANTIC:
 - ❌ SAI: "Input Management (CRUD)" 
 - ✅ ĐÚNG: "Add Input", "Delete Input", "Search Input", "Filter Input", "Update Input"
 
-IV. TASK QUALITY:
-- Task phải deployable (có thể giao cho dev, thời gian 1-3 ngày)
-- Task mô tả xử lý logic/nghiệp vụ, KHÔNG phải UI-step
-- Task KHÔNG được trùng vai trò Use Case (Task ≠ Use Case con, Task ≠ User journey)
+IV. ALTERNATIVE FLOWS (BẮT BUỘC):
+- Mỗi use case PHẢI có ít nhất 1-2 alternative_flows cho các trường hợp thay thế
+- Đối với CRUD operations, BẮT BUỘC có alternative flows:
+  - "Thêm X": alternative flow khi X đã tồn tại, dữ liệu không hợp lệ
+  - "Cập nhật X": alternative flow khi X không tồn tại, dữ liệu không hợp lệ
+  - "Xóa X": alternative flow khi X đang được sử dụng, không có quyền xóa
+  - "Tìm kiếm X": alternative flow khi không tìm thấy kết quả
+- alternative_flows KHÔNG được để rỗng [] (trừ use case cực kỳ đơn giản)
+- Mỗi alternative_flow phải có: id, at_step, condition, system_response, end_state
+
+V. MAIN_FLOW QUALITY:
+- Mỗi step phải có actor rõ ràng: "User" hoặc "System"
+- User step: hành động của người dùng → expected_result mô tả system response
+- System step: xử lý nội bộ → expected_result mô tả kết quả xử lý
+- Inputs trong step: tham chiếu tên input được sử dụng (ví dụ: ["username", "password"])
+- Rules_applied: tham chiếu ID rule được áp dụng (ví dụ: ["R1", "R2"])
 - ❌ CẤM: "Click nút", "Nhập form", "Mở màn hình", "Truy cập trang" (UI-level)
 - ✅ ĐÚNG: "Xác thực thông tin", "Tạo record trong database", "Gửi email", "Tính toán giá" (Business logic)
 
-V. ROLE & ACTOR:
-- Role LUÔN là object đầy đủ {id, name, description}
-- Không rõ role → fallback chuẩn: {"id": "user", "name": "Người dùng hệ thống", "description": "Người dùng sử dụng hệ thống"}
-- KHÔNG tự sáng tạo vai trò mới nếu không có trong văn bản
+VI. INPUTS & OUTPUTS:
+- KHÔNG được để trống nếu use case có dữ liệu đầu vào/ra
+- Mỗi input/output cần: name (tên field), type (kiểu dữ liệu), required/optional
 
-VI. CẤP ĐỘ TRỪU TƯỢNG (KHÔNG ĐẢO TẦNG):
-- Use Case = Nghiệp vụ hệ thống (business-level)
-- Task = Business-level execution (deployable unit)
-- Epic = Nhóm use case cùng domain (trừu tượng hơn use case)
-- ❌ CẤM: UI-level (click, nhập form, màn hình, giao diện)
+VII. POSTCONDITIONS:
+- Phải cover cả SUCCESS và FAILURE cases
+- Format: "[SUCCESS] mô tả kết quả thành công" hoặc "[FAILURE] mô tả kết quả thất bại"
 
-VII. SCHEMA & JSON:
+VIII. NON_FUNCTIONAL_CONSTRAINTS:
+- Phân loại theo category: [Performance], [Security], [Availability], [Compatibility]
+- Format: "[Category] mô tả constraint"
+
+IX. ACTOR:
+- Actor LUÔN là object đầy đủ {id, name, description}
+- Không rõ actor → fallback chuẩn: {"id": "user", "name": "Người dùng hệ thống", "description": "Người dùng sử dụng hệ thống"}
+- Field tên là "actor" (KHÔNG phải "role")
+
+X. SCHEMA & JSON:
 - Schema tuyệt đối bất biến: KHÔNG thêm field, KHÔNG thiếu field, ĐÚNG type
 - JSON parse-safe: KHÔNG markdown, KHÔNG code fence, KHÔNG comment
 - KHÔNG sinh id: id do hệ thống backend quản lý, prompt cấm tuyệt đối thêm id
 
-VIII. CHẤT LƯỢNG NỘI DUNG:
+XI. CHẤT LƯỢNG NỘI DUNG:
 - Mỗi use case phải tự đủ nghĩa (đọc riêng vẫn hiểu, không phụ thuộc ngữ cảnh ngoài)
 - Có rule – trigger – exception hợp lý (không rỗng, không hình thức, phù hợp nghiệp vụ)
 - KHÔNG sinh nội dung "cho đủ" (không filler text, không lặp cấu trúc máy móc)
 - Mỗi use case phải đầy đủ thông tin (~400-500 tokens)
 
-**CẤU TRÚC USE CASE** (SCHEMA TUYỆT ĐỐI BẤT BIẾN):
+**CẤU TRÚC USE CASE** (SCHEMA TUYỆT ĐỐI BẤT BIẾN - theo schema mới):
 [
   {
+    "type": "use_case",
+    "level": "system",
+    "status": "active",
     "name": "Tên use case (1 mục tiêu nghiệp vụ rõ ràng)",
-    "role": { "id": "...", "name": "...", "description": "..." },
+    "description": "Mô tả chi tiết use case",
+    "actor": { "id": "user", "name": "Người dùng hệ thống", "description": "..." },
     "goal": "Mục tiêu nghiệp vụ rõ ràng, cụ thể",
-    "reason": "Lý do tồn tại use case này",
-    "tasks": ["Task deployable 1-3 ngày", "Task business logic", "KHÔNG phải UI-step"],
-    "inputs": [...],
-    "outputs": [...],
-    "context": "Module/domain",
+    "business_reason": "Lý do nghiệp vụ",
+    "context": { "module": "Module", "scope": "", "system": "" },
     "priority": "high|medium|low",
-    "feedback": "...",
-    "rules": ["Rule nghiệp vụ hợp lý", "KHÔNG rỗng, KHÔNG hình thức"],
-    "triggers": ["Trigger nghiệp vụ", "KHÔNG phải 'click nút'"],
-    "preconditions": [...],
-    "postconditions": [...],
-    "exceptions": ["Exception hợp lý", "KHÔNG rỗng"],
-    "stakeholders": [...],
-    "constraints": [...],
-    "related_usecases": []
+    "frequency": "high|medium|low",
+    "trigger": { "event": "Sự kiện trigger", "source": "UI" },
+    "preconditions": ["Điều kiện tiên quyết"],
+    "main_flow": [
+        { 
+            "step": 1, 
+            "actor": "User|System", 
+            "action": "Hành động business logic", 
+            "inputs": ["input_name"],
+            "rules_applied": ["R1"],
+            "expected_result": "Kết quả mong đợi" 
+        }
+    ],
+    "alternative_flows": [
+        {
+            "id": "AF1",
+            "at_step": 1,
+            "condition": "Điều kiện thay thế",
+            "system_response": "Phản hồi của hệ thống",
+            "end_state": "Trạng thái kết thúc"
+        }
+    ],
+    "exceptions": [
+        {
+            "id": "E1",
+            "at_step": 1,
+            "type": "Network|System|Business",
+            "description": "Mô tả exception",
+            "system_response": "Phản hồi của hệ thống"
+        }
+    ],
+    "postconditions": ["[SUCCESS] Kết quả thành công", "[FAILURE] Kết quả thất bại"],
+    "rules": [{ "id": "R1", "description": "Quy tắc nghiệp vụ" }],
+    "inputs": [{ "name": "field", "type": "string", "required": true }],
+    "outputs": [{ "name": "result", "type": "string", "optional": false }],
+    "non_functional_constraints": ["[Performance] Constraint", "[Security] Constraint"],
+    "stakeholders": ["Stakeholder 1", "Stakeholder 2"]
   }
 ]
 
@@ -571,8 +598,127 @@ VIII. CHẤT LƯỢNG NỘI DUNG:
 - Chỉ trả về JSON array, không có markdown, không có code fence, không có comment
 - Nếu đã hết nội dung để generate → trả về mảng rỗng [] NGAY LẬP TỨC
 - KHÔNG thêm field "id" vào response
-- Đảm bảo 1 Use Case = 1 mục tiêu nghiệp vụ, Task là business-level deployable
-`
+- Đảm bảo 1 Use Case = 1 mục tiêu nghiệp vụ, alternative_flows không được rỗng
+`,
+        generateBatchFromCommitment: (
+            text: string,
+            committed: Array<{ key: string; name: string; desc: string; module?: string }>,
+            batchNumber: number,
+            totalBatches: number
+        ) => {
+            const committedList = committed.map(uc =>
+                `- ${uc.key}: "${uc.name}" - ${uc.desc} (Module: ${uc.module || 'N/A'})`
+            ).join('\n');
+
+            return `**MỤC TIÊU**: Generate chi tiết cho CHÍNH XÁC ${committed.length} use cases đã cam kết.
+
+**BATCH**: ${batchNumber}/${totalBatches}
+
+**DANH SÁCH USE CASES CẦN GENERATE** (ĐÃ CAM KẾT - PHẢI GENERATE ĐỦ):
+${committedList}
+
+**VĂN BẢN GỐC** (để tham khảo chi tiết):
+${text}
+
+**YÊU CẦU NGHIÊM NGẶT**:
+1. PHẢI generate CHÍNH XÁC ${committed.length} use cases (không thiếu, không thừa)
+2. Mỗi use case PHẢI có key tương ứng (${committed.map(c => c.key).join(', ')})
+3. Giữ nguyên tên và mục tiêu đã cam kết
+4. Bổ sung chi tiết đầy đủ theo schema bên dưới
+
+**QUY TẮC XỬ LÝ NGHIÊM NGẶT**:
+
+I. ALTERNATIVE FLOWS (BẮT BUỘC):
+• Mỗi use case PHẢI có ít nhất 1-2 alternative_flows cho các trường hợp thay thế
+• Đối với CRUD operations, BẮT BUỘC có alternative flows:
+  - "Thêm X": alternative flow khi X đã tồn tại, dữ liệu không hợp lệ
+  - "Cập nhật X": alternative flow khi X không tồn tại, dữ liệu không hợp lệ
+  - "Xóa X": alternative flow khi X đang được sử dụng, không có quyền xóa
+  - "Tìm kiếm X": alternative flow khi không tìm thấy kết quả
+• alternative_flows KHÔNG được để rỗng [] (trừ use case cực kỳ đơn giản)
+• Mỗi alternative_flow phải có: id, at_step, condition, system_response, end_state
+
+II. MAIN_FLOW QUALITY:
+• Mỗi step phải có actor rõ ràng: "User" hoặc "System"
+• User step: hành động của người dùng → expected_result mô tả system response
+• System step: xử lý nội bộ → expected_result mô tả kết quả xử lý
+• Inputs trong step: tham chiếu tên input được sử dụng (ví dụ: ["username", "password"])
+• Rules_applied: tham chiếu ID rule được áp dụng (ví dụ: ["R1", "R2"])
+• KHÔNG: "Click nút", "Nhập form", "Mở màn hình", "Truy cập trang" (UI-level)
+• ĐÚNG: "Xác thực thông tin", "Tạo record trong database", "Gửi email" (Business logic)
+
+III. INPUTS & OUTPUTS:
+• KHÔNG được để trống nếu use case có dữ liệu đầu vào/ra
+• Mỗi input/output cần: name (tên field), type (kiểu dữ liệu), required/optional
+
+IV. POSTCONDITIONS:
+• Phải cover cả SUCCESS và FAILURE cases
+• Format: "[SUCCESS] mô tả kết quả thành công" hoặc "[FAILURE] mô tả kết quả thất bại"
+
+V. NON_FUNCTIONAL_CONSTRAINTS:
+• Phân loại theo category: [Performance], [Security], [Availability], [Compatibility]
+• Format: "[Category] mô tả constraint"
+
+VI. ACTOR:
+• Actor LUÔN là object đầy đủ {id, name, description}
+• Không rõ actor → fallback chuẩn: {"id": "user", "name": "Người dùng hệ thống", "description": "Người dùng sử dụng hệ thống"}
+
+**SCHEMA USE CASE** (TUYỆT ĐỐI BẤT BIẾN):
+{
+    "key": "UC001",
+    "name": "Tên use case",
+    "type": "use_case",
+    "level": "system",
+    "status": "active",
+    "description": "Mô tả chi tiết use case",
+    "actor": { "id": "user", "name": "Người dùng hệ thống", "description": "..." },
+    "goal": "Mục tiêu nghiệp vụ rõ ràng",
+    "business_reason": "Lý do nghiệp vụ",
+    "context": { "module": "Module", "scope": "", "system": "" },
+    "priority": "high|medium|low",
+    "frequency": "high|medium|low",
+    "trigger": { "event": "Sự kiện trigger", "source": "UI" },
+    "preconditions": ["Điều kiện tiên quyết"],
+    "main_flow": [
+        { 
+            "step": 1, 
+            "actor": "User|System", 
+            "action": "Hành động business logic", 
+            "inputs": ["input_name"],
+            "rules_applied": ["R1"],
+            "expected_result": "Kết quả mong đợi" 
+        }
+    ],
+    "alternative_flows": [
+        {
+            "id": "AF1",
+            "at_step": 1,
+            "condition": "Điều kiện thay thế",
+            "system_response": "Phản hồi của hệ thống",
+            "end_state": "Trạng thái kết thúc"
+        }
+    ],
+    "exceptions": [
+        {
+            "id": "E1",
+            "at_step": 1,
+            "type": "Network|System|Business",
+            "description": "Mô tả exception",
+            "system_response": "Phản hồi của hệ thống"
+        }
+    ],
+    "postconditions": ["[SUCCESS] Kết quả thành công", "[FAILURE] Kết quả thất bại"],
+    "rules": [{ "id": "R1", "description": "Quy tắc nghiệp vụ" }],
+    "inputs": [{ "name": "field", "type": "string", "required": true }],
+    "outputs": [{ "name": "result", "type": "string", "optional": false }],
+    "non_functional_constraints": ["[Performance] Constraint", "[Security] Constraint"],
+    "stakeholders": ["Stakeholder 1", "Stakeholder 2"]
+}
+
+**OUTPUT**: JSON array với ${committed.length} use cases. KHÔNG markdown, KHÔNG giải thích, KHÔNG code fence.
+
+[`;
+        }
     },
     'en-US': {
         schemaDescription: (batchSize: number, offset: number) => ` **OBJECTIVE**: Convert text into software use cases in JSON format
@@ -732,8 +878,7 @@ Each use case MUST have the following fields (DO NOT include "_id", "project_id"
     "stakeholders": [
       "User",
       "System administrator"
-    ],
-    "related_usecases": []
+    ]
   }
 ]
 
@@ -751,20 +896,30 @@ II. USE CASE SEMANTIC:
 • DO NOT generate 2 use cases with same goal (if different names but same meaning → conflict)
 • Correct abstraction level: Use Case = System business (NOT UI-level)
 
-III. TASK QUALITY:
+III. ALTERNATIVE FLOWS (MANDATORY):
+• Each use case MUST have at least 1-2 alternative_flows for alternative scenarios
+• For CRUD operations, MANDATORY alternative flows:
+  - "Add X": alternative flow when X already exists, invalid data
+  - "Update X": alternative flow when X does not exist, invalid data
+  - "Delete X": alternative flow when X is in use, no permission to delete
+  - "Search X": alternative flow when no results found
+• alternative_flows MUST NOT be empty [] (except extremely simple use cases)
+• Each alternative_flow must have: id, at_step, condition, system_response, end_state
+
+IV. TASK QUALITY:
 • Task must be deployable (can be assigned to dev, 1-3 days duration)
 • Task describes logic/business processing, NOT UI-step
 • Task MUST NOT duplicate Use Case role (Task ≠ Use Case child, Task ≠ User journey)
 • ❌ FORBIDDEN: "Click button", "Enter form", "Open screen" (UI-level)
 • ✅ CORRECT: "Validate information", "Create record in database", "Send email" (Business logic)
 
-IV. ACTOR (instead of ROLE):
+V. ACTOR (instead of ROLE):
 • Actor ALWAYS complete object {id, name, description}
 • Unclear actor → standard fallback: {"id": "user", "name": "System User", "description": "User using the system"}
 • DO NOT create new roles if not in text
 • Field name is "actor" (NOT "role")
 
-V. ABSTRACTION LEVEL (NO LEVEL MIXING):
+VI. ABSTRACTION LEVEL (NO LEVEL MIXING):
 • Use Case = System business (business-level)
 • Task = Business-level execution (deployable unit)
 • Epic = Group of use cases in same domain (more abstract than use case)
@@ -774,11 +929,6 @@ VI. SCHEMA & JSON:
 • Absolutely immutable schema: DO NOT add fields, DO NOT miss fields, CORRECT types
 • JSON parse-safe: NO markdown, NO code fence, NO comments
 • DO NOT generate id: id managed by backend system, prompt absolutely forbids adding id
-
-VII. RELATED USE CASES:
-• related_usecases only reference valid IDs (only use existing IDs)
-• DO NOT create new IDs, DO NOT reference meaningless cycles
-• Default to empty array [] (will be processed later)
 
 VIII. CONTENT QUALITY:
 • Each use case must be self-sufficient (readable alone, no external context dependency)
@@ -804,30 +954,6 @@ VIII. CONTENT QUALITY:
 ✓ Task is business-level, deployable (not UI-step)
 ✓ No filler text, no mechanical structure repetition
 :`,
-        relatedUseCases: (simplified: any, incremental?: boolean) => `Here is a list of existing software use cases:\n${JSON.stringify(simplified, null, 2)}\n\n**RELATED USE CASES CRITERIA**:
-
-I. ONLY REFERENCE VALID IDs:
-- related_usecases[] must only reference use cases from the list above
-- Format: Use the exact ID value from the "id" field in the list above (e.g., if id is "507f1f77bcf86cd799439011", use "507f1f77bcf86cd799439011")
-- DO NOT create new IDs, DO NOT reference meaningless cycles
-- If a use case has no relations, return an empty array []
-
-II. INCREMENTAL MODE SAFE:
-${incremental ? `- DO NOT delete or overwrite existing related_usecases
-- Only add links between new and old use cases
-- Keep all existing related_usecases intact` : `- Analyze and regenerate all related_usecases for all use cases
-- Ensure only valid IDs from the list above are referenced`}
-
-Your task:
-${incremental ? `- DO NOT delete or overwrite existing related_usecases.\n- Only add links between new and old use cases.` : `- Analyze and regenerate all related_usecases for all use cases.`}
-
-REQUIREMENTS:
-- related_usecases[] must only reference use cases from the list above.
-- Format: Use the exact ID value from the "id" field in the list above (e.g., if id is "507f1f77bcf86cd799439011", use "507f1f77bcf86cd799439011").
-- If a use case has no relations, return an empty array [].
-- Return the entire list of use cases with the 'related_usecases' field updated.
-- Keep all other fields and structure of each use case unchanged.
-- DO NOT create new IDs, DO NOT reference meaningless cycles.`,
         conflictCheck: (textA: string, textB: string) => `
 You are a strict use case comparison engine.
 
@@ -1018,68 +1144,242 @@ III. USE CASE SEMANTIC:
 - ❌ WRONG: "Input Management (CRUD)"
 - ✅ CORRECT: "Add Input", "Delete Input", "Search Input", "Filter Input", "Update Input"
 
-IV. TASK QUALITY:
-- Task must be deployable (can be assigned to dev, 1-3 days duration)
-- Task describes logic/business processing, NOT UI-step
-- Task MUST NOT duplicate Use Case role (Task ≠ Use Case child, Task ≠ User journey)
+IV. ALTERNATIVE FLOWS (MANDATORY):
+- Each use case MUST have at least 1-2 alternative_flows for alternative scenarios
+- For CRUD operations, MANDATORY alternative flows:
+  - "Add X": alternative flow when X already exists, invalid data
+  - "Update X": alternative flow when X does not exist, invalid data
+  - "Delete X": alternative flow when X is in use, no permission to delete
+  - "Search X": alternative flow when no results found
+- alternative_flows MUST NOT be empty [] (except extremely simple use cases)
+- Each alternative_flow must have: id, at_step, condition, system_response, end_state
+
+V. MAIN_FLOW QUALITY:
+- Each step must have clear actor: "User" or "System"
+- User step: user action → expected_result describes system response
+- System step: internal processing → expected_result describes processing result
+- Inputs in step: reference input names used (e.g., ["username", "password"])
+- Rules_applied: reference rule IDs applied (e.g., ["R1", "R2"])
 - ❌ FORBIDDEN: "Click button", "Enter form", "Open screen", "Access page" (UI-level)
 - ✅ CORRECT: "Validate information", "Create record in database", "Send email", "Calculate price" (Business logic)
 
-V. ACTOR (instead of ROLE):
+VI. INPUTS & OUTPUTS:
+- MUST NOT be empty if use case has input/output data
+- Each input/output needs: name (field name), type (data type), required/optional
+
+VII. POSTCONDITIONS:
+- Must cover both SUCCESS and FAILURE cases
+- Format: "[SUCCESS] success result description" or "[FAILURE] failure result description"
+
+VIII. NON_FUNCTIONAL_CONSTRAINTS:
+- Categorize by: [Performance], [Security], [Availability], [Compatibility]
+- Format: "[Category] constraint description"
+
+IX. TASK QUALITY:
+- Task must be deployable (can be assigned to dev, 1-3 days duration)
+- Task describes logic/business processing, NOT UI-step
+- Task MUST NOT duplicate Use Case role (Task ≠ Use Case child, Task ≠ User journey)
+
+X. ACTOR (instead of ROLE):
 - Actor ALWAYS complete object {id, name, description}
 - Unclear actor → standard fallback: {"id": "user", "name": "System User", "description": "User using the system"}
 - DO NOT create new roles if not in text
 - Field name is "actor" (NOT "role")
 
-VI. ABSTRACTION LEVEL (NO LEVEL MIXING):
+XI. ABSTRACTION LEVEL (NO LEVEL MIXING):
 - Use Case = System business (business-level)
 - Task = Business-level execution (deployable unit)
 - Epic = Group of use cases in same domain (more abstract than use case)
 - ❌ FORBIDDEN: UI-level (click, enter form, screen, interface)
 
-VII. SCHEMA & JSON:
+XII. SCHEMA & JSON:
 - Absolutely immutable schema: DO NOT add fields, DO NOT miss fields, CORRECT types
 - JSON parse-safe: NO markdown, NO code fence, NO comments
 - DO NOT generate id: id managed by backend system, prompt absolutely forbids adding id
 
-VIII. CONTENT QUALITY:
+XIII. CONTENT QUALITY:
 - Each use case must be self-sufficient (readable alone, no external context dependency)
 - Have valid rule – trigger – exception (not empty, not formal, business-appropriate)
 - DO NOT generate "filler" content (no filler text, no mechanical structure repetition)
 - Each use case must have complete information (~400-500 tokens)
 
 **USE CASE STRUCTURE** (ABSOLUTELY IMMUTABLE SCHEMA):
-Each use case MUST follow the exact structure as in schemaDescription above, with fields:
-- type: "use_case" (default)
-- level: "system" | "module" | "component" (default "system")
-- status: "active" (default)
-- name: Use case name
-- description: Detailed use case description
-- actor: {id, name, description} (NOT "role")
-- goal: Business goal
-- business_reason: Business reason (NOT "reason")
-- context: {module, scope, system}
-- priority: "low" | "medium" | "high"
-- frequency: "low" | "medium" | "high" (default "medium")
-- trigger: {event, source}
-- preconditions: [string array]
-- main_flow: [{step, actor, action, expected_result, inputs?, rules_applied?}]
-- alternative_flows: [{id, at_step, condition, system_response, end_state}]
-- exceptions: [{id, at_step, type, description, system_response}]
-- rules: [{id, description}]
-- inputs: [{name, type, required}]
-- outputs: [{name, type, optional?}]
-- postconditions: [string array]
-- non_functional_constraints: [string array] (NOT "constraints")
-- stakeholders: [string array]
-- related_usecases: [] (empty array, will be processed later)
+Each use case MUST follow the exact structure below:
+{
+    "type": "use_case",
+    "level": "system",
+    "status": "active",
+    "name": "Use case name",
+    "description": "Detailed use case description",
+    "actor": { "id": "user", "name": "System User", "description": "..." },
+    "goal": "Clear business goal",
+    "business_reason": "Business reason",
+    "context": { "module": "Module", "scope": "", "system": "" },
+    "priority": "high|medium|low",
+    "frequency": "high|medium|low",
+    "trigger": { "event": "Trigger event", "source": "UI" },
+    "preconditions": ["Precondition"],
+    "main_flow": [
+        { 
+            "step": 1, 
+            "actor": "User|System", 
+            "action": "Business logic action", 
+            "inputs": ["input_name"],
+            "rules_applied": ["R1"],
+            "expected_result": "Expected result" 
+        }
+    ],
+    "alternative_flows": [
+        {
+            "id": "AF1",
+            "at_step": 1,
+            "condition": "Alternative condition",
+            "system_response": "System response",
+            "end_state": "End state"
+        }
+    ],
+    "exceptions": [
+        {
+            "id": "E1",
+            "at_step": 1,
+            "type": "Network|System|Business",
+            "description": "Exception description",
+            "system_response": "System response"
+        }
+    ],
+    "postconditions": ["[SUCCESS] Success result", "[FAILURE] Failure result"],
+    "rules": [{ "id": "R1", "description": "Business rule" }],
+    "inputs": [{ "name": "field", "type": "string", "required": true }],
+    "outputs": [{ "name": "result", "type": "string", "optional": false }],
+    "non_functional_constraints": ["[Performance] Constraint", "[Security] Constraint"],
+    "stakeholders": ["Stakeholder 1", "Stakeholder 2"]
+}
 
 **IMPORTANT**:
 - Return ONLY JSON array, no markdown, no code fence, no comments
 - If content exhausted → return empty array [] IMMEDIATELY
 - DO NOT add "id" field to response
-- Ensure 1 Use Case = 1 business goal, Task is business-level deployable
-`
+- Ensure 1 Use Case = 1 business goal, alternative_flows must not be empty
+`,
+        generateBatchFromCommitment: (
+            text: string,
+            committed: Array<{ key: string; name: string; desc: string; module?: string }>,
+            batchNumber: number,
+            totalBatches: number
+        ) => {
+            const committedList = committed.map(uc =>
+                `- ${uc.key}: "${uc.name}" - ${uc.desc} (Module: ${uc.module || 'N/A'})`
+            ).join('\n');
+
+            return `**OBJECTIVE**: Generate details for EXACTLY ${committed.length} committed use cases.
+
+**BATCH**: ${batchNumber}/${totalBatches}
+
+**USE CASES TO GENERATE** (COMMITTED - MUST GENERATE ALL):
+${committedList}
+
+**ORIGINAL TEXT** (for reference):
+${text}
+
+**STRICT REQUIREMENTS**:
+1. MUST generate EXACTLY ${committed.length} use cases (no less, no more)
+2. Each use case MUST have corresponding key (${committed.map(c => c.key).join(', ')})
+3. Keep committed name and goal
+4. Add complete details according to schema below
+
+**STRICT PROCESSING RULES**:
+
+I. ALTERNATIVE FLOWS (MANDATORY):
+• Each use case MUST have at least 1-2 alternative_flows for alternative scenarios
+• For CRUD operations, MANDATORY alternative flows:
+  - "Add X": alternative flow when X already exists, invalid data
+  - "Update X": alternative flow when X does not exist, invalid data
+  - "Delete X": alternative flow when X is in use, no permission to delete
+  - "Search X": alternative flow when no results found
+• alternative_flows MUST NOT be empty [] (except extremely simple use cases)
+• Each alternative_flow must have: id, at_step, condition, system_response, end_state
+
+II. MAIN_FLOW QUALITY:
+• Each step must have clear actor: "User" or "System"
+• User step: user action → expected_result describes system response
+• System step: internal processing → expected_result describes processing result
+• Inputs in step: reference input names used (e.g., ["username", "password"])
+• Rules_applied: reference rule IDs applied (e.g., ["R1", "R2"])
+• ❌ FORBIDDEN: "Click button", "Enter form", "Open screen", "Access page" (UI-level)
+• ✅ CORRECT: "Validate information", "Create record in database", "Send email" (Business logic)
+
+III. INPUTS & OUTPUTS:
+• MUST NOT be empty if use case has input/output data
+• Each input/output needs: name (field name), type (data type), required/optional
+
+IV. POSTCONDITIONS:
+• Must cover both SUCCESS and FAILURE cases
+• Format: "[SUCCESS] success result description" or "[FAILURE] failure result description"
+
+V. NON_FUNCTIONAL_CONSTRAINTS:
+• Categorize by: [Performance], [Security], [Availability], [Compatibility]
+• Format: "[Category] constraint description"
+
+VI. ACTOR:
+• Actor ALWAYS complete object {id, name, description}
+• Unclear actor → standard fallback: {"id": "user", "name": "System User", "description": "User using the system"}
+
+**USE CASE SCHEMA** (ABSOLUTELY IMMUTABLE):
+{
+    "key": "UC001",
+    "name": "Use case name",
+    "type": "use_case",
+    "level": "system",
+    "status": "active",
+    "description": "Detailed use case description",
+    "actor": { "id": "user", "name": "System User", "description": "..." },
+    "goal": "Clear business goal",
+    "business_reason": "Business reason",
+    "context": { "module": "Module", "scope": "", "system": "" },
+    "priority": "high|medium|low",
+    "frequency": "high|medium|low",
+    "trigger": { "event": "Trigger event", "source": "UI" },
+    "preconditions": ["Precondition"],
+    "main_flow": [
+        { 
+            "step": 1, 
+            "actor": "User|System", 
+            "action": "Business logic action", 
+            "inputs": ["input_name"],
+            "rules_applied": ["R1"],
+            "expected_result": "Expected result" 
+        }
+    ],
+    "alternative_flows": [
+        {
+            "id": "AF1",
+            "at_step": 1,
+            "condition": "Alternative condition",
+            "system_response": "System response",
+            "end_state": "End state"
+        }
+    ],
+    "exceptions": [
+        {
+            "id": "E1",
+            "at_step": 1,
+            "type": "Network|System|Business",
+            "description": "Exception description",
+            "system_response": "System response"
+        }
+    ],
+    "postconditions": ["[SUCCESS] Success result", "[FAILURE] Failure result"],
+    "rules": [{ "id": "R1", "description": "Business rule" }],
+    "inputs": [{ "name": "field", "type": "string", "required": true }],
+    "outputs": [{ "name": "result", "type": "string", "optional": false }],
+    "non_functional_constraints": ["[Performance] Constraint", "[Security] Constraint"],
+    "stakeholders": ["Stakeholder 1", "Stakeholder 2"]
+}
+
+**OUTPUT**: JSON array with ${committed.length} use cases. NO markdown, NO explanations, NO code fence.
+
+[`;
+        }
     }
 };
 
@@ -1464,73 +1764,10 @@ export class GeminiService {
         userId?: string,
         projectId?: string
     ): Promise<any[]> {
-        if (!useCases || useCases.length <= 1) {
-            console.log("⏩ Skipping addRelatedUseCases: Not enough use cases.");
-            return useCases;
-        }
-
-        const simplified = useCases.map((u) => ({ id: u._id ? String(u._id) : '', name: u.name, goal: u.goal }));
-        const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
-        const basePrompt = prompts[lang].relatedUseCases(simplified, options?.incremental);
-
-        // ✅ Sử dụng LLMService để lấy model (ưu tiên model user đã chọn)
-        const modelName = await this.llmService.getRecommendedModel(undefined, userId);
-
-        try {
-            console.log(`🔑 Calling LLM for addRelatedUseCases with model: ${modelName}${userId ? ` (user: ${userId})` : ''}`);
-
-            const response = await this.llmService.callLLM({
-                prompt: basePrompt,
-                modelName: modelName,
-                userId: userId,
-                projectId: projectId,
-                endpoint: 'addRelatedUseCases',
-                isProductionFreeMode: true,
-                forceModel: true // ✅ Force sử dụng model user đã chọn
-            });
-
-            let text: string = response.text || "[]";
-            text = this.cleanJsonString(text);
-            const parsed = this.safeJsonParse(text);
-
-            if (Array.isArray(parsed)) {
-                // Tạo mapping từ id (từ Gemini response) sang _id (trong useCases)
-                const updated = useCases.map((u) => {
-                    const uId = u._id ? String(u._id) : '';
-                    // Tìm match theo _id hoặc id (nếu Gemini trả về id cũ)
-                    const match = parsed.find((p: any) => {
-                        const pId = p._id ? String(p._id) : (p.id || '');
-                        return pId === uId;
-                    });
-
-                    if (match && Array.isArray(match.related_usecases)) {
-                        // Map related_usecases từ id cũ (UC1) sang _id mới
-                        const mappedRelated = match.related_usecases.map((refId: string) => {
-                            // Nếu refId là format cũ (UC1, UC2), tìm trong parsed để lấy _id tương ứng
-                            if (refId.match(/^UC\d+$/)) {
-                                const refUseCase = parsed.find((p: any) => p.id === refId || p._tempOldId === refId);
-                                if (refUseCase && refUseCase._id) {
-                                    return String(refUseCase._id);
-                                }
-                                // Nếu không tìm thấy trong parsed, tìm trong useCases
-                                // (trường hợp này ít xảy ra vì Gemini chỉ trả về related trong cùng batch)
-                            }
-                            // Nếu refId đã là _id, giữ nguyên
-                            return refId;
-                        }).filter(Boolean);
-
-                        return { ...u, related_usecases: mappedRelated };
-                    }
-                    return u;
-                });
-                return updated;
-            }
-            return useCases;
-        } catch (err: any) {
-            console.error("❌ addRelatedUseCases error:", err);
-            // Nếu lỗi, trả về useCases gốc (không có related_usecases)
-            return useCases;
-        }
+        // ✅ related_usecases đã bị xóa khỏi schema, hàm này không còn cần thiết
+        // Trả về dữ liệu gốc mà không xử lý gì
+        console.log("⏩ Skipping addRelatedUseCases: related_usecases field has been removed from schema.");
+        return useCases;
     }
 
     /**
@@ -1922,7 +2159,6 @@ export class GeminiService {
                                 it.role.id = `role_${it.role.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}`;
                             }
                             // Bỏ field 'id' từ Gemini response và tạo _id mới
-                            const tempId = it.id; // Lưu tạm id từ Gemini để xử lý related_usecases sau
                             if (it.id) {
                                 delete it.id;
                             }
@@ -1930,30 +2166,11 @@ export class GeminiService {
                             if (!it._id) {
                                 it._id = new Types.ObjectId();
                             }
-                            // Lưu mapping từ id cũ sang _id mới để xử lý related_usecases
-                            if (tempId) {
-                                it._tempOldId = tempId;
+                            // Xóa related_usecases nếu có (không còn trong schema)
+                            if (it.related_usecases) {
+                                delete it.related_usecases;
                             }
                             return it;
-                        });
-
-                        // Xử lý related_usecases: map từ id cũ (UC1, UC2) sang _id mới
-                        const idToNewIdMap = new Map<string, string>();
-                        normalized.forEach((uc: any) => {
-                            if (uc._tempOldId && uc._id) {
-                                idToNewIdMap.set(uc._tempOldId, String(uc._id));
-                            }
-                        });
-
-                        // Cập nhật related_usecases trong normalized array
-                        normalized.forEach((uc: any) => {
-                            if (Array.isArray(uc.related_usecases) && uc.related_usecases.length > 0) {
-                                uc.related_usecases = uc.related_usecases
-                                    .map((oldId: string) => idToNewIdMap.get(oldId) || oldId)
-                                    .filter((newId: string) => idToNewIdMap.has(newId) || normalized.some((x: any) => String(x._id) === newId));
-                            }
-                            // Xóa temp field
-                            delete uc._tempOldId;
                         });
 
                         // Lọc lại để đảm bảo chỉ có use case hợp lệ (có name hoặc goal)
@@ -2257,13 +2474,20 @@ ${text}
 1. Phân tích văn bản và liệt kê TẤT CẢ các use case có thể extract
 2. Mỗi use case phải có key duy nhất (UC001, UC002, ...)
 3. CHỈ liệt kê các use case PHẦN MỀM, KHÔNG liệt kê thủ tục giấy tờ
-4. Gom các CRUD operations cho cùng entity thành 1 use case quản lý
-5. Mỗi use case = 1 mục tiêu nghiệp vụ rõ ràng
+4. Mỗi use case = 1 mục tiêu nghiệp vụ rõ ràng
 
-**QUY TẮC TÁCH RIÊNG OPERATIONS**:
-- KHÔNG gom CRUD, TÁCH RIÊNG từng operation
-- Ví dụ: "Thêm Input", "Xóa Input", "Tìm kiếm Input", "Lọc Input", "Cập nhật Input"
-- Mỗi operation = 1 usecase độc lập với goal riêng
+**⚠️ QUY TẮC TÁCH RIÊNG OPERATIONS (BẮT BUỘC)**:
+- ❌ CẤM TUYỆT ĐỐI: Gom CRUD operations thành 1 use case quản lý chung
+- ✅ BẮT BUỘC: TÁCH RIÊNG từng operation thành usecase độc lập
+- Ví dụ cho entity "API Key":
+  - ✅ "Thêm API Key" (Add API Key)
+  - ✅ "Xóa API Key" (Delete API Key)
+  - ✅ "Tìm kiếm API Key" (Search API Key)
+  - ✅ "Lọc API Key" (Filter API Key)
+  - ✅ "Cập nhật API Key" (Update API Key)
+  - ✅ "Xem chi tiết API Key" (View API Key Detail)
+  - ❌ "API Key Management (CRUD)" - SAI, CẤM TUYỆT ĐỐI
+- Mỗi operation = 1 usecase độc lập với goal, main_flow, preconditions, postconditions riêng biệt
 
 **OUTPUT FORMAT** (JSON only, no markdown):
 {
@@ -2296,13 +2520,20 @@ ${text}
 1. Analyze text and list ALL extractable use cases
 2. Each use case must have unique key (UC001, UC002, ...)
 3. ONLY list SOFTWARE use cases, NOT paperwork procedures
-4. Group CRUD operations for same entity into 1 management use case
-5. Each use case = 1 clear business goal
+4. Each use case = 1 clear business goal
 
-**SEPARATE OPERATIONS RULES**:
-- DO NOT group CRUD, SEPARATE each operation
-- Example: "Add Input", "Delete Input", "Search Input", "Filter Input", "Update Input"
-- Each operation = 1 independent usecase with separate goal
+**⚠️ SEPARATE OPERATIONS RULES (MANDATORY)**:
+- ❌ ABSOLUTELY FORBIDDEN: Group CRUD operations into 1 management use case
+- ✅ MANDATORY: SEPARATE each operation into independent usecase
+- Example for entity "API Key":
+  - ✅ "Add API Key"
+  - ✅ "Delete API Key"
+  - ✅ "Search API Key"
+  - ✅ "Filter API Key"
+  - ✅ "Update API Key"
+  - ✅ "View API Key Detail"
+  - ❌ "API Key Management (CRUD)" - WRONG, ABSOLUTELY FORBIDDEN
+- Each operation = 1 independent usecase with separate goal, main_flow, preconditions, postconditions
 
 **OUTPUT FORMAT** (JSON only, no markdown):
 {
@@ -2343,9 +2574,12 @@ Return JSON:`;
         const effectiveModelName = modelName || await this.llmService.getRecommendedModel(undefined, userId);
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
 
-        const prompt = lang === 'vi-VN'
-            ? this.getGenerateBatchPromptVI(originalText, committedUsecases, batchNumber, totalBatches)
-            : this.getGenerateBatchPromptEN(originalText, committedUsecases, batchNumber, totalBatches);
+        const prompt = prompts[lang].generateBatchFromCommitment(
+            originalText,
+            committedUsecases,
+            batchNumber,
+            totalBatches
+        );
 
         try {
             console.log(`🔑 Calling LLM for generateBatchFromCommitment with model: ${effectiveModelName}`);
@@ -2376,111 +2610,6 @@ Return JSON:`;
         }
     }
 
-    private getGenerateBatchPromptVI(
-        text: string,
-        committed: Array<{ key: string; name: string; desc: string; module?: string }>,
-        batchNumber: number,
-        totalBatches: number
-    ): string {
-        const committedList = committed.map(uc =>
-            `- ${uc.key}: "${uc.name}" - ${uc.desc} (Module: ${uc.module || 'N/A'})`
-        ).join('\n');
-
-        return `**MỤC TIÊU**: Generate chi tiết cho CHÍNH XÁC ${committed.length} use cases đã cam kết.
-
-**BATCH**: ${batchNumber}/${totalBatches}
-
-**DANH SÁCH USE CASES CẦN GENERATE** (ĐÃ CAM KẾT - PHẢI GENERATE ĐỦ):
-${committedList}
-
-**VĂN BẢN GỐC** (để tham khảo chi tiết):
-${text}
-
-**YÊU CẦU NGHIÊM NGẶT**:
-1. PHẢI generate CHÍNH XÁC ${committed.length} use cases (không thiếu, không thừa)
-2. Mỗi use case PHẢI có key tương ứng (${committed.map(c => c.key).join(', ')})
-3. Giữ nguyên tên và mục tiêu đã cam kết
-4. Bổ sung chi tiết: actor, main_flow, preconditions, postconditions, etc.
-
-**SCHEMA USE CASE**:
-{
-    "key": "UC001",
-    "name": "Tên use case",
-    "actor": { "id": "user", "name": "Người dùng", "description": "..." },
-    "goal": "Mục tiêu",
-    "business_reason": "Lý do nghiệp vụ",
-    "context": { "module": "Module", "scope": "", "system": "" },
-    "trigger": { "event": "Sự kiện trigger", "source": "UI" },
-    "preconditions": ["Điều kiện tiên quyết"],
-    "main_flow": [
-        { "step": 1, "actor": "Người dùng", "action": "Hành động", "expected_result": "Kết quả" }
-    ],
-    "alternative_flows": [],
-    "exceptions": [],
-    "postconditions": ["Kết quả sau khi hoàn thành"],
-    "rules": [{ "id": "R1", "description": "Quy tắc" }],
-    "inputs": [{ "name": "field", "type": "string", "required": true }],
-    "outputs": [{ "name": "result", "type": "string", "optional": false }],
-    "non_functional_constraints": ["Ràng buộc phi chức năng"]
-}
-
-**OUTPUT**: JSON array với ${committed.length} use cases. KHÔNG markdown, KHÔNG giải thích.
-
-[`;
-    }
-
-    private getGenerateBatchPromptEN(
-        text: string,
-        committed: Array<{ key: string; name: string; desc: string; module?: string }>,
-        batchNumber: number,
-        totalBatches: number
-    ): string {
-        const committedList = committed.map(uc =>
-            `- ${uc.key}: "${uc.name}" - ${uc.desc} (Module: ${uc.module || 'N/A'})`
-        ).join('\n');
-
-        return `**OBJECTIVE**: Generate details for EXACTLY ${committed.length} committed use cases.
-
-**BATCH**: ${batchNumber}/${totalBatches}
-
-**USE CASES TO GENERATE** (COMMITTED - MUST GENERATE ALL):
-${committedList}
-
-**ORIGINAL TEXT** (for reference):
-${text}
-
-**STRICT REQUIREMENTS**:
-1. MUST generate EXACTLY ${committed.length} use cases (no less, no more)
-2. Each use case MUST have corresponding key (${committed.map(c => c.key).join(', ')})
-3. Keep committed name and goal
-4. Add details: actor, main_flow, preconditions, postconditions, etc.
-
-**USE CASE SCHEMA**:
-{
-    "key": "UC001",
-    "name": "Use case name",
-    "actor": { "id": "user", "name": "User", "description": "..." },
-    "goal": "Goal",
-    "business_reason": "Business reason",
-    "context": { "module": "Module", "scope": "", "system": "" },
-    "trigger": { "event": "Trigger event", "source": "UI" },
-    "preconditions": ["Precondition"],
-    "main_flow": [
-        { "step": 1, "actor": "User", "action": "Action", "expected_result": "Result" }
-    ],
-    "alternative_flows": [],
-    "exceptions": [],
-    "postconditions": ["Postcondition"],
-    "rules": [{ "id": "R1", "description": "Rule" }],
-    "inputs": [{ "name": "field", "type": "string", "required": true }],
-    "outputs": [{ "name": "result", "type": "string", "optional": false }],
-    "non_functional_constraints": ["Non-functional constraint"]
-}
-
-**OUTPUT**: JSON array with ${committed.length} use cases. NO markdown, NO explanations.
-
-[`;
-    }
 
     /**
      * V2: Retry generate missing usecases

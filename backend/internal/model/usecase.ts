@@ -231,7 +231,6 @@ const usecaseSchema = new Schema({
 usecaseSchema.index({ project_id: 1, version_id: 1 });
 usecaseSchema.index({ project_id: 1 });
 usecaseSchema.index({ version_id: 1 });
-usecaseSchema.index({ "related_usecases": 1 });
 usecaseSchema.index({ name: 1 });
 usecaseSchema.index({ priority: 1 });
 usecaseSchema.index({ type: 1 });

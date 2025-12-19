@@ -969,8 +969,8 @@ ${mergedText.substring(0, 3000)}
                 if (inputSocketService && projectId && versionId && userId) {
                     inputSocketService.emitIncrementalProgress(
                         projectId,
-                        versionId,
-                        userId,
+                versionId,
+                userId,
                         Math.floor((result.totalGenerated / 100) * 100),
                         "paused",
                         false, // isProcessing = false vì đã pause
