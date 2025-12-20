@@ -26,8 +26,23 @@ LOẠI KIỂM THỬ: ${testType}
   "estimated_count": ${isShort ? '10' : '50'},
   "estimated_batches": ${isShort ? '1' : '3'},
   "summary": "Tóm tắt ngắn gọn về các use cases và số lượng test cases ước tính",
-  "reasoning": "Lý do ước tính số lượng test cases"
+  "reasoning": "Lý do ước tính số lượng test cases",
+  "committed_testcases": [
+    {
+      "title": "Tên testcase cụ thể (ví dụ: Thêm sản phẩm thành công với số lượng hợp lệ)",
+      "requirement_id": "ID của use case liên quan",
+      "test_type": "integration|api|ui|performance|security",
+      "priority": "high|medium|low"
+    },
+    ...
+  ]
 }
+
+**QUAN TRỌNG VỀ committed_testcases:**
+- Phải liệt kê CHI TIẾT từng testcase sẽ generate (không phải placeholder)
+- Mỗi testcase phải có title cụ thể, mô tả rõ ràng testcase đó test gì
+- Số lượng testcases trong committed_testcases phải bằng estimated_count
+- Title phải ngắn gọn, rõ ràng, dễ hiểu
 
 **QUAN TRỌNG:**
 - estimated_count phải là số nguyên dương
@@ -271,8 +286,23 @@ TEST TYPE: ${testType}
   "estimated_count": ${isShort ? '10' : '50'},
   "estimated_batches": ${isShort ? '1' : '3'},
   "summary": "Brief summary of use cases and estimated test case count",
-  "reasoning": "Reasoning for estimated test case count"
+  "reasoning": "Reasoning for estimated test case count",
+  "committed_testcases": [
+    {
+      "title": "Specific testcase name (e.g., Add product successfully with valid quantity)",
+      "requirement_id": "Related use case ID",
+      "test_type": "integration|api|ui|performance|security",
+      "priority": "high|medium|low"
+    },
+    ...
+  ]
 }
+
+**IMPORTANT ABOUT committed_testcases:**
+- Must list DETAILED testcases to be generated (not placeholders)
+- Each testcase must have a specific title that clearly describes what it tests
+- Number of testcases in committed_testcases must equal estimated_count
+- Titles must be concise, clear, and easy to understand
 
 **IMPORTANT:**
 - estimated_count must be a positive integer
@@ -520,6 +550,12 @@ export class TestcaseGeminiService {
         summary: string;
         estimated_batches: number;
         reasoning?: string;
+        committed_testcases?: Array<{ // ✅ Danh sách testcases chi tiết từ LLM
+            title: string;
+            requirement_id?: string;
+            test_type?: string;
+            priority?: string;
+        }>;
     }> {
         const requirementsJson = JSON.stringify(requirements, null, 2);
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
@@ -595,11 +631,30 @@ export class TestcaseGeminiService {
 
                 console.log(`✅ [ESTIMATE] Estimated ${estimated_count} test cases, ${estimated_batches} batches (batch size: ${this.TESTCASE_BATCH_SIZE})`);
 
+                // ✅ Validate và format committed_testcases từ LLM
+                let committedTestcases: Array<{ title: string; requirement_id?: string; test_type?: string; priority?: string }> = [];
+                if (estimate.committed_testcases && Array.isArray(estimate.committed_testcases)) {
+                    committedTestcases = estimate.committed_testcases
+                        .filter((tc: any) => tc && tc.title && typeof tc.title === 'string')
+                        .map((tc: any) => ({
+                            title: tc.title.trim(),
+                            requirement_id: tc.requirement_id || tc.requirementId || undefined,
+                            test_type: tc.test_type || tc.testType || undefined,
+                            priority: tc.priority || undefined
+                        }));
+
+                    // Nếu số lượng không khớp, log warning
+                    if (committedTestcases.length !== estimated_count) {
+                        console.warn(`⚠️ [ESTIMATE] committed_testcases count (${committedTestcases.length}) doesn't match estimated_count (${estimated_count})`);
+                    }
+                }
+
                 return {
                     estimated_count,
                     estimated_batches,
                     summary: estimate.summary || `Estimated ${estimated_count} test cases for ${requirements.length} requirements`,
-                    reasoning: estimate.reasoning
+                    reasoning: estimate.reasoning,
+                    committed_testcases: committedTestcases.length > 0 ? committedTestcases : undefined
                 };
             } else {
                 throw new Error("Invalid response format: expected JSON object");

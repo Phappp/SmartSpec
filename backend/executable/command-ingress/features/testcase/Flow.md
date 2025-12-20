@@ -23,8 +23,8 @@
 │        PHASE 2: BATCH PLANNING                                   │
 │  Chia committed_requirements thành batches testcases              │
 │                                                                  │
-│  Batch 1: UC001-UC010 (10 testcases)                             │
-│  Batch 2: UC011-UC020 (10 testcases)                             │
+│  Batch 1: UC001-UC020 (20 testcases)                             │
+│  Batch 2: UC021-UC040 (20 testcases)                             │
 │  ...                                                             │
 └──────────────────────────────┬───────────────────────────────────┘
                                │
