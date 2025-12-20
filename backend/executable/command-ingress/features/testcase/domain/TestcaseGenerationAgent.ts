@@ -85,7 +85,7 @@ export interface InvalidTestcase {
     title: string;
     errors: string[];
     originalData?: any;
-    expectedIndex?: number;
+    expectedIndex?: number; 
 }
 
 export interface TempTestcaseEntry {
@@ -95,7 +95,7 @@ export interface TempTestcaseEntry {
     index?: number; // Index trong batch
 }
 
-export interface TestcaseSaveResult {
+export interface TestcaseSaveResult { 
     totalExpected: number;
     saved: number;
     repairedByLLM: number;
@@ -285,7 +285,7 @@ export class TestcaseGenerationAgent {
 
         if (estimate.committed_testcases && estimate.committed_testcases.length > 0) {
             // ✅ Sử dụng danh sách testcases chi tiết từ LLM
-            console.log(`✅ [ESTIMATE] Using ${estimate.committed_testcases.length} committed testcases from LLM`);
+            console.log(`✅ [ESTIMATE] Using ${estimate.committed_testcases.length} committed testcases from LLM (expected ${estimate.estimated_count})`);
 
             estimate.committed_testcases.forEach((tc, idx) => {
                 // Tìm requirement tương ứng nếu có requirement_id
@@ -310,48 +310,34 @@ export class TestcaseGenerationAgent {
                 });
             });
 
-            // Nếu số lượng không đủ, thêm placeholder cho phần còn lại
-            if (committedTestcases.length < estimate.estimated_count) {
-                const remaining = estimate.estimated_count - committedTestcases.length;
-                console.warn(`⚠️ [ESTIMATE] Only ${committedTestcases.length} committed testcases from LLM, adding ${remaining} placeholders`);
-
-                for (let i = 0; i < remaining; i++) {
-                    const requirement = this.context.requirements[i % this.context.requirements.length];
-                    const requirementId = requirement._id?.toString() || requirement.id?.toString() || '';
-                    const requirementName = requirement.name || 'Unknown';
-
-                    committedTestcases.push({
-                        index: committedTestcases.length,
-                        title: `${requirementName} - Testcase ${i + 1}`, // Placeholder
-                        requirementId,
-                        status: 'pending'
-                    });
-                }
+            // ✅ QUAN TRỌNG: Điều chỉnh estimated_count để KHỚP CHÍNH XÁC với số lượng từ LLM
+            // Đảm bảo không có placeholder nào được tạo thêm
+            if (committedTestcases.length !== estimate.estimated_count) {
+                console.warn(`⚠️ [ESTIMATE] committed_testcases count (${committedTestcases.length}) doesn't match estimated_count (${estimate.estimated_count}). Adjusting estimated_count to match LLM output.`);
+                this.context.estimatedCount = committedTestcases.length;
+                this.context.estimatedBatches = Math.ceil(committedTestcases.length / 20);
+                console.log(`✅ [ESTIMATE] Adjusted estimated_count to ${committedTestcases.length} to match LLM committed_testcases`);
             }
         } else {
-            // ✅ Fallback: Tạo placeholder nếu LLM không trả về committed_testcases
-            console.log(`⚠️ [ESTIMATE] No committed_testcases from LLM, creating placeholders`);
-            let testcaseIndex = 0;
-            const testcasesPerRequirement = Math.ceil(estimate.estimated_count / this.context.requirements.length);
+            // ✅ Fallback: Nếu LLM không trả về committed_testcases, KHÔNG tạo placeholder
+            // Thay vào đó, để empty list và để LLM generate testcases trong quá trình generate batch
+            console.warn(`⚠️ [ESTIMATE] LLM did not return committed_testcases. Will generate testcases during batch generation. Estimated count: ${estimate.estimated_count}`);
 
-            for (const requirement of this.context.requirements) {
-                const requirementId = requirement._id?.toString() || requirement.id?.toString() || '';
-                const requirementName = requirement.name || 'Unknown';
-
-                for (let i = 0; i < testcasesPerRequirement && testcaseIndex < estimate.estimated_count; i++) {
-                    committedTestcases.push({
-                        index: testcaseIndex,
-                        title: `${requirementName} - Testcase ${i + 1}`, // Placeholder
-                        requirementId,
-                        status: 'pending'
-                    });
-                    testcaseIndex++;
-                }
-            }
+            // ✅ KHÔNG tạo placeholder để tránh format không đồng nhất
+            // committedTestcases sẽ là empty array []
+            this.context.estimatedCount = estimate.estimated_count;
+            this.context.estimatedBatches = estimate.estimated_batches;
         }
 
-        this.context.committedTestcases = committedTestcases;
-        console.log(`✅ [ESTIMATE] Created ${committedTestcases.length} committed testcases from ${this.context.requirements.length} requirements`);
+        // ✅ QUAN TRỌNG: Chỉ set committedTestcases nếu có từ LLM
+        // Nếu không có, để empty array để frontend không hiển thị danh sách placeholder
+        if (committedTestcases.length > 0) {
+            this.context.committedTestcases = committedTestcases;
+            console.log(`✅ [ESTIMATE] Created ${committedTestcases.length} committed testcases from LLM`);
+        } else {
+            this.context.committedTestcases = undefined; // ✅ Không set nếu không có từ LLM
+            console.log(`⚠️ [ESTIMATE] No committed testcases from LLM. Frontend will not show testcase list.`);
+        }
 
         console.log(`✅ [ESTIMATE] Estimated ${this.context.estimatedCount} test cases, ${this.context.estimatedBatches} batches`);
 

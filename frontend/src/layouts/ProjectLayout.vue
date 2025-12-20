@@ -164,7 +164,7 @@
               </div>
               <div v-show="showCommittedTestcases[`${process.userId}_${process.type}`]" class="committed-testcases-items">
                 <div
-                  v-for="tc in process.committedTestcases"
+                  v-for="tc in getSortedCommittedTestcases(process.committedTestcases)"
                   :key="tc.index"
                   class="committed-testcase-item"
                   :class="{
@@ -466,6 +466,24 @@ export default {
       } else {
         showCommittedTestcases.value[processKey] = false
       }
+    }
+
+    // ✅ Sắp xếp committedTestcases: các testcase đang gen (generating) luôn ở đầu
+    const getSortedCommittedTestcases = (committedTestcases) => {
+      if (!committedTestcases || !Array.isArray(committedTestcases)) {
+        return []
+      }
+      
+      // Tách thành 2 nhóm: đang gen và các trạng thái khác
+      const generating = committedTestcases.filter(tc => tc.status === 'generating')
+      const others = committedTestcases.filter(tc => tc.status !== 'generating')
+      
+      // Sắp xếp mỗi nhóm theo index để giữ thứ tự
+      generating.sort((a, b) => a.index - b.index)
+      others.sort((a, b) => a.index - b.index)
+      
+      // Trả về: đang gen trước, sau đó là các trạng thái khác
+      return [...generating, ...others]
     }
 
     // Group processes by userId
@@ -1089,6 +1107,7 @@ export default {
       getAgentStateIconClass,
       toggleCommittedTestcases, // ✅ Export toggle function
       showCommittedTestcases, // ✅ Export state
+      getSortedCommittedTestcases, // ✅ Export sort function
     }
   },
 }
