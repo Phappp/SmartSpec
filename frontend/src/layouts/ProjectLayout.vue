@@ -848,6 +848,15 @@ export default {
           error: event.error,
         })
       })
+
+      // 🔥 REALTIME: Listen for project events (e.g., member accepted invitation)
+      socket.on('project_event', (event) => {
+        if (event.type === 'MEMBER_ACCEPTED' && event.projectId === projectId.value) {
+          console.log('📥 [Project Event] Member accepted:', event.member)
+          // Refetch project data để cập nhật members count
+          fetchProjectData()
+        }
+      })
     }
 
     // Cleanup socket listeners
@@ -858,6 +867,7 @@ export default {
       socket.off('database_event')
       socket.off('testcase_event')
       socket.off('uml_event')
+      socket.off('project_event')
     }
 
     // Event handlers

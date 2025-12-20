@@ -190,6 +190,14 @@ export class TestcaseGenerationAgent {
                         await this.generateRetry();
                         break;
 
+                    case TestcaseAgentState.FINAL_VALIDATION:
+                        await this.finalValidation();
+                        break;
+
+                    case TestcaseAgentState.ATOMIC_SAVE:
+                        await this.atomicSave();
+                        break;
+
                     default:
                         throw new Error(`Unknown state: ${this.state}`);
                 }
@@ -526,7 +534,7 @@ export class TestcaseGenerationAgent {
         // Nếu có missing hoặc invalid → replan và retry
         if (verification.hasMissing || verification.hasInvalid) {
             if (this.context.retryAttempts! >= this.context.maxRetryAttempts!) {
-                console.warn(`⚠️ [VERIFY_RESULTS] Max retry attempts (${this.context.maxRetryAttempts}) reached. Stopping.`);
+                console.warn(`⚠️ [VERIFY_RESULTS] Max retry attempts (${this.context.maxRetryAttempts}) reached. Saving generated testcases and stopping.`);
 
                 // Broadcast max retry reached
                 if (testcaseSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
@@ -540,11 +548,13 @@ export class TestcaseGenerationAgent {
                         undefined,
                         undefined,
                         TestcaseAgentState.VERIFY_RESULTS,
-                        `Đã đạt max retry (${this.context.maxRetryAttempts}). Còn thiếu ${verification.missingCount} testcases.`
+                        `Đã đạt max retry (${this.context.maxRetryAttempts}). Còn thiếu ${verification.missingCount} testcases. Đang lưu ${verification.totalGenerated} testcases đã generate...`
                     );
                 }
 
-                this.state = TestcaseAgentState.DONE;
+                // ✅ FIX: Vẫn save những testcases đã generate được, sau đó mới DONE
+                // Chuyển sang FINAL_VALIDATION để validate và save testcases đã có
+                this.state = TestcaseAgentState.FINAL_VALIDATION;
             } else {
                 this.context.retryAttempts!++;
                 console.log(`🔄 [VERIFY_RESULTS] Missing/invalid detected. Starting retry attempt ${this.context.retryAttempts}/${this.context.maxRetryAttempts}`);

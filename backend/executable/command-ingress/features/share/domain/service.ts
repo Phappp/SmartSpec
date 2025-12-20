@@ -10,6 +10,7 @@ import jwt from "jsonwebtoken";
 import { notificationService } from "../../../services/notification.service";
 import { NotificationServiceImpl } from "../../notification/domain/service";
 import { LogService } from "../../../../command-ingress/features/log/domain/service";
+import { io } from "../../../socket";
 
 export class ShareProjectService {
   private logService = new LogService();
@@ -580,6 +581,24 @@ export class ShareProjectService {
       `${recipient.name} accepted your invitation to ${project.name}`,
       ""
     );
+
+    // 🔥 REALTIME: Emit socket event để cập nhật project members real-time
+    try {
+      io.to(`project_${projectId}`).emit('project_event', {
+        type: 'MEMBER_ACCEPTED',
+        projectId: projectId,
+        member: {
+          user_id: userId,
+          status: 'accepted',
+          role: member.role
+        },
+        timestamp: new Date()
+      });
+      console.log(`📢 Broadcast member accepted event to project ${projectId}`);
+    } catch (socketError) {
+      console.error('❌ Error emitting member accepted socket event:', socketError);
+      // Không throw error, chỉ log vì đây không phải lỗi critical
+    }
 
     return new ServiceResponse(
       ResponseStatus.Success,
