@@ -39,6 +39,7 @@ export interface TestcaseAgentContext {
     estimatedCount?: number;
     estimatedBatches?: number;
     summary?: string;
+    initialTestcaseCount?: number; // ✅ Số lượng testcases đã có sẵn trong DB khi bắt đầu generate
     committedTestcases?: Array<{ // ✅ Danh sách testcases đã cam kết sẽ generate
         index: number;
         title: string; // Placeholder title hoặc title thực tế
@@ -85,7 +86,7 @@ export interface InvalidTestcase {
     title: string;
     errors: string[];
     originalData?: any;
-    expectedIndex?: number; 
+    expectedIndex?: number;
 }
 
 export interface TempTestcaseEntry {
@@ -95,7 +96,7 @@ export interface TempTestcaseEntry {
     index?: number; // Index trong batch
 }
 
-export interface TestcaseSaveResult { 
+export interface TestcaseSaveResult {
     totalExpected: number;
     saved: number;
     repairedByLLM: number;
@@ -266,6 +267,15 @@ export class TestcaseGenerationAgent {
                 "Đang ước tính số lượng testcase từ requirements..."
             );
         }
+
+        // ✅ QUAN TRỌNG: Lưu số lượng testcases đã có sẵn trong DB khi bắt đầu generate
+        // Để sau này chỉ tính số lượng testcases mới được thêm vào trong session này
+        // Lưu ý: Mỗi lần generate mới (tạo agent mới), initialTestcaseCount sẽ được set lại
+        // - Nếu generate thêm: initialTestcaseCount = số testcases hiện tại (bao gồm cả testcases cũ)
+        // - Nếu generate lại từ đầu (đã xóa testcases cũ): initialTestcaseCount = 0
+        const existingCount = await Testcase.countDocuments({ version_id: this.context.versionId });
+        this.context.initialTestcaseCount = existingCount;
+        console.log(`📊 [ESTIMATE] Initial testcase count in DB: ${existingCount} (sẽ chỉ tính testcases mới được thêm vào sau thời điểm này)`);
 
         const estimate = await this.gemini.estimateTestCasesCount(
             this.context.requirements,
@@ -1239,14 +1249,27 @@ export class TestcaseGenerationAgent {
             return;
         }
 
+        // ✅ QUAN TRỌNG: Query số testcases đã lưu TRƯỚC KHI lưu batch mới
+        const currentCountBeforeSave = await Testcase.countDocuments({ version_id: this.context.versionId });
+
+        // ✅ Tính số testcases đã lưu trong session này (không tính testcases cũ)
+        const initialCount = this.context.initialTestcaseCount || 0;
+        const previouslySavedInSession = currentCountBeforeSave - initialCount;
+
         const saveResult = await this.performAtomicSave(validTestcases);
 
         // Cập nhật savedTestcases
         this.context.savedTestcases = saveResult.savedTestcases || [];
 
+        // ✅ Tính tổng số đã lưu trong session này = số đã lưu trước đó trong session + số mới lưu
+        const totalSavedCount = previouslySavedInSession + saveResult.saved;
+
         console.log(`✅ [ATOMIC_SAVE] Save complete:`, {
             totalExpected: saveResult.totalExpected,
-            saved: saveResult.saved,
+            initialCount: initialCount,
+            previouslySavedInSession: previouslySavedInSession,
+            newlySaved: saveResult.saved,
+            totalSavedInSession: totalSavedCount,
             repairedByLLM: saveResult.repairedByLLM,
             skipped: saveResult.skipped,
             failed: saveResult.failed.length
@@ -1266,12 +1289,12 @@ export class TestcaseGenerationAgent {
                     currentBatch: this.context.batchPlan?.length || 0,
                     totalBatches: this.context.batchPlan?.length || 0,
                     testcasesInBatch: 0,
-                    savedCount: saveResult.saved, // ✅ Sử dụng số đã lưu thực sự
+                    savedCount: totalSavedCount, // ✅ Sử dụng TỔNG số đã lưu (bao gồm cả trước đó)
                     totalCount: saveResult.totalExpected
                 },
                 undefined,
                 TestcaseAgentState.ATOMIC_SAVE,
-                `✅ Đã lưu ${saveResult.saved}/${saveResult.totalExpected} testcases vào database`
+                `✅ Đã lưu ${totalSavedCount}/${saveResult.totalExpected} testcases vào database`
             );
 
             // ✅ Emit completion event với flag refresh
@@ -1281,12 +1304,12 @@ export class TestcaseGenerationAgent {
                 this.context.userId,
                 {
                     totalExpected: saveResult.totalExpected,
-                    saved: saveResult.saved,
+                    saved: totalSavedCount, // ✅ Sử dụng TỔNG số đã lưu
                     repairedByLLM: saveResult.repairedByLLM,
                     skipped: saveResult.skipped,
                     failed: saveResult.failed.length
                 },
-                `✅ Đã hoàn thành: ${saveResult.saved}/${saveResult.totalExpected} testcases đã lưu vào database`
+                `✅ Đã hoàn thành: ${totalSavedCount}/${saveResult.totalExpected} testcases đã lưu vào database`
             );
         }
 
@@ -1706,15 +1729,18 @@ export class TestcaseGenerationAgent {
         // Vì sau khi save batch, các entry đã được đánh dấu là "saved" nên không còn status "generated"
         const actualSavedCount = await Testcase.countDocuments({ version_id: this.context.versionId });
 
+        // ✅ QUAN TRỌNG: Chỉ tính số testcases đã lưu trong session này (không tính testcases cũ)
+        const initialCount = this.context.initialTestcaseCount || 0;
+        const savedInSession = actualSavedCount - initialCount;
+
         // Đếm từ temp storage (bao gồm cả "generated" và "saved")
         const generatedCount = Array.from(this.context.tempStorage.values()).filter(e =>
             e.status === "generated" || e.status === "saved"
         ).length;
         const invalidCount = Array.from(this.context.tempStorage.values()).filter(e => e.status === "invalid").length;
 
-        // ✅ Sử dụng actualSavedCount từ DB thay vì generatedCount từ temp storage
-        // Vì temp storage có thể không chính xác sau khi đã save
-        const missingCount = Math.max(0, expectedCount - actualSavedCount);
+        // ✅ Sử dụng savedInSession (chỉ tính testcases trong session này) thay vì actualSavedCount
+        const missingCount = Math.max(0, expectedCount - savedInSession);
 
         const invalidTestcases: InvalidTestcase[] = [];
         for (const entry of Array.from(this.context.tempStorage.values())) {
@@ -1734,7 +1760,7 @@ export class TestcaseGenerationAgent {
             hasInvalid: invalidCount > 0,
             missingCount: effectiveMissingCount,
             invalidTestcases,
-            totalGenerated: actualSavedCount, // ✅ Sử dụng actualSavedCount từ DB
+            totalGenerated: savedInSession, // ✅ Chỉ tính số testcases mới được thêm vào trong session này
             totalExpected: expectedCount
         };
     }

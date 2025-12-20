@@ -643,6 +643,7 @@ onMounted(() => {
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.2s;
+  min-height: 250px;
 }
 
 .api-key-card:hover {

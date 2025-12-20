@@ -511,7 +511,7 @@ export class LLMService {
         // Lấy tất cả providers có keys
         const providers: Provider[] = ['openrouter', 'gemini', 'google', 'mistral', 'meta', 'openai', 'claude',
             'nous', 'qwen', 'deepseek', 'tngtech', 'nex-agi', 'arcee-ai', 'kwaipilot', 'nvidia',
-            'amazon', 'z-ai', 'moonshotai', 'cognitivecomputations', 'meta-llama', 'allenai', 'alibaba'];
+            'amazon', 'z-ai', 'moonshotai', 'cognitivecomputations', 'meta-llama', 'allenai', 'alibaba', 'x-ai'];
 
         const providersWithKeys = new Set<Provider>();
         for (const provider of providers) {
@@ -909,6 +909,7 @@ export class LLMService {
             'z-ai': 'z-ai/glm-4.5-air:free',
             'moonshotai': 'moonshotai/kimi-k2:free',
             'cognitivecomputations': 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free',
+            'x-ai': 'x-ai/grok-4.1-fast',
         };
         return defaults[provider] || 'google/gemma-3-12b-it:free';
     }

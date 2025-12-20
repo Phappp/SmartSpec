@@ -5,7 +5,7 @@
  * LLM đọc TOKEN, không đọc chữ. Mỗi model có cách tokenize khác nhau.
  */
 
-export type Provider = 'gemini' | 'openai' | 'claude' | 'nous' | 'qwen' | 'deepseek' | 'mistral' | 'meta' | 'allenai' | 'google' | 'amazon' | 'nvidia' | 'kwaipilot' | 'openrouter' | 'nex-agi' | 'arcee-ai' | 'tngtech' | 'alibaba' | 'z-ai' | 'moonshotai' | 'cognitivecomputations' | 'meta-llama';
+export type Provider = 'gemini' | 'openai' | 'claude' | 'nous' | 'qwen' | 'deepseek' | 'mistral' | 'meta' | 'allenai' | 'google' | 'amazon' | 'nvidia' | 'kwaipilot' | 'openrouter' | 'nex-agi' | 'arcee-ai' | 'tngtech' | 'alibaba' | 'z-ai' | 'moonshotai' | 'cognitivecomputations' | 'meta-llama' | 'x-ai';
 export type ModelStrategy = 'truncate' | 'chunk-sliding' | 'compress-long';
 export type ModelCategory = 'agent' | 'worker' | 'specialized';
 
@@ -25,7 +25,8 @@ export interface ModelConfig {
  * Model FREE trên OpenRouter PHẢI có :free trong modelName
  * Nếu không → có thể bị tính tiền
  * 
- * 🔥 Phiên bản CLEAN (rút gọn, chỉ FREE models)
+ * 💰 Model có phí: Không có :free suffix → sẽ bị tính tiền khi sử dụng
+ * ✅ Model FREE: Có :free suffix → không bị tính tiền
  */
 export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     // =========================
@@ -358,6 +359,60 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
         tokenEstimationRatio: 4.0,
         supportsLongContext: true,
         supportsCompression: false
+    },
+
+    // =========================
+    // 💰 PAID MODELS (Worker)
+    // =========================
+    'gemini-2.5-flash-lite': {
+        provider: 'google',
+        modelName: 'google/gemini-2.5-flash-lite',
+        category: 'worker',
+        contextWindow: 1000000,
+        strategy: 'compress-long',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: true
+    },
+    'gemini-2.5-flash': {
+        provider: 'google',
+        modelName: 'google/gemini-2.5-flash',
+        category: 'worker',
+        contextWindow: 1000000,
+        strategy: 'compress-long',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: true
+    },
+    'gemini-2.0-flash-001': {
+        provider: 'google',
+        modelName: 'google/gemini-2.0-flash-001',
+        category: 'worker',
+        contextWindow: 1000000,
+        strategy: 'compress-long',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: true
+    },
+    'grok-4.1-fast': {
+        provider: 'x-ai',
+        modelName: 'x-ai/grok-4.1-fast',
+        category: 'worker',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: false
+    },
+    'gpt-oss-20b-paid': {
+        provider: 'openai',
+        modelName: 'openai/gpt-oss-20b',
+        category: 'worker',
+        contextWindow: 128000,
+        strategy: 'chunk-sliding',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: false
     }
 };
 
@@ -413,6 +468,7 @@ function extractProviderFromModelName(modelName: string): Provider | null {
         'cognitivecomputations': 'cognitivecomputations',
         'nex-agi': 'nex-agi',
         'arcee-ai': 'arcee-ai',
+        'x-ai': 'x-ai',
     };
 
     return providerMap[providerPart] || null;
