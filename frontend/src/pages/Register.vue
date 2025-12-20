@@ -184,7 +184,7 @@
           please see
           <a href="#">Spotify's Privacy Policy</a>.
         </p>
-        <button class="spotify-button primary" @click="register" :disabled="registering">
+        <button class="spotify-button primary" @click="register" :disabled="registering || !newsletter">
           <div v-if="registering" class="button-spinner"></div>
           <span v-else>Sign Up</span>
         </button>

@@ -45,6 +45,7 @@
           :show-incremental-button="showIncrementalButton"
           :unprocessed-inputs-count="unprocessedInputsCount"
           :is-adding-input="isAddingInput"
+          :is-version-processing="isVersionProcessing"
           :estimate-info="estimateInfo"
           :batch-progress="batchProgress"
           :agent-state="agentState"
@@ -215,6 +216,11 @@ export default {
     },
     processingVersion() {
       return this.versions.find((version) => version.status === 'processing')
+    },
+    isVersionProcessing() {
+      if (!this.selectedVersionId) return false
+      const currentVersion = this.versions.find((v) => v._id === this.selectedVersionId)
+      return currentVersion?.status === 'processing'
     },
 
     // ========== CONFLICT RESOLUTION COMPUTED ==========
@@ -2001,7 +2007,30 @@ export default {
             this.inputs[index]._isError = true
           }
         })
-        this.toast.error('Error adding input')
+        
+        // Xử lý thông báo lỗi chi tiết
+        let errorMessage = 'Không thể thêm input. Vui lòng thử lại.'
+        
+        // Kiểm tra lỗi 409 (Conflict) - version đang processing
+        if (error.response?.status === 409) {
+          errorMessage = error.response?.data?.message || 
+                        error.response?.data?.data?.message ||
+                        'Không thể thêm input khi version đang được xử lý. Vui lòng đợi quá trình xử lý hoàn tất.'
+        } else if (error.response?.data?.message) {
+          errorMessage = error.response.data.message
+        } else if (error.message) {
+          errorMessage = error.message
+        }
+        
+        // Sử dụng formatErrorForDisplay nếu có
+        try {
+          const { formatErrorForDisplay } = require('@/utils/errorMessages')
+          errorMessage = formatErrorForDisplay(error, errorMessage)
+        } catch (e) {
+          // Nếu không load được formatErrorForDisplay, dùng message đã xử lý
+        }
+        
+        this.toast.error(errorMessage)
         
         // Xóa inputs lỗi sau 5 giây
         setTimeout(() => {

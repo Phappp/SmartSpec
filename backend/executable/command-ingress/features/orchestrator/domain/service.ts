@@ -139,7 +139,8 @@ export class OrchestratorService {
             opts.files,
             opts.rawText,
             projectId,
-            versionId
+            versionId,
+            userId // ✅ THÊM: Truyền userId xuống để refine sử dụng model user chọn
         );
         await delay(randomDelay);
 
@@ -183,13 +184,45 @@ export class OrchestratorService {
             }).lean();
         } else {
             if (targetIds.length > 0) {
+                // Đợi inputs mới được tạo hoàn thành (bao gồm cả refine cho audio)
                 inputs = await this.util.waitForInputsCompletionByIds(targetIds);
             } else {
-                inputs = await Input.find({
+                // Fallback: Tìm tất cả unprocessed inputs
+                // Đợi một chút để refine process (cho audio/images) có thời gian chạy
+                await this.util.delay(2000); // Đợi 2 giây để refine process bắt đầu
+
+                // Tìm inputs chưa được processed, bao gồm cả "extracted" và "completed"
+                // Vì audio/images có status "extracted" và cần được refine thành "completed"
+                const allUnprocessedInputs = await Input.find({
                     version_id: versionId,
-                    processing_status: "completed",
+                    processing_status: { $in: ["completed", "extracted"] },
                     is_processed: { $ne: true }
                 }).lean();
+
+                // Tách inputs thành "completed" và "extracted"
+                const completedInputs = allUnprocessedInputs.filter((i: any) => i.processing_status === "completed");
+                const extractedInputs = allUnprocessedInputs.filter((i: any) => i.processing_status === "extracted");
+
+                if (extractedInputs.length > 0) {
+                    console.log(`⏳ Đợi ${extractedInputs.length} input(s) với status "extracted" hoàn thành refine...`);
+                    const extractedIds = extractedInputs.map((i: any) => String(i._id));
+                    // Đợi refine hoàn thành (timeout 90s cho audio/images)
+                    const refinedInputs = await this.util.waitForInputsCompletionByIds(extractedIds, 90000);
+                    // Lọc chỉ những inputs đã hoàn thành (completed), bỏ qua failed
+                    const successfullyRefined = refinedInputs.filter((i: any) => i.processing_status === "completed");
+                    const failedRefined = refinedInputs.filter((i: any) => i.processing_status === "failed");
+                    if (failedRefined.length > 0) {
+                        console.warn(`⚠️ ${failedRefined.length} input(s) refine failed, sẽ bỏ qua`);
+                    }
+                    console.log(`✅ ${successfullyRefined.length} input(s) refine thành công`);
+                    // Kết hợp với completed inputs ban đầu
+                    inputs = [...completedInputs, ...successfullyRefined];
+                } else {
+                    // Không có extracted inputs, dùng completed inputs
+                    inputs = completedInputs;
+                }
+
+                console.log(`📊 Tổng số inputs sẽ xử lý: ${inputs.length} (${completedInputs.length} completed + ${extractedInputs.length > 0 ? extractedInputs.length : 0} refined)`);
             }
         }
 

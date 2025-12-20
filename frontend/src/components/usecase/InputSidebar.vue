@@ -20,6 +20,8 @@
             class="btn-primary" 
             @click="toggleAddForm"
             :class="{ active: showAddForm }"
+            :disabled="isVersionProcessing"
+            :title="isVersionProcessing ? 'Cannot add inputs while version is being processed' : ''"
           >
             <span class="material-symbols-outlined">{{ showAddForm ? 'close' : 'add' }}</span>
             {{ showAddForm ? 'Cancel' : 'Add Input' }}
@@ -75,11 +77,20 @@
           </div>
 
           <div class="form-actions">
-            <button class="submit-btn" @click="handleSubmit" :disabled="!canSubmit || isAddingInput">
+            <button 
+              class="submit-btn" 
+              @click="handleSubmit" 
+              :disabled="!canSubmit || isAddingInput || isVersionProcessing"
+              :title="isVersionProcessing ? 'Cannot add inputs while version is being processed' : ''"
+            >
               <span v-if="isAddingInput" class="button-spinner-small"></span>
               <span v-else class="material-symbols-outlined">check</span>
-              {{ isAddingInput ? 'Adding...' : 'Add Input' }}
+              {{ isAddingInput ? 'Adding...' : isVersionProcessing ? 'Processing...' : 'Add Input' }}
             </button>
+            <div v-if="isVersionProcessing" class="processing-warning">
+              <span class="material-symbols-outlined">info</span>
+              Cannot add inputs while version is being processed. Please wait for processing to complete.
+            </div>
           </div>
         </div>
 
@@ -355,6 +366,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    isVersionProcessing: {
+      type: Boolean,
+      default: false,
+    },
     estimateInfo: {
       type: Object,
       default: () => ({
@@ -618,9 +633,26 @@ export default {
         'audio/mpeg',
         'audio/wav',
         'audio/mp4',
+        'audio/x-m4a',
+        'audio/m4a',
       ]
 
-      const validFiles = files.filter((file) => allowedTypes.includes(file.type))
+      const validFiles = files.filter((file) => {
+        // Kiểm tra MIME type hoặc extension nếu MIME type không có
+        if (allowedTypes.includes(file.type)) {
+          return true
+        }
+        // Fallback: kiểm tra extension nếu MIME type không khớp
+        const fileName = file.name.toLowerCase()
+        const allowedExtensions = ['.docx', '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.mp3', '.wav', '.m4a']
+        return allowedExtensions.some(ext => fileName.endsWith(ext))
+      })
+      
+      if (validFiles.length < files.length) {
+        const rejectedCount = files.length - validFiles.length
+        console.warn(`${rejectedCount} file(s) were rejected due to unsupported type`)
+      }
+      
       this.selectedFiles = [...this.selectedFiles, ...validFiles]
       if (event.target) {
         event.target.value = ''
@@ -1950,10 +1982,33 @@ export default {
 
 .form-actions {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 8px;
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.form-actions > .submit-btn {
+  align-self: flex-end;
+}
+
+.processing-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 6px;
+  color: #92400e;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.processing-warning .material-symbols-outlined {
+  font-size: 18px;
   flex-shrink: 0;
 }
 
