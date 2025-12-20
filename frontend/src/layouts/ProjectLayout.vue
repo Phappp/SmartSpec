@@ -152,6 +152,43 @@
                 </div>
               </div>
             </div>
+
+            <!-- ✅ MỚI: Hiển thị committed testcases list (chỉ cho testcase type) -->
+            <div v-if="process.type === 'testcase' && process.committedTestcases && process.committedTestcases.length > 0" class="committed-testcases-list">
+              <div class="committed-testcases-header" @click="toggleCommittedTestcases(`${process.userId}_${process.type}`)">
+                <span class="material-symbols-outlined" style="font-size: 16px; color: #64748b;">list</span>
+                <span class="committed-testcases-title">Danh sách testcases ({{ process.committedTestcases.length }})</span>
+                <span class="material-symbols-outlined toggle-icon" :class="{ 'expanded': showCommittedTestcases[`${process.userId}_${process.type}`] }">
+                  {{ showCommittedTestcases[`${process.userId}_${process.type}`] ? 'expand_less' : 'expand_more' }}
+                </span>
+              </div>
+              <div v-show="showCommittedTestcases[`${process.userId}_${process.type}`]" class="committed-testcases-items">
+                <div
+                  v-for="tc in getSortedCommittedTestcases(process.committedTestcases)"
+                  :key="tc.index"
+                  class="committed-testcase-item"
+                  :class="{
+                    'status-pending': tc.status === 'pending',
+                    'status-generating': tc.status === 'generating',
+                    'status-completed': tc.status === 'completed',
+                    'status-error': tc.status === 'error'
+                  }"
+                >
+                  <span class="testcase-status-icon">
+                    <span v-if="tc.status === 'completed'" class="material-symbols-outlined" style="font-size: 14px; color: #10b981;">check_circle</span>
+                    <span v-else-if="tc.status === 'error'" class="material-symbols-outlined" style="font-size: 14px; color: #ef4444;">error</span>
+                    <span v-else-if="tc.status === 'generating'" class="material-symbols-outlined spinning" style="font-size: 14px; color: #64748b;">sync</span>
+                    <span v-else class="material-symbols-outlined" style="font-size: 14px; color: #64748b;">radio_button_unchecked</span>
+                  </span>
+                  <span class="testcase-title" :class="{
+                    'text-completed': tc.status === 'completed',
+                    'text-error': tc.status === 'error',
+                    'text-generating': tc.status === 'generating',
+                    'text-pending': tc.status === 'pending'
+                  }">{{ tc.title }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -255,6 +292,9 @@ export default {
 
     // LLM Process tracking - Store by userId and processType
     const llmProcesses = ref({}) // Format: { 'userId_processType': { userId, type, ...process } }
+    
+    // ✅ Track show/hide state cho committed testcases của mỗi process
+    const showCommittedTestcases = ref({}) // Format: { 'userId_processType': boolean }
 
     // Storage key for this project
     const getStorageKey = () => {
@@ -415,7 +455,35 @@ export default {
     const removeProcess = (process) => {
       const processKey = `${process.userId}_${process.type}`
       delete llmProcesses.value[processKey]
+      delete showCommittedTestcases.value[processKey] // ✅ Xóa state show/hide khi remove process
       saveProcessesToStorage()
+    }
+
+    // ✅ Toggle show/hide committed testcases
+    const toggleCommittedTestcases = (processKey) => {
+      if (!showCommittedTestcases.value[processKey]) {
+        showCommittedTestcases.value[processKey] = true
+      } else {
+        showCommittedTestcases.value[processKey] = false
+      }
+    }
+
+    // ✅ Sắp xếp committedTestcases: các testcase đang gen (generating) luôn ở đầu
+    const getSortedCommittedTestcases = (committedTestcases) => {
+      if (!committedTestcases || !Array.isArray(committedTestcases)) {
+        return []
+      }
+      
+      // Tách thành 2 nhóm: đang gen và các trạng thái khác
+      const generating = committedTestcases.filter(tc => tc.status === 'generating')
+      const others = committedTestcases.filter(tc => tc.status !== 'generating')
+      
+      // Sắp xếp mỗi nhóm theo index để giữ thứ tự
+      generating.sort((a, b) => a.index - b.index)
+      others.sort((a, b) => a.index - b.index)
+      
+      // Trả về: đang gen trước, sau đó là các trạng thái khác
+      return [...generating, ...others]
     }
 
     // Group processes by userId
@@ -615,9 +683,10 @@ export default {
           status: 'processing',
           progress: 10,
           stage: 'estimate_received',
-          agentState: 'ESTIMATE_USECASE_COUNT', // ✅ Thêm agentState
-          agentMessage: `Đã ước tính: ${event.estimate.estimated_count} usecases, ${event.estimate.estimated_batches} batches`, // ✅ Thêm agentMessage
+          agentState: processType === 'testcase' ? 'ESTIMATE_TESTCASE_COUNT' : 'ESTIMATE_USECASE_COUNT', // ✅ Thêm agentState
+          agentMessage: `Đã ước tính: ${event.estimate.estimated_count} ${processType === 'testcase' ? 'testcases' : 'usecases'}, ${event.estimate.estimated_batches} batches`, // ✅ Thêm agentMessage
           estimateInfo: event.estimate,
+          committedTestcases: event.committedTestcases || [], // ✅ Thêm committedTestcases
           batchProgress: {
             currentBatch: 0,
             totalBatches: event.estimate.estimated_batches,
@@ -720,6 +789,7 @@ export default {
             agentState: 'DONE', // ✅ Set agentState khi hoàn thành
             agentMessage: event.message || currentProcess?.agentMessage || 'Hoàn thành', // ✅ Giữ agentMessage
             estimateInfo: currentProcess?.estimateInfo || null,
+            committedTestcases: event.committedTestcases || currentProcess?.committedTestcases || [], // ✅ Giữ committedTestcases
             batchProgress: currentProcess?.batchProgress || null,
             timestamp: currentProcess?.timestamp || Date.now(),
           }
@@ -756,6 +826,18 @@ export default {
           }
         }
         
+        // ✅ Merge committedTestcases: cập nhật từng item thay vì replace toàn bộ
+        let mergedCommittedTestcases = currentProcess?.committedTestcases || []
+        if (event.committedTestcases && event.committedTestcases.length > 0) {
+          // Tạo map từ committedTestcases hiện tại
+          const testcaseMap = new Map(mergedCommittedTestcases.map(tc => [tc.index, tc]))
+          // Merge với committedTestcases từ event (ưu tiên event)
+          event.committedTestcases.forEach(eventTc => {
+            testcaseMap.set(eventTc.index, eventTc)
+          })
+          mergedCommittedTestcases = Array.from(testcaseMap.values()).sort((a, b) => a.index - b.index)
+        }
+
         // Update processing state
         llmProcesses.value[processKey] = {
           userId,
@@ -767,6 +849,7 @@ export default {
           agentState: event.agentState || currentProcess?.agentState || null, // ✅ Thêm agentState
           agentMessage: event.message || currentProcess?.agentMessage || null, // ✅ Thêm agentMessage
           estimateInfo: currentProcess?.estimateInfo || null,
+          committedTestcases: mergedCommittedTestcases, // ✅ Sử dụng merged committedTestcases
           batchProgress: {
             currentBatch: event.batchInfo?.currentBatch || currentProcess?.batchProgress?.currentBatch || 0,
             totalBatches: event.batchInfo?.totalBatches || currentProcess?.batchProgress?.totalBatches || currentProcess?.estimateInfo?.estimated_batches || 0,
@@ -848,6 +931,15 @@ export default {
           error: event.error,
         })
       })
+
+      // 🔥 REALTIME: Listen for project events (e.g., member accepted invitation)
+      socket.on('project_event', (event) => {
+        if (event.type === 'MEMBER_ACCEPTED' && event.projectId === projectId.value) {
+          console.log('📥 [Project Event] Member accepted:', event.member)
+          // Refetch project data để cập nhật members count
+          fetchProjectData()
+        }
+      })
     }
 
     // Cleanup socket listeners
@@ -858,6 +950,7 @@ export default {
       socket.off('database_event')
       socket.off('testcase_event')
       socket.off('uml_event')
+      socket.off('project_event')
     }
 
     // Event handlers
@@ -1012,6 +1105,9 @@ export default {
       getAgentStateTitle,
       getAgentStateIcon,
       getAgentStateIconClass,
+      toggleCommittedTestcases, // ✅ Export toggle function
+      showCommittedTestcases, // ✅ Export state
+      getSortedCommittedTestcases, // ✅ Export sort function
     }
   },
 }
@@ -1483,6 +1579,128 @@ export default {
   font-size: 20px;
 }
 
+/* ✅ Committed Testcases List */
+.committed-testcases-list {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e1e5e9;
+}
+
+.committed-testcases-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.committed-testcases-header:hover {
+  background: rgba(26, 54, 93, 0.05);
+}
+
+.committed-testcases-header .toggle-icon {
+  margin-left: auto;
+  font-size: 18px;
+  color: #64748b;
+  transition: transform 0.2s ease;
+}
+
+.committed-testcases-header .toggle-icon.expanded {
+  transform: rotate(0deg);
+}
+
+.committed-testcases-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.committed-testcases-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.committed-testcase-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.testcase-status-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.testcase-title {
+  font-size: 0.7rem;
+  font-weight: 500;
+  flex: 1;
+  transition: all 0.2s ease;
+}
+
+/* Trạng thái: Chưa gen (đen) */
+.committed-testcase-item.status-pending .testcase-title {
+  color: #1f2937;
+}
+
+/* Trạng thái: Đang gen (hiệu ứng loading đơn giản) */
+.committed-testcase-item.status-generating .testcase-title {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.committed-testcase-item.status-generating .testcase-status-icon .spinning {
+  animation: spin 1.5s linear infinite;
+}
+
+/* Trạng thái: Xong (gạch ngang) */
+.committed-testcase-item.status-completed .testcase-title {
+  color: #10b981;
+  text-decoration: line-through;
+  opacity: 0.8;
+}
+
+/* Trạng thái: Lỗi (đỏ) */
+.committed-testcase-item.status-error .testcase-title {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.committed-testcase-item:hover {
+  background: rgba(26, 54, 93, 0.05);
+}
+
+/* Scrollbar cho committed testcases list */
+.committed-testcases-items::-webkit-scrollbar {
+  width: 4px;
+}
+
+.committed-testcases-items::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 2px;
+}
+
+.committed-testcases-items::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+
+.committed-testcases-items::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 @media (max-width: 768px) {
   .llm-progress-section {
     padding: 12px 16px;
@@ -1500,6 +1718,10 @@ export default {
 
   .tab-button .material-symbols-outlined {
     font-size: 18px;
+  }
+
+  .committed-testcases-items {
+    max-height: 150px;
   }
 }
 </style>

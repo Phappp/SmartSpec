@@ -5,8 +5,15 @@ import { LLMService } from "../../../shared/LLMService";
 // PROMPTS cho test case generation với Enterprise standard
 const testcasePrompts = {
     'vi-VN': {
-        estimateTestCasesCount: (requirementsJson: string, testType: string) => {
+        estimateTestCasesCount: (requirementsJson: string, testType: string, existingTitles?: string[], remainingCount?: number) => {
             const isShort = requirementsJson.length < 500;
+            const existingTitlesSection = existingTitles && existingTitles.length > 0
+                ? `\n**DANH SÁCH TESTCASES ĐÃ TẠO (KHÔNG được trùng lặp):**
+${existingTitles.map((title, idx) => `${idx + 1}. "${title}"`).join('\n')}
+
+**QUAN TRỌNG**: Bạn cần tạo ${remainingCount || 'số lượng còn lại'} testcases MỚI, KHÔNG được trùng với danh sách trên.`
+                : '';
+
             return `
 BẠN LÀ CHUYÊN GIA KIỂM THỬ PHẦN MỀM. Nhiệm vụ của bạn là ƯỚC TÍNH số lượng test cases cần thiết để kiểm thử đầy đủ các use cases được cung cấp.
 
@@ -14,6 +21,7 @@ DANH SÁCH USE CASES:
 ${requirementsJson}
 
 LOẠI KIỂM THỬ: ${testType}
+${existingTitlesSection}
 
 **QUY TẮC ƯỚC TÍNH:**
 - Use case đơn giản (CRUD cơ bản): 4-6 test cases
@@ -26,8 +34,29 @@ LOẠI KIỂM THỬ: ${testType}
   "estimated_count": ${isShort ? '10' : '50'},
   "estimated_batches": ${isShort ? '1' : '3'},
   "summary": "Tóm tắt ngắn gọn về các use cases và số lượng test cases ước tính",
-  "reasoning": "Lý do ước tính số lượng test cases"
+  "reasoning": "Lý do ước tính số lượng test cases",
+  "committed_testcases": [
+    {
+      "title": "Tên testcase cụ thể (ví dụ: Thêm sản phẩm thành công với số lượng hợp lệ)",
+      "requirement_id": "ID của use case liên quan",
+      "test_type": "integration|api|ui|performance|security",
+      "priority": "high|medium|low"
+    },
+    ...
+  ]
 }
+
+**QUAN TRỌNG VỀ committed_testcases:**
+- Phải liệt kê CHI TIẾT từng testcase sẽ generate (không phải placeholder)
+- Mỗi testcase phải có title cụ thể, mô tả rõ ràng testcase đó test gì
+${existingTitles && existingTitles.length > 0
+                    ? `- Bạn cần tạo CHÍNH XÁC ${remainingCount || 'số lượng còn lại'} testcases MỚI, KHÔNG được trùng với danh sách đã có ở trên
+- Số lượng testcases trong committed_testcases PHẢI BẰNG CHÍNH XÁC ${remainingCount || 'số lượng còn lại'} (KHÔNG được thiếu, KHÔNG được thừa)`
+                    : `- Số lượng testcases trong committed_testcases PHẢI BẰNG CHÍNH XÁC estimated_count (KHÔNG được thiếu, KHÔNG được thừa)`}
+- Title phải ngắn gọn, rõ ràng, dễ hiểu, theo format: "[Test Type]: [Mô tả testcase]" (ví dụ: "UI: Kiểm tra hiển thị thông báo lỗi khi không tính được tổng tiền", "API: Kiểm tra API tính tổng tiền với dữ liệu đầu vào không hợp lệ")
+- Tất cả testcases phải có format đồng nhất, không được trộn lẫn format
+- KHÔNG được tạo placeholder như "Tên use case - Testcase 1", "Tên use case - Testcase 2"
+- Mỗi testcase phải có title riêng biệt, mô tả cụ thể testcase đó test gì
 
 **QUAN TRỌNG:**
 - estimated_count phải là số nguyên dương
@@ -250,8 +279,15 @@ LOẠI KIỂM THỬ YÊU CẦU: ${testType}
 `
     },
     'en-US': {
-        estimateTestCasesCount: (requirementsJson: string, testType: string) => {
+        estimateTestCasesCount: (requirementsJson: string, testType: string, existingTitles?: string[], remainingCount?: number) => {
             const isShort = requirementsJson.length < 500;
+            const existingTitlesSection = existingTitles && existingTitles.length > 0
+                ? `\n**EXISTING TESTCASES LIST (DO NOT DUPLICATE):**
+${existingTitles.map((title, idx) => `${idx + 1}. "${title}"`).join('\n')}
+
+**IMPORTANT**: You need to create ${remainingCount || 'remaining'} NEW testcases, DO NOT duplicate the list above.`
+                : '';
+
             return `
 YOU ARE A SOFTWARE TESTING EXPERT. Your task is to ESTIMATE the number of test cases needed to fully test the provided use cases.
 
@@ -259,6 +295,7 @@ USE CASE LIST:
 ${requirementsJson}
 
 TEST TYPE: ${testType}
+${existingTitlesSection}
 
 **ESTIMATION RULES:**
 - Simple use case (basic CRUD): 4-6 test cases
@@ -271,8 +308,37 @@ TEST TYPE: ${testType}
   "estimated_count": ${isShort ? '10' : '50'},
   "estimated_batches": ${isShort ? '1' : '3'},
   "summary": "Brief summary of use cases and estimated test case count",
-  "reasoning": "Reasoning for estimated test case count"
+  "reasoning": "Reasoning for estimated test case count",
+  "committed_testcases": [
+    {
+      "title": "Specific testcase name (e.g., Add product successfully with valid quantity)",
+      "requirement_id": "Related use case ID",
+      "test_type": "integration|api|ui|performance|security",
+      "priority": "high|medium|low"
+    },
+    ...
+  ]
 }
+
+${existingTitles && existingTitles.length > 0 ? `**IMPORTANT NOTE:**
+- You need to create ${remainingCount || 'remaining'} NEW testcases
+- DO NOT duplicate the existing testcases list above
+- Each testcase must have a UNIQUE title, cannot be the same` : ''}
+
+**IMPORTANT ABOUT committed_testcases:**
+- Must list DETAILED testcases to be generated (not placeholders)
+- Each testcase must have a specific title that clearly describes what it tests
+${existingTitles && existingTitles.length > 0
+                    ? `- You need to create EXACTLY ${remainingCount || 'remaining'} NEW testcases, DO NOT duplicate the existing list above
+- Number of testcases in committed_testcases MUST EXACTLY EQUAL ${remainingCount || 'remaining'} (CANNOT be less, CANNOT be more)`
+                    : `- Number of testcases in committed_testcases MUST EXACTLY EQUAL estimated_count (CANNOT be less, CANNOT be more)`}
+- Titles must be concise, clear, and easy to understand, following format: "[Test Type]: [Testcase description]" (e.g., "UI: Check error message display when total cannot be calculated", "API: Check API with invalid input data")
+- All testcases must have consistent format, cannot mix different formats
+- DO NOT create placeholders like "Use case name - Testcase 1", "Use case name - Testcase 2"
+- Each testcase must have a unique title that specifically describes what it tests
+${existingTitles && existingTitles.length > 0
+                    ? `- Each new testcase must have a title DIFFERENT from all existing testcases above`
+                    : ''}
 
 **IMPORTANT:**
 - estimated_count must be a positive integer
@@ -506,6 +572,128 @@ export class TestcaseGeminiService {
     private readonly TESTCASE_BATCH_SIZE = 20; // Batch size cho test case generation
 
     /**
+     * ✅ Helper: Generate committed_testcases với loop cho đến khi đủ số lượng
+     */
+    private async generateCommittedTestcasesWithLoop(
+        requirements: any[],
+        testType: string,
+        language: string,
+        remainingCount: number,
+        existingTitles: string[],
+        modelName?: string,
+        userId?: string,
+        projectId?: string
+    ): Promise<Array<{ title: string; requirement_id?: string; test_type?: string; priority?: string }>> {
+        const requirementsJson = JSON.stringify(requirements, null, 2);
+        const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
+        const maxRetries = 5; // Tối đa 5 lần loop
+        let allCommittedTestcases: Array<{ title: string; requirement_id?: string; test_type?: string; priority?: string }> = [];
+        let existingTitlesSet = new Set(existingTitles.map(t => t.toLowerCase().trim()));
+        let attempt = 0;
+
+        while (allCommittedTestcases.length < remainingCount && attempt < maxRetries) {
+            attempt++;
+            const stillNeeded = remainingCount - allCommittedTestcases.length;
+            const currentExistingTitles = Array.from(existingTitlesSet);
+
+            console.log(`🔄 [ESTIMATE_LOOP] Attempt ${attempt}/${maxRetries}: Generating ${stillNeeded} more testcases (already have ${allCommittedTestcases.length}/${remainingCount})`);
+
+            // Tạo prompt với danh sách đã có
+            const prompt = testcasePrompts[lang].estimateTestCasesCount(
+                requirementsJson,
+                testType,
+                currentExistingTitles.length > 0 ? currentExistingTitles : undefined,
+                stillNeeded
+            );
+
+            // ✅ Sử dụng LLMService để lấy recommended model
+            let effectiveModelName = modelName;
+            if (!effectiveModelName && userId) {
+                effectiveModelName = await this.llmService.getRecommendedModel(undefined, userId);
+            } else if (!effectiveModelName) {
+                effectiveModelName = await this.llmService.getRecommendedModel();
+            }
+
+            try {
+                const response = await this.llmService.callLLM({
+                    prompt: prompt,
+                    modelName: effectiveModelName,
+                    userId: userId,
+                    projectId: projectId,
+                    endpoint: 'estimateTestCasesCount',
+                    isProductionFreeMode: true,
+                    forceModel: !!modelName
+                });
+
+                let text: string = response.text || "{}";
+                text = this.cleanJsonString(text);
+
+                // Parse JSON
+                let parsed: any = null;
+                try {
+                    parsed = JSON.parse(text);
+                } catch (parseError: any) {
+                    try {
+                        const repairedJson = this.repairTruncatedJson(text);
+                        parsed = JSON.parse(repairedJson);
+                    } catch (repairError: any) {
+                        const jsonMatch = text.match(/\{[\s\S]*\}/);
+                        if (jsonMatch) {
+                            const extractedJson = this.repairTruncatedJson(jsonMatch[0]);
+                            parsed = JSON.parse(extractedJson);
+                        } else {
+                            throw new Error("No JSON object found in response");
+                        }
+                    }
+                }
+
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    const estimate = parsed as any;
+
+                    if (estimate.committed_testcases && Array.isArray(estimate.committed_testcases)) {
+                        const newTestcases = estimate.committed_testcases
+                            .filter((tc: any) => tc && tc.title && typeof tc.title === 'string')
+                            .map((tc: any) => ({
+                                title: tc.title.trim(),
+                                requirement_id: tc.requirement_id || tc.requirementId || undefined,
+                                test_type: tc.test_type || tc.testType || undefined,
+                                priority: tc.priority || undefined
+                            }))
+                            .filter((tc: any) => {
+                                // ✅ Loại bỏ duplicate
+                                const titleLower = tc.title.toLowerCase().trim();
+                                if (existingTitlesSet.has(titleLower)) {
+                                    console.log(`⏩ [ESTIMATE_LOOP] Skipping duplicate: "${tc.title}"`);
+                                    return false;
+                                }
+                                existingTitlesSet.add(titleLower);
+                                return true;
+                            });
+
+                        allCommittedTestcases.push(...newTestcases);
+                        console.log(`✅ [ESTIMATE_LOOP] Attempt ${attempt}: Got ${newTestcases.length} new testcases (total: ${allCommittedTestcases.length}/${remainingCount})`);
+
+                        // Nếu đã đủ, dừng
+                        if (allCommittedTestcases.length >= remainingCount) {
+                            console.log(`✅ [ESTIMATE_LOOP] Reached target count: ${allCommittedTestcases.length}/${remainingCount}`);
+                            break;
+                        }
+                    }
+                }
+            } catch (error: any) {
+                console.warn(`⚠️ [ESTIMATE_LOOP] Attempt ${attempt} failed: ${error.message}`);
+                if (attempt >= maxRetries) {
+                    console.warn(`⚠️ [ESTIMATE_LOOP] Max retries reached. Using ${allCommittedTestcases.length} testcases instead of ${remainingCount}`);
+                    break;
+                }
+            }
+        }
+
+        // Chỉ lấy đúng số lượng cần thiết
+        return allCommittedTestcases.slice(0, remainingCount);
+    }
+
+    /**
      * ✅ MỚI: Estimate số lượng test cases cần generate
      */
     async estimateTestCasesCount(
@@ -520,6 +708,12 @@ export class TestcaseGeminiService {
         summary: string;
         estimated_batches: number;
         reasoning?: string;
+        committed_testcases?: Array<{ // ✅ Danh sách testcases chi tiết từ LLM
+            title: string;
+            requirement_id?: string;
+            test_type?: string;
+            priority?: string;
+        }>;
     }> {
         const requirementsJson = JSON.stringify(requirements, null, 2);
         const lang = language === 'en-US' ? 'en-US' : 'vi-VN';
@@ -595,11 +789,63 @@ export class TestcaseGeminiService {
 
                 console.log(`✅ [ESTIMATE] Estimated ${estimated_count} test cases, ${estimated_batches} batches (batch size: ${this.TESTCASE_BATCH_SIZE})`);
 
+                // ✅ Validate và format committed_testcases từ LLM (lần đầu)
+                let committedTestcases: Array<{ title: string; requirement_id?: string; test_type?: string; priority?: string }> = [];
+                if (estimate.committed_testcases && Array.isArray(estimate.committed_testcases)) {
+                    committedTestcases = estimate.committed_testcases
+                        .filter((tc: any) => tc && tc.title && typeof tc.title === 'string')
+                        .map((tc: any) => ({
+                            title: tc.title.trim(),
+                            requirement_id: tc.requirement_id || tc.requirementId || undefined,
+                            test_type: tc.test_type || tc.testType || undefined,
+                            priority: tc.priority || undefined
+                        }));
+                }
+
+                // ✅ QUAN TRỌNG: Nếu số lượng không đủ, loop để generate thêm
+                if (committedTestcases.length < estimated_count) {
+                    const remaining = estimated_count - committedTestcases.length;
+                    console.log(`🔄 [ESTIMATE] Only got ${committedTestcases.length}/${estimated_count} testcases. Looping to generate ${remaining} more...`);
+
+                    // Lấy danh sách titles đã có
+                    const existingTitles = committedTestcases.map(tc => tc.title);
+
+                    // Loop để generate phần còn lại
+                    const additionalTestcases = await this.generateCommittedTestcasesWithLoop(
+                        requirements,
+                        testType,
+                        language,
+                        remaining,
+                        existingTitles,
+                        modelName,
+                        userId,
+                        projectId
+                    );
+
+                    // Merge với danh sách đã có
+                    committedTestcases.push(...additionalTestcases);
+                    console.log(`✅ [ESTIMATE] After loop: Got ${committedTestcases.length}/${estimated_count} testcases`);
+                }
+
+                // ✅ Nếu vẫn không đủ, điều chỉnh estimated_count
+                if (committedTestcases.length !== estimated_count) {
+                    console.warn(`⚠️ [ESTIMATE] committed_testcases count (${committedTestcases.length}) doesn't match estimated_count (${estimated_count}). Adjusting estimated_count to match.`);
+                    estimated_count = committedTestcases.length;
+                    const adjustedBatches = Math.ceil(estimated_count / this.TESTCASE_BATCH_SIZE);
+                    console.log(`✅ [ESTIMATE] Adjusted to ${estimated_count} test cases, ${adjustedBatches} batches to match committed_testcases`);
+                }
+
+                // ✅ Chỉ trả về nếu có đủ số lượng
+                const finalCommittedTestcases = committedTestcases.length > 0 && committedTestcases.length === estimated_count
+                    ? committedTestcases
+                    : undefined;
+
                 return {
-                    estimated_count,
-                    estimated_batches,
+                    estimated_count, // ✅ Đã được điều chỉnh nếu cần để khớp với committed_testcases
+                    estimated_batches: Math.ceil(estimated_count / this.TESTCASE_BATCH_SIZE), // ✅ Tính lại batches sau khi điều chỉnh
                     summary: estimate.summary || `Estimated ${estimated_count} test cases for ${requirements.length} requirements`,
-                    reasoning: estimate.reasoning
+                    reasoning: estimate.reasoning,
+                    committed_testcases: finalCommittedTestcases // ✅ Chỉ trả về nếu đủ số lượng
                 };
             } else {
                 throw new Error("Invalid response format: expected JSON object");

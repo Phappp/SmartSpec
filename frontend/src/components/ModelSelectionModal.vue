@@ -55,6 +55,9 @@
                 <div class="model-details">
                   <span class="model-provider">{{ model.provider }}</span>
                   <span class="model-context">{{ formatContextWindow(model.contextWindow) }}</span>
+                  <span v-if="!model.isFree && getModelPricing(model.modelName)" class="model-pricing">
+                    {{ getModelPricing(model.modelName) }}
+                  </span>
                 </div>
               </div>
               <div class="model-check">
@@ -114,6 +117,14 @@ export default {
       selectedCategory: 'all',
       selectedModel: null,
       categories: ['all', 'agent', 'worker', 'specialized'],
+      // Hard-coded pricing cho các model có phí
+      modelPricing: {
+        'google/gemini-2.5-flash-lite': '$0.10/M input, $0.40/M output',
+        'google/gemini-2.5-flash': '$0.30/M input, $2.50/M output, $1/M audio',
+        'google/gemini-2.0-flash-001': '$0.10/M input, $0.40/M output, $0.70/M audio',
+        'x-ai/grok-4.1-fast': '$0.20/M input, $0.50/M output',
+        'openai/gpt-oss-20b': '$0.03/M input, $0.14/M output',
+      },
     }
   },
   computed: {
@@ -234,6 +245,9 @@ export default {
         return `${(tokens / 1000).toFixed(0)}K tokens`
       }
       return `${tokens} tokens`
+    },
+    getModelPricing(modelName) {
+      return this.modelPricing[modelName] || null
     },
     close() {
       this.$emit('update:modelValue', false)
@@ -473,6 +487,12 @@ export default {
 
 .model-context {
   color: #9ca3af;
+}
+
+.model-pricing {
+  color: #dc2626;
+  font-weight: 500;
+  font-size: 12px;
 }
 
 .model-check {

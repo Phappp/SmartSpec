@@ -42,7 +42,7 @@ export class TestcaseService {
 
         // Lấy usecases từ collection
         const allUsecases = await Usecase.find({ version_id: version._id }).lean();
-        
+
         // Helper: Normalize requirement ID (support both _id and id for backward compatibility)
         const normalizeRequirementId = (req: any): string[] => {
             const ids: string[] = [];
@@ -94,8 +94,8 @@ export class TestcaseService {
                     const normalizedReq = String(reqId).trim();
                     // Case-insensitive comparison and handle ObjectId string variations
                     return normalizedReq === normalizedSelected ||
-                           normalizedReq.toLowerCase() === normalizedSelected.toLowerCase() ||
-                           (Types.ObjectId.isValid(normalizedReq) && Types.ObjectId.isValid(normalizedSelected) &&
+                        normalizedReq.toLowerCase() === normalizedSelected.toLowerCase() ||
+                        (Types.ObjectId.isValid(normalizedReq) && Types.ObjectId.isValid(normalizedSelected) &&
                             new Types.ObjectId(normalizedReq).toString() === new Types.ObjectId(normalizedSelected).toString());
                 });
             });
@@ -139,33 +139,23 @@ export class TestcaseService {
         // ✅ SỬ DỤNG TESTCASE GENERATION AGENT
         console.log(`🤖 [TESTCASE_SERVICE] Using TestcaseGenerationAgent for generation...`);
 
-        // ✅ Lấy modelName từ user selection (tương tự như usecase generation)
+        // ✅ Lấy modelName từ user selection (sử dụng phương thức chung getRecommendedModel)
+        // getRecommendedModel đã tự động ưu tiên user selected model nếu có userId
         const { LLMService } = await import("../../../shared/LLMService");
         const llmService = new LLMService();
         let modelName: string | undefined = undefined;
-        
+
         try {
-            // Ưu tiên lấy model từ user selection
-            if (userId) {
-                const userSelectedModel = await llmService.getUserSelectedModel(userId);
-                if (userSelectedModel) {
-                    modelName = userSelectedModel;
-                    console.log(`✅ [TESTCASE_SERVICE] Using user selected model: ${modelName}`);
-                } else {
-                    // Fallback: lấy recommended model với userId
-                    modelName = await llmService.getRecommendedModel(undefined, userId);
-                    console.log(`✅ [TESTCASE_SERVICE] Using recommended model: ${modelName}`);
-                }
-            } else {
-                // Nếu không có userId, lấy recommended model
-                modelName = await llmService.getRecommendedModel();
-                console.log(`✅ [TESTCASE_SERVICE] Using recommended model (no userId): ${modelName}`);
-            }
+            // ✅ Chuẩn hóa: Dùng getRecommendedModel giống như orchestrator
+            // getRecommendedModel đã có logic ưu tiên user selected model bên trong
+            modelName = await llmService.getRecommendedModel(undefined, userId);
+            console.log(`✅ [TESTCASE_SERVICE] Using model: ${modelName}${userId ? ` (for user: ${userId})` : ''}`);
         } catch (error: any) {
             console.warn(`⚠️ [TESTCASE_SERVICE] Failed to get model preference: ${error.message}. Will use default.`);
-            // Fallback: lấy recommended model không có userId
+            // Fallback: thử lại không có userId
             try {
                 modelName = await llmService.getRecommendedModel();
+                console.log(`✅ [TESTCASE_SERVICE] Using fallback model: ${modelName}`);
             } catch (fallbackError: any) {
                 console.error(`❌ [TESTCASE_SERVICE] Failed to get recommended model: ${fallbackError.message}`);
                 // modelName sẽ là undefined, agent sẽ tự xử lý
@@ -204,7 +194,7 @@ export class TestcaseService {
             const agentResumeState = agent.getResumeState();
             if (agentResumeState) {
                 console.log(`⚠️ [TESTCASE_SERVICE] Agent paused due to retryable error. Saving resume state...`);
-                
+
                 // Lưu resumeState vào Version
                 await Version.findByIdAndUpdate(version._id, {
                     $set: {
@@ -339,17 +329,17 @@ export class TestcaseService {
     ): Promise<any[]> {
         const testTypes = ['integration', 'api', 'ui', 'performance', 'security'];
         const allTestCases: any[] = [];
-        
+
         // Tính toán số lượng test cases cần generate cho batch này
         const testCasesPerType = Math.ceil(batchSize / testTypes.length);
         let generatedCount = 0;
-        
+
         for (const testType of testTypes) {
             if (generatedCount >= batchSize) break;
-            
+
             const remaining = batchSize - generatedCount;
             const currentBatchSize = Math.min(testCasesPerType, remaining);
-            
+
             try {
                 const batchTestCases = await this.testcaseGeminiService.generateTestCasesBatch(
                     requirements,
@@ -365,10 +355,10 @@ export class TestcaseService {
                     userId,
                     projectId
                 );
-                
+
                 allTestCases.push(...batchTestCases);
                 generatedCount += batchTestCases.length;
-                
+
                 // Delay giữa các test types
                 await new Promise(resolve => setTimeout(resolve, 300));
             } catch (error) {
@@ -377,7 +367,7 @@ export class TestcaseService {
                 continue;
             }
         }
-        
+
         return allTestCases;
     }
 
@@ -1238,7 +1228,7 @@ export class TestcaseService {
         if (versionId) versionQuery._id = versionId;
 
         const version = await Version.findOne(versionQuery).lean();
-        
+
         // Lấy tổng số usecases từ collection
         const usecaseQuery: any = { project_id: projectId };
         if (versionId) usecaseQuery.version_id = versionId;
