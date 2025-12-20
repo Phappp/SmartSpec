@@ -93,7 +93,8 @@ export class SequenceDiagramServiceImpl implements SequenceDiagramService {
           useCaseContext: useCaseContext, // <-- Đã đúng
           language,
         },
-        language
+        language,
+        userId
       );
 
       // 2. Validate kết quả (Giữ nguyên)

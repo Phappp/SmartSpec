@@ -1334,31 +1334,6 @@
                   >
                 </div>
               </div>
-              <div class="detail-section">
-                <h5>Related Use Cases</h5>
-                <div class="tag-list">
-                  <span
-                    v-for="relatedId in viewingUsecase.related_usecases"
-                    :key="relatedId"
-                    class="tag tag-related"
-                  >
-                    <template v-if="useCaseMap[relatedId]">
-                      {{ getUsecaseName(useCaseMap[relatedId]) }}
-                    </template>
-                    <template v-else>
-                      Use Case {{ String(relatedId).substring(0, 8) }}...
-                    </template>
-                  </span>
-                  <span
-                    v-if="
-                      !viewingUsecase.related_usecases ||
-                      viewingUsecase.related_usecases.length === 0
-                    "
-                    class="tag tag-meta"
-                    >None</span
-                  >
-                </div>
-              </div>
             </div>
             
             <!-- Row 8: Context Details (if object) -->

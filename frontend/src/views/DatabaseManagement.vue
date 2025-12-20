@@ -417,6 +417,9 @@ export default {
     // Listen for version-approved event from PreviewModal
     eventBus.on('version-approved', this.handleVersionApproved)
     
+    // ✅ THÊM: Listen for database-generation-completed event để tự động refresh data
+    eventBus.on('database-generation-completed', this.handleDatabaseGenerationCompleted)
+    
     // Add click outside listener for dialect filter
     document.addEventListener('click', this.handleClickOutsideDialectFilter)
   },
@@ -429,6 +432,9 @@ export default {
     
     // Remove event listener
     eventBus.off('version-approved', this.handleVersionApproved)
+    
+    // ✅ THÊM: Remove database-generation-completed event listener
+    eventBus.off('database-generation-completed', this.handleDatabaseGenerationCompleted)
     
     // Remove click outside listener
     document.removeEventListener('click', this.handleClickOutsideDialectFilter)
@@ -480,6 +486,31 @@ export default {
       }
       
       this.loadDatabaseData()
+    },
+
+    /**
+     * Xử lý khi database generation hoàn thành từ ProjectLayout
+     */
+    async handleDatabaseGenerationCompleted(event) {
+      // Chỉ xử lý nếu là project hiện tại và version hiện tại
+      if (!event || event.projectId !== this.project._id) {
+        return
+      }
+
+      // Nếu có versionId trong event, chỉ refresh nếu đúng version đang được chọn
+      if (event.versionId && event.versionId !== this.selectedVersionId) {
+        console.log('⚠️ Database generation completed for different version, skipping refresh')
+        return
+      }
+
+      console.log('✅ Database generation completed event received:', event)
+      
+      // Đợi một chút để backend cập nhật xong
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      
+      // Tự động refresh database data
+      await this.loadDatabaseData()
+      this.toast.success('Database schema đã được cập nhật!')
     },
 
     /**

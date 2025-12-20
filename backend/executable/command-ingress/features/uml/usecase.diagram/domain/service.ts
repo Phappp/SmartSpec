@@ -31,23 +31,23 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
     const { versionId, projectId, requirements, language } = payload;
 
     try {
-    const user = await new UserServiceImpl().getUserById(userId);
-    if (!user) {
+      const user = await new UserServiceImpl().getUserById(userId);
+      if (!user) {
         const errorMsg = "User not found";
         if (umlSocketService && projectId && versionId && userId) {
           umlSocketService.emitProgress(projectId, versionId, userId, 'usecase', 100, 'failed', false, [errorMsg]);
         }
         throw new Error(errorMsg);
-    }
+      }
 
-    if (!requirements || requirements.length === 0) {
+      if (!requirements || requirements.length === 0) {
         const errorMsg = "There are no requirements to generate usecase diagrams.";
         if (umlSocketService && projectId && versionId && userId) {
           umlSocketService.emitProgress(projectId, versionId, userId, 'usecase', 100, 'failed', false, [errorMsg]);
         }
         throw new Error(errorMsg);
-    }
-    if (!projectId) {
+      }
+      if (!projectId) {
         const errorMsg = "Missing required field: 'projectId' is required.";
         if (umlSocketService && projectId && versionId && userId) {
           umlSocketService.emitProgress(projectId, versionId, userId, 'usecase', 100, 'failed', false, [errorMsg]);
@@ -58,88 +58,90 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       // Emit start event
       if (umlSocketService && projectId && versionId && userId) {
         umlSocketService.emitProgress(projectId, versionId, userId, 'usecase', 10, 'generating', true);
-    }
+      }
 
-    const geminiDiagramData = await this.geminiService.generateUsecaseDiagram(
-      requirements,
-      language //"en-US, vi-VN"
-    );
+      const geminiDiagramData = await this.geminiService.generateUsecaseDiagram(
+        requirements,
+        language, //"en-US, vi-VN"
+        userId,
+        projectId
+      );
 
-    if (
-      !geminiDiagramData ||
-      !geminiDiagramData.name ||
-      geminiDiagramData.name === "Generation Failed" ||
-      !geminiDiagramData.actors ||
-      !geminiDiagramData.usecases
-    ) {
+      if (
+        !geminiDiagramData ||
+        !geminiDiagramData.name ||
+        geminiDiagramData.name === "Generation Failed" ||
+        !geminiDiagramData.actors ||
+        !geminiDiagramData.usecases
+      ) {
         const errorMsg = "Failed to generate complete diagram data from Gemini. The response was invalid or empty.";
         if (umlSocketService && projectId && versionId && userId) {
           umlSocketService.emitProgress(projectId, versionId, userId, 'usecase', 100, 'failed', false, [errorMsg]);
         }
         throw new Error(errorMsg);
-    }
-
-    const newUsecaseDiagram = new UsecaseDiagramSchema({
-      project_id: projectId,
-      version_id: versionId,
-      name: geminiDiagramData.name,
-      actors: geminiDiagramData.actors,
-      usecases: geminiDiagramData.usecases,
-      associations: geminiDiagramData.associations || [],
-      relationships: geminiDiagramData.relationships || [],
-      description: geminiDiagramData.description || [],
-      created_by: user.id,
-    });
-
-    const savedDocument = await newUsecaseDiagram.save();
-
-    // ✅ Tạo preview change cho usecase diagram mới
-    if (userId && versionId) {
-      await this.versionService.createOrUpdatePreview(
-        versionId,
-        userId,
-        {
-          entity_type: "usecase_diagram",
-          entity_id: savedDocument._id.toString(),
-          change_type: "added",
-          before_snapshot: null,
-          after_snapshot: savedDocument.toObject()
-        }
-      );
-    }
-
-    // ✅ Ghi log cho generate usecase diagram
-    try {
-      const version = await Version.findById(versionId).lean();
-      if (version) {
-        const user = await User.findById(userId).lean();
-        const username = user?.name || "Unknown User";
-        await this.logService.createLog({
-          project_id: projectId,
-          user_id: userId,
-          action: "generate_output",
-          target_id: savedDocument._id.toString(),
-          target_type: "usecase_diagrams",
-          version_number: version.version_number,
-          affects_requirement: true,
-          level: "info",
-          performed_by_ai: true,
-          details: {
-            after: { name: savedDocument.name, requirement_count: requirements.length },
-            message: `${username} generated usecase diagram "${savedDocument.name}" from ${requirements.length} requirement(s)`
-          }
-        });
       }
-    } catch (logError) {
-      console.error("❌ Error logging usecase diagram generation:", logError);
-    }
+
+      const newUsecaseDiagram = new UsecaseDiagramSchema({
+        project_id: projectId,
+        version_id: versionId,
+        name: geminiDiagramData.name,
+        actors: geminiDiagramData.actors,
+        usecases: geminiDiagramData.usecases,
+        associations: geminiDiagramData.associations || [],
+        relationships: geminiDiagramData.relationships || [],
+        description: geminiDiagramData.description || [],
+        created_by: user.id,
+      });
+
+      const savedDocument = await newUsecaseDiagram.save();
+
+      // ✅ Tạo preview change cho usecase diagram mới
+      if (userId && versionId) {
+        await this.versionService.createOrUpdatePreview(
+          versionId,
+          userId,
+          {
+            entity_type: "usecase_diagram",
+            entity_id: savedDocument._id.toString(),
+            change_type: "added",
+            before_snapshot: null,
+            after_snapshot: savedDocument.toObject()
+          }
+        );
+      }
+
+      // ✅ Ghi log cho generate usecase diagram
+      try {
+        const version = await Version.findById(versionId).lean();
+        if (version) {
+          const user = await User.findById(userId).lean();
+          const username = user?.name || "Unknown User";
+          await this.logService.createLog({
+            project_id: projectId,
+            user_id: userId,
+            action: "generate_output",
+            target_id: savedDocument._id.toString(),
+            target_type: "usecase_diagrams",
+            version_number: version.version_number,
+            affects_requirement: true,
+            level: "info",
+            performed_by_ai: true,
+            details: {
+              after: { name: savedDocument.name, requirement_count: requirements.length },
+              message: `${username} generated usecase diagram "${savedDocument.name}" from ${requirements.length} requirement(s)`
+            }
+          });
+        }
+      } catch (logError) {
+        console.error("❌ Error logging usecase diagram generation:", logError);
+      }
 
       // Emit completion event
       if (umlSocketService && projectId && versionId && userId) {
         umlSocketService.emitProgress(projectId, versionId, userId, 'usecase', 100, 'completed', false);
       }
 
-    return savedDocument.toObject({ getters: true }) as UseCaseDiagramResponse;
+      return savedDocument.toObject({ getters: true }) as UseCaseDiagramResponse;
     } catch (error: any) {
       console.error('❌ Error generating usecase diagram:', error);
       // Emit failed event với error message
@@ -210,7 +212,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       description: data.description || '',
       position: defaultPosition,
     });
-    
+
     uc.markModified('actors');
     await uc.save();
     return this.getUsecaseDiagramsById(ucId);
@@ -307,7 +309,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       description: data.description || '',
       position: defaultPosition,
     });
-    
+
     uc.markModified('usecases');
     await uc.save();
     return this.getUsecaseDiagramsById(ucId);
@@ -506,7 +508,7 @@ export class UsecaseDiagramServiceImpl implements UseCaseDiagramService {
       actor_id: data.actor_id,
       usecase_id: data.usecase_id,
     });
-    
+
     ucd.markModified('associations');
     await ucd.save();
     return this.getUsecaseDiagramsById(ucId);
