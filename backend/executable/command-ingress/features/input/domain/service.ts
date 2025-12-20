@@ -12,11 +12,11 @@ import User from '../../../../../internal/model/user'
 import { inputSocketService } from '../../input/domain/input.socket.service';
 import { io } from '../../../socket';
 import { VersionService } from "../../version/domain/service";
-import {PreviewChangeDto} from "../../version/adapter/preview.dto";
+import { PreviewChangeDto } from "../../version/adapter/preview.dto";
 
 export class InputHandleService {
   private logService: LogService;
-  private versionService: VersionService; 
+  private versionService: VersionService;
 
   constructor(
     private orchestratorService: OrchestratorService,
@@ -34,22 +34,22 @@ export class InputHandleService {
   ): Promise<ServiceResponse<any>> {
     try {
       console.log('📥 [addInputsToVersion] Started:', { versionId, userId, filesCount: files?.length || 0, hasRawText: !!rawText });
-      
+
       let version = await Version.findById(versionId);
       if (!version) {
         console.error('❌ [addInputsToVersion] Version not found:', versionId);
         return new ServiceResponse(ResponseStatus.Failed, 'Version not found', null, 404);
       }
-      
-      console.log('✅ [addInputsToVersion] Version found:', { 
-        versionId: version._id.toString(), 
+
+      console.log('✅ [addInputsToVersion] Version found:', {
+        versionId: version._id.toString(),
         version_temporary: version.version_temporary,
-        status: version.status 
+        status: version.status
       });
-      
-      if(version.version_temporary == false){
+
+      if (version.version_temporary == false) {
         console.log('🔄 [addInputsToVersion] Bumping version...');
-        const bumpRes = await this.versionService.bumpVersion(versionId,userId,"minor");
+        const bumpRes = await this.versionService.bumpVersion(versionId, userId, "minor");
         if (!bumpRes || !bumpRes.data || !bumpRes.data.newVersion) {
           console.error('❌ [addInputsToVersion] Bump version failed:', bumpRes);
           return new ServiceResponse(ResponseStatus.Failed, 'Failed to bump version: ' + (bumpRes?.message || 'Unknown error'), null, 500);
@@ -77,22 +77,23 @@ export class InputHandleService {
       }
 
       const projectId = version.project_id.toString();
-      
+
       console.log('📤 [addInputsToVersion] Calling handleInputs...');
-      
-      const { newFilesCount, newTextProvided, newInputs} = await this.inputService.handleInputs(
+
+      const { newFilesCount, newTextProvided, newInputs } = await this.inputService.handleInputs(
         files,
         rawText,
         projectId,
-        versionId 
+        versionId,
+        userId // ✅ THÊM: Truyền userId xuống để refine sử dụng model user chọn
       );
-      
-      console.log('✅ [addInputsToVersion] handleInputs completed:', { 
-        newFilesCount, 
-        newTextProvided, 
-        newInputsCount: newInputs?.length || 0 
+
+      console.log('✅ [addInputsToVersion] handleInputs completed:', {
+        newFilesCount,
+        newTextProvided,
+        newInputsCount: newInputs?.length || 0
       });
-      
+
       const user = await User.findById(userId).lean();
       const username = user?.name || "Unknown User";
       if (newFilesCount === 0 && !newTextProvided) {
@@ -122,7 +123,7 @@ export class InputHandleService {
       // 🔥 REALTIME: Lấy dữ liệu mới nhất
       // Lấy số lượng inputs trước khi thêm để xác định inputs mới
       const inputsBeforeAdd = await Input.countDocuments({ version_id: versionId });
-      
+
       const updatedInputs = await Input.find({ version_id: versionId }).sort({ created_at: 1 }).lean();
       const unprocessedInputs = await Input.find({
         version_id: versionId,
@@ -156,7 +157,7 @@ export class InputHandleService {
           // ✅ Xử lý preview cho các inputs mới
           // Lấy các inputs mới nhất từ updatedInputs (đã query từ DB, có _id)
           const expectedNewCount = newFilesCount + (newTextProvided ? 1 : 0);
-          
+
           // Lấy N inputs cuối cùng từ updatedInputs (các inputs mới nhất vì đã sort created_at: 1)
           const newInputsFromDb = updatedInputs.slice(-expectedNewCount);
 
@@ -166,9 +167,9 @@ export class InputHandleService {
               console.warn('⚠️ Skipping input without _id:', input);
               continue;
             }
-            
+
             try {
-              const changePayload : PreviewChangeDto  = {
+              const changePayload: PreviewChangeDto = {
                 entity_type: "input",
                 change_type: "added",
                 entity_id: input._id.toString(),
@@ -223,13 +224,13 @@ export class InputHandleService {
         version: version,
         newVersionId: versionId
       }, 201);
-      
-      console.log('✅ [addInputsToVersion] Successfully completed:', { 
-        added_files: newFilesCount, 
+
+      console.log('✅ [addInputsToVersion] Successfully completed:', {
+        added_files: newFilesCount,
         added_text: newTextProvided,
         newVersionId: versionId
       });
-      
+
       return response;
     } catch (error: any) {
       console.error('❌ [addInputsToVersion] Error occurred:', {
@@ -300,7 +301,7 @@ export class InputHandleService {
       const beforeDelete = await Input.findById(inputId).lean();
       // 🧩 Ghi preview change cho xóa input
       if (beforeDelete) {
-        const changePayload : PreviewChangeDto = {
+        const changePayload: PreviewChangeDto = {
           entity_type: "input",
           change_type: "deleted",
           entity_id: beforeDelete._id.toString(),
@@ -320,7 +321,7 @@ export class InputHandleService {
 
       await Version.findByIdAndUpdate(
         versionId,
-        { $pull: { inputs: inputId }},
+        { $pull: { inputs: inputId } },
         { session }
       );
 
@@ -350,7 +351,7 @@ export class InputHandleService {
       io.to(`project_${projectId}`).emit('input_event', deleteSummaryEvent);
 
       console.log(`🗑️ Broadcast input deletion summary: ${inputId} deleted, ${unprocessedInputs.length} unprocessed inputs remaining`);
-      
+
       const user = await User.findById(userId).lean();
       const username = user?.name || "Unknown User";
 

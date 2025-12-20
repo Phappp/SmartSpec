@@ -109,9 +109,26 @@ export default {
         'audio/mpeg',
         'audio/wav',
         'audio/mp4',
+        'audio/x-m4a',
+        'audio/m4a',
       ]
 
-      const validFiles = files.filter((file) => allowedTypes.includes(file.type))
+      const validFiles = files.filter((file) => {
+        // Kiểm tra MIME type hoặc extension nếu MIME type không có
+        if (allowedTypes.includes(file.type)) {
+          return true
+        }
+        // Fallback: kiểm tra extension nếu MIME type không khớp
+        const fileName = file.name.toLowerCase()
+        const allowedExtensions = ['.docx', '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.mp3', '.wav', '.m4a']
+        return allowedExtensions.some(ext => fileName.endsWith(ext))
+      })
+      
+      if (validFiles.length < files.length) {
+        const rejectedCount = files.length - validFiles.length
+        console.warn(`${rejectedCount} file(s) were rejected due to unsupported type`)
+      }
+      
       this.selectedFiles = [...this.selectedFiles, ...validFiles]
       event.target.value = ''
     },

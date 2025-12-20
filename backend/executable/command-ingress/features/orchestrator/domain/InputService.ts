@@ -16,8 +16,9 @@ export class InputService {
         files: UploadedFile[] | undefined,
         rawText: string | undefined,
         projectId: string,
-        versionId: string
-    ): Promise<{ newFilesCount: number; newTextProvided: boolean;newInputs :any }> {
+        versionId: string,
+        userId?: string // ✅ THÊM: userId để truyền xuống refine process
+    ): Promise<{ newFilesCount: number; newTextProvided: boolean; newInputs: any }> {
         const existingInputs = await Input.find(
             { version_id: versionId },
             { file_hash: 1, text_hash: 1, is_processed: 1 }
@@ -38,11 +39,11 @@ export class InputService {
 
             if (nonDuplicateFiles.length > 0) {
                 console.log(`Starting file extraction for ${nonDuplicateFiles.length} new files...`);
-                const savedInputs = await this.extractor.extractFiles(nonDuplicateFiles, projectId, versionId);
-                console.log("Input when save ",savedInputs);
+                const savedInputs = await this.extractor.extractFiles(nonDuplicateFiles, projectId, versionId, userId);
+                console.log("Input when save ", savedInputs);
                 newFilesCount = nonDuplicateFiles.length;
                 newInputs.push(...savedInputs);
-                console.log("Input when add newInput",newInputs);
+                console.log("Input when add newInput", newInputs);
             } else {
                 console.log("All files are duplicates, skipping extraction");
             }
@@ -62,14 +63,16 @@ export class InputService {
             }
         }
 
-        return { newFilesCount, newTextProvided, newInputs};
+        return { newFilesCount, newTextProvided, newInputs };
     }
 
     /**
      * Lấy danh sách input mới được tạo trong run này
+     * Tăng window time từ 2s lên 10s để bao phủ cả audio processing time
      */
     async getNewlyCreatedInputs(versionId: string): Promise<string[]> {
-        const since = new Date(Date.now() - 2000); // từ 2s trước
+        // Tăng từ 2s lên 10s để bao phủ thời gian xử lý audio (STT + refine có thể mất 5-10s)
+        const since = new Date(Date.now() - 10000); // từ 10s trước
         const createdNow = await Input.find(
             { version_id: versionId, createdAt: { $gte: since } },
             { _id: 1 }
@@ -99,7 +102,7 @@ export class InputService {
         }
 
         const version = await Version.findById(versionId).lean();
-        
+
         // Lấy usecases từ collection
         const Usecase = (await import("../../../../../internal/model/usecase")).default;
         const previousRequirements = version ? await Usecase.find({ version_id: versionId }).lean() : [];

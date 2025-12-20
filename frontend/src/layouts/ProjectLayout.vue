@@ -498,11 +498,11 @@ export default {
         'REPLAN_MISSING': 'Đang lập kế hoạch retry',
         'GENERATE_RETRY': 'Đang retry',
         'DONE': 'Hoàn thành',
-        // V2 States
+        // V2 States (Testcase Generation - Orchestrator Style)
         'ESTIMATE_WITH_COMMITMENT': 'Đang ước tính',
         'RETRY_MISSING': 'Đang retry usecases thiếu',
-        'FINAL_VALIDATION': 'Đang validate toàn bộ',
-        'ATOMIC_SAVE': 'Đang lưu vào database'
+        'FINAL_VALIDATION': 'Đang validate toàn bộ testcases',
+        'ATOMIC_SAVE': 'Đang lưu tất cả testcases vào database'
       }
       return titles[state] || 'Đang xử lý...'
     }
@@ -534,7 +534,7 @@ export default {
       if (state === 'GENERATE_RETRY' || state === 'REPLAN_MISSING' || state === 'RETRY_MISSING') return 'pulsing'
       if (state === 'GENERATE_BATCH') return 'pulsing'
       if (state === 'VERIFY_RESULTS' || state === 'FINAL_VALIDATION') return 'spinning'
-      if (state === 'ATOMIC_SAVE') return 'spinning'
+      if (state === 'ATOMIC_SAVE') return 'spinning' // Spinning icon for atomic save
       return 'spinning'
     }
 

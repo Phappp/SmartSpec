@@ -551,21 +551,33 @@ export class TestcaseGeminiService {
             let text: string = response.text || "{}";
             text = this.cleanJsonString(text);
 
-            // Parse JSON
+            // Parse JSON với khả năng sửa JSON bị truncate
             let parsed: any = null;
             try {
                 parsed = JSON.parse(text);
             } catch (parseError: any) {
-                const jsonMatch = text.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    try {
-                        parsed = JSON.parse(jsonMatch[0]);
-                    } catch (e) {
-                        console.error(`❌ [ESTIMATE] Failed to parse JSON: ${parseError.message}`);
-                        throw new Error(`Invalid JSON format: ${parseError.message}`);
+                console.warn(`⚠️ [ESTIMATE] JSON parse failed, attempting repair... Error: ${parseError.message}`);
+                try {
+                    // Thử sửa JSON bị truncate
+                    const repairedJson = this.repairTruncatedJson(text);
+                    parsed = JSON.parse(repairedJson);
+                    console.log(`✅ [ESTIMATE] JSON repair successful`);
+                } catch (repairError: any) {
+                    // Nếu repair không thành công, thử extract JSON object từ response
+                    const jsonMatch = text.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        try {
+                            const extractedJson = this.repairTruncatedJson(jsonMatch[0]);
+                            parsed = JSON.parse(extractedJson);
+                            console.log(`✅ [ESTIMATE] JSON extraction and repair successful`);
+                        } catch (extractError: any) {
+                            console.error(`❌ [ESTIMATE] Failed to parse JSON even after repair: ${extractError.message}`);
+                            throw new Error(`Invalid JSON format: ${extractError.message}`);
+                        }
+                    } else {
+                        console.error(`❌ [ESTIMATE] No JSON object found in response`);
+                        throw new Error("No JSON object found in response");
                     }
-                } else {
-                    throw new Error("No JSON object found in response");
                 }
             }
 
@@ -692,21 +704,34 @@ ${existingTitles && existingTitles.length > 0 ? '- **CRITICAL**: DO NOT generate
             let responseText: string = response.text || "{}";
             responseText = this.cleanJsonString(responseText);
 
-            // Parse JSON
+            // Parse JSON với khả năng sửa JSON bị truncate
             let parsed: any = null;
             try {
                 parsed = JSON.parse(responseText);
             } catch (parseError: any) {
-                const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    try {
-                        parsed = JSON.parse(jsonMatch[0]);
-                    } catch (e) {
-                        console.error(`❌ [BATCH ${batchNumber}/${totalBatches}] Failed to parse JSON: ${parseError.message}`);
-                        throw new Error(`Invalid JSON format: ${parseError.message}`);
+                console.warn(`⚠️ [BATCH ${batchNumber}/${totalBatches}] JSON parse failed, attempting repair... Error: ${parseError.message}`);
+                try {
+                    // Thử sửa JSON bị truncate
+                    const repairedJson = this.repairTruncatedJson(responseText);
+                    parsed = JSON.parse(repairedJson);
+                    console.log(`✅ [BATCH ${batchNumber}/${totalBatches}] JSON repair successful`);
+                } catch (repairError: any) {
+                    // Nếu repair không thành công, thử extract JSON object từ response
+                    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        try {
+                            const extractedJson = this.repairTruncatedJson(jsonMatch[0]);
+                            parsed = JSON.parse(extractedJson);
+                            console.log(`✅ [BATCH ${batchNumber}/${totalBatches}] JSON extraction and repair successful`);
+                        } catch (extractError: any) {
+                            console.error(`❌ [BATCH ${batchNumber}/${totalBatches}] Failed to parse JSON even after repair: ${extractError.message}`);
+                            console.error(`❌ [BATCH ${batchNumber}/${totalBatches}] Response length: ${responseText.length}, First 500 chars: ${responseText.substring(0, 500)}`);
+                            throw new Error(`Invalid JSON format: ${extractError.message}`);
+                        }
+                    } else {
+                        console.error(`❌ [BATCH ${batchNumber}/${totalBatches}] No JSON object found in response`);
+                        throw new Error("No JSON object found in response");
                     }
-                } else {
-                    throw new Error("No JSON object found in response");
                 }
             }
 
@@ -1395,5 +1420,171 @@ ${existingTitles && existingTitles.length > 0 ? '- **CRITICAL**: DO NOT generate
 
         // If no code fence, return trimmed text
         return trimmed;
+    }
+
+    /**
+     * Sửa chữa JSON bị cắt ngắn (truncated JSON)
+     * Xử lý trường hợp JSON response bị cắt giữa chừng do token limit hoặc API response limit
+     * Strategy: Tìm vị trí cuối cùng có JSON hợp lệ và cắt bỏ phần bị hỏng
+     */
+    private repairTruncatedJson(jsonStr: string): string {
+        if (!jsonStr || typeof jsonStr !== 'string') return '{}';
+
+        let braceBalance = 0;  // Balance của {}
+        let bracketBalance = 0;  // Balance của []
+        let inString = false;
+        let escapeNext = false;
+        let lastValidPosition = -1;
+        let stringStartPosition = -1;
+
+        // Tìm vị trí cuối cùng có JSON hợp lệ
+        for (let i = 0; i < jsonStr.length; i++) {
+            const char = jsonStr[i];
+
+            if (escapeNext) {
+                escapeNext = false;
+                continue;
+            }
+
+            if (char === '\\') {
+                escapeNext = true;
+                continue;
+            }
+
+            if (char === '"' && !escapeNext) {
+                if (!inString) {
+                    // Bắt đầu string
+                    stringStartPosition = i;
+                } else {
+                    // Kết thúc string
+                    stringStartPosition = -1;
+                    lastValidPosition = i; // String đã được đóng đúng cách
+                }
+                inString = !inString;
+                continue;
+            }
+
+            if (!inString) {
+                // Chỉ đếm balance khi không trong string
+                if (char === '{') {
+                    braceBalance++;
+                    lastValidPosition = i;
+                } else if (char === '}') {
+                    braceBalance--;
+                    lastValidPosition = i;
+                    // Kiểm tra nếu đây là closing của object/array hợp lệ
+                    if (braceBalance === 0 && bracketBalance === 0 && i > 0) {
+                        // Có thể đây là vị trí kết thúc hợp lệ
+                    }
+                } else if (char === '[') {
+                    bracketBalance++;
+                    lastValidPosition = i;
+                } else if (char === ']') {
+                    bracketBalance--;
+                    lastValidPosition = i;
+                } else if (char === ',' && braceBalance >= 0 && bracketBalance >= 0) {
+                    // Dấu phẩy hợp lệ (không trong string và balance >= 0)
+                    lastValidPosition = i;
+                }
+            }
+        }
+
+        // Nếu đang trong string (string bị cắt giữa chừng)
+        if (inString && stringStartPosition >= 0) {
+            // Tìm về trước để tìm vị trí cuối cùng có JSON hợp lệ
+            // Tìm dấu phẩy hợp lệ cuối cùng hoặc dấu đóng của object/array
+            let cutPosition = stringStartPosition;
+            let tempBalance = 0;
+            let tempBracketBalance = 0;
+
+            // Đếm balance từ đầu đến vị trí string bắt đầu để biết context
+            for (let i = 0; i < stringStartPosition; i++) {
+                const char = jsonStr[i];
+                if (char === '{') tempBalance++;
+                else if (char === '}') tempBalance--;
+                else if (char === '[') tempBracketBalance++;
+                else if (char === ']') tempBracketBalance--;
+            }
+
+            // Tìm về trước từ vị trí string bắt đầu để tìm dấu phẩy hoặc dấu đóng hợp lệ
+            for (let i = stringStartPosition - 1; i >= 0; i--) {
+                const char = jsonStr[i];
+                if (char === ',') {
+                    // Tìm thấy dấu phẩy - cắt trước dấu phẩy (loại bỏ property bị hỏng)
+                    cutPosition = i;
+                    break;
+                } else if (char === '}' && tempBalance > 0) {
+                    // Đã về đến object cha, cắt tại đây
+                    cutPosition = i + 1;
+                    break;
+                } else if (char === ']' && tempBracketBalance > 0) {
+                    // Đã về đến array cha, cắt tại đây
+                    cutPosition = i + 1;
+                    break;
+                } else if (char === '{' || char === '[') {
+                    // Đã về đến đầu object/array, cắt sau dấu mở (loại bỏ toàn bộ property)
+                    cutPosition = i + 1;
+                    break;
+                }
+            }
+
+            // Cắt JSON tại vị trí hợp lệ
+            jsonStr = jsonStr.substring(0, cutPosition).trim();
+
+            // Loại bỏ dấu phẩy cuối cùng nếu có
+            jsonStr = jsonStr.replace(/,\s*$/, '').trim();
+
+            // Reset và đếm lại balance
+            braceBalance = 0;
+            bracketBalance = 0;
+            inString = false;
+            escapeNext = false;
+
+            for (let i = 0; i < jsonStr.length; i++) {
+                const char = jsonStr[i];
+                if (escapeNext) {
+                    escapeNext = false;
+                    continue;
+                }
+                if (char === '\\') {
+                    escapeNext = true;
+                    continue;
+                }
+                if (char === '"' && !escapeNext) {
+                    inString = !inString;
+                    continue;
+                }
+                if (!inString) {
+                    if (char === '{') braceBalance++;
+                    else if (char === '}') braceBalance--;
+                    else if (char === '[') bracketBalance++;
+                    else if (char === ']') bracketBalance--;
+                }
+            }
+        }
+
+        let repaired = jsonStr.trim();
+
+        // Đóng các brackets/braces còn mở
+        // Đóng arrays trước (vì array có thể nằm trong object)
+        while (bracketBalance > 0) {
+            repaired += ']';
+            bracketBalance--;
+        }
+
+        // Đóng objects
+        while (braceBalance > 0) {
+            repaired += '}';
+            braceBalance--;
+        }
+
+        // Kiểm tra và đóng cấu trúc tổng thể nếu cần
+        if (repaired.startsWith('[') && !repaired.endsWith(']')) {
+            repaired += ']';
+        } else if (repaired.startsWith('{') && !repaired.endsWith('}')) {
+            repaired += '}';
+        }
+
+        return repaired;
     }
 }

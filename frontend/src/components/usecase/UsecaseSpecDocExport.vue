@@ -616,16 +616,47 @@ export default {
 
         content += `Goal: ${uc.goal || 'Not specified'}\n\n`
         content += `Description: ${(uc.description || uc.business_reason || uc.reason) || 'Not specified'}\n\n`
-        const contextStr = typeof uc.context === 'object' ? (uc.context.module || uc.context.scope || uc.context.system || '') : (uc.context || '')
+        
+        // Business Reason (separate from description)
+        if (uc.business_reason || uc.reason) {
+          content += `Business Reason: ${(uc.business_reason || uc.reason)}\n\n`
+        }
+        
+        // Context - xử lý đúng format như UseCaseMainContent
+        const contextStr = typeof uc.context === 'object' 
+          ? (uc.context.module || uc.context.scope || uc.context.system || '') 
+          : (uc.context || '')
         content += `Context: ${contextStr || 'Not specified'}\n\n`
 
-        // Main Flow
+        // Actor Details - nếu actor là object
+        if (uc.actor && typeof uc.actor === 'object') {
+          content += `Actor: ${uc.actor.name || 'Not specified'}`
+          if (uc.actor.description) {
+            content += ` - ${uc.actor.description}`
+          }
+          content += '\n\n'
+        }
+
+        // Main Flow - xử lý đúng format như UseCaseMainContent
         content += 'Main Flow:\n'
         const mainFlow = uc.main_flow || uc.tasks || []
         if (mainFlow.length > 0) {
           mainFlow.forEach((step, i) => {
             if (typeof step === 'object') {
-              content += `  ${step.step || (i + 1)}. ${step.action || step}\n`
+              const stepNum = step.step || (i + 1)
+              const actor = step.actor || 'User'
+              const action = step.action || step
+              content += `  ${stepNum}. [${actor}] ${action}`
+              if (step.expected_result) {
+                content += ` → ${step.expected_result}`
+              }
+              if (step.inputs && step.inputs.length > 0) {
+                content += ` (Inputs: ${step.inputs.join(', ')})`
+              }
+              if (step.rules_applied && step.rules_applied.length > 0) {
+                content += ` [Rules: ${step.rules_applied.join(', ')}]`
+              }
+              content += '\n'
             } else {
               content += `  ${i + 1}. ${step}\n`
             }
@@ -634,6 +665,18 @@ export default {
           content += '  No tasks defined\n'
         }
         content += '\n'
+
+        // Alternative Flows - thêm mới
+        if (uc.alternative_flows && uc.alternative_flows.length > 0) {
+          content += 'Alternative Flows:\n'
+          uc.alternative_flows.forEach((af, i) => {
+            const afId = af.id || `AF${i + 1}`
+            content += `  ${afId} (at Step ${af.at_step}):\n`
+            content += `    Condition: ${af.condition || 'N/A'}\n`
+            content += `    System Response: ${af.system_response || 'N/A'}\n`
+            content += `    End State: ${af.end_state || 'N/A'}\n\n`
+          })
+        }
 
         // Preconditions & Postconditions
         content += 'Preconditions:\n'
@@ -656,13 +699,19 @@ export default {
         }
         content += '\n'
 
-        // Inputs & Outputs
+        // Inputs & Outputs - xử lý đúng format như UseCaseMainContent
         content += 'Inputs:\n'
         if (uc.inputs && uc.inputs.length > 0) {
           uc.inputs.forEach((input) => {
-            content += `  [${input}] `
+            if (typeof input === 'object') {
+              const name = input.name || 'N/A'
+              const type = input.type ? ` (${input.type})` : ''
+              const required = input.required !== undefined ? (input.required ? ' [Required]' : ' [Optional]') : ''
+              content += `  • ${name}${type}${required}\n`
+            } else {
+              content += `  • ${input}\n`
+            }
           })
-          content += '\n'
         } else {
           content += '  None\n'
         }
@@ -671,9 +720,15 @@ export default {
         content += 'Outputs:\n'
         if (uc.outputs && uc.outputs.length > 0) {
           uc.outputs.forEach((output) => {
-            content += `  [${output}] `
+            if (typeof output === 'object') {
+              const name = output.name || 'N/A'
+              const type = output.type ? ` (${output.type})` : ''
+              const optional = output.optional !== undefined ? (output.optional ? ' [Optional]' : ' [Required]') : ''
+              content += `  • ${name}${type}${optional}\n`
+            } else {
+              content += `  • ${output}\n`
+            }
           })
-          content += '\n'
         } else {
           content += '  None\n'
         }
@@ -716,11 +771,23 @@ export default {
         }
         content += '\n'
 
-        // Exceptions
+        // Exceptions - xử lý đúng format như UseCaseMainContent
         content += 'Exceptions:\n'
         if (uc.exceptions && uc.exceptions.length > 0) {
           uc.exceptions.forEach((exception) => {
-            content += `  ⚠ ${exception}\n`
+            if (typeof exception === 'object') {
+              const id = exception.id || 'N/A'
+              const type = exception.type ? ` [${exception.type}]` : ''
+              const atStep = exception.at_step ? ` at Step ${exception.at_step}` : ''
+              const desc = exception.description || exception
+              content += `  ⚠ ${id}${type}${atStep}: ${desc}`
+              if (exception.system_response) {
+                content += ` → ${exception.system_response}`
+              }
+              content += '\n'
+            } else {
+              content += `  ⚠ ${exception}\n`
+            }
           })
         } else {
           content += '  No exceptions defined\n'
@@ -810,7 +877,7 @@ export default {
       <div class="usecase-section page-break-avoid">
         <div class="usecase-header keep-with-next">
           <h2>${index + 1}. ${uc.name}</h2>
-          <p>UC-${this.getUsecaseId(uc)} | Actor: ${(uc.actor?.name || uc.role?.name) || 'Not specified'} | Priority: ${
+          <p>UC-${this.getUsecaseId(uc)} | Actor: ${(uc.actor?.name || uc.role?.name) || 'Not specified'}${uc.actor?.description ? ` - ${this.escapeHtml(uc.actor.description)}` : ''} | Priority: ${
           uc.priority || 'Not specified'
         }</p>
         </div>
@@ -827,11 +894,17 @@ export default {
           </div>
           <div class="detail-item">
             <h4 class="keep-with-next">Context</h4>
-            <p>${this.escapeHtml(uc.context || 'Not specified')}</p>
+            <p>${this.escapeHtml((typeof uc.context === 'object' ? (uc.context.module || uc.context.scope || uc.context.system || '') : uc.context) || 'Not specified')}</p>
           </div>
+          ${uc.business_reason || uc.reason ? `
+          <div class="detail-item">
+            <h4 class="keep-with-next">Business Reason</h4>
+            <p>${this.escapeHtml((uc.business_reason || uc.reason) || 'Not specified')}</p>
+          </div>
+          ` : ''}
         </div>
         
-        <!-- Main Flow -->
+        <!-- Main Flow - Enhanced -->
         <div class="detail-item full-width page-break-avoid">
           <h4 class="keep-with-next">Main Flow</h4>
           <ol class="task-list">
@@ -841,7 +914,21 @@ export default {
                 if (mainFlow.length > 0) {
                   return mainFlow.map((step, i) => {
                     if (typeof step === 'object') {
-                      return `<li><strong>Step ${step.step || (i + 1)}:</strong> ${this.escapeHtml(step.action || step)}${step.expected_result ? ` → ${this.escapeHtml(step.expected_result)}` : ''}</li>`
+                      const stepNum = step.step || (i + 1)
+                      const actor = step.actor || 'User'
+                      const action = step.action || step
+                      let html = `<li><strong>Step ${stepNum} [${actor}]:</strong> ${this.escapeHtml(action)}`
+                      if (step.expected_result) {
+                        html += ` <span style="color: #059669;">→ ${this.escapeHtml(step.expected_result)}</span>`
+                      }
+                      if (step.inputs && step.inputs.length > 0) {
+                        html += ` <span style="color: #7c3aed; font-size: 0.9em;">(Inputs: ${step.inputs.map(inp => this.escapeHtml(inp)).join(', ')})</span>`
+                      }
+                      if (step.rules_applied && step.rules_applied.length > 0) {
+                        html += ` <span style="color: #dc2626; font-size: 0.9em;">[Rules: ${step.rules_applied.map(rule => this.escapeHtml(rule)).join(', ')}]</span>`
+                      }
+                      html += '</li>'
+                      return html
                     } else {
                       return `<li>${this.escapeHtml(step)}</li>`
                     }
@@ -853,6 +940,28 @@ export default {
             }
           </ol>
         </div>
+        
+        <!-- Alternative Flows -->
+        ${uc.alternative_flows && uc.alternative_flows.length > 0 ? `
+        <div class="detail-item full-width page-break-avoid">
+          <h4 class="keep-with-next">Alternative Flows</h4>
+          <div style="margin-left: 20px;">
+            ${uc.alternative_flows.map((af, i) => {
+              const afId = af.id || `AF${i + 1}`
+              return `
+              <div style="margin-bottom: 12px; padding: 8px; background: #f9fafb; border-left: 3px solid #1a365d; border-radius: 4px;">
+                <div style="font-weight: bold; margin-bottom: 4px;">
+                  ${afId} <span style="color: #6b7280; font-weight: normal;">(at Step ${af.at_step})</span>
+                </div>
+                <div style="margin: 4px 0;"><strong>If:</strong> ${this.escapeHtml(af.condition || 'N/A')}</div>
+                <div style="margin: 4px 0;"><strong>Then:</strong> ${this.escapeHtml(af.system_response || 'N/A')}</div>
+                <div style="margin: 4px 0;"><strong>End State:</strong> ${this.escapeHtml(af.end_state || 'N/A')}</div>
+              </div>
+              `
+            }).join('')}
+          </div>
+        </div>
+        ` : ''}
         
         <!-- Preconditions & Postconditions -->
         <div class="detail-grid two-columns page-break-avoid">
@@ -882,16 +991,23 @@ export default {
           </div>
         </div>
         
-        <!-- Inputs & Outputs -->
+        <!-- Inputs & Outputs - Enhanced -->
         <div class="detail-grid two-columns page-break-avoid">
           <div class="detail-item">
             <h4 class="keep-with-next">Inputs</h4>
             <div>
               ${
                 uc.inputs && uc.inputs.length > 0
-                  ? uc.inputs
-                      .map((input) => `<span class="tag">${this.escapeHtml(input)}</span>`)
-                      .join('')
+                  ? uc.inputs.map((input) => {
+                      if (typeof input === 'object') {
+                        const name = this.escapeHtml(input.name || 'N/A')
+                        const type = input.type ? ` <span style="color: #6b7280; font-size: 0.9em;">(${this.escapeHtml(input.type)})</span>` : ''
+                        const required = input.required !== undefined ? (input.required ? ' <span style="color: #dc2626; font-size: 0.85em;">[Required]</span>' : ' <span style="color: #059669; font-size: 0.85em;">[Optional]</span>') : ''
+                        return `<div style="margin: 4px 0;"><span class="tag">${name}${type}${required}</span></div>`
+                      } else {
+                        return `<span class="tag">${this.escapeHtml(input)}</span>`
+                      }
+                    }).join('')
                   : '<span class="tag">None</span>'
               }
             </div>
@@ -901,9 +1017,16 @@ export default {
             <div>
               ${
                 uc.outputs && uc.outputs.length > 0
-                  ? uc.outputs
-                      .map((output) => `<span class="tag">${this.escapeHtml(output)}</span>`)
-                      .join('')
+                  ? uc.outputs.map((output) => {
+                      if (typeof output === 'object') {
+                        const name = this.escapeHtml(output.name || 'N/A')
+                        const type = output.type ? ` <span style="color: #6b7280; font-size: 0.9em;">(${this.escapeHtml(output.type)})</span>` : ''
+                        const optional = output.optional !== undefined ? (output.optional ? ' <span style="color: #059669; font-size: 0.85em;">[Optional]</span>' : ' <span style="color: #dc2626; font-size: 0.85em;">[Required]</span>') : ''
+                        return `<div style="margin: 4px 0;"><span class="tag">${name}${type}${optional}</span></div>`
+                      } else {
+                        return `<span class="tag">${this.escapeHtml(output)}</span>`
+                      }
+                    }).join('')
                   : '<span class="tag">None</span>'
               }
             </div>
@@ -933,7 +1056,15 @@ export default {
             <ul class="condition-list">
               ${
                 uc.rules && uc.rules.length > 0
-                  ? uc.rules.map((rule) => `<li>${this.escapeHtml(rule)}</li>`).join('')
+                  ? uc.rules.map((rule) => {
+                      if (typeof rule === 'object') {
+                        const id = rule.id ? `<strong>${this.escapeHtml(rule.id)}:</strong> ` : ''
+                        const desc = this.escapeHtml(rule.description || rule)
+                        return `<li>${id}${desc}</li>`
+                      } else {
+                        return `<li>${this.escapeHtml(rule)}</li>`
+                      }
+                    }).join('')
                   : '<li>None</li>'
               }
             </ul>
@@ -962,9 +1093,18 @@ export default {
             <ul class="condition-list">
               ${
                 uc.exceptions && uc.exceptions.length > 0
-                  ? uc.exceptions
-                      .map((exception) => `<li>⚠ ${this.escapeHtml(exception)}</li>`)
-                      .join('')
+                  ? uc.exceptions.map((exception) => {
+                      if (typeof exception === 'object') {
+                        const id = exception.id ? `<strong>${this.escapeHtml(exception.id)}</strong>` : ''
+                        const type = exception.type ? ` <span style="color: #6b7280;">[${this.escapeHtml(exception.type)}]</span>` : ''
+                        const atStep = exception.at_step ? ` <span style="color: #6b7280;">at Step ${exception.at_step}</span>` : ''
+                        const desc = this.escapeHtml(exception.description || exception)
+                        const response = exception.system_response ? ` → ${this.escapeHtml(exception.system_response)}` : ''
+                        return `<li>⚠ ${id}${type}${atStep}: ${desc}${response}</li>`
+                      } else {
+                        return `<li>⚠ ${this.escapeHtml(exception)}</li>`
+                      }
+                    }).join('')
                   : '<li>No exceptions defined</li>'
               }
             </ul>

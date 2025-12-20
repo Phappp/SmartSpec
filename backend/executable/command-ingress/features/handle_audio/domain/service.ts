@@ -29,9 +29,9 @@ interface ProcessedFile {
 }
 
 export class SpeechToTextService {
-    private enqueueRefineJob(inputId: string, provider: 'gemini' | 'openai' | 'claude' = 'gemini') {
+    private enqueueRefineJob(inputId: string, userId?: string) {
         import('../../handle_extraction/index')
-            .then((m) => m.refineInputById(inputId, provider))
+            .then((m) => m.refineInputById(inputId, userId))
             .catch((err) => console.error('[refine] audio error', err?.message || err));
     }
 
@@ -42,7 +42,8 @@ export class SpeechToTextService {
     public async handleAudio(
         files: UploadedFile[],
         project_id: string,
-        version_id: string
+        version_id: string,
+        userId?: string // ✅ THÊM: userId để truyền xuống refine process
     ): Promise<SpeechToTextResult[]> {
 
         // IMPROVEMENT: Đã loại bỏ logic thừa về xử lý ID, vì controller đã làm việc này.
@@ -104,7 +105,7 @@ export class SpeechToTextService {
             }
 
             // === 3. Map kết quả và lưu vào DB ===
-            await this.saveResultsToDatabase(allResults, processedFiles, project_id, version_id);
+            await this.saveResultsToDatabase(allResults, processedFiles, project_id, version_id, userId);
 
             return allResults;
 
@@ -160,11 +161,12 @@ export class SpeechToTextService {
      * @description Chuyển đổi kết quả từ Python sang schema và lưu vào MongoDB.
      */
     private async saveResultsToDatabase(
-            results: SpeechToTextResult[],
-            processedFiles: ProcessedFile[],
-            project_id: string,
-            version_id: string
-        ): Promise<void> {
+        results: SpeechToTextResult[],
+        processedFiles: ProcessedFile[],
+        project_id: string,
+        version_id: string,
+        userId?: string // ✅ THÊM: userId để truyền xuống refine process
+    ): Promise<void> {
 
         for (let i = 0; i < results.length; i++) {
             const result = results[i];
@@ -208,7 +210,7 @@ export class SpeechToTextService {
             });
 
             // 📝 Append text vào merged_text
-            
+
             // if (result.text && result.text.trim().length > 0) {
             //     try {
             //         const current = await VersionModel.findById(version_id).lean();
@@ -224,7 +226,7 @@ export class SpeechToTextService {
             // }
 
             if (!result.error && saved?._id) {
-                this.enqueueRefineJob(String(saved._id), 'gemini');
+                this.enqueueRefineJob(String(saved._id), userId);
             }
         }
     }

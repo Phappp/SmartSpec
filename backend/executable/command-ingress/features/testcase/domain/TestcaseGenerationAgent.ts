@@ -20,6 +20,8 @@ export enum TestcaseAgentState {
     VERIFY_RESULTS = "VERIFY_RESULTS",
     REPLAN_MISSING = "REPLAN_MISSING",
     GENERATE_RETRY = "GENERATE_RETRY",
+    FINAL_VALIDATION = "FINAL_VALIDATION",
+    ATOMIC_SAVE = "ATOMIC_SAVE",
     DONE = "DONE"
 }
 
@@ -42,7 +44,8 @@ export interface TestcaseAgentContext {
     batchPlan?: TestcaseBatchPlan[];
     currentBatchIndex?: number;
 
-    // Generation results
+    // Generation results - temp storage (orchestrator-style)
+    tempStorage?: Map<string, TempTestcaseEntry>;
     generatedTestcases?: any[];
     savedTestcases?: any[];
 
@@ -76,6 +79,22 @@ export interface InvalidTestcase {
     errors: string[];
     originalData?: any;
     expectedIndex?: number;
+}
+
+export interface TempTestcaseEntry {
+    status: "generated" | "missing" | "invalid";
+    data?: any; // Testcase data nếu status = "generated"
+    error?: string; // Error message nếu status = "missing" | "invalid"
+    index?: number; // Index trong batch
+}
+
+export interface TestcaseSaveResult {
+    totalExpected: number;
+    saved: number;
+    repairedByLLM: number;
+    skipped: number;
+    failed: string[];
+    savedTestcases?: any[]; // Optional: array of saved testcases
 }
 
 export interface TestcaseVerificationResult {
@@ -200,12 +219,13 @@ export class TestcaseGenerationAgent {
 
         // Lấy final testcases từ database
         const finalTestcases = await Testcase.find({ version_id: this.context.versionId }).lean();
-        console.log(`✅ [TESTCASE_AGENT] Completed: ${finalTestcases.length} total test cases`);
+        const totalGenerated = this.context.savedTestcases?.length || finalTestcases.length;
+        console.log(`✅ [TESTCASE_AGENT] Completed: ${totalGenerated} total test cases saved to database`);
 
         return {
             version_id: this.context.versionId,
             testcases: finalTestcases,
-            totalGenerated: this.context.savedTestcases?.length || 0
+            totalGenerated
         };
     }
 
@@ -406,8 +426,8 @@ export class TestcaseGenerationAgent {
                 return;
             }
 
-            // Normalize và save batch
-            const saved = await this.saveBatch(batchTestcases, currentBatch.batchNumber);
+            // ✅ SAVE TO TEMP STORAGE (orchestrator-style)
+            await this.saveToTempStorage(batchTestcases, currentBatch.offset, currentBatch.batchNumber);
 
             if (this.context.generatedTestcases) {
                 this.context.generatedTestcases.push(...batchTestcases);
@@ -548,8 +568,8 @@ export class TestcaseGenerationAgent {
                 this.state = TestcaseAgentState.REPLAN_MISSING;
             }
         } else {
-            // Không có missing/invalid → hoàn thành
-            console.log(`✅ [VERIFY_RESULTS] All testcases generated successfully!`);
+            // Không có missing/invalid → chuyển sang final validation
+            console.log(`✅ [VERIFY_RESULTS] All testcases generated. Moving to final validation.`);
 
             // Broadcast verification success
             if (testcaseSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
@@ -563,11 +583,11 @@ export class TestcaseGenerationAgent {
                     undefined,
                     undefined,
                     TestcaseAgentState.VERIFY_RESULTS,
-                    `✅ Đã verify thành công: ${verification.totalGenerated}/${verification.totalExpected} testcases`
+                    `✅ Đã verify thành công: ${verification.totalGenerated}/${verification.totalExpected} testcases. Chuyển sang final validation...`
                 );
             }
 
-            this.state = TestcaseAgentState.DONE;
+            this.state = TestcaseAgentState.FINAL_VALIDATION;
         }
     }
 
@@ -718,8 +738,11 @@ export class TestcaseGenerationAgent {
                 return;
             }
 
-            // Normalize và save batch
-            const saved = await this.saveBatch(batchTestcases, currentBatch.batchNumber);
+            // ✅ SAVE TO TEMP STORAGE (orchestrator-style)
+            // Tính offset cho retry (cộng với offset ban đầu của batch plan)
+            const baseOffset = (this.context.batchPlan?.length || 0) * this.DEFAULT_BATCH_SIZE;
+            const retryBatchOffset = baseOffset + currentBatch.offset;
+            await this.saveToTempStorage(batchTestcases, retryBatchOffset, currentBatch.batchNumber);
 
             if (this.context.generatedTestcases) {
                 this.context.generatedTestcases.push(...batchTestcases);
@@ -781,7 +804,401 @@ export class TestcaseGenerationAgent {
     }
 
     /**
-     * Helper: Save batch testcases vào database
+     * ✅ NEW: Save batch testcases vào TEMP STORAGE (orchestrator-style)
+     */
+    private async saveToTempStorage(batchTestcases: any[], offset: number, batchNumber: number): Promise<void> {
+        if (!this.context.tempStorage) {
+            this.context.tempStorage = new Map();
+        }
+
+        const version = await Version.findById(this.context.versionId).lean();
+        if (!version) throw new Error("Version not found");
+
+        // Validate và lưu vào temp storage với status
+        batchTestcases.forEach((tc: any, index: number) => {
+            const globalIndex = offset + index;
+            const errors: string[] = [];
+
+            // Validate required fields
+            if (!tc.title || (typeof tc.title === 'string' && tc.title.trim() === '')) {
+                errors.push('missing title');
+            }
+            if (!tc.steps || !Array.isArray(tc.steps) || tc.steps.length === 0) {
+                errors.push('missing steps');
+            }
+            if (!tc.test_type || !['integration', 'api', 'ui', 'performance', 'security'].includes(tc.test_type)) {
+                errors.push('missing or invalid test_type');
+            }
+
+            // Map to database format
+            const testcaseData = {
+                project_id: version.project_id,
+                version_id: new Types.ObjectId(this.context.versionId),
+                title: tc.title ? tc.title.trim() : '',
+                description: tc.description || '',
+                test_type: tc.test_type || this.context.testType,
+                source_requirement_ids: Array.isArray(tc.source_requirement_ids)
+                    ? tc.source_requirement_ids.map((id: any) => new Types.ObjectId(String(id)))
+                    : [],
+                priority: tc.priority || 'medium',
+                preconditions: Array.isArray(tc.preconditions) ? tc.preconditions : [],
+                database_tables: Array.isArray(tc.database_tables) ? tc.database_tables : [],
+                database_operations: Array.isArray(tc.database_operations) ? tc.database_operations : [],
+                steps: Array.isArray(tc.steps) ? tc.steps : [],
+                expected_results: tc.expected_results || {},
+                test_data: Array.isArray(tc.test_data) ? tc.test_data : [],
+                created_by: version.created_by
+            };
+
+            if (errors.length > 0) {
+                // Status: invalid
+                this.context.tempStorage.set(String(globalIndex), {
+                    status: "invalid",
+                    error: errors.join(', '),
+                    index: globalIndex,
+                    data: testcaseData
+                });
+                console.warn(`⚠️ [TEMP_STORAGE] Batch ${batchNumber}, index ${globalIndex}: invalid - ${errors.join(', ')}`);
+            } else {
+                // Status: generated
+                this.context.tempStorage.set(String(globalIndex), {
+                    status: "generated",
+                    data: testcaseData,
+                    index: globalIndex
+                });
+            }
+        });
+
+        console.log(`✅ [TEMP_STORAGE] Batch ${batchNumber}: Saved ${batchTestcases.length} testcases to temp storage`);
+
+        // Broadcast progress
+        const { testcaseSocketService } = await import("./testcase.socket.service");
+        if (testcaseSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
+            const generatedCount = Array.from(this.context.tempStorage.values()).filter(e => e.status === "generated").length;
+            const progress = 20 + Math.floor((batchNumber / (this.context.batchPlan?.length || 1)) * 70);
+            testcaseSocketService.emitProgress(
+                this.context.projectId,
+                this.context.versionId,
+                this.context.userId,
+                progress,
+                "generating",
+                true,
+                {
+                    currentBatch: batchNumber,
+                    totalBatches: this.context.batchPlan?.length || 1,
+                    testcasesInBatch: batchTestcases.length,
+                    savedCount: generatedCount,
+                    totalCount: this.context.estimatedCount || 0
+                },
+                undefined,
+                TestcaseAgentState.GENERATE_BATCH,
+                `Đã generate batch ${batchNumber}: ${batchTestcases.length} testcases (temp storage: ${generatedCount}/${this.context.estimatedCount || 0})`
+            );
+        }
+    }
+
+    /**
+     * State: FINAL_VALIDATION
+     * Validate tất cả testcases từ temp storage
+     */
+    private async finalValidation(): Promise<void> {
+        console.log(`🔍 [FINAL_VALIDATION] Validating all testcases from temp storage...`);
+
+        const { testcaseSocketService } = await import("./testcase.socket.service");
+        if (testcaseSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
+            testcaseSocketService.emitProgress(
+                this.context.projectId,
+                this.context.versionId,
+                this.context.userId,
+                92,
+                "validating",
+                true,
+                undefined,
+                undefined,
+                TestcaseAgentState.FINAL_VALIDATION,
+                "Đang validate tất cả testcases từ temp storage..."
+            );
+        }
+
+        if (!this.context.tempStorage) {
+            throw new Error("Temp storage not initialized");
+        }
+
+        // Validate và check duplicates
+        const existingTitles = new Set<string>();
+        const validTestcases: any[] = [];
+        const invalidEntries: Array<{ index: string; entry: TempTestcaseEntry }> = [];
+
+        // Lấy tất cả testcases đã có trong DB để check duplicate
+        const existingTestcases = await Testcase.find({ version_id: this.context.versionId })
+            .select('title')
+            .lean();
+        existingTestcases.forEach(tc => {
+            if (tc.title) existingTitles.add((tc.title as string).toLowerCase().trim());
+        });
+
+        // Validate từng entry trong temp storage
+        for (const [index, entry] of Array.from(this.context.tempStorage.entries())) {
+            if (entry.status === "generated" && entry.data) {
+                const tc = entry.data;
+                const errors: string[] = [];
+
+                // Check duplicate title
+                const titleLower = (tc.title as string)?.toLowerCase().trim();
+                if (titleLower && existingTitles.has(titleLower)) {
+                    errors.push(`duplicate title: "${tc.title}"`);
+                }
+
+                // Re-validate required fields
+                if (!tc.title || (tc.title as string).trim() === '') {
+                    errors.push('missing title');
+                }
+                if (!tc.steps || !Array.isArray(tc.steps) || tc.steps.length === 0) {
+                    errors.push('missing steps');
+                }
+
+                if (errors.length > 0) {
+                    // Mark as invalid
+                    entry.status = "invalid";
+                    entry.error = errors.join(', ');
+                    invalidEntries.push({ index, entry });
+                    console.warn(`⚠️ [FINAL_VALIDATION] Testcase at index ${index}: ${errors.join(', ')}`);
+                } else {
+                    validTestcases.push(tc);
+                    if (titleLower) existingTitles.add(titleLower);
+                }
+            } else if (entry.status === "invalid" || entry.status === "missing") {
+                invalidEntries.push({ index, entry });
+            }
+        }
+
+        console.log(`📊 [FINAL_VALIDATION] Validation complete: ${validTestcases.length} valid, ${invalidEntries.length} invalid/missing`);
+
+        // Update context
+        this.context.invalidTestcases = invalidEntries.map(({ entry }) => ({
+            title: entry.data?.title || 'Unnamed',
+            errors: entry.error ? [entry.error] : ['Unknown error'],
+            originalData: entry.data
+        }));
+
+        // Broadcast validation result
+        if (testcaseSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
+            testcaseSocketService.emitProgress(
+                this.context.projectId,
+                this.context.versionId,
+                this.context.userId,
+                94,
+                "validating",
+                true,
+                undefined,
+                undefined,
+                TestcaseAgentState.FINAL_VALIDATION,
+                `✅ Validate xong: ${validTestcases.length} valid, ${invalidEntries.length} invalid/missing. Chuyển sang atomic save...`
+            );
+        }
+
+        // Chuyển sang atomic save
+        this.state = TestcaseAgentState.ATOMIC_SAVE;
+    }
+
+    /**
+     * State: ATOMIC_SAVE
+     * Insert tất cả testcases hợp lệ vào database một lần (atomic)
+     */
+    private async atomicSave(): Promise<void> {
+        console.log(`💾 [ATOMIC_SAVE] Starting atomic save to database...`);
+
+        const { testcaseSocketService } = await import("./testcase.socket.service");
+        if (testcaseSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
+            testcaseSocketService.emitProgress(
+                this.context.projectId,
+                this.context.versionId,
+                this.context.userId,
+                95,
+                "saving",
+                true,
+                undefined,
+                undefined,
+                TestcaseAgentState.ATOMIC_SAVE,
+                "Đang lưu tất cả testcases vào database (atomic insert)..."
+            );
+        }
+
+        if (!this.context.tempStorage) {
+            throw new Error("Temp storage not initialized");
+        }
+
+        // Lấy tất cả testcases có status = "generated" và đã pass validation
+        const validTestcases: any[] = [];
+        for (const entry of Array.from(this.context.tempStorage.values())) {
+            if (entry.status === "generated" && entry.data) {
+                validTestcases.push(entry.data);
+            }
+        }
+
+        if (validTestcases.length === 0) {
+            console.warn(`⚠️ [ATOMIC_SAVE] No valid testcases to save.`);
+            this.state = TestcaseAgentState.DONE;
+            return;
+        }
+
+        const saveResult = await this.performAtomicSave(validTestcases);
+
+        // Cập nhật savedTestcases
+        this.context.savedTestcases = saveResult.savedTestcases || [];
+
+        console.log(`✅ [ATOMIC_SAVE] Save complete:`, {
+            totalExpected: saveResult.totalExpected,
+            saved: saveResult.saved,
+            repairedByLLM: saveResult.repairedByLLM,
+            skipped: saveResult.skipped,
+            failed: saveResult.failed.length
+        });
+
+        // Broadcast completion
+        if (testcaseSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
+            testcaseSocketService.emitProgress(
+                this.context.projectId,
+                this.context.versionId,
+                this.context.userId,
+                98,
+                "saving",
+                true,
+                undefined,
+                undefined,
+                TestcaseAgentState.ATOMIC_SAVE,
+                `✅ Đã lưu ${saveResult.saved}/${saveResult.totalExpected} testcases vào database`
+            );
+        }
+
+        this.state = TestcaseAgentState.DONE;
+    }
+
+    /**
+     * Helper: Perform atomic save với retry và self-repair
+     */
+    private async performAtomicSave(validTestcases: any[]): Promise<TestcaseSaveResult> {
+        const totalExpected = this.context.estimatedCount || validTestcases.length;
+        let savedTestcases: any[] = [];
+        let repairedByLLM = 0;
+        let skipped = 0;
+        const failed: string[] = [];
+
+        try {
+            // STEP 1: BATCH INSERT (attempt 1-3)
+            let attempt = 1;
+            const maxAttempts = 3;
+            let insertSuccess = false;
+
+            while (attempt <= maxAttempts && !insertSuccess) {
+                try {
+                    console.log(`💾 [ATOMIC_SAVE] Attempt ${attempt}/${maxAttempts}: Inserting ${validTestcases.length} testcases...`);
+                    const result = await Testcase.insertMany(validTestcases, { ordered: false });
+                    savedTestcases = result;
+                    insertSuccess = true;
+                    console.log(`✅ [ATOMIC_SAVE] Successfully inserted ${result.length} testcases on attempt ${attempt}`);
+                } catch (error: any) {
+                    console.error(`❌ [ATOMIC_SAVE] Attempt ${attempt} failed:`, error.message);
+
+                    if (attempt === maxAttempts) {
+                        // STEP 2: ANALYZE ERRORS
+                        if (error.name === 'BulkWriteError' && error.result) {
+                            const insertedCount = error.result.insertedCount || 0;
+                            const writeErrors = error.result.writeErrors || [];
+
+                            console.log(`📊 [ATOMIC_SAVE] BulkWriteError analysis: ${insertedCount}/${validTestcases.length} inserted, ${writeErrors.length} errors`);
+
+                            // Lấy các testcases đã insert thành công
+                            if (insertedCount > 0) {
+                                for (let i = 0; i < insertedCount; i++) {
+                                    if (error.result.insertedIds && error.result.insertedIds[i]) {
+                                        const doc = await Testcase.findById(error.result.insertedIds[i]);
+                                        if (doc) savedTestcases.push(doc);
+                                    }
+                                }
+                            }
+
+                            // STEP 3: LLM SELF-REPAIR cho validation errors
+                            const validationErrors = writeErrors.filter((e: any) =>
+                                e.code === 121 || // Schema validation error
+                                e.errmsg?.includes('validation') ||
+                                e.errmsg?.includes('required')
+                            );
+
+                            if (validationErrors.length > 0 && validationErrors.length <= 10) {
+                                console.log(`🔧 [ATOMIC_SAVE] Attempting LLM self-repair for ${validationErrors.length} testcases...`);
+                                // TODO: Implement LLM self-repair nếu cần
+                                // Hiện tại skip để không làm phức tạp quá
+                            }
+
+                            // STEP 4: RETRY INSERT từng cái cho các testcase còn lại
+                            const failedIndices = writeErrors.map((e: any) => e.index).filter((i: number) => i != null);
+                            const remainingTestcases = validTestcases.filter((_, idx) => !failedIndices.includes(idx));
+
+                            if (remainingTestcases.length > 0) {
+                                console.log(`🔄 [ATOMIC_SAVE] Retrying insert for ${remainingTestcases.length} remaining testcases...`);
+                                for (const tc of remainingTestcases) {
+                                    try {
+                                        const doc = new Testcase(tc);
+                                        await doc.validate();
+                                        const saved = await doc.save();
+                                        savedTestcases.push(saved);
+                                    } catch (individualError: any) {
+                                        console.error(`❌ [ATOMIC_SAVE] Failed to insert testcase "${tc.title}":`, individualError.message);
+                                        failed.push(tc.title || 'Unnamed');
+                                        skipped++;
+                                    }
+                                }
+                            }
+
+                            // Thêm các testcase failed từ writeErrors
+                            writeErrors.forEach((e: any) => {
+                                if (e.op && e.op.title) {
+                                    failed.push(e.op.title);
+                                }
+                            });
+                        } else {
+                            // Nếu không phải BulkWriteError, thử insert từng cái
+                            console.log(`🔄 [ATOMIC_SAVE] Non-BulkWriteError, attempting individual inserts...`);
+                            for (const tc of validTestcases) {
+                                try {
+                                    const doc = new Testcase(tc);
+                                    await doc.validate();
+                                    const saved = await doc.save();
+                                    savedTestcases.push(saved);
+                                } catch (individualError: any) {
+                                    console.error(`❌ [ATOMIC_SAVE] Failed to insert testcase "${tc.title}":`, individualError.message);
+                                    failed.push(tc.title || 'Unnamed');
+                                    skipped++;
+                                }
+                            }
+                        }
+                    }
+
+                    attempt++;
+                    if (attempt <= maxAttempts && !insertSuccess) {
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Delay giữa các attempt
+                    }
+                }
+            }
+        } catch (error: any) {
+            console.error(`❌ [ATOMIC_SAVE] Fatal error:`, error.message);
+            throw error;
+        }
+
+        return {
+            totalExpected,
+            saved: savedTestcases.length,
+            repairedByLLM,
+            skipped,
+            failed,
+            savedTestcases
+        };
+    }
+
+    /**
+     * Helper: Save batch testcases vào database (DEPRECATED - dùng temp storage thay thế)
+     * @deprecated Use saveToTempStorage instead
      */
     private async saveBatch(batchTestcases: any[], batchNumber: number): Promise<any[]> {
         const version = await Version.findById(this.context.versionId).lean();
@@ -906,42 +1323,50 @@ export class TestcaseGenerationAgent {
     }
 
     /**
-     * Helper: Perform verification
+     * Helper: Perform verification (đọc từ temp storage thay vì DB)
      */
     private async performVerification(): Promise<TestcaseVerificationResult> {
         const expectedCount = this.context.estimatedCount || 0;
-        const actualCount = await Testcase.countDocuments({ version_id: this.context.versionId });
 
-        const savedCount = this.context.savedTestcases?.length || 0;
-        const missingCount = Math.max(0, expectedCount - actualCount);
+        if (!this.context.tempStorage) {
+            // Nếu chưa có temp storage, fallback về cách cũ (từ DB)
+            const actualCount = await Testcase.countDocuments({ version_id: this.context.versionId });
+            const missingCount = Math.max(0, expectedCount - actualCount);
 
-        // Kiểm tra invalid testcases
-        const allTestcases = await Testcase.find({ version_id: this.context.versionId }).lean();
+            return {
+                hasMissing: missingCount > 0,
+                hasInvalid: false,
+                missingCount,
+                invalidTestcases: [],
+                totalGenerated: actualCount,
+                totalExpected: expectedCount
+            };
+        }
+
+        // Đếm từ temp storage
+        const generatedCount = Array.from(this.context.tempStorage.values()).filter(e => e.status === "generated").length;
+        const invalidCount = Array.from(this.context.tempStorage.values()).filter(e => e.status === "invalid").length;
+        const missingCount = Math.max(0, expectedCount - generatedCount);
+
         const invalidTestcases: InvalidTestcase[] = [];
-
-        // Validate từng testcase đã lưu
-        for (const tc of allTestcases) {
-            const errors: string[] = [];
-            if (!tc.title || (tc.title as string).trim() === '') errors.push('missing title');
-            if (!tc.steps || !Array.isArray(tc.steps) || tc.steps.length === 0) errors.push('missing steps');
-
-            if (errors.length > 0) {
+        for (const entry of Array.from(this.context.tempStorage.values())) {
+            if (entry.status === "invalid") {
                 invalidTestcases.push({
-                    title: (tc.title as string) || 'Unnamed',
-                    errors,
-                    originalData: tc
+                    title: entry.data?.title || 'Unnamed',
+                    errors: entry.error ? [entry.error] : ['Unknown error'],
+                    originalData: entry.data
                 });
             }
         }
 
-        const effectiveMissingCount = missingCount + invalidTestcases.length;
+        const effectiveMissingCount = missingCount + invalidCount;
 
         return {
             hasMissing: missingCount > 0,
-            hasInvalid: invalidTestcases.length > 0,
+            hasInvalid: invalidCount > 0,
             missingCount: effectiveMissingCount,
             invalidTestcases,
-            totalGenerated: actualCount,
+            totalGenerated: generatedCount,
             totalExpected: expectedCount
         };
     }

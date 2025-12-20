@@ -18,7 +18,8 @@ export class ExtractorService {
   async extractFiles(
     files: UploadedFile[],
     projectId: string,
-    versionId: string
+    versionId: string,
+    userId?: string // ✅ THÊM: userId để truyền xuống refine process
   ): Promise<ExtractionResult[]> {
     const results: ExtractionResult[] = [];
 
@@ -56,7 +57,7 @@ export class ExtractorService {
           results.push(...docxResultsWithHash);
           // results.push(...docxResults);
         } else if (mime.startsWith('audio/') || ["mp3", "m4a", "wav", "flac", "ogg", "webm", "aac"].includes(ext || "")) {
-          const audioResults = await this.audioService.handleAudio([file as any], projectId, versionId);
+          const audioResults = await this.audioService.handleAudio([file as any], projectId, versionId, userId);
           const audioMapped: ExtractionResult[] = audioResults.map(r => ({
             project_id: projectId,
             version_id: versionId,
