@@ -59,7 +59,7 @@ class UserController extends BaseController {
           return;
         }
 
-        const { name, dob, gender, avatar_url, status } = req.body;
+        const { name, dob, gender, avatar_url, status, selectedModel } = req.body;
         const { day, month, year } = dob;
         // Sử dụng UTC để tránh timezone issues - tạo Date với UTC time 00:00:00
         const newDob = new Date(Date.UTC(year, month - 1, day));
@@ -77,6 +77,7 @@ class UserController extends BaseController {
           gender,
           avatar_url,
           status,
+          selectedModel, // ✅ MỚI: Thêm selectedModel
         });
 
         res.status(StatusCodes.OK).json({

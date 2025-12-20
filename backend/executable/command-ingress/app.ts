@@ -105,6 +105,11 @@ import initSequenceDiagramRoute from "./features/uml/sequence.diagram/adapter/ro
 import initStatsRoute from "./features/stats/adapter/route";
 import { StatsController } from "./features/stats/adapter/controller";
 import { StatsService } from "./features/stats/domain/service";
+import { StatsCacheService } from "./features/stats/domain/stats.cache.service";
+import { PresenceRedisService } from "./features/presence/domain/presence.redis.service";
+import { presenceSocketService } from "./features/presence/domain/presence.socket.service";
+
+import initLLMRoute from "./features/llm/adapter/route";
 
 
 const app = express();
@@ -268,12 +273,37 @@ const createHttpServer = (redisClient: any) => {
     )
   );
   app.use("/api/logs", initLogRoute(new LogController(new LogService())));
-  app.use("/api/versions",initVersionRoute(new VersionController(new VersionService())))
+  app.use("/api/versions", initVersionRoute(new VersionController(new VersionService())))
+  app.use("/api/llm", initLLMRoute());
   app.use(recoverMiddleware);
-  app.use(
-    "/api/stats",
-    initStatsRoute(new StatsController())
-  );
+
+  // ✅ Khởi tạo Redis services nếu có Redis client
+  if (redisClient) {
+    // Khởi tạo Presence Redis Service
+    const presenceRedisService = new PresenceRedisService(redisClient);
+    presenceSocketService.setRedisService(presenceRedisService);
+    console.log('✅ Presence Redis Service initialized');
+
+    // Khởi tạo Stats Cache Service
+    const statsCacheService = new StatsCacheService(redisClient);
+    const statsService = new StatsService();
+    statsService.setCacheService(statsCacheService);
+    console.log('✅ Stats Cache Service initialized');
+
+    app.use(
+      "/api/stats",
+      initStatsRoute(new StatsController(statsService))
+    );
+  } else {
+    // Fallback: không có Redis, dùng StatsService không cache
+    const statsService = new StatsService();
+    app.use(
+      "/api/stats",
+      initStatsRoute(new StatsController(statsService))
+    );
+    // Không log warning ở đây vì đã log ở main.ts khi kết nối Redis
+    // console.log('⚠️ Stats Service initialized without Redis cache');
+  }
 
   return server;
 };

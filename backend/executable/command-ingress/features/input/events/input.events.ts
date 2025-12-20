@@ -36,9 +36,13 @@ export interface IncrementalProgressEvent extends InputEventData {
         currentBatch: number;
         totalBatches: number;
         usecasesInBatch: number;
+        savedCount?: number; // ✅ Tổng số usecases đã save
+        totalCount?: number; // ✅ Tổng số usecases cần generate
     };
     errors?: string[]; // ✅ Thêm errors field để frontend có thể detect failed state
     errorMessage?: string; // ✅ Thêm errorMessage cho compatibility
+    agentState?: string; // ✅ Agent state: ESTIMATE_USECASE_COUNT, BATCH_PLANNING, GENERATE_BATCH, VERIFY_RESULTS, REPLAN_MISSING, GENERATE_RETRY
+    message?: string; // ✅ Human-readable message từ agent
 }
 
 export interface EstimateReceivedEvent extends InputEventData {

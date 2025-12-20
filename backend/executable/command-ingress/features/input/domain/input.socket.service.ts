@@ -29,7 +29,7 @@ export class InputSocketService {
      */
     joinProjectRoom(socket: any, projectId: string): void {
         socket.join(`project_${projectId}`);
-        console.log(`✅ User ${socket.id} joined project room: project_${projectId}`);
+        //console.log(`✅ User ${socket.id} joined project room: project_${projectId}`);
     }
 
     /**
@@ -37,7 +37,7 @@ export class InputSocketService {
      */
     leaveProjectRoom(socket: any, projectId: string): void {
         socket.leave(`project_${projectId}`);
-        console.log(`🚪 User ${socket.id} left project room: project_${projectId}`);
+        //console.log(`🚪 User ${socket.id} left project room: project_${projectId}`);
     }
 
     // Các helper methods cho từng loại event
@@ -122,8 +122,12 @@ export class InputSocketService {
             currentBatch: number;
             totalBatches: number;
             usecasesInBatch: number;
+            savedCount?: number; // ✅ Tổng số usecases đã save
+            totalCount?: number; // ✅ Tổng số usecases cần generate
         },
-        errors?: string[] // ✅ Thêm errors parameter
+        errors?: string[], // ✅ Thêm errors parameter
+        agentState?: string, // ✅ Agent state
+        message?: string // ✅ Human-readable message
     ): void {
         const event: IncrementalProgressEvent = {
             type: 'INCREMENTAL_PROGRESS',
@@ -136,11 +140,15 @@ export class InputSocketService {
             batchInfo,
             errors, // ✅ Gửi errors trong event
             errorMessage: errors && errors.length > 0 ? errors.join('; ') : undefined, // ✅ Thêm errorMessage cho compatibility
+            agentState, // ✅ Agent state
+            message, // ✅ Human-readable message
             timestamp: new Date()
         };
         this.broadcastToProject(projectId, event);
         const errorInfo = errors && errors.length > 0 ? ` (Errors: ${errors.length})` : '';
-        console.log(`📊 Broadcast incremental progress: ${progress}% - ${stage}${batchInfo ? ` (Batch ${batchInfo.currentBatch}/${batchInfo.totalBatches})` : ''}${errorInfo}`);
+        const stateInfo = agentState ? ` [${agentState}]` : '';
+        const messageInfo = message ? ` - ${message}` : '';
+        console.log(`📊 Broadcast incremental progress: ${progress}% - ${stage}${stateInfo}${messageInfo}${batchInfo ? ` (Batch ${batchInfo.currentBatch}/${batchInfo.totalBatches})` : ''}${errorInfo}`);
     }
 
     emitEstimateReceived(

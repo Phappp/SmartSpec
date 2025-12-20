@@ -16,7 +16,7 @@ export class LogSocketService {
    */
   broadcastToProject(projectId: string, event: LogEvent): void {
     io.to(`project_${projectId}`).emit('log_event', event);
-    console.log(`📢 Broadcast log event to project ${projectId}:`, event.type);
+    //console.log(`📢 Broadcast log event to project ${projectId}:`, event.type);
   }
 
   /**
@@ -24,14 +24,14 @@ export class LogSocketService {
    */
   sendToUser(userId: string, event: LogEvent): void {
     io.to(`user_${userId}`).emit('log_event', event);
-    console.log(`📢 Sent log event to user ${userId}:`, event.type);
+    //console.log(`📢 Sent log event to user ${userId}:`, event.type);
   }
   /**
  * Gửi event log tới toàn hệ thống (ví dụ: login, logout, tạo project,...)
  */
 broadcastToSystem(event: LogEvent): void {
   io.to('system_logs').emit('log_event', event);
-  console.log(`🌍 Broadcast global log event:`, event.type);
+  //console.log(`🌍 Broadcast global log event:`, event.type);
 }
 
 /**
@@ -39,7 +39,7 @@ broadcastToSystem(event: LogEvent): void {
  */
 joinSystemRoom(socket: any): void {
   socket.join('system_logs');
-  console.log(`✅ User ${socket.id} joined system log room`);
+  //console.log(`✅ User ${socket.id} joined system log room`);
 }
 
 /**
@@ -60,7 +60,7 @@ emitGlobalLog(log: any): void {
    */
   joinProjectRoom(socket: any, projectId: string): void {
     socket.join(`project_${projectId}`);
-    console.log(`✅ User ${socket.id} joined project log room: project_${projectId}`);
+    //console.log(`✅ User ${socket.id} joined project log room: project_${projectId}`);
   }
 
   /**
@@ -68,7 +68,7 @@ emitGlobalLog(log: any): void {
    */
   leaveProjectRoom(socket: any, projectId: string): void {
     socket.leave(`project_${projectId}`);
-    console.log(`🚪 User ${socket.id} left project log room: project_${projectId}`);
+    //console.log(`🚪 User ${socket.id} left project log room: project_${projectId}`);
   }
 
   /**
@@ -76,7 +76,7 @@ emitGlobalLog(log: any): void {
    */
   joinUserRoom(socket: any, userId: string): void {
     socket.join(`user_${userId}`);
-    console.log(`✅ User ${socket.id} joined user log room: user_${userId}`);
+    //console.log(`✅ User ${socket.id} joined user log room: user_${userId}`);
   }
 
   /**
@@ -84,7 +84,7 @@ emitGlobalLog(log: any): void {
    */
   leaveUserRoom(socket: any, userId: string): void {
     socket.leave(`user_${userId}`);
-    console.log(`🚪 User ${socket.id} left user log room: user_${userId}`);
+    //console.log(`🚪 User ${socket.id} left user log room: user_${userId}`);
   }
 
   // ============================================================

@@ -83,6 +83,7 @@ export class UserServiceImpl implements UserService {
       gender?: string;
       avatar_url?: string;
       status?: string;
+      selectedModel?: string; // ✅ MỚI: Model LLM được user chọn
     }
   ): Promise<UserResponse> {
     const user = await User.findOne({ _id: userId });
@@ -106,6 +107,14 @@ export class UserServiceImpl implements UserService {
     }
     if (body.status === "ACTIVE" || body.status === "INACTIVE") {
       user.status = body.status;
+    }
+    // ✅ MỚI: Cập nhật selectedModel trong setting
+    if (body.selectedModel !== undefined) {
+      if (!user.setting) {
+        user.setting = { language: "vi", theme: "light", selectedModel: null };
+      }
+      (user.setting as any).selectedModel = body.selectedModel || null;
+      console.log(`✅ [updateProfile] Updated selectedModel for user ${userId}: ${body.selectedModel || 'null'}`);
     }
 
     await user.save();

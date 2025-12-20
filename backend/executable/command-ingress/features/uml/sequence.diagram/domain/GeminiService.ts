@@ -215,13 +215,17 @@ export class SequenceDiagramGeminiService {
     try {
       // <-- THAY ĐỔI: Lấy ngữ cảnh Usecase (là 1 object)
       const useCaseContext = payload.useCaseContext;
+      // Hỗ trợ cả main_flow (mới) và tasks (cũ)
+      const mainFlow = useCaseContext?.main_flow || useCaseContext?.tasks;
       if (
         !useCaseContext ||
         typeof useCaseContext !== "object" ||
-        !useCaseContext.tasks
+        !mainFlow ||
+        !Array.isArray(mainFlow) ||
+        mainFlow.length === 0
       ) {
         throw new Error(
-          "Invalid useCaseContext. It must be a Usecase object containing 'tasks'."
+          "Invalid useCaseContext. It must be a Usecase object containing 'main_flow' or 'tasks'."
         );
       }
 

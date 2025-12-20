@@ -104,6 +104,9 @@
               <li @click.stop="$emit('open-personal')">
                 <span class="material-symbols-outlined">settings</span> Settings
               </li>
+              <li @click.stop="openModelSelection">
+                <span class="material-symbols-outlined">smart_toy</span> Model Selection
+              </li>
               <hr />
               <li @click.stop="handleLogout">
                 <span class="material-symbols-outlined">logout</span> Logout
@@ -114,6 +117,12 @@
       </div>
     </div>
 
+    <!-- Model Selection Modal -->
+    <ModelSelectionModal
+      v-model="showModelModal"
+      @model-selected="handleModelSelected"
+    />
+
     <!-- Mobile Overlay -->
     <div v-if="isMobile && isMobileOpen" class="mobile-overlay" @click="closeMobile"></div>
   </div>
@@ -122,9 +131,13 @@
 <script>
 import { isAdmin } from '../utils/authGuard'
 import axiosClient from '@/utils/axiosClient'
+import ModelSelectionModal from './ModelSelectionModal.vue'
 
 export default {
   name: 'Sidebar',
+  components: {
+    ModelSelectionModal,
+  },
   props: {
     user: {
       type: Object,
@@ -139,6 +152,7 @@ export default {
       localUser: null,
       isMobile: false,
       isMobileOpen: false,
+      showModelModal: false,
     }
   },
   computed: {
@@ -264,6 +278,15 @@ export default {
       if (this.isMobile) {
         this.closeMobile()
       }
+    },
+    openModelSelection() {
+      this.showUserMenu = false
+      this.showModelModal = true
+    },
+    handleModelSelected(modelName) {
+      console.log('Model selected:', modelName)
+      // Có thể emit event hoặc lưu vào store nếu cần
+      this.$emit('model-selected', modelName)
     },
   },
 }

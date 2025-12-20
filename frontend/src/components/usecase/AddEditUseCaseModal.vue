@@ -165,20 +165,13 @@
           </div>
 
           <div class="form-grid">
-            <!-- Main Flow -->
+            <!-- Row 1: Main Flow (Tasks) -->
             <div class="form-group span-3">
               <label class="required">Main Flow (Tasks)</label>
               <div class="array-input">
-                <div v-for="(task, index) in localForm.tasks" :key="index" class="array-item">
+                <div v-for="(task, index) in localForm.tasks" :key="index" class="task-item">
+                  <div class="task-header">
                   <div class="step-number">{{ index + 1 }}</div>
-                  <input
-                    v-model="localForm.tasks[index]"
-                    type="text"
-                    placeholder="Describe a step in the main flow"
-                    required
-                    :class="{ error: fieldErrors.tasks && fieldErrors.tasks[index] }"
-                    @blur="validateTasks()"
-                  />
                   <button
                     type="button"
                     class="remove-item-btn"
@@ -187,6 +180,30 @@
                   >
                     <span class="material-symbols-outlined">remove</span>
                   </button>
+                  </div>
+                  <div class="task-inputs">
+                    <div class="task-input-group">
+                      <label class="task-label">Action</label>
+                      <input
+                        v-model="localForm.tasks[index].action"
+                        type="text"
+                        placeholder="Describe the action"
+                        required
+                        :class="{ error: fieldErrors.tasks && fieldErrors.tasks[index] }"
+                        @blur="validateTasks()"
+                      />
+                    </div>
+                    <div class="task-input-group">
+                      <label class="task-label">Expected Result</label>
+                      <input
+                        v-model="localForm.tasks[index].expected_result"
+                        type="text"
+                        placeholder="Expected result"
+                        :class="{ error: fieldErrors.tasks && fieldErrors.tasks[index] }"
+                        @blur="validateTasks()"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <button type="button" class="add-item-btn" @click="addArrayItem('tasks')">
                   <span class="material-symbols-outlined">add</span>
@@ -198,7 +215,8 @@
               </div>
             </div>
 
-            <!-- Inputs & Outputs -->
+            <!-- Row 2: Inputs & Outputs -->
+            <div class="conditions-row">
             <div class="form-group">
               <label>Inputs</label>
               <div class="array-input">
@@ -244,10 +262,12 @@
                   <span class="material-symbols-outlined">add</span>
                   Add Output
                 </button>
+                </div>
               </div>
             </div>
 
-            <!-- Conditions -->
+            <!-- Row 3: Preconditions & Postconditions -->
+            <div class="conditions-row">
             <div class="form-group">
               <label>Preconditions</label>
               <div class="array-input">
@@ -301,10 +321,70 @@
                   <span class="material-symbols-outlined">add</span>
                   Add Postcondition
                 </button>
+                </div>
               </div>
             </div>
 
-            <!-- Triggers & Exceptions -->
+            <!-- Row 4: Alternate Flows -->
+            <div class="form-group span-3">
+              <label>Alternate Flows</label>
+              <div class="array-input">
+                <div v-for="(flow, index) in localForm.alternative_flows" :key="index" class="alternative-flow-item">
+                  <div class="flow-header">
+                    <span class="flow-label">Flow {{ index + 1 }}</span>
+                    <button
+                      type="button"
+                      class="remove-item-btn"
+                      @click="removeArrayItem('alternative_flows', index)"
+                    >
+                      <span class="material-symbols-outlined">remove</span>
+                    </button>
+                  </div>
+                  <div class="flow-inputs">
+                    <div class="flow-input-group">
+                      <label class="task-label">At Step</label>
+                      <input
+                        v-model.number="localForm.alternative_flows[index].at_step"
+                        type="number"
+                        placeholder="Step number"
+                        min="1"
+                      />
+                    </div>
+                    <div class="flow-input-group">
+                      <label class="task-label">Condition</label>
+                      <input
+                        v-model="localForm.alternative_flows[index].condition"
+                        type="text"
+                        placeholder="Condition that triggers this flow"
+                      />
+                    </div>
+                    <div class="flow-input-group">
+                      <label class="task-label">System Response</label>
+                      <input
+                        v-model="localForm.alternative_flows[index].system_response"
+                        type="text"
+                        placeholder="How the system responds"
+                      />
+                    </div>
+                    <div class="flow-input-group">
+                      <label class="task-label">End State</label>
+                      <input
+                        v-model="localForm.alternative_flows[index].end_state"
+                        type="text"
+                        placeholder="Final state after this flow"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <button type="button" class="add-item-btn" @click="addArrayItem('alternative_flows')">
+                  <span class="material-symbols-outlined">add</span>
+                  Add Alternate Flow
+                </button>
+              </div>
+            </div>
+
+            <!-- Row 5: Triggers & Exceptions -->
+            <div class="conditions-row">
             <div class="form-group">
               <label>Triggers</label>
               <div class="array-input">
@@ -329,8 +409,8 @@
               </div>
             </div>
 
-            <div class="form-group span-2">
-              <label>Exceptions (Alternate Flows)</label>
+              <div class="form-group">
+                <label>Exceptions</label>
               <div class="array-input">
                 <div
                   v-for="(exception, index) in localForm.exceptions"
@@ -354,11 +434,13 @@
                   <span class="material-symbols-outlined">add</span>
                   Add Exception
                 </button>
+                </div>
               </div>
             </div>
 
-            <!-- Rules & Constraints -->
-            <div class="form-group span-2">
+            <!-- Row 6: Business Rules & Constraints -->
+            <div class="conditions-row">
+              <div class="form-group">
               <label>Business Rules</label>
               <div class="array-input">
                 <div v-for="(rule, index) in localForm.rules" :key="index" class="array-item">
@@ -407,6 +489,7 @@
                   <span class="material-symbols-outlined">add</span>
                   Add Constraint
                 </button>
+                </div>
               </div>
             </div>
           </div>
@@ -531,7 +614,7 @@
                   <div class="review-item">
                     <span class="review-label">Tasks:</span>
                     <span class="review-value"
-                      >{{ localForm.tasks.filter((t) => t.trim()).length }} steps</span
+                      >{{ localForm.tasks.filter((t) => t && (t.action || '').trim()).length }} steps</span
                     >
                   </div>
                 </div>
@@ -659,7 +742,7 @@ export default {
       if (
         !Array.isArray(this.localForm.tasks) ||
         this.localForm.tasks.length === 0 ||
-        !this.localForm.tasks[0]?.trim()
+        !this.localForm.tasks[0]?.action?.trim()
       ) {
         return false
       }
@@ -680,7 +763,7 @@ export default {
         return (
           Array.isArray(this.localForm.tasks) &&
           this.localForm.tasks.length > 0 &&
-          this.localForm.tasks[0]?.trim()
+          this.localForm.tasks[0]?.action?.trim()
         )
       }
       return true
@@ -765,7 +848,7 @@ export default {
           } else if (
             !Array.isArray(this.localForm.tasks) ||
             this.localForm.tasks.length === 0 ||
-            !this.localForm.tasks[0]?.trim()
+            !this.localForm.tasks[0]?.action?.trim()
           ) {
             this.currentStep = 2
           }
@@ -835,7 +918,7 @@ export default {
       if (
         !Array.isArray(this.localForm.tasks) ||
         this.localForm.tasks.length === 0 ||
-        !this.localForm.tasks[0]?.trim()
+        !this.localForm.tasks[0]?.action?.trim()
       ) {
         this.fieldErrors.tasks = 'At least one task is required'
       }
@@ -887,9 +970,54 @@ export default {
         }`
       }
 
+      // Convert tasks to main_flow format for backend
+      if (Array.isArray(cleanedForm.tasks) && cleanedForm.tasks.length > 0) {
+        cleanedForm.main_flow = cleanedForm.tasks.map((task, index) => {
+          if (typeof task === 'object' && task !== null) {
+            return {
+              step: index + 1,
+              action: (task.action || '').trim(),
+              expected_result: (task.expected_result || '').trim()
+            }
+          } else if (typeof task === 'string') {
+            // Fallback: if task is string, use it as action
+            return {
+              step: index + 1,
+              action: task.trim(),
+              expected_result: ''
+            }
+          }
+          return {
+            step: index + 1,
+            action: '',
+            expected_result: ''
+          }
+        }).filter((step) => step.action.trim()) // Remove empty actions
+        // Keep tasks for internal use but backend will use main_flow
+      } else {
+        cleanedForm.main_flow = []
+      }
+
+      // Clean alternative_flows
+      if (Array.isArray(cleanedForm.alternative_flows)) {
+        cleanedForm.alternative_flows = cleanedForm.alternative_flows.map((flow) => {
+          if (typeof flow === 'object' && flow !== null) {
+            return {
+              id: (flow.id || '').trim(),
+              at_step: flow.at_step ? Number(flow.at_step) : 1,
+              condition: (flow.condition || '').trim(),
+              system_response: (flow.system_response || '').trim(),
+              end_state: (flow.end_state || '').trim()
+            }
+          }
+          return { id: '', at_step: 1, condition: '', system_response: '', end_state: '' }
+        }).filter((flow) => flow.condition.trim() || flow.system_response.trim() || flow.end_state.trim())
+      } else {
+        cleanedForm.alternative_flows = []
+      }
+
       // Clean array fields - đảm bảo luôn là array
       const arrayFields = [
-        'tasks',
         'inputs',
         'outputs',
         'preconditions',
@@ -907,24 +1035,59 @@ export default {
           cleanedForm[field] = []
         } else {
           cleanedForm[field] = cleanedForm[field]
-            .map((item) => (typeof item === 'string' ? item.trim() : item))
+            .map((item) => {
+              if (typeof item === 'string') {
+                return item.trim()
+              } else if (typeof item === 'object' && item !== null) {
+                // Convert object thành string để tránh "[object Object]"
+                // Xử lý theo từng loại field
+                if (field === 'inputs' || field === 'outputs') {
+                  if (item.name) {
+                    let desc = item.name
+                    if (item.type) desc += ` (${item.type})`
+                    return desc
+                  }
+                } else if (field === 'rules') {
+                  return item.description || item.id || ''
+                } else if (field === 'exceptions') {
+                  const parts = []
+                  if (item.description) parts.push(item.description)
+                  else if (item.type) parts.push(`${item.type} exception`)
+                  if (item.at_step) parts.push(`at step ${item.at_step}`)
+                  return parts.length > 0 ? parts.join(' - ') : ''
+                }
+                // Fallback: convert object thành string
+                return JSON.stringify(item)
+              }
+              return String(item || '').trim()
+            })
             .filter((item) => item && item !== '')
         }
       })
 
-      // Đảm bảo tasks có ít nhất một item
-      if (cleanedForm.tasks.length === 0) {
-        cleanedForm.tasks = ['']
-      }
-
-      // Đảm bảo context có giá trị mặc định nếu empty
-      if (!cleanedForm.context || cleanedForm.context.trim() === '') {
+      // Đảm bảo context có giá trị mặc định nếu empty - kiểm tra type trước khi gọi trim()
+      if (typeof cleanedForm.context === 'string') {
+        if (!cleanedForm.context || cleanedForm.context.trim() === '') {
+          cleanedForm.context = ''
+        }
+      } else if (cleanedForm.context && typeof cleanedForm.context === 'object') {
+        // Context object từ backend: { module, scope, system }
+        const parts = []
+        if (cleanedForm.context.module) parts.push(`Module: ${cleanedForm.context.module}`)
+        if (cleanedForm.context.scope) parts.push(`Scope: ${cleanedForm.context.scope}`)
+        if (cleanedForm.context.system) parts.push(`System: ${cleanedForm.context.system}`)
+        cleanedForm.context = parts.join(', ').trim() || ''
+      } else {
         cleanedForm.context = ''
       }
 
-      // Đảm bảo feedback có giá trị phù hợp
-      if (!cleanedForm.feedback || cleanedForm.feedback.trim() === '') {
-        cleanedForm.feedback = null // hoặc '' tùy BE xử lý
+      // Đảm bảo feedback có giá trị phù hợp - kiểm tra type trước khi gọi trim()
+      if (typeof cleanedForm.feedback === 'string') {
+        if (!cleanedForm.feedback || cleanedForm.feedback.trim() === '') {
+          cleanedForm.feedback = null // hoặc '' tùy BE xử lý
+        }
+      } else {
+        cleanedForm.feedback = null
       }
 
       // Đảm bảo priority hợp lệ
@@ -956,29 +1119,227 @@ export default {
     },
 
     normalizeFormData(data) {
-      if (data.role && typeof data.role === 'string') {
+      const normalized = { ...data }
+
+      // Normalize business_reason -> reason
+      if (normalized.business_reason && !normalized.reason) {
+        normalized.reason = normalized.business_reason
+      }
+
+      // Normalize role
+      if (normalized.role && typeof normalized.role === 'string') {
         // ✅ Đơn giản hóa - chỉ giữ name, để BE mapping ID
-        return {
-          ...data,
-          role: {
-            id: '', // Để BE tự động mapping
-            name: data.role,
-          },
+        normalized.role = {
+          id: '', // Để BE tự động mapping
+          name: normalized.role,
         }
-      }
-
-      if (data.role && typeof data.role === 'object' && !data.role.id) {
+      } else if (normalized.role && typeof normalized.role === 'object' && !normalized.role.id) {
         // ✅ Chỉ cần name, BE sẽ tạo ID đúng
-        return {
-          ...data,
-          role: {
-            id: '', // Để BE tự động mapping
-            name: data.role.name || '',
-          },
+        normalized.role = {
+          id: '', // Để BE tự động mapping
+          name: normalized.role.name || '',
         }
       }
 
-      return data
+      // Normalize context - convert từ object sang string nếu cần
+      if (normalized.context && typeof normalized.context === 'object') {
+        // Context object từ backend: { module, scope, system }
+        const parts = []
+        if (normalized.context.module) parts.push(`Module: ${normalized.context.module}`)
+        if (normalized.context.scope) parts.push(`Scope: ${normalized.context.scope}`)
+        if (normalized.context.system) parts.push(`System: ${normalized.context.system}`)
+        normalized.context = parts.join(', ').trim() || ''
+      } else if (!normalized.context || typeof normalized.context !== 'string') {
+        normalized.context = ''
+      }
+
+      // Normalize actor (backend có thể dùng actor thay vì role)
+      if (normalized.actor && !normalized.role) {
+        // Nếu có actor nhưng không có role, copy actor sang role
+        if (typeof normalized.actor === 'object') {
+          normalized.role = {
+            id: normalized.actor.id || '',
+            name: normalized.actor.name || '',
+          }
+        } else if (typeof normalized.actor === 'string') {
+          normalized.role = {
+            id: '',
+            name: normalized.actor,
+          }
+        }
+      }
+
+      // Normalize inputs: array of objects { name, type, required, optional } -> array of strings
+      if (Array.isArray(normalized.inputs)) {
+        normalized.inputs = normalized.inputs.map((item) => {
+          if (typeof item === 'string') return item
+          if (typeof item === 'object' && item !== null) {
+            // Extract name từ object, hoặc tạo string mô tả
+            if (item.name) {
+              let desc = item.name
+              if (item.type) desc += ` (${item.type})`
+              return desc
+            }
+            return JSON.stringify(item)
+          }
+          return String(item || '')
+        }).filter(Boolean)
+      } else if (!normalized.inputs) {
+        normalized.inputs = []
+      }
+
+      // Normalize outputs: array of objects { name, type, required, optional } -> array of strings
+      if (Array.isArray(normalized.outputs)) {
+        normalized.outputs = normalized.outputs.map((item) => {
+          if (typeof item === 'string') return item
+          if (typeof item === 'object' && item !== null) {
+            // Extract name từ object, hoặc tạo string mô tả
+            if (item.name) {
+              let desc = item.name
+              if (item.type) desc += ` (${item.type})`
+              return desc
+            }
+            return JSON.stringify(item)
+          }
+          return String(item || '')
+        }).filter(Boolean)
+      } else if (!normalized.outputs) {
+        normalized.outputs = []
+      }
+
+      // Normalize rules: array of objects { id, description } -> array of strings
+      if (Array.isArray(normalized.rules)) {
+        normalized.rules = normalized.rules.map((item) => {
+          if (typeof item === 'string') return item
+          if (typeof item === 'object' && item !== null) {
+            // Extract description từ object
+            return item.description || item.id || JSON.stringify(item)
+          }
+          return String(item || '')
+        }).filter(Boolean)
+      } else if (!normalized.rules) {
+        normalized.rules = []
+      }
+
+      // Normalize exceptions: array of objects { id, at_step, type, description, system_response } -> array of strings
+      if (Array.isArray(normalized.exceptions)) {
+        normalized.exceptions = normalized.exceptions.map((item) => {
+          if (typeof item === 'string') return item
+          if (typeof item === 'object' && item !== null) {
+            // Tạo string mô tả từ exception object
+            const parts = []
+            if (item.description) parts.push(item.description)
+            else if (item.type) parts.push(`${item.type} exception`)
+            if (item.at_step) parts.push(`at step ${item.at_step}`)
+            if (item.system_response) parts.push(`→ ${item.system_response}`)
+            return parts.length > 0 ? parts.join(' - ') : JSON.stringify(item)
+          }
+          return String(item || '')
+        }).filter(Boolean)
+      } else if (!normalized.exceptions) {
+        normalized.exceptions = []
+      }
+
+      // Normalize trigger: object { event, source } -> array of strings (triggers)
+      if (normalized.trigger && typeof normalized.trigger === 'object' && !Array.isArray(normalized.trigger)) {
+        // Convert trigger object thành array
+        const triggerStrings = []
+        if (normalized.trigger.event) {
+          triggerStrings.push(normalized.trigger.event)
+        }
+        if (normalized.trigger.source && normalized.trigger.source !== 'UI') {
+          triggerStrings.push(`Source: ${normalized.trigger.source}`)
+        }
+        normalized.triggers = triggerStrings.length > 0 ? triggerStrings : (normalized.triggers || [])
+        delete normalized.trigger
+      } else if (!normalized.triggers || !Array.isArray(normalized.triggers)) {
+        normalized.triggers = []
+      }
+
+      // Normalize main_flow: array of objects -> tasks array of objects
+      if (Array.isArray(normalized.main_flow) && normalized.main_flow.length > 0) {
+        // Convert main_flow objects thành tasks objects
+        normalized.tasks = normalized.main_flow.map((step, index) => {
+          if (typeof step === 'object' && step !== null) {
+            // Extract action và expected_result từ step object
+            return {
+              action: step.action || '',
+              expected_result: step.expected_result || ''
+            }
+          } else if (typeof step === 'string') {
+            // Nếu là string, giả sử toàn bộ là action
+            return {
+              action: step,
+              expected_result: ''
+            }
+          }
+          return { action: String(step || ''), expected_result: '' }
+        })
+      } else if (!normalized.tasks || !Array.isArray(normalized.tasks)) {
+        // Nếu không có main_flow, kiểm tra tasks hiện tại
+        normalized.tasks = normalized.tasks || [{ action: '', expected_result: '' }]
+      } else {
+        // Nếu tasks đã tồn tại, đảm bảo mỗi task là object
+        normalized.tasks = normalized.tasks.map((task) => {
+          if (typeof task === 'object' && task !== null && (task.action !== undefined || task.expected_result !== undefined)) {
+            return {
+              action: task.action || '',
+              expected_result: task.expected_result || ''
+            }
+          } else if (typeof task === 'string') {
+            // Convert string thành object
+            return { action: task, expected_result: '' }
+          }
+          return { action: '', expected_result: '' }
+        })
+      }
+
+      // Normalize non_functional_constraints -> constraints
+      if (Array.isArray(normalized.non_functional_constraints)) {
+        normalized.constraints = normalized.non_functional_constraints.map((item) => {
+          return typeof item === 'string' ? item : String(item || '')
+        }).filter(Boolean)
+      } else if (!normalized.constraints || !Array.isArray(normalized.constraints)) {
+        normalized.constraints = []
+      }
+
+      // Normalize alternative_flows
+      if (Array.isArray(normalized.alternative_flows) && normalized.alternative_flows.length > 0) {
+        normalized.alternative_flows = normalized.alternative_flows.map((flow) => {
+          if (typeof flow === 'object' && flow !== null) {
+            return {
+              id: flow.id || '',
+              at_step: flow.at_step || 1,
+              condition: flow.condition || '',
+              system_response: flow.system_response || '',
+              end_state: flow.end_state || ''
+            }
+          }
+          return { id: '', at_step: 1, condition: '', system_response: '', end_state: '' }
+        })
+      } else if (!normalized.alternative_flows || !Array.isArray(normalized.alternative_flows)) {
+        normalized.alternative_flows = []
+      }
+      
+      // Ensure alternative_flows is always an array
+      if (!Array.isArray(normalized.alternative_flows)) {
+        normalized.alternative_flows = []
+      }
+
+      // Đảm bảo các array fields khác là array
+      const arrayFields = ['preconditions', 'postconditions', 'stakeholders', 'related_usecases']
+      arrayFields.forEach((field) => {
+        if (!Array.isArray(normalized[field])) {
+          normalized[field] = []
+        }
+      })
+
+      // Đảm bảo tasks có ít nhất một item
+      if (!normalized.tasks || normalized.tasks.length === 0) {
+        normalized.tasks = [{ action: '', expected_result: '' }]
+      }
+
+      return normalized
     },
 
     nextStep() {
@@ -1002,7 +1363,19 @@ export default {
       if (!this.localForm[field]) {
         this.localForm[field] = []
       }
+      if (field === 'tasks') {
+        this.localForm[field].push({ action: '', expected_result: '' })
+      } else if (field === 'alternative_flows') {
+        this.localForm[field].push({ 
+          id: '', 
+          at_step: 1, 
+          condition: '', 
+          system_response: '', 
+          end_state: '' 
+        })
+      } else {
       this.localForm[field].push('')
+      }
     },
 
     removeArrayItem(field, index) {
@@ -1013,7 +1386,7 @@ export default {
         this.localForm[field] = []
       } else {
         // For tasks, we always need at least one
-        this.localForm[field] = ['']
+        this.localForm[field] = [{ action: '', expected_result: '' }]
       }
     },
 
@@ -1025,11 +1398,12 @@ export default {
         reason: '',
         priority: 'medium',
         context: '',
-        tasks: [''],
+        tasks: [{ action: '', expected_result: '' }],
         inputs: [],
         outputs: [],
         preconditions: [],
         postconditions: [],
+        alternative_flows: [],
         triggers: [],
         rules: [],
         constraints: [],
@@ -1064,9 +1438,48 @@ export default {
     cleanFormDataForComparison(form) {
       const cleaned = { ...form }
 
+      // Clean tasks - xử lý riêng vì là objects
+      if (Array.isArray(cleaned.tasks)) {
+        cleaned.tasks = cleaned.tasks.map((task) => {
+          if (typeof task === 'object' && task !== null) {
+            return {
+              action: (task.action || '').trim(),
+              expected_result: (task.expected_result || '').trim()
+            }
+          } else if (typeof task === 'string') {
+            return { action: task.trim(), expected_result: '' }
+          }
+          return { action: '', expected_result: '' }
+        }).filter((task) => task.action.trim()) // Remove empty actions
+      } else {
+        cleaned.tasks = []
+      }
+
+      // Đảm bảo tasks có ít nhất một item
+      if (cleaned.tasks.length === 0) {
+        cleaned.tasks = [{ action: '', expected_result: '' }]
+      }
+
+      // Clean alternative_flows
+      if (Array.isArray(cleaned.alternative_flows)) {
+        cleaned.alternative_flows = cleaned.alternative_flows.map((flow) => {
+          if (typeof flow === 'object' && flow !== null) {
+            return {
+              id: (flow.id || '').trim(),
+              at_step: flow.at_step ? Number(flow.at_step) : 1,
+              condition: (flow.condition || '').trim(),
+              system_response: (flow.system_response || '').trim(),
+              end_state: (flow.end_state || '').trim()
+            }
+          }
+          return { id: '', at_step: 1, condition: '', system_response: '', end_state: '' }
+        }).filter((flow) => flow.condition.trim() || flow.system_response.trim() || flow.end_state.trim())
+      } else {
+        cleaned.alternative_flows = []
+      }
+
       // Clean array fields - đảm bảo luôn là array và trim
       const arrayFields = [
-        'tasks',
         'inputs',
         'outputs',
         'preconditions',
@@ -1084,20 +1497,58 @@ export default {
           cleaned[field] = []
         } else {
           cleaned[field] = cleaned[field]
-            .map((item) => (typeof item === 'string' ? item.trim() : String(item).trim()))
+            .map((item) => {
+              if (typeof item === 'string') {
+                return item.trim()
+              } else if (typeof item === 'object' && item !== null) {
+                // Convert object thành string để tránh "[object Object]"
+                // Xử lý theo từng loại field
+                if (field === 'inputs' || field === 'outputs') {
+                  if (item.name) {
+                    let desc = item.name
+                    if (item.type) desc += ` (${item.type})`
+                    return desc
+                  }
+                } else if (field === 'rules') {
+                  return item.description || item.id || ''
+                } else if (field === 'exceptions') {
+                  const parts = []
+                  if (item.description) parts.push(item.description)
+                  else if (item.type) parts.push(`${item.type} exception`)
+                  if (item.at_step) parts.push(`at step ${item.at_step}`)
+                  return parts.length > 0 ? parts.join(' - ') : ''
+                }
+                // Fallback: convert object thành string
+                return JSON.stringify(item)
+              }
+              return String(item || '').trim()
+            })
             .filter((item) => item && item !== '')
         }
       })
 
-      // Đảm bảo tasks có ít nhất một item
-      if (cleaned.tasks.length === 0) {
-        cleaned.tasks = ['']
-      }
-
-      // Normalize string fields
+      // Normalize string fields - kiểm tra type trước khi gọi trim()
       const stringFields = ['name', 'goal', 'reason', 'context', 'feedback']
       stringFields.forEach((field) => {
-        cleaned[field] = (cleaned[field] || '').trim()
+        const value = cleaned[field]
+        if (typeof value === 'string') {
+          cleaned[field] = value.trim()
+        } else if (value != null && typeof value === 'object') {
+          // Nếu là object (ví dụ context từ backend), convert sang string
+          if (field === 'context') {
+            // Context object từ backend: { module, scope, system }
+            const parts = []
+            if (value.module) parts.push(`Module: ${value.module}`)
+            if (value.scope) parts.push(`Scope: ${value.scope}`)
+            if (value.system) parts.push(`System: ${value.system}`)
+            cleaned[field] = parts.join(', ').trim()
+          } else {
+            // Các object khác, convert sang empty string
+            cleaned[field] = ''
+          }
+        } else {
+          cleaned[field] = String(value || '').trim()
+        }
       })
 
       // Normalize priority
@@ -1120,8 +1571,36 @@ export default {
       // So sánh các trường cơ bản
       const basicFields = ['name', 'goal', 'reason', 'priority', 'context', 'feedback']
       for (const field of basicFields) {
-        const originalValue = (original[field] || '').trim()
-        const currentValue = (current[field] || '').trim()
+        // Xử lý an toàn - kiểm tra type trước khi gọi trim()
+        let originalValue = original[field]
+        let currentValue = current[field]
+        
+        if (typeof originalValue === 'string') {
+          originalValue = originalValue.trim()
+        } else if (originalValue != null && typeof originalValue === 'object' && field === 'context') {
+          // Context object từ backend
+          const parts = []
+          if (originalValue.module) parts.push(`Module: ${originalValue.module}`)
+          if (originalValue.scope) parts.push(`Scope: ${originalValue.scope}`)
+          if (originalValue.system) parts.push(`System: ${originalValue.system}`)
+          originalValue = parts.join(', ').trim()
+        } else {
+          originalValue = String(originalValue || '').trim()
+        }
+        
+        if (typeof currentValue === 'string') {
+          currentValue = currentValue.trim()
+        } else if (currentValue != null && typeof currentValue === 'object' && field === 'context') {
+          // Context object từ backend
+          const parts = []
+          if (currentValue.module) parts.push(`Module: ${currentValue.module}`)
+          if (currentValue.scope) parts.push(`Scope: ${currentValue.scope}`)
+          if (currentValue.system) parts.push(`System: ${currentValue.system}`)
+          currentValue = parts.join(', ').trim()
+        } else {
+          currentValue = String(currentValue || '').trim()
+        }
+        
         if (originalValue !== currentValue) {
           return true
         }
@@ -1134,9 +1613,56 @@ export default {
         return true
       }
 
-      // So sánh các mảng
+      // So sánh tasks - xử lý riêng vì là objects
+      const originalTasks = (original.tasks || []).map((task) => {
+        if (typeof task === 'object' && task !== null) {
+          return `${(task.action || '').trim()}|${(task.expected_result || '').trim()}`
+        }
+        return String(task || '').trim()
+      }).filter(Boolean)
+      const currentTasks = (current.tasks || []).map((task) => {
+        if (typeof task === 'object' && task !== null) {
+          return `${(task.action || '').trim()}|${(task.expected_result || '').trim()}`
+        }
+        return String(task || '').trim()
+      }).filter(Boolean)
+
+      if (originalTasks.length !== currentTasks.length) {
+        return true
+      }
+
+      for (let i = 0; i < originalTasks.length; i++) {
+        if (originalTasks[i] !== currentTasks[i]) {
+          return true
+        }
+      }
+
+      // So sánh alternative_flows - xử lý riêng vì là objects
+      const originalFlows = (original.alternative_flows || []).map((flow) => {
+        if (typeof flow === 'object' && flow !== null) {
+          return `${flow.at_step || 1}|${(flow.condition || '').trim()}|${(flow.system_response || '').trim()}|${(flow.end_state || '').trim()}`
+        }
+        return ''
+      }).filter(Boolean)
+      const currentFlows = (current.alternative_flows || []).map((flow) => {
+        if (typeof flow === 'object' && flow !== null) {
+          return `${flow.at_step || 1}|${(flow.condition || '').trim()}|${(flow.system_response || '').trim()}|${(flow.end_state || '').trim()}`
+        }
+        return ''
+      }).filter(Boolean)
+
+      if (originalFlows.length !== currentFlows.length) {
+        return true
+      }
+
+      for (let i = 0; i < originalFlows.length; i++) {
+        if (originalFlows[i] !== currentFlows[i]) {
+          return true
+        }
+      }
+
+      // So sánh các mảng khác
       const arrayFields = [
-        'tasks',
         'inputs',
         'outputs',
         'preconditions',
@@ -1402,6 +1928,31 @@ export default {
   grid-column: span 3;
 }
 
+.conditions-row {
+  grid-column: span 3;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.conditions-row .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.conditions-row .array-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.conditions-row .array-item input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 label {
   font-weight: 600;
   color: #374151;
@@ -1538,7 +2089,98 @@ textarea {
 }
 
 .array-item input {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+/* Task Item Styles */
+.task-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.task-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-header .step-number {
+  width: 24px;
+  height: 24px;
+  background: #3b82f6;
+  border: 1px solid #2563eb;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.task-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.task-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6b7280;
+  margin: 0;
+}
+
+.task-input-group input {
+  margin: 0;
+}
+
+/* Alternative Flow Item Styles */
+.alternative-flow-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.flow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flow-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.flow-inputs {
+  display: grid;
+  grid-template-columns: 80px 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.flow-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flow-input-group input {
   margin: 0;
 }
 
@@ -1767,6 +2409,15 @@ textarea {
   .form-group.span-2,
   .form-group.span-3 {
     grid-column: span 1;
+  }
+
+  .conditions-row {
+    grid-column: span 1;
+    grid-template-columns: 1fr;
+  }
+
+  .flow-inputs {
+    grid-template-columns: 1fr;
   }
 
   .priority-selector {

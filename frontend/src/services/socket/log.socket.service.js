@@ -47,7 +47,7 @@ export class LogSocketService {
   joinProjectRoom(projectId) {
     if (this.socket && this.socket.connected) {
       this.socket.emit('join_project_room', projectId);
-      console.log(`✅ [LogSocket] Joined project room: ${projectId}`);
+      //console.log(`✅ [LogSocket] Joined project room: ${projectId}`);
     } else {
       console.warn('⚠️ [LogSocket] Socket not connected, cannot join room');
     }
@@ -57,7 +57,7 @@ export class LogSocketService {
   leaveProjectRoom(projectId) {
     if (this.socket && this.socket.connected) {
       this.socket.emit('leave_project_room', projectId);
-      console.log(`🚪 [LogSocket] Left project room: ${projectId}`);
+      //console.log(`🚪 [LogSocket] Left project room: ${projectId}`);
     }
   }
 
@@ -65,7 +65,7 @@ export class LogSocketService {
   joinUserRoom(userId) {
     if (this.socket && this.socket.connected) {
       this.socket.emit('join_user_room', userId);
-      console.log(`✅ [LogSocket] Joined user room: ${userId}`);
+      //console.log(`✅ [LogSocket] Joined user room: ${userId}`);
     }
   }
 
@@ -73,7 +73,7 @@ export class LogSocketService {
   joinSystemRoom() {
     if (this.socket && this.socket.connected) {
       this.socket.emit('join_system_room');
-      console.log(`✅ [LogSocket] Joined system room`);
+      //console.log(`✅ [LogSocket] Joined system room`);
     }
   }
 

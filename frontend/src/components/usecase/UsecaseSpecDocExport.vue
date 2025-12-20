@@ -178,7 +178,8 @@ export default {
     availableRoles() {
       const roles = new Set()
       this.useCases.forEach((uc) => {
-        if (uc.role.name) roles.add(uc.role.name)
+        const actorName = uc.actor?.name || uc.role?.name
+        if (actorName) roles.add(actorName)
       })
       return Array.from(roles).sort()
     },
@@ -186,8 +187,9 @@ export default {
     roleUseCaseCounts() {
       const counts = {}
       this.useCases.forEach((uc) => {
-        if (uc.role) {
-          counts[uc.role.name] = (counts[uc.role.name] || 0) + 1
+        const actorName = uc.actor?.name || uc.role?.name
+        if (actorName) {
+          counts[actorName] = (counts[actorName] || 0) + 1
         }
       })
       return counts
@@ -199,7 +201,10 @@ export default {
           return this.selectedUseCases
         case 'role':
           return this.selectedRole
-            ? this.useCases.filter((uc) => uc.role.name === this.selectedRole)
+            ? this.useCases.filter((uc) => {
+                const actorName = uc.actor?.name || uc.role?.name
+                return actorName === this.selectedRole
+              })
             : []
         case 'all':
         default:
@@ -605,18 +610,25 @@ export default {
         content += `\n${index + 1}. USE CASE: ${uc.name}\n`
         content += `${'='.repeat(50)}\n`
         content += `ID: UC-${this.getUsecaseId(uc)}\n`
-        content += `Role: ${uc.role.name || 'Not specified'}\n`
+        const actorName = uc.actor?.name || uc.role?.name || 'Not specified'
+        content += `Actor: ${actorName}\n`
         content += `Priority: ${uc.priority || 'Not specified'}\n\n`
 
         content += `Goal: ${uc.goal || 'Not specified'}\n\n`
-        content += `Description: ${uc.reason || 'Not specified'}\n\n`
-        content += `Context: ${uc.context || 'Not specified'}\n\n`
+        content += `Description: ${(uc.description || uc.business_reason || uc.reason) || 'Not specified'}\n\n`
+        const contextStr = typeof uc.context === 'object' ? (uc.context.module || uc.context.scope || uc.context.system || '') : (uc.context || '')
+        content += `Context: ${contextStr || 'Not specified'}\n\n`
 
         // Main Flow
         content += 'Main Flow:\n'
-        if (uc.tasks && uc.tasks.length > 0) {
-          uc.tasks.forEach((task, i) => {
-            content += `  ${i + 1}. ${task}\n`
+        const mainFlow = uc.main_flow || uc.tasks || []
+        if (mainFlow.length > 0) {
+          mainFlow.forEach((step, i) => {
+            if (typeof step === 'object') {
+              content += `  ${step.step || (i + 1)}. ${step.action || step}\n`
+            } else {
+              content += `  ${i + 1}. ${step}\n`
+            }
           })
         } else {
           content += '  No tasks defined\n'
@@ -667,9 +679,14 @@ export default {
         }
         content += '\n'
 
-        // Triggers, Rules, Constraints
-        content += 'Triggers:\n'
-        if (uc.triggers && uc.triggers.length > 0) {
+        // Trigger, Rules, Non-functional Constraints
+        content += 'Trigger:\n'
+        if (uc.trigger && typeof uc.trigger === 'object') {
+          content += `  • Event: ${uc.trigger.event || 'N/A'}\n`
+          if (uc.trigger.source) {
+            content += `  • Source: ${uc.trigger.source}\n`
+          }
+        } else if (uc.triggers && uc.triggers.length > 0) {
           uc.triggers.forEach((trigger) => {
             content += `  • ${trigger}\n`
           })
@@ -688,9 +705,10 @@ export default {
         }
         content += '\n'
 
-        content += 'Constraints:\n'
-        if (uc.constraints && uc.constraints.length > 0) {
-          uc.constraints.forEach((constraint) => {
+        content += 'Non-functional Constraints:\n'
+        const constraints = uc.non_functional_constraints || uc.constraints || []
+        if (constraints.length > 0) {
+          constraints.forEach((constraint) => {
             content += `  • ${constraint}\n`
           })
         } else {
@@ -792,7 +810,7 @@ export default {
       <div class="usecase-section page-break-avoid">
         <div class="usecase-header keep-with-next">
           <h2>${index + 1}. ${uc.name}</h2>
-          <p>UC-${this.getUsecaseId(uc)} | Role: ${uc.role.name || 'Not specified'} | Priority: ${
+          <p>UC-${this.getUsecaseId(uc)} | Actor: ${(uc.actor?.name || uc.role?.name) || 'Not specified'} | Priority: ${
           uc.priority || 'Not specified'
         }</p>
         </div>
@@ -805,7 +823,7 @@ export default {
           </div>
           <div class="detail-item">
             <h4 class="keep-with-next">Description</h4>
-            <p>${this.escapeHtml(uc.reason || 'Not specified')}</p>
+            <p>${this.escapeHtml((uc.description || uc.business_reason || uc.reason) || 'Not specified')}</p>
           </div>
           <div class="detail-item">
             <h4 class="keep-with-next">Context</h4>
@@ -818,9 +836,20 @@ export default {
           <h4 class="keep-with-next">Main Flow</h4>
           <ol class="task-list">
             ${
-              uc.tasks && uc.tasks.length > 0
-                ? uc.tasks.map((task) => `<li>${this.escapeHtml(task)}</li>`).join('')
-                : '<li>No tasks defined</li>'
+              (() => {
+                const mainFlow = uc.main_flow || uc.tasks || []
+                if (mainFlow.length > 0) {
+                  return mainFlow.map((step, i) => {
+                    if (typeof step === 'object') {
+                      return `<li><strong>Step ${step.step || (i + 1)}:</strong> ${this.escapeHtml(step.action || step)}${step.expected_result ? ` → ${this.escapeHtml(step.expected_result)}` : ''}</li>`
+                    } else {
+                      return `<li>${this.escapeHtml(step)}</li>`
+                    }
+                  }).join('')
+                } else {
+                  return '<li>No tasks defined</li>'
+                }
+              })()
             }
           </ol>
         </div>
@@ -887,9 +916,15 @@ export default {
             <h4 class="keep-with-next">Triggers</h4>
             <ul class="condition-list">
               ${
-                uc.triggers && uc.triggers.length > 0
-                  ? uc.triggers.map((trigger) => `<li>${this.escapeHtml(trigger)}</li>`).join('')
-                  : '<li>None</li>'
+                (() => {
+                  if (uc.trigger && typeof uc.trigger === 'object') {
+                    return `<li><strong>Event:</strong> ${this.escapeHtml(uc.trigger.event || 'N/A')}</li>${uc.trigger.source ? `<li><strong>Source:</strong> ${this.escapeHtml(uc.trigger.source)}</li>` : ''}`
+                  } else if (uc.triggers && uc.triggers.length > 0) {
+                    return uc.triggers.map((trigger) => `<li>${this.escapeHtml(trigger)}</li>`).join('')
+                  } else {
+                    return '<li>None</li>'
+                  }
+                })()
               }
             </ul>
           </div>
@@ -911,11 +946,14 @@ export default {
             <h4 class="keep-with-next">Constraints</h4>
             <ul class="condition-list">
               ${
-                uc.constraints && uc.constraints.length > 0
-                  ? uc.constraints
-                      .map((constraint) => `<li>${this.escapeHtml(constraint)}</li>`)
-                      .join('')
-                  : '<li>None</li>'
+                (() => {
+                  const constraints = uc.non_functional_constraints || uc.constraints || []
+                  if (constraints.length > 0) {
+                    return constraints.map((constraint) => `<li>${this.escapeHtml(constraint)}</li>`).join('')
+                  } else {
+                    return '<li>None</li>'
+                  }
+                })()
               }
             </ul>
           </div>

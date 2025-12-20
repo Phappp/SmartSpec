@@ -73,7 +73,7 @@ export function useActiveMembers() {
     const joinProjectRoom = (projectId) => {
         if (socket && projectId) {
             socket.emit('join_project', projectId)
-            console.log(`✅ Joined project room: project_${projectId}`)
+            //console.log(`✅ Joined project room: project_${projectId}`)
         }
     }
 
@@ -88,7 +88,7 @@ export function useActiveMembers() {
             // Leave project room
             if (projectId) {
                 socket.emit('leave_project', projectId)
-                console.log(`🚪 Left project room: project_${projectId}`)
+                //console.log(`🚪 Left project room: project_${projectId}`)
             }
         }
     }

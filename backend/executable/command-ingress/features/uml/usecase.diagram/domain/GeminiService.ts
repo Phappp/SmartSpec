@@ -165,11 +165,16 @@ export class UsecaseDiagramGeminiService {
   ): Promise<any> {
     try {
       const simplifiedRequirements = requirements.map((r) => ({
-        id: r.id,
+        id: r.id || r._id,
         name: r.name,
-        role: r.role,
+        actor: (r as any).actor || r.role, // Hỗ trợ cả actor (mới) và role (cũ)
         goal: r.goal,
-        tasks: r.tasks,
+        main_flow: (r as any).main_flow || (r.tasks ? r.tasks.map((task: string, index: number) => ({
+          step: index + 1,
+          actor: ((r as any).actor || r.role)?.name || 'User',
+          action: task,
+          expected_result: `Task ${index + 1} completed`
+        })) : []),
       }));
 
       const requirementsJson = JSON.stringify(simplifiedRequirements, null, 2);

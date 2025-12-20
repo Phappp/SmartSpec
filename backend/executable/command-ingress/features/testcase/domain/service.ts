@@ -10,6 +10,7 @@ import { VersionService } from "../../version/domain/service";
 import { LogService } from "../../log/domain/service";
 import { PreviewChangeDto } from "../../version/adapter/preview.dto";
 import { testcaseSocketService } from "./testcase.socket.service";
+import { TestcaseGenerationAgent, TestcaseAgentContext } from "./TestcaseGenerationAgent";
 
 export class TestcaseService {
     private testcaseGeminiService = new TestcaseGeminiService();
@@ -135,40 +136,175 @@ export class TestcaseService {
 
         console.log(`📊 Processing ${requirementsToProcess.length} requirements with ${databaseSchema.tables?.length || 0} tables`);
 
-        // ✅ MỚI: Estimate số lượng test cases trước
-        console.log(`📊 [ESTIMATE PHASE] Estimating test cases count...`);
+        // ✅ SỬ DỤNG TESTCASE GENERATION AGENT
+        console.log(`🤖 [TESTCASE_SERVICE] Using TestcaseGenerationAgent for generation...`);
+
+        // ✅ Lấy modelName từ user selection (tương tự như usecase generation)
+        const { LLMService } = await import("../../../shared/LLMService");
+        const llmService = new LLMService();
+        let modelName: string | undefined = undefined;
         
-        // Emit estimating stage
-        if (testcaseSocketService && projectId && versionId && userId) {
-            testcaseSocketService.emitProgress(
-                projectId,
-                versionId,
-                userId,
-                10,
-                'estimating',
-                true
-            );
-        }
-        
-        let estimate;
         try {
-            estimate = await this.testcaseGeminiService.estimateTestCasesCount(
-            requirementsToProcess,
-            testType,
-            language,
-            undefined, // modelName
-            userId,
-            projectId
-        );
-        console.log(`✅ [ESTIMATE PHASE] Estimated ${estimate.estimated_count} test cases, ${estimate.estimated_batches} batches`);
-            
-            // Emit estimate received
-            if (testcaseSocketService && projectId && versionId && userId) {
-                testcaseSocketService.emitEstimateReceived(projectId, versionId, userId, estimate);
+            // Ưu tiên lấy model từ user selection
+            if (userId) {
+                const userSelectedModel = await llmService.getUserSelectedModel(userId);
+                if (userSelectedModel) {
+                    modelName = userSelectedModel;
+                    console.log(`✅ [TESTCASE_SERVICE] Using user selected model: ${modelName}`);
+                } else {
+                    // Fallback: lấy recommended model với userId
+                    modelName = await llmService.getRecommendedModel(undefined, userId);
+                    console.log(`✅ [TESTCASE_SERVICE] Using recommended model: ${modelName}`);
+                }
+            } else {
+                // Nếu không có userId, lấy recommended model
+                modelName = await llmService.getRecommendedModel();
+                console.log(`✅ [TESTCASE_SERVICE] Using recommended model (no userId): ${modelName}`);
             }
-        } catch (estimateError: any) {
-            console.error(`❌ [ESTIMATE PHASE] Error:`, estimateError.message);
-            // Emit failed event với errors
+        } catch (error: any) {
+            console.warn(`⚠️ [TESTCASE_SERVICE] Failed to get model preference: ${error.message}. Will use default.`);
+            // Fallback: lấy recommended model không có userId
+            try {
+                modelName = await llmService.getRecommendedModel();
+            } catch (fallbackError: any) {
+                console.error(`❌ [TESTCASE_SERVICE] Failed to get recommended model: ${fallbackError.message}`);
+                // modelName sẽ là undefined, agent sẽ tự xử lý
+            }
+        }
+
+        // ✅ Kiểm tra resumeState từ Version (nếu có)
+        const resumeState = (version as any).resumeState?.testcase || null;
+
+        // Tạo context cho agent
+        const agentContext: TestcaseAgentContext = {
+            versionId: version._id.toString(),
+            projectId,
+            userId,
+            requirements: requirementsToProcess,
+            databaseSchema,
+            language,
+            testType,
+            modelName, // ✅ Sử dụng modelName từ user selection
+            resumeState: resumeState ? {
+                state: resumeState.state as any,
+                savedCount: resumeState.savedCount || 0,
+                currentBatchIndex: resumeState.currentBatchIndex || 0,
+                errorMessage: resumeState.errorMessage || '',
+                errorType: resumeState.errorType || ''
+            } : undefined
+        };
+
+        // Tạo và chạy agent
+        const agent = new TestcaseGenerationAgent(this.testcaseGeminiService, agentContext);
+
+        try {
+            const result = await agent.run();
+
+            // ✅ Kiểm tra nếu agent có resumeState (lỗi retryable)
+            const agentResumeState = agent.getResumeState();
+            if (agentResumeState) {
+                console.log(`⚠️ [TESTCASE_SERVICE] Agent paused due to retryable error. Saving resume state...`);
+                
+                // Lưu resumeState vào Version
+                await Version.findByIdAndUpdate(version._id, {
+                    $set: {
+                        'resumeState.testcase': agentResumeState,
+                        status: 'paused'
+                    }
+                });
+
+                // Broadcast paused event
+                if (testcaseSocketService && projectId && versionId && userId) {
+                    testcaseSocketService.emitProgress(
+                        projectId,
+                        versionId,
+                        userId,
+                        95,
+                        'paused',
+                        true,
+                        {
+                            currentBatch: agentResumeState.currentBatchIndex + 1,
+                            totalBatches: agentContext.estimatedBatches || 1,
+                            testcasesInBatch: 0,
+                            savedCount: agentResumeState.savedCount,
+                            totalCount: agentContext.estimatedCount || 0
+                        },
+                        [agentResumeState.errorMessage],
+                        agentResumeState.state,
+                        `⚠️ ${agentResumeState.errorMessage}. Đã lưu ${agentResumeState.savedCount} testcases. Có thể tiếp tục sau...`
+                    );
+                }
+
+                // Trả về partial results
+                return result.testcases;
+            }
+
+            // ✅ Xóa resumeState nếu hoàn thành thành công
+            if ((version as any).resumeState?.testcase) {
+                await Version.findByIdAndUpdate(version._id, {
+                    $unset: { 'resumeState.testcase': '' },
+                    $set: { status: 'completed' }
+                });
+            }
+
+            // ✅ Ghi log cho generate testcase
+            try {
+                const user = await User.findById(userId).lean();
+                const username = user?.name || "Unknown User";
+                const agentContext = agent.getContext();
+                await this.logService.createLog({
+                    project_id: projectId,
+                    user_id: userId,
+                    action: "generate_output",
+                    target_id: versionId,
+                    target_type: "testcases",
+                    version_number: version.version_number,
+                    affects_requirement: true,
+                    level: "info",
+                    performed_by_ai: true,
+                    details: {
+                        after: {
+                            count: result.totalGenerated,
+                            test_type: testType,
+                            requirement_count: requirementsToProcess.length,
+                            estimated_count: agentContext.estimatedCount || 0,
+                            actual_count: result.totalGenerated
+                        },
+                        message: `${username} generated and saved ${result.totalGenerated} test cases from ${requirementsToProcess.length} requirement(s) (type: ${testType}, estimated: ${agentContext.estimatedCount || 0})`
+                    }
+                });
+            } catch (logError) {
+                console.error("❌ Error logging testcase generation:", logError);
+            }
+
+            // ✅ Broadcast completion
+            if (testcaseSocketService && projectId && versionId && userId) {
+                const agentContext = agent.getContext();
+                testcaseSocketService.emitProgress(
+                    projectId,
+                    versionId,
+                    userId,
+                    100,
+                    'completed',
+                    false,
+                    {
+                        currentBatch: agentContext.batchPlan?.length || 1,
+                        totalBatches: agentContext.batchPlan?.length || 1,
+                        testcasesInBatch: 0,
+                        savedCount: result.totalGenerated,
+                        totalCount: agentContext.estimatedCount || result.totalGenerated
+                    },
+                    undefined, // errors
+                    'DONE',
+                    `✅ Hoàn thành: ${result.totalGenerated} testcases đã được generate`
+                );
+            }
+
+            return result.testcases;
+        } catch (error: any) {
+            console.error(`❌ [TESTCASE_SERVICE] Error in agent:`, error.message);
+
+            // Broadcast failed event
             if (testcaseSocketService && projectId && versionId && userId) {
                 testcaseSocketService.emitProgress(
                     projectId,
@@ -178,248 +314,12 @@ export class TestcaseService {
                     'failed',
                     false,
                     undefined,
-                    [estimateError.message || 'Failed to estimate test cases']
+                    [error.message || 'Failed to generate test cases']
                 );
             }
-            throw estimateError; // Re-throw để controller xử lý
+
+            throw error;
         }
-
-        // ✅ MỚI: Generate và save từng batch
-        const BATCH_SIZE = 20;
-        const estimatedBatches = estimate.estimated_batches;
-        const estimatedCount = estimate.estimated_count;
-        let totalSaved = 0;
-        let allGeneratedTestCases: any[] = [];
-        const batchErrors: string[] = []; // ✅ Collect errors từ các batches
-
-        // Generate và save từng batch
-        for (let batchNumber = 1; batchNumber <= estimatedBatches; batchNumber++) {
-            try {
-                const offset = (batchNumber - 1) * BATCH_SIZE;
-                const remaining = estimatedCount - totalSaved;
-                const currentBatchSize = Math.min(BATCH_SIZE, remaining);
-
-                if (remaining <= 0) {
-                    console.log(`⏩ [BATCH ${batchNumber}/${estimatedBatches}] Already reached estimated count (${estimatedCount}). Stopping.`);
-                    break;
-                }
-
-                console.log(`📦 [BATCH ${batchNumber}/${estimatedBatches}] Generating test cases ${offset + 1} to ${offset + currentBatchSize} (estimated total: ${estimatedCount})...`);
-
-                // Emit batch start progress
-                if (testcaseSocketService && projectId && versionId && userId) {
-                    const batchProgress = Math.floor((batchNumber / estimatedBatches) * 80) + 10; // 10-90%
-                    testcaseSocketService.emitProgress(
-                        projectId,
-                        versionId,
-                        userId,
-                        batchProgress,
-                        'generating',
-                        true,
-                        {
-                            currentBatch: batchNumber,
-                            totalBatches: estimatedBatches,
-                            testcasesInBatch: 0,
-                            savedCount: totalSaved,
-                            totalCount: estimatedCount
-                        }
-                    );
-                }
-
-                // Generate batch
-                let batchTestCases: any[];
-                if (testType === 'all') {
-                    // Với testType = "all", generate từng requirement với tất cả test types
-                    batchTestCases = await this.generateBatchForAllTypes(
-                        requirementsToProcess,
-                        databaseSchema,
-                        language,
-                        batchNumber,
-                        estimatedBatches,
-                        offset,
-                        currentBatchSize,
-                        estimatedCount,
-                        userId,
-                        projectId
-                    );
-                } else {
-                    // Generate với testType cụ thể
-                    batchTestCases = await this.testcaseGeminiService.generateTestCasesBatch(
-                        requirementsToProcess,
-                        databaseSchema,
-                        batchNumber,
-                        estimatedBatches,
-                        offset,
-                        currentBatchSize,
-                        language,
-                        testType,
-                        estimatedCount,
-                        undefined, // modelName
-                        userId,
-                        projectId
-                    );
-                }
-
-                if (batchTestCases.length === 0) {
-                    console.log(`⏩ [BATCH ${batchNumber}/${estimatedBatches}] No more test cases to generate. Stopping.`);
-                    break;
-                }
-
-                // Giới hạn số lượng dựa trên estimate
-                const remainingToGenerate = estimatedCount - totalSaved;
-                const testCasesToProcess = batchTestCases.slice(0, remainingToGenerate);
-                if (testCasesToProcess.length < batchTestCases.length) {
-                    console.warn(`⚠️ [BATCH ${batchNumber}/${estimatedBatches}] Generated ${batchTestCases.length} test cases, but only ${remainingToGenerate} remaining to reach estimate (${estimatedCount}). Limiting to ${testCasesToProcess.length}.`);
-                }
-
-                // Save batch ngay vào DB
-                if (testCasesToProcess.length > 0) {
-                    try {
-                        console.log(`💾 [BATCH ${batchNumber}/${estimatedBatches}] Attempting to save ${testCasesToProcess.length} test cases...`);
-
-                        // Validate và filter test cases hợp lệ
-                        const validTestCases = this.validateTestCases(testCasesToProcess, requirementsToProcess);
-                        
-                        if (validTestCases.length === 0) {
-                            console.warn(`⚠️ [BATCH ${batchNumber}/${estimatedBatches}] All ${testCasesToProcess.length} test cases failed validation. Skipping batch.`);
-                            continue;
-                        }
-
-                        // Save vào DB
-                        const savedTestCases = await this.saveTestCasesBatch(
-                            projectId,
-                            versionId,
-                            validTestCases,
-                            userId
-                        );
-
-                        totalSaved += savedTestCases.length;
-                        allGeneratedTestCases.push(...savedTestCases);
-
-                        console.log(`✅ [BATCH ${batchNumber}/${estimatedBatches}] Successfully saved ${savedTestCases.length} test cases (total saved: ${totalSaved})`);
-                        
-                        // Emit batch saved progress
-                        if (testcaseSocketService && projectId && versionId && userId) {
-                            const batchProgress = Math.floor((batchNumber / estimatedBatches) * 80) + 10; // 10-90%
-                            testcaseSocketService.emitProgress(
-                                projectId,
-                                versionId,
-                                userId,
-                                batchProgress,
-                                'generating',
-                                true,
-                                {
-                                    currentBatch: batchNumber,
-                                    totalBatches: estimatedBatches,
-                                    testcasesInBatch: savedTestCases.length,
-                                    savedCount: totalSaved,
-                                    totalCount: estimatedCount
-                                }
-                            );
-                        }
-
-                        // Delay giữa các batch
-                        if (batchNumber < estimatedBatches) {
-                            await new Promise(resolve => setTimeout(resolve, 500));
-                        }
-                    } catch (err: any) {
-                        console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Error saving test cases:`, err.message);
-                        batchErrors.push(`Batch ${batchNumber}: ${err.message || 'Failed to save test cases'}`);
-                        // Tiếp tục với batch tiếp theo thay vì throw error
-                        continue;
-                    }
-                }
-            } catch (error: any) {
-                console.error(`❌ [BATCH ${batchNumber}/${estimatedBatches}] Error:`, error.message);
-                batchErrors.push(`Batch ${batchNumber}: ${error.message || 'Failed to generate test cases'}`);
-                // Tiếp tục với batch tiếp theo thay vì throw error
-                continue;
-            }
-        }
-
-        // ✅ Ghi log cho generate testcase
-        try {
-            const user = await User.findById(userId).lean();
-            const username = user?.name || "Unknown User";
-            await this.logService.createLog({
-                project_id: projectId,
-                user_id: userId,
-                action: "generate_output",
-                target_id: versionId,
-                target_type: "testcases",
-                version_number: version.version_number,
-                affects_requirement: true,
-                level: "info",
-                performed_by_ai: true,
-                details: {
-                    after: {
-                        count: totalSaved,
-                        test_type: testType,
-                        requirement_count: requirementsToProcess.length,
-                        estimated_count: estimate.estimated_count,
-                        actual_count: totalSaved
-                    },
-                    message: `${username} generated and saved ${totalSaved} test cases from ${requirementsToProcess.length} requirement(s) (type: ${testType}, estimated: ${estimate.estimated_count})`
-                }
-            });
-        } catch (logError) {
-            console.error("❌ Error logging testcase generation:", logError);
-            // Không throw error để không ảnh hưởng đến flow chính
-        }
-
-        // ✅ Kiểm tra nếu có lỗi trong quá trình generate
-        const hasErrors = batchErrors.length > 0 || (totalSaved === 0 && allGeneratedTestCases.length === 0);
-        const processingErrors: string[] = [];
-        
-        // Thêm batch errors vào processing errors
-        if (batchErrors.length > 0) {
-            processingErrors.push(...batchErrors);
-        }
-        
-        // Nếu không có test cases nào được save, có thể có lỗi
-        if (totalSaved === 0 && allGeneratedTestCases.length === 0 && batchErrors.length === 0) {
-            processingErrors.push('No test cases were generated. Please check your requirements and try again.');
-        }
-
-        // Emit completion (hoặc failed nếu có errors)
-        if (testcaseSocketService && projectId && versionId && userId) {
-            if (hasErrors && processingErrors.length > 0) {
-                testcaseSocketService.emitProgress(
-                    projectId,
-                    versionId,
-                    userId,
-                    100,
-                    'failed',
-                    false,
-                    {
-                        currentBatch: estimatedBatches,
-                        totalBatches: estimatedBatches,
-                        testcasesInBatch: 0,
-                        savedCount: totalSaved,
-                        totalCount: totalSaved
-                    },
-                    processingErrors
-                );
-            } else {
-                testcaseSocketService.emitProgress(
-                    projectId,
-                    versionId,
-                    userId,
-                    100,
-                    'completed',
-                    false,
-                    {
-                        currentBatch: estimatedBatches,
-                        totalBatches: estimatedBatches,
-                        testcasesInBatch: 0,
-                        savedCount: totalSaved,
-                        totalCount: totalSaved
-                    }
-                );
-            }
-        }
-
-        return allGeneratedTestCases;
     }
 
     /**

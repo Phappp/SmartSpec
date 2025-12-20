@@ -24,6 +24,8 @@ export interface TestcaseProgressEvent {
     };
     errors?: string[]; // ✅ Thêm errors field để frontend có thể detect failed state
     errorMessage?: string; // ✅ Thêm errorMessage cho compatibility
+    agentState?: string; // ✅ Thêm agentState để hiển thị state của agent
+    message?: string; // ✅ Thêm message để hiển thị thông báo chi tiết
     timestamp: Date;
 }
 
@@ -79,7 +81,9 @@ export class TestcaseSocketService {
             savedCount: number;
             totalCount: number;
         },
-        errors?: string[] // ✅ Thêm errors parameter
+        errors?: string[], // ✅ Thêm errors parameter
+        agentState?: string, // ✅ Thêm agentState parameter
+        message?: string // ✅ Thêm message parameter
     ): void {
         const event: TestcaseProgressEvent = {
             type: 'TESTCASE_PROGRESS',
@@ -92,11 +96,15 @@ export class TestcaseSocketService {
             batchInfo,
             errors, // ✅ Gửi errors trong event
             errorMessage: errors && errors.length > 0 ? errors.join('; ') : undefined, // ✅ Thêm errorMessage cho compatibility
+            agentState, // ✅ Thêm agentState
+            message, // ✅ Thêm message
             timestamp: new Date()
         };
         this.broadcastToProject(projectId, event);
         const errorInfo = errors && errors.length > 0 ? ` (Errors: ${errors.length})` : '';
-        console.log(`📊 Broadcast testcase progress: ${progress}% - ${stage}${batchInfo ? ` (Batch ${batchInfo.currentBatch}/${batchInfo.totalBatches})` : ''}${errorInfo}`);
+        const stateInfo = agentState ? ` [${agentState}]` : '';
+        const messageInfo = message ? ` - ${message}` : '';
+        console.log(`📊 Broadcast testcase progress: ${progress}% - ${stage}${stateInfo}${batchInfo ? ` (Batch ${batchInfo.currentBatch}/${batchInfo.totalBatches})` : ''}${messageInfo}${errorInfo}`);
     }
 }
 

@@ -4,8 +4,8 @@ import { StatsService } from '../domain/service';
 export class StatsController {
     private statsService: StatsService;
 
-    constructor() {
-        this.statsService = new StatsService();
+    constructor(statsService?: StatsService) {
+        this.statsService = statsService || new StatsService();
     }
 
     // Tổng hợp usage toàn hệ thống
@@ -60,19 +60,19 @@ export class StatsController {
         }
     }
 
-  // User analytics (new registrations, online users, timeline)
-  async userAnalytics(req: Request, res: Response, next: NextFunction) {
-      try {
-          const { rangeDays } = req.query;
-          const range = rangeDays ? parseInt(rangeDays as string, 10) : 7;
-          const data = await this.statsService.fetchUserAnalytics({
-              rangeDays: isNaN(range) ? 7 : range,
-          });
-          res.json(data);
-      } catch (err) {
-          next(err);
-      }
-  }
+    // User analytics (new registrations, online users, timeline)
+    async userAnalytics(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { rangeDays } = req.query;
+            const range = rangeDays ? parseInt(rangeDays as string, 10) : 7;
+            const data = await this.statsService.fetchUserAnalytics({
+                rangeDays: isNaN(range) ? 7 : range,
+            });
+            res.json(data);
+        } catch (err) {
+            next(err);
+        }
+    }
 
     // Trends (user, api, project, activity)
     async trends(req: Request, res: Response, next: NextFunction) {

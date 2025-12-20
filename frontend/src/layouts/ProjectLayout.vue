@@ -52,6 +52,13 @@
                 <span class="material-symbols-outlined process-icon">{{ getProcessIcon(process.type) }}</span>
                 <span class="process-name">{{ getProcessName(process.type) }}</span>
               </div>
+              <div class="progress-header-right">
+                <!-- Hiển thị số lượng usecase/testcase đã gen / ước tính ở góc trên bên phải -->
+                <div v-if="(process.type === 'usecase' || process.type === 'testcase') && (process.batchProgress?.savedCount > 0 || process.batchProgress?.totalCount > 0 || process.estimateInfo?.estimated_count > 0)" class="usecase-count-display-header">
+                  <span class="usecase-count-number">{{ process.batchProgress?.savedCount || 0 }}</span>
+                  <span class="usecase-count-separator">/</span>
+                  <span class="usecase-count-total">{{ process.batchProgress?.totalCount || process.estimateInfo?.estimated_count || 0 }}</span>
+                </div>
               <!-- Close button for success/failed states -->
               <button
                 v-if="process.status === 'success' || process.status === 'failed'"
@@ -61,6 +68,7 @@
               >
                 <span class="material-symbols-outlined">close</span>
               </button>
+              </div>
             </div>
             
             <!-- Success State -->
@@ -85,8 +93,19 @@
 
             <!-- Processing States -->
             <div v-else class="progress-stages">
+              <!-- Agent State và Message (ưu tiên hiển thị) -->
+              <div v-if="process.agentState || process.agentMessage" class="progress-stage">
+                <div class="stage-content">
+                  <span class="material-symbols-outlined stage-icon" :class="getAgentStateIconClass(process.agentState)">{{ getAgentStateIcon(process.agentState) }}</span>
+                  <div class="stage-text-container">
+                    <span class="stage-text stage-title">{{ getAgentStateTitle(process.agentState) }}</span>
+                    <span v-if="process.agentMessage" class="stage-text stage-message">{{ process.agentMessage }}</span>
+                  </div>
+                </div>
+              </div>
+
               <!-- Estimate Phase -->
-              <div v-if="process.stage === 'estimating'" class="progress-stage">
+              <div v-else-if="process.stage === 'estimating'" class="progress-stage">
                 <div class="stage-content">
                   <span class="material-symbols-outlined stage-icon spinning">calculate</span>
                   <span class="stage-text">Estimating...</span>
@@ -97,27 +116,31 @@
               <div v-else-if="(process.type === 'usecase' || process.type === 'testcase') && process.estimateInfo?.estimated_count > 0 && (!process.batchProgress || process.batchProgress.currentBatch === 0)" class="progress-stage">
                 <div class="stage-content">
                   <span class="material-symbols-outlined stage-icon success pulse">check_circle</span>
-                  <span class="stage-text">Estimated {{ process.estimateInfo.estimated_count }} items</span>
+                  <div class="stage-text-container">
+                    <span class="stage-text stage-title">Estimated {{ process.estimateInfo.estimated_count }} items</span>
+                  </div>
                 </div>
               </div>
 
-              <!-- Generating Phase -->
+              <!-- Generating Phase với Batch Info -->
               <div v-else-if="process.batchProgress?.currentBatch > 0" class="progress-stage">
                 <div class="stage-content">
                   <span class="material-symbols-outlined stage-icon pulsing">auto_awesome</span>
-                  <span class="stage-text">
+                  <div class="stage-text-container">
+                    <span class="stage-text stage-title">
                     Generating Batch {{ process.batchProgress.currentBatch }}/{{ process.batchProgress.totalBatches }}
                   </span>
+                  </div>
                 </div>
               </div>
 
               <!-- Saving Phase -->
-              <div v-else-if="process.batchProgress?.savedCount > 0 && process.batchProgress.savedCount < process.batchProgress.totalCount" class="progress-stage">
+              <div v-else-if="process.batchProgress?.savedCount > 0 && process.batchProgress.savedCount < (process.batchProgress.totalCount || process.estimateInfo?.estimated_count || 0)" class="progress-stage">
                 <div class="stage-content">
-                  <span class="material-symbols-outlined stage-icon">save</span>
-                  <span class="stage-text">
-                    Saving {{ process.batchProgress.savedCount }}/{{ process.batchProgress.totalCount }}
-                  </span>
+                  <span class="material-symbols-outlined stage-icon spinning">save</span>
+                  <div class="stage-text-container">
+                    <span class="stage-text stage-title">Saving...</span>
+                  </div>
                 </div>
               </div>
 
@@ -462,6 +485,58 @@ export default {
       return names[type] || 'Processing'
     }
 
+    // ✅ Helper: Get agent state title (V1 + V2)
+    const getAgentStateTitle = (state) => {
+      const titles = {
+        // V1 States
+        'ESTIMATE_USECASE_COUNT': 'Đang ước tính usecases',
+        'ESTIMATE_TESTCASE_COUNT': 'Đang ước tính testcases',
+        'BATCH_PLANNING': 'Đang lập kế hoạch batches',
+        'GENERATE_BATCH': 'Đang generate',
+        'VERIFY_RESULTS': 'Đang kiểm tra kết quả',
+        'REPLAN_MISSING': 'Đang lập kế hoạch retry',
+        'GENERATE_RETRY': 'Đang retry',
+        'DONE': 'Hoàn thành',
+        // V2 States
+        'ESTIMATE_WITH_COMMITMENT': 'Đang ước tính',
+        'RETRY_MISSING': 'Đang retry usecases thiếu',
+        'FINAL_VALIDATION': 'Đang validate toàn bộ',
+        'ATOMIC_SAVE': 'Đang lưu vào database'
+      }
+      return titles[state] || 'Đang xử lý...'
+    }
+
+    // ✅ Helper: Get agent state icon (V1 + V2)
+    const getAgentStateIcon = (state) => {
+      const icons = {
+        // V1 States
+        'ESTIMATE_USECASE_COUNT': 'calculate',
+        'ESTIMATE_TESTCASE_COUNT': 'calculate',
+        'BATCH_PLANNING': 'list_alt',
+        'GENERATE_BATCH': 'auto_awesome',
+        'VERIFY_RESULTS': 'verified',
+        'REPLAN_MISSING': 'refresh',
+        'GENERATE_RETRY': 'sync',
+        'DONE': 'check_circle',
+        // V2 States
+        'ESTIMATE_WITH_COMMITMENT': 'fact_check',
+        'RETRY_MISSING': 'replay',
+        'FINAL_VALIDATION': 'verified_user',
+        'ATOMIC_SAVE': 'save'
+      }
+      return icons[state] || 'sync'
+    }
+
+    // ✅ Helper: Get agent state icon class (V1 + V2)
+    const getAgentStateIconClass = (state) => {
+      if (state === 'DONE') return 'success'
+      if (state === 'GENERATE_RETRY' || state === 'REPLAN_MISSING' || state === 'RETRY_MISSING') return 'pulsing'
+      if (state === 'GENERATE_BATCH') return 'pulsing'
+      if (state === 'VERIFY_RESULTS' || state === 'FINAL_VALIDATION') return 'spinning'
+      if (state === 'ATOMIC_SAVE') return 'spinning'
+      return 'spinning'
+    }
+
     // User avatar helpers
     const getFullAvatarUrl = (avatarUrl) => {
       if (!avatarUrl) return ''
@@ -539,6 +614,8 @@ export default {
           status: 'processing',
           progress: 10,
           stage: 'estimate_received',
+          agentState: 'ESTIMATE_USECASE_COUNT', // ✅ Thêm agentState
+          agentMessage: `Đã ước tính: ${event.estimate.estimated_count} usecases, ${event.estimate.estimated_batches} batches`, // ✅ Thêm agentMessage
           estimateInfo: event.estimate,
           batchProgress: {
             currentBatch: 0,
@@ -592,6 +669,8 @@ export default {
             progress: existingProcess?.progress || progress,
             stage: 'failed',
             errorMessage: friendlyErrorMsg,
+            agentState: existingProcess?.agentState || null, // ✅ Giữ agentState
+            agentMessage: existingProcess?.agentMessage || null, // ✅ Giữ agentMessage
             estimateInfo: existingProcess?.estimateInfo || null,
             batchProgress: existingProcess?.batchProgress || null,
             timestamp: existingProcess?.timestamp || Date.now(),
@@ -603,7 +682,12 @@ export default {
         
         // Check if process completed successfully (chỉ khi không phải failed và không có errors)
         // ✅ QUAN TRỌNG: Kiểm tra hasErrors và hasErrorMessage TRƯỚC khi set success
-        if (!event.isProcessing && progress >= 100 && stage !== 'failed' && stage !== 'error' && !hasErrors && !hasErrorMessage) {
+        // ✅ Cũng kiểm tra agentState === 'DONE' hoặc stage === 'completed'
+        const isCompleted = (!event.isProcessing && progress >= 100 && stage !== 'failed' && stage !== 'error' && !hasErrors && !hasErrorMessage) ||
+                           (event.agentState === 'DONE') ||
+                           (stage === 'completed' && !hasErrors && !hasErrorMessage)
+        
+        if (isCompleted) {
           llmProcesses.value[processKey] = {
             userId,
             type: processType,
@@ -611,6 +695,8 @@ export default {
             status: 'success',
             progress: 100,
             stage: 'completed',
+            agentState: 'DONE', // ✅ Set agentState khi hoàn thành
+            agentMessage: event.message || existingProcess?.agentMessage || 'Hoàn thành', // ✅ Giữ agentMessage
             estimateInfo: existingProcess?.estimateInfo || null,
             batchProgress: existingProcess?.batchProgress || null,
             timestamp: existingProcess?.timestamp || Date.now(),
@@ -618,6 +704,23 @@ export default {
           saveProcessesToStorage()
           // ✅ Không tự động xóa - chỉ xóa khi user đóng thủ công
           return
+        }
+        
+        // ✅ Cập nhật savedCount: ưu tiên từ batchInfo.savedCount (từ backend)
+        // Nếu không có, tính từ usecasesInBatch + previous savedCount
+        let savedCount = event.batchInfo?.savedCount
+        
+        if (savedCount === undefined || savedCount === null) {
+          // Fallback: tính từ previous + usecasesInBatch
+          const previousSavedCount = existingProcess?.batchProgress?.savedCount || 0
+          const currentBatchUsecases = event.batchInfo?.usecasesInBatch || 0
+          
+          // Nếu có usecasesInBatch > 0, có thể là batch mới đã save
+          if (currentBatchUsecases > 0) {
+            savedCount = previousSavedCount + currentBatchUsecases
+          } else {
+            savedCount = previousSavedCount
+          }
         }
         
         // Update processing state
@@ -628,12 +731,17 @@ export default {
           status: 'processing',
           progress: Math.min(progress, 100),
           stage,
+          agentState: event.agentState || existingProcess?.agentState || null, // ✅ Thêm agentState
+          agentMessage: event.message || existingProcess?.agentMessage || null, // ✅ Thêm agentMessage
           estimateInfo: existingProcess?.estimateInfo || null,
           batchProgress: {
             currentBatch: event.batchInfo?.currentBatch || existingProcess?.batchProgress?.currentBatch || 0,
-            totalBatches: event.batchInfo?.totalBatches || existingProcess?.batchProgress?.totalBatches || 0,
-            savedCount: event.batchInfo?.savedCount || existingProcess?.batchProgress?.savedCount || 0,
-            totalCount: event.batchInfo?.totalCount || existingProcess?.batchProgress?.totalCount || 0,
+            totalBatches: event.batchInfo?.totalBatches || existingProcess?.batchProgress?.totalBatches || existingProcess?.estimateInfo?.estimated_batches || 0,
+            savedCount: savedCount, // ✅ Sử dụng savedCount đã tính
+            totalCount: event.batchInfo?.totalCount || existingProcess?.batchProgress?.totalCount || existingProcess?.estimateInfo?.estimated_count || 0,
+            // ✅ Thêm testcasesInBatch cho testcase type
+            testcasesInBatch: event.batchInfo?.testcasesInBatch || 0,
+            usecasesInBatch: event.batchInfo?.usecasesInBatch || 0,
           },
           timestamp: existingProcess?.timestamp || Date.now(),
         }
@@ -854,6 +962,9 @@ export default {
       getUserInitials,
       handleAvatarError,
       removeProcess,
+      getAgentStateTitle,
+      getAgentStateIcon,
+      getAgentStateIconClass,
     }
   },
 }
@@ -936,6 +1047,27 @@ export default {
   min-width: 200px;
   flex: 1;
   transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Hiệu ứng shimmer lướt qua toàn bộ thẻ khi đang loading */
+.llm-progress-item:not(.status-success):not(.status-failed)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(26, 54, 93, 0.1),
+    transparent
+  );
+  animation: shimmerSweep 2.5s infinite;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .llm-progress-item.status-success {
@@ -964,6 +1096,13 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  position: relative;
+}
+
+.progress-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .progress-title {
@@ -1032,7 +1171,7 @@ export default {
 
 .stage-icon.pulsing {
   color: #8b5cf6;
-  animation: pulse 1.5s ease-in-out infinite;
+  animation: pulseBlink 1.2s ease-in-out infinite;
 }
 
 .stage-icon.pulse {
@@ -1059,10 +1198,115 @@ export default {
   }
 }
 
+@keyframes pulseBlink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes shimmerSweep {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
 .stage-text {
   font-size: 0.75rem;
   color: #64748b;
   font-weight: 500;
+}
+
+.stage-text-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.stage-text.stage-title {
+  font-weight: 600;
+  color: #1a365d;
+}
+
+.stage-text.stage-message {
+  font-size: 0.7rem;
+  color: #64748b;
+  opacity: 0.9;
+}
+
+/* Usecase Count Display - Thu gọn, bỏ animation */
+.usecase-count-display {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: rgba(26, 54, 93, 0.05);
+  border-radius: 6px;
+  border: 1px solid rgba(26, 54, 93, 0.1);
+}
+
+/* Usecase Count Display ở header (góc trên bên phải) */
+.usecase-count-display-header {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  padding: 2px 6px;
+  background: rgba(26, 54, 93, 0.08);
+  border-radius: 4px;
+  border: 1px solid rgba(26, 54, 93, 0.15);
+  font-size: 0.75rem;
+}
+
+.usecase-count-number {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #1a365d;
+  min-width: 24px;
+  text-align: right;
+}
+
+.usecase-count-display-header .usecase-count-number {
+  font-size: 0.75rem;
+  min-width: 20px;
+}
+
+.usecase-count-separator {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #64748b;
+  margin: 0 2px;
+}
+
+.usecase-count-display-header .usecase-count-separator {
+  font-size: 0.75rem;
+  margin: 0 1px;
+}
+
+.usecase-count-total {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #64748b;
+  min-width: 24px;
+  text-align: left;
+}
+
+.usecase-count-display-header .usecase-count-total {
+  font-size: 0.75rem;
+  min-width: 20px;
+}
+
+.usecase-count-label {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  font-weight: 500;
+  margin-left: 2px;
 }
 
 .success-stage .stage-text {

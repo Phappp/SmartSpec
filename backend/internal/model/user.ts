@@ -20,6 +20,7 @@ const userSchema = new Schema({
   setting: {
     language: { type: String, default: "vi" },
     theme: { type: String, default: "light" },
+    selectedModel: { type: String, default: null }, // ✅ Model LLM được user chọn
   },
   bio: String,
   avatar_url: String,
