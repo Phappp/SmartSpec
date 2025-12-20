@@ -297,10 +297,10 @@ const createHttpServer = (redisClient: any) => {
   } else {
     // Fallback: không có Redis, dùng StatsService không cache
     const statsService = new StatsService();
-    app.use(
-      "/api/stats",
+  app.use(
+    "/api/stats",
       initStatsRoute(new StatsController(statsService))
-    );
+  );
     // Không log warning ở đây vì đã log ở main.ts khi kết nối Redis
     // console.log('⚠️ Stats Service initialized without Redis cache');
   }

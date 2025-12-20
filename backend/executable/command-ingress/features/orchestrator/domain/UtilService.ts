@@ -31,7 +31,7 @@ export class UtilService {
     }
 
     /**
-     * Delay tiện ích
+     * Delay tiện ích  
      */
     async delay(ms: number) {
         return new Promise((resolve) => setTimeout(resolve, ms));

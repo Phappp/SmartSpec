@@ -210,7 +210,8 @@ export class SequenceDiagramGeminiService {
    */
   async generateSequenceDiagram(
     payload: GenerateSequenceDiagramPayload, // <-- Đã cập nhật (chứa useCaseContext)
-    language: string
+    language: string,
+    userId?: string
   ): Promise<any> {
     try {
       // <-- THAY ĐỔI: Lấy ngữ cảnh Usecase (là 1 object)
@@ -249,7 +250,7 @@ export class SequenceDiagramGeminiService {
       }
 
       // 1. Gọi Gemini (Giữ nguyên)
-      const generatedJsonString = await this.generateJsonContent(prompt);
+      const generatedJsonString = await this.generateJsonContent(prompt, userId, payload.projectId);
 
       if (!generatedJsonString) {
         throw new Error("Empty response from Gemini");
@@ -652,8 +653,8 @@ export class SequenceDiagramGeminiService {
    * ✅ CẬP NHẬT: Sử dụng LLMService thay vì hardcode Gemini
    */
   private async generateJsonContent(prompt: string, userId?: string, projectId?: string): Promise<string> {
-    // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
-    const modelName = await this.llmService.getRecommendedModel();
+    // ✅ Sử dụng LLMService để lấy recommended model (ưu tiên model user đã chọn)
+    const modelName = await this.llmService.getRecommendedModel(undefined, userId);
 
     try {
       const response = await this.llmService.callLLM({

@@ -78,7 +78,7 @@ export class PresenceSocketService {
     async getActiveUsersInProject(projectId: string): Promise<ActiveUser[]> {
         if (this.redisService) {
             return await this.redisService.getActiveUsersInProject(projectId);
-        }
+            }
 
         // Fallback: trả về empty array nếu không có Redis
         return [];

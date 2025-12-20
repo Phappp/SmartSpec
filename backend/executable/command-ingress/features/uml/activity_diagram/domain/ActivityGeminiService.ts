@@ -11,10 +11,23 @@ YÊU CẦU:
 ${requirementModelJson}
 
 QUY TẮC UML:
-1. NODES: Phải có 1 start, 1 end. Mọi action trong lane. Decision BẮT BUỘC có đúng 2 edges với condition "true"/"false". Merge đóng nhánh từ decision.
+1. NODES:
+   - ⚠️ BẮT BUỘC: CHỈ có ĐÚNG 1 node type="start" và ĐÚNG 1 node type="end" trong toàn bộ diagram
+   - KHÔNG được tạo nhiều start nodes hoặc nhiều end nodes
+   - Mọi action phải nằm trong lane. Decision BẮT BUỘC có đúng 2 edges với condition "true"/"false". Merge đóng nhánh từ decision.
+   - Node ID duy nhất (mẫu: 'UC1_ActionA'). Label bắt buộc cho action/decision/merge.
+
 2. EDGES: Liên tục start→end. Condition CHỈ cho edges từ decision, LUÔN là "true" hoặc "false". Action chỉ có 1 edge ra.
+
 3. CẤU TRÚC: Node ID duy nhất (mẫu: 'UC1_ActionA'). Label bắt buộc cho action/decision/merge.
+
 4. POSITION: Bắt buộc cho tất cả nodes {x, y}. X: 100-1100, Y: 100-1500. Cùng lane có X tương tự, Y tăng theo luồng.
+
+⚠️ QUAN TRỌNG VỀ START/END NODES:
+- CHỈ được tạo ĐÚNG 1 node với type="start" (đây là điểm bắt đầu duy nhất của diagram)
+- CHỈ được tạo ĐÚNG 1 node với type="end" (đây là điểm kết thúc duy nhất của diagram)
+- TẤT CẢ các luồng phải bắt đầu từ start node và kết thúc tại end node
+- KHÔNG được tạo nhiều start/end nodes, ngay cả khi có nhiều luồng song song
 
 ⚠️ QUAN TRỌNG VỀ DECISION:
 - Mỗi decision node PHẢI có đúng 2 edges đi ra
@@ -39,10 +52,23 @@ REQUIREMENTS:
 ${requirementModelJson}
 
 UML RULES:
-1. NODES: Must have 1 start, 1 end. All actions in lanes. Decision MUST have exactly 2 edges with conditions "true"/"false". Merge closes decision branches.
+1. NODES:
+   - ⚠️ MANDATORY: MUST have EXACTLY 1 node with type="start" and EXACTLY 1 node with type="end" in the entire diagram
+   - DO NOT create multiple start nodes or multiple end nodes
+   - All actions must be in lanes. Decision MUST have exactly 2 edges with conditions "true"/"false". Merge closes decision branches.
+   - Unique node IDs (pattern: 'UC1_ActionA'). Label required for action/decision/merge.
+
 2. EDGES: Continuous start→end flow. Condition ONLY for edges from decision, ALWAYS "true" or "false". Action has only 1 outgoing edge.
+
 3. STRUCTURE: Unique node IDs (pattern: 'UC1_ActionA'). Label required for action/decision/merge.
+
 4. POSITION: Required for all nodes {x, y}. X: 100-1100, Y: 100-1500. Same lane has similar X, Y increases by flow.
+
+⚠️ CRITICAL ABOUT START/END NODES:
+- MUST create EXACTLY 1 node with type="start" (this is the ONLY entry point of the diagram)
+- MUST create EXACTLY 1 node with type="end" (this is the ONLY exit point of the diagram)
+- ALL flows must start from the start node and end at the end node
+- DO NOT create multiple start/end nodes, even if there are parallel flows
 
 ⚠️ IMPORTANT ABOUT DECISION:
 - Each decision node MUST have exactly 2 outgoing edges
@@ -66,8 +92,8 @@ export class ActivityGeminiService {
   private llmService = new LLMService(); // ✅ Sử dụng LLMService
 
   private async callGemini(prompt: string, userId?: string, projectId?: string): Promise<string> {
-    // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
-    const modelName = await this.llmService.getRecommendedModel();
+    // ✅ Sử dụng LLMService để lấy recommended model (ưu tiên model user đã chọn)
+    const modelName = await this.llmService.getRecommendedModel(undefined, userId);
 
     try {
       const response = await this.llmService.callLLM({
@@ -117,7 +143,7 @@ export class ActivityGeminiService {
     }
   }
 
-  async generateFromUseCase(requirements: any[], language: string): Promise<ActivityDiagramDTO> {
+  async generateFromUseCase(requirements: any[], language: string, userId?: string, projectId?: string): Promise<ActivityDiagramDTO> {
     console.log('--- generateFromUseCase START ---');
     console.log('Input requirements:', JSON.stringify(requirements, null, 2));
 
@@ -143,12 +169,12 @@ export class ActivityGeminiService {
 
     // ✅ MỚI: Token analysis trước khi gọi LLM
     const { getModelConfig, logTokenInfo } = await import("../../../../shared/tokenManager");
-    const modelName = await this.llmService.getRecommendedModel();
+    const modelName = await this.llmService.getRecommendedModel(undefined, userId);
     const modelConfig = getModelConfig(modelName, undefined);
     logTokenInfo(prompt, modelConfig, '[UML Activity Diagram]');
 
     // ✅ Không catch error ở đây - để service layer xử lý và emit failed event
-    const raw = await this.callGemini(prompt);
+    const raw = await this.callGemini(prompt, userId, projectId);
     console.log('Raw AI response length:', raw.length);
 
     const cleanedJson = this.cleanJson(raw);
@@ -156,19 +182,77 @@ export class ActivityGeminiService {
 
     // ✅ cleanJson sẽ throw error nếu parse fail, không cần fallback
     const parsed = JSON.parse(cleanedJson);
-    
+
     if (!parsed || typeof parsed !== 'object') {
       throw new Error('Invalid response from AI: response is not an object');
     }
-    
+
     const lanes: ActivityLane[] = Array.isArray(parsed.lanes) ? parsed.lanes : [];
-    const nodes: ActivityNode[] = Array.isArray(parsed.nodes) ? parsed.nodes : [];
-    const edges: ActivityEdge[] = Array.isArray(parsed.edges) ? parsed.edges : [];
+    let nodes: ActivityNode[] = Array.isArray(parsed.nodes) ? parsed.nodes : [];
+    let edges: ActivityEdge[] = Array.isArray(parsed.edges) ? parsed.edges : [];
 
     // ✅ Validate rằng có ít nhất nodes hoặc lanes
     if (nodes.length === 0 && lanes.length === 0) {
       throw new Error('Invalid response from AI: no nodes or lanes generated');
     }
+
+    // ✅ Đảm bảo chỉ có 1 start node và 1 end node duy nhất
+    const startNodes = nodes.filter(n => n.type === 'start');
+    const endNodes = nodes.filter(n => n.type === 'end');
+
+    if (startNodes.length === 0) {
+      throw new Error('Invalid response from AI: missing start node');
+    }
+    if (endNodes.length === 0) {
+      throw new Error('Invalid response from AI: missing end node');
+    }
+
+    let finalNodes = [...nodes];
+    let finalEdges = [...edges];
+
+    // Nếu có nhiều start nodes, chỉ giữ lại node đầu tiên và chuyển edges
+    if (startNodes.length > 1) {
+      console.warn(`⚠️ [Activity Diagram] Found ${startNodes.length} start nodes, keeping only the first one`);
+      const keptStartNodeId = startNodes[0].id;
+      const removedStartNodeIds = startNodes.slice(1).map(n => n.id);
+
+      // Chuyển tất cả edges từ các start nodes bị xóa sang start node được giữ lại
+      finalEdges = finalEdges.map(edge => {
+        if (removedStartNodeIds.includes(edge.from)) {
+          return { ...edge, from: keptStartNodeId };
+        }
+        return edge;
+      });
+
+      // Loại bỏ các start nodes thừa
+      finalNodes = finalNodes.filter(n => !(n.type === 'start' && n.id !== keptStartNodeId));
+    }
+
+    // Nếu có nhiều end nodes, chỉ giữ lại node đầu tiên và chuyển edges
+    if (endNodes.length > 1) {
+      console.warn(`⚠️ [Activity Diagram] Found ${endNodes.length} end nodes, keeping only the first one`);
+      const keptEndNodeId = endNodes[0].id;
+      const removedEndNodeIds = endNodes.slice(1).map(n => n.id);
+
+      // Chuyển tất cả edges đến các end nodes bị xóa sang end node được giữ lại
+      finalEdges = finalEdges.map(edge => {
+        if (removedEndNodeIds.includes(edge.to)) {
+          return { ...edge, to: keptEndNodeId };
+        }
+        return edge;
+      });
+
+      // Loại bỏ các end nodes thừa
+      finalNodes = finalNodes.filter(n => !(n.type === 'end' && n.id !== keptEndNodeId));
+    }
+
+    // Loại bỏ các edges trùng lặp sau khi merge
+    const uniqueEdges = finalEdges.filter((edge, index, self) =>
+      index === self.findIndex(e => e.from === edge.from && e.to === edge.to)
+    );
+
+    nodes = finalNodes;
+    edges = uniqueEdges;
 
     // Translate string IDs to ObjectIds (giống sequence diagram)
     const translated = this.translateKeysToIds({
@@ -211,7 +295,7 @@ export class ActivityGeminiService {
       if (nodeKey) {
         nodeIdMap.set(nodeKey, newId);
       }
-      
+
       // Dịch lane_id từ string sang ObjectId nếu có
       let laneId = null;
       if (node.lane_id) {

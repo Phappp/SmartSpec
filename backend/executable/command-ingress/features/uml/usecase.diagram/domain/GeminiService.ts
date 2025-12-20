@@ -161,7 +161,9 @@ export class UsecaseDiagramGeminiService {
    */
   async generateUsecaseDiagram(
     requirements: any[],
-    language: string
+    language: string,
+    userId?: string,
+    projectId?: string
   ): Promise<any> {
     try {
       const simplifiedRequirements = requirements.map((r) => ({
@@ -196,7 +198,7 @@ export class UsecaseDiagramGeminiService {
       }
 
       // 1. Gọi Gemini và lấy chuỗi JSON (dùng TÊN string)
-      const generatedJsonString = await this.generateJsonContent(prompt);
+      const generatedJsonString = await this.generateJsonContent(prompt, userId, projectId);
 
       if (!generatedJsonString) {
         throw new Error("Empty response from Gemini");
@@ -437,8 +439,8 @@ export class UsecaseDiagramGeminiService {
    * ✅ CẬP NHẬT: Sử dụng LLMService thay vì hardcode Gemini
    */
   private async generateJsonContent(prompt: string, userId?: string, projectId?: string): Promise<string> {
-    // ✅ Sử dụng LLMService để lấy recommended model (không hardcode)
-    const modelName = await this.llmService.getRecommendedModel();
+    // ✅ Sử dụng LLMService để lấy recommended model (ưu tiên model user đã chọn)
+    const modelName = await this.llmService.getRecommendedModel(undefined, userId);
 
     try {
       const response = await this.llmService.callLLM({

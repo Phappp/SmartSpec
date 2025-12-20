@@ -969,8 +969,8 @@ ${mergedText.substring(0, 3000)}
                 if (inputSocketService && projectId && versionId && userId) {
                     inputSocketService.emitIncrementalProgress(
                         projectId,
-                versionId,
-                userId,
+                        versionId,
+                        userId,
                         Math.floor((result.totalGenerated / 100) * 100),
                         "paused",
                         false, // isProcessing = false vì đã pause
@@ -1122,15 +1122,57 @@ ${mergedText.substring(0, 3000)}
             throw new Error(`Conflict ${conflictId} not found`);
         }
 
-        // Xóa các usecases khác (không phải keepUseCaseId)
-        const usecasesToDelete = conflict.items.filter((id: string) => id !== keepUseCaseId);
+        // ✅ FIX: Normalize IDs để so sánh chính xác (hỗ trợ cả ObjectId và string)
+        const normalizeId = (id: any): string => {
+            if (!id) return '';
+            if (typeof id === 'string') return id;
+            if (id._id) return String(id._id);
+            if (id.toString) return id.toString();
+            return String(id);
+        };
+
+        const keepUseCaseIdNormalized = normalizeId(keepUseCaseId);
+
+        // ✅ FIX: Chỉ xóa các usecases trong conflict.items, không phải keepUseCaseId
+        // Đảm bảo chỉ xóa đúng số lượng usecases trong conflict này
+        const usecasesToDelete = conflict.items
+            .map((item: any) => normalizeId(item))
+            .filter((id: string) => id && id !== keepUseCaseIdNormalized);
 
         if (usecasesToDelete.length > 0) {
-            await Usecase.deleteMany({
-                version_id: versionId,
-                _id: { $in: usecasesToDelete.map((id: string) => new Types.ObjectId(id)) }
-            });
-            console.log(`🗑️ [RESOLVE CONFLICT] Deleted ${usecasesToDelete.length} duplicate usecases`);
+            // ✅ FIX: Validate rằng số lượng usecases xóa không vượt quá số lượng items trong conflict (trừ 1 usecase được giữ lại)
+            const expectedDeleteCount = conflict.items.length - 1;
+            if (usecasesToDelete.length > expectedDeleteCount) {
+                console.warn(`⚠️ [RESOLVE CONFLICT] Warning: Attempting to delete ${usecasesToDelete.length} usecases, but conflict only has ${conflict.items.length} items. Limiting to ${expectedDeleteCount} items.`);
+                // Chỉ xóa số lượng đúng
+                usecasesToDelete.splice(expectedDeleteCount);
+            }
+
+            // ✅ FIX: Chỉ xóa các usecases thực sự tồn tại trong conflict này
+            const validDeleteIds = usecasesToDelete
+                .filter((id: string) => {
+                    // Đảm bảo ID này thực sự nằm trong conflict.items
+                    return conflict.items.some((item: any) => normalizeId(item) === id);
+                })
+                .map((id: string) => {
+                    try {
+                        return new Types.ObjectId(id);
+                    } catch (e) {
+                        console.warn(`⚠️ [RESOLVE CONFLICT] Invalid ObjectId: ${id}`);
+                        return null;
+                    }
+                })
+                .filter((id: any) => id !== null);
+
+            if (validDeleteIds.length > 0) {
+                await Usecase.deleteMany({
+                    version_id: versionId,
+                    _id: { $in: validDeleteIds }
+                });
+                console.log(`🗑️ [RESOLVE CONFLICT] Deleted ${validDeleteIds.length} duplicate usecases from conflict ${conflictId}`);
+            } else {
+                console.warn(`⚠️ [RESOLVE CONFLICT] No valid usecases to delete for conflict ${conflictId}`);
+            }
         }
 
         // Xóa conflict khỏi pending_conflicts

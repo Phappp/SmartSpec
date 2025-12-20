@@ -231,6 +231,7 @@ import { getVersionsByProject } from '@/api/version'
 import { useActiveMembers } from '@/utils/useActiveMembers'
 import { socket } from '@/utils/socket'
 import { translateErrorMessage } from '@/utils/errorMessages'
+import eventBus from '@/utils/eventBus'
 
 export default {
   name: 'ProjectLayout',
@@ -632,6 +633,26 @@ export default {
         const stage = event.stage || 'processing'
         const existingProcess = llmProcesses.value[processKey]
         
+        // ✅ QUAN TRỌNG: Nếu process cũ đã hoàn thành (success) và event mới là process mới đang xử lý
+        // thì cần reset lại hoàn toàn để tránh hiển thị trạng thái "Hoàn thành" khi đang gen mới
+        const isNewProcessStarting = existingProcess?.status === 'success' && 
+                                     (event.isProcessing === true || 
+                                      (stage !== 'completed' && stage !== 'failed' && stage !== 'error'))
+        
+        if (isNewProcessStarting) {
+          console.log(`🔄 [${processType}] Resetting completed process for new generation`, {
+            oldStatus: existingProcess?.status,
+            newStage: stage,
+            isProcessing: event.isProcessing
+          })
+          // Reset process về trạng thái ban đầu - xóa hoàn toàn process cũ
+          delete llmProcesses.value[processKey]
+          saveProcessesToStorage()
+        }
+        
+        // Lấy lại existingProcess sau khi có thể đã reset
+        const currentProcess = llmProcesses.value[processKey]
+        
         // ✅ QUAN TRỌNG: Kiểm tra failed TRƯỚC khi kiểm tra success
         // Backend có thể gửi stage: "completed" nhưng vẫn có errors (partial success)
         const hasErrors = Array.isArray(event.errors) && event.errors.length > 0
@@ -683,9 +704,10 @@ export default {
         // Check if process completed successfully (chỉ khi không phải failed và không có errors)
         // ✅ QUAN TRỌNG: Kiểm tra hasErrors và hasErrorMessage TRƯỚC khi set success
         // ✅ Cũng kiểm tra agentState === 'DONE' hoặc stage === 'completed'
-        const isCompleted = (!event.isProcessing && progress >= 100 && stage !== 'failed' && stage !== 'error' && !hasErrors && !hasErrorMessage) ||
-                           (event.agentState === 'DONE') ||
-                           (stage === 'completed' && !hasErrors && !hasErrorMessage)
+        // ✅ Ưu tiên kiểm tra stage === 'completed' trước (backend đang emit đúng)
+        const isCompleted = (stage === 'completed' && !hasErrors && !hasErrorMessage) ||
+                           (!event.isProcessing && progress >= 100 && stage !== 'failed' && stage !== 'error' && !hasErrors && !hasErrorMessage) ||
+                           (event.agentState === 'DONE')
         
         if (isCompleted) {
           llmProcesses.value[processKey] = {
@@ -696,12 +718,23 @@ export default {
             progress: 100,
             stage: 'completed',
             agentState: 'DONE', // ✅ Set agentState khi hoàn thành
-            agentMessage: event.message || existingProcess?.agentMessage || 'Hoàn thành', // ✅ Giữ agentMessage
-            estimateInfo: existingProcess?.estimateInfo || null,
-            batchProgress: existingProcess?.batchProgress || null,
-            timestamp: existingProcess?.timestamp || Date.now(),
+            agentMessage: event.message || currentProcess?.agentMessage || 'Hoàn thành', // ✅ Giữ agentMessage
+            estimateInfo: currentProcess?.estimateInfo || null,
+            batchProgress: currentProcess?.batchProgress || null,
+            timestamp: currentProcess?.timestamp || Date.now(),
           }
           saveProcessesToStorage()
+          
+          // ✅ Emit event khi database generation hoàn thành để tự động refresh data
+          if (processType === 'database') {
+            eventBus.emit('database-generation-completed', {
+              projectId: projectId.value,
+              versionId: event.versionId || selectedVersionId.value,
+              userId,
+            })
+            console.log('📢 Emitted database-generation-completed event')
+          }
+          
           // ✅ Không tự động xóa - chỉ xóa khi user đóng thủ công
           return
         }
@@ -712,7 +745,7 @@ export default {
         
         if (savedCount === undefined || savedCount === null) {
           // Fallback: tính từ previous + usecasesInBatch
-          const previousSavedCount = existingProcess?.batchProgress?.savedCount || 0
+          const previousSavedCount = currentProcess?.batchProgress?.savedCount || 0
           const currentBatchUsecases = event.batchInfo?.usecasesInBatch || 0
           
           // Nếu có usecasesInBatch > 0, có thể là batch mới đã save
@@ -731,19 +764,19 @@ export default {
           status: 'processing',
           progress: Math.min(progress, 100),
           stage,
-          agentState: event.agentState || existingProcess?.agentState || null, // ✅ Thêm agentState
-          agentMessage: event.message || existingProcess?.agentMessage || null, // ✅ Thêm agentMessage
-          estimateInfo: existingProcess?.estimateInfo || null,
+          agentState: event.agentState || currentProcess?.agentState || null, // ✅ Thêm agentState
+          agentMessage: event.message || currentProcess?.agentMessage || null, // ✅ Thêm agentMessage
+          estimateInfo: currentProcess?.estimateInfo || null,
           batchProgress: {
-            currentBatch: event.batchInfo?.currentBatch || existingProcess?.batchProgress?.currentBatch || 0,
-            totalBatches: event.batchInfo?.totalBatches || existingProcess?.batchProgress?.totalBatches || existingProcess?.estimateInfo?.estimated_batches || 0,
+            currentBatch: event.batchInfo?.currentBatch || currentProcess?.batchProgress?.currentBatch || 0,
+            totalBatches: event.batchInfo?.totalBatches || currentProcess?.batchProgress?.totalBatches || currentProcess?.estimateInfo?.estimated_batches || 0,
             savedCount: savedCount, // ✅ Sử dụng savedCount đã tính
-            totalCount: event.batchInfo?.totalCount || existingProcess?.batchProgress?.totalCount || existingProcess?.estimateInfo?.estimated_count || 0,
+            totalCount: event.batchInfo?.totalCount || currentProcess?.batchProgress?.totalCount || currentProcess?.estimateInfo?.estimated_count || 0,
             // ✅ Thêm testcasesInBatch cho testcase type
             testcasesInBatch: event.batchInfo?.testcasesInBatch || 0,
             usecasesInBatch: event.batchInfo?.usecasesInBatch || 0,
           },
-          timestamp: existingProcess?.timestamp || Date.now(),
+          timestamp: currentProcess?.timestamp || Date.now(),
         }
         
         // Save to storage
@@ -766,18 +799,6 @@ export default {
       })
       
       // Listen to other process events (database, testcase, uml)
-      socket.on('database_event', (event) => {
-        // ✅ Đảm bảo giữ nguyên tất cả fields từ event, đặc biệt là errors
-        handleLLMProgressEvent({
-          ...event,
-          type: 'DATABASE_PROGRESS',
-          // Đảm bảo errors và errorMessage được giữ lại
-          errors: event.errors,
-          errorMessage: event.errorMessage,
-          error: event.error,
-        })
-      })
-      
       socket.on('testcase_event', (event) => {
         // ✅ Đảm bảo giữ nguyên tất cả fields từ event, đặc biệt là errors
         handleLLMProgressEvent({
@@ -792,9 +813,35 @@ export default {
       
       socket.on('uml_event', (event) => {
         // ✅ Đảm bảo giữ nguyên tất cả fields từ event, đặc biệt là errors
+        console.log('📥 [UML Event] Received:', {
+          stage: event.stage,
+          progress: event.progress,
+          isProcessing: event.isProcessing,
+          errors: event.errors,
+          errorMessage: event.errorMessage,
+        })
         handleLLMProgressEvent({
           ...event,
           type: 'UML_PROGRESS',
+          // Đảm bảo errors và errorMessage được giữ lại
+          errors: event.errors,
+          errorMessage: event.errorMessage,
+          error: event.error,
+        })
+      })
+      
+      socket.on('database_event', (event) => {
+        // ✅ Đảm bảo giữ nguyên tất cả fields từ event, đặc biệt là errors
+        console.log('📥 [Database Event] Received:', {
+          stage: event.stage,
+          progress: event.progress,
+          isProcessing: event.isProcessing,
+          errors: event.errors,
+          errorMessage: event.errorMessage,
+        })
+        handleLLMProgressEvent({
+          ...event,
+          type: 'DATABASE_PROGRESS',
           // Đảm bảo errors và errorMessage được giữ lại
           errors: event.errors,
           errorMessage: event.errorMessage,
