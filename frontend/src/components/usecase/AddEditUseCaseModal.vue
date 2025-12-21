@@ -440,22 +440,38 @@
 
             <!-- Row 6: Business Rules & Constraints -->
             <div class="conditions-row">
-              <div class="form-group">
+              <div class="form-group span-3">
               <label>Business Rules</label>
               <div class="array-input">
-                <div v-for="(rule, index) in localForm.rules" :key="index" class="array-item">
-                  <input
-                    v-model="localForm.rules[index]"
-                    type="text"
-                    placeholder="Rule that governs this use case"
-                  />
-                  <button
-                    type="button"
-                    class="remove-item-btn"
-                    @click="removeArrayItem('rules', index)"
-                  >
-                    <span class="material-symbols-outlined">remove</span>
-                  </button>
+                <div v-for="(rule, index) in localForm.rules" :key="index" class="alternative-flow-item">
+                  <div class="flow-header">
+                    <span class="flow-label">Rule {{ index + 1 }}</span>
+                    <button
+                      type="button"
+                      class="remove-item-btn"
+                      @click="removeArrayItem('rules', index)"
+                    >
+                      <span class="material-symbols-outlined">remove</span>
+                    </button>
+                  </div>
+                  <div class="flow-inputs">
+                    <div class="flow-input-group">
+                      <label class="task-label">ID</label>
+                      <input
+                        v-model="localForm.rules[index].id"
+                        type="text"
+                        placeholder="Rule ID"
+                      />
+                    </div>
+                    <div class="flow-input-group" style="grid-column: span 3;">
+                      <label class="task-label">Description</label>
+                      <input
+                        v-model="localForm.rules[index].description"
+                        type="text"
+                        placeholder="Rule description"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <button type="button" class="add-item-btn" @click="addArrayItem('rules')">
                   <span class="material-symbols-outlined">add</span>
@@ -1016,6 +1032,29 @@ export default {
         cleanedForm.alternative_flows = []
       }
 
+      // Clean rules: keep as array of objects { id, description }
+      if (Array.isArray(cleanedForm.rules)) {
+        cleanedForm.rules = cleanedForm.rules
+          .map((item) => {
+            if (typeof item === 'object' && item !== null) {
+              return {
+                id: (item.id || '').trim(),
+                description: (item.description || '').trim()
+              }
+            } else if (typeof item === 'string') {
+              // Convert string to object with description
+              return {
+                id: '',
+                description: item.trim()
+              }
+            }
+            return { id: '', description: '' }
+          })
+          .filter((rule) => rule.id || rule.description) // Remove empty rules
+      } else {
+        cleanedForm.rules = []
+      }
+
       // Clean array fields - đảm bảo luôn là array
       const arrayFields = [
         'inputs',
@@ -1023,7 +1062,6 @@ export default {
         'preconditions',
         'postconditions',
         'triggers',
-        'rules',
         'constraints',
         'exceptions',
         'stakeholders',
@@ -1047,8 +1085,6 @@ export default {
                     if (item.type) desc += ` (${item.type})`
                     return desc
                   }
-                } else if (field === 'rules') {
-                  return item.description || item.id || ''
                 } else if (field === 'exceptions') {
                   const parts = []
                   if (item.description) parts.push(item.description)
@@ -1207,16 +1243,24 @@ export default {
         normalized.outputs = []
       }
 
-      // Normalize rules: array of objects { id, description } -> array of strings
+      // Normalize rules: keep as array of objects { id, description }
       if (Array.isArray(normalized.rules)) {
         normalized.rules = normalized.rules.map((item) => {
-          if (typeof item === 'string') return item
           if (typeof item === 'object' && item !== null) {
-            // Extract description từ object
-            return item.description || item.id || JSON.stringify(item)
+            // Keep as object with id and description
+            return {
+              id: (item.id || '').trim(),
+              description: (item.description || '').trim()
+            }
+          } else if (typeof item === 'string') {
+            // Convert string to object with description
+            return {
+              id: '',
+              description: item.trim()
+            }
           }
-          return String(item || '')
-        }).filter(Boolean)
+          return { id: '', description: '' }
+        }).filter((rule) => rule.id || rule.description) // Remove empty rules
       } else if (!normalized.rules) {
         normalized.rules = []
       }
@@ -1373,6 +1417,8 @@ export default {
           system_response: '', 
           end_state: '' 
         })
+      } else if (field === 'rules') {
+        this.localForm[field].push({ id: '', description: '' })
       } else {
       this.localForm[field].push('')
       }
@@ -1405,7 +1451,7 @@ export default {
         postconditions: [],
         alternative_flows: [],
         triggers: [],
-        rules: [],
+        rules: [{ id: '', description: '' }],
         constraints: [],
         exceptions: [],
         stakeholders: [],
@@ -1478,6 +1524,29 @@ export default {
         cleaned.alternative_flows = []
       }
 
+      // Clean rules: keep as array of objects { id, description }
+      if (Array.isArray(cleaned.rules)) {
+        cleaned.rules = cleaned.rules
+          .map((item) => {
+            if (typeof item === 'object' && item !== null) {
+              return {
+                id: (item.id || '').trim(),
+                description: (item.description || '').trim()
+              }
+            } else if (typeof item === 'string') {
+              // Convert string to object with description
+              return {
+                id: '',
+                description: item.trim()
+              }
+            }
+            return { id: '', description: '' }
+          })
+          .filter((rule) => rule.id || rule.description) // Remove empty rules
+      } else {
+        cleaned.rules = []
+      }
+
       // Clean array fields - đảm bảo luôn là array và trim
       const arrayFields = [
         'inputs',
@@ -1485,7 +1554,6 @@ export default {
         'preconditions',
         'postconditions',
         'triggers',
-        'rules',
         'constraints',
         'exceptions',
         'stakeholders',
@@ -1509,8 +1577,6 @@ export default {
                     if (item.type) desc += ` (${item.type})`
                     return desc
                   }
-                } else if (field === 'rules') {
-                  return item.description || item.id || ''
                 } else if (field === 'exceptions') {
                   const parts = []
                   if (item.description) parts.push(item.description)
@@ -1661,6 +1727,33 @@ export default {
         }
       }
 
+      // So sánh rules - xử lý riêng vì là objects
+      const originalRules = (original.rules || []).map((rule) => {
+        if (typeof rule === 'object' && rule !== null) {
+          return `${(rule.id || '').trim()}|${(rule.description || '').trim()}`
+        }
+        return String(rule || '').trim()
+      }).filter(Boolean)
+      const currentRules = (current.rules || []).map((rule) => {
+        if (typeof rule === 'object' && rule !== null) {
+          return `${(rule.id || '').trim()}|${(rule.description || '').trim()}`
+        }
+        return String(rule || '').trim()
+      }).filter(Boolean)
+
+      if (originalRules.length !== currentRules.length) {
+        return true
+      }
+
+      const sortedOriginalRules = [...originalRules].sort()
+      const sortedCurrentRules = [...currentRules].sort()
+
+      for (let i = 0; i < sortedOriginalRules.length; i++) {
+        if (sortedOriginalRules[i] !== sortedCurrentRules[i]) {
+          return true
+        }
+      }
+
       // So sánh các mảng khác
       const arrayFields = [
         'inputs',
@@ -1668,7 +1761,6 @@ export default {
         'preconditions',
         'postconditions',
         'triggers',
-        'rules',
         'constraints',
         'exceptions',
         'stakeholders',

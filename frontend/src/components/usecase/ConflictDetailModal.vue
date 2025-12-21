@@ -206,6 +206,7 @@
               <ul class="condition-list">
                 <template v-if="useCase.rules && Array.isArray(useCase.rules) && useCase.rules.length > 0">
                   <li v-for="(item, i) in useCase.rules" :key="i">
+                    <span v-if="typeof item === 'object' && item.id" class="rule-id">[{{ item.id }}]</span>
                     {{ typeof item === 'object' ? item.description : item }}
                   </li>
                 </template>
@@ -860,6 +861,12 @@ export default {
   border-radius: 10px;
   font-size: 0.7rem;
   font-weight: 500;
+}
+
+.rule-id {
+  font-weight: 600;
+  color: #92400e;
+  margin-right: 6px;
 }
 
 .step-result {
