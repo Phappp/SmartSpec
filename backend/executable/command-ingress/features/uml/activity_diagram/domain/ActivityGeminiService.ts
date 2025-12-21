@@ -170,7 +170,8 @@ export class ActivityGeminiService {
     // ✅ MỚI: Token analysis trước khi gọi LLM
     const { getModelConfig, logTokenInfo } = await import("../../../../shared/tokenManager");
     const modelName = await this.llmService.getRecommendedModel(undefined, userId);
-    const modelConfig = getModelConfig(modelName, undefined);
+    // ✅ CẢI THIỆN: Set isProductionFreeMode = false để cho phép model có phí (user đã chọn)
+    const modelConfig = getModelConfig(modelName, undefined, false);
     logTokenInfo(prompt, modelConfig, '[UML Activity Diagram]');
 
     // ✅ Không catch error ở đây - để service layer xử lý và emit failed event

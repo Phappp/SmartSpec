@@ -488,10 +488,47 @@ function normalizeModelNameForMatching(modelName: string): string {
 }
 
 /**
+ * ✅ MỚI: Tạo ModelConfig tạm thời cho OpenRouter models (không có trong MODEL_CONFIGS)
+ */
+function createOpenRouterModelConfig(modelName: string): ModelConfig {
+    // Kiểm tra xem có trong MODEL_CONFIGS không (có thể là model có phí)
+    const exactMatch = Object.entries(MODEL_CONFIGS).find(([_, config]) => config.modelName === modelName);
+    if (exactMatch) {
+        return exactMatch[1];
+    }
+
+    // Nếu không tìm thấy, tạo config mặc định cho OpenRouter model
+    return {
+        provider: 'openrouter',
+        modelName: modelName,
+        category: 'worker',
+        contextWindow: 1000000, // Default large context window
+        strategy: 'compress-long',
+        tokenEstimationRatio: 4.0,
+        supportsLongContext: true,
+        supportsCompression: true
+    };
+}
+
+/**
  * Get model config by model name (with fallback)
  * ✅ CẢI THIỆN: Smart matching với extract provider và normalize name
  */
 export function getModelConfig(modelName: string, provider?: Provider, isProductionFreeMode: boolean = true): ModelConfig {
+    // ✅ MỚI: Nếu model có format OpenRouter (có /) và không có trong MODEL_CONFIGS, tạo config tạm
+    if (modelName && modelName.includes('/')) {
+        const exactMatch = Object.entries(MODEL_CONFIGS).find(([_, config]) => config.modelName === modelName);
+        if (exactMatch) {
+            const config = exactMatch[1];
+            validateFreeMode(config, isProductionFreeMode);
+            return config;
+        } else {
+            // Model OpenRouter không có trong MODEL_CONFIGS → tạo config tạm (không validate FREE mode)
+            console.log(`ℹ️ [getModelConfig] OpenRouter model "${modelName}" not in MODEL_CONFIGS, creating temporary config`);
+            return createOpenRouterModelConfig(modelName);
+        }
+    }
+
     // Try exact match first
     if (MODEL_CONFIGS[modelName]) {
         const config = MODEL_CONFIGS[modelName];
@@ -512,15 +549,21 @@ export function getModelConfig(modelName: string, provider?: Provider, isProduct
     for (const [key, config] of allModels) {
         const normalizedConfig = normalizeModelNameForMatching(config.modelName);
 
-        // Match nếu normalized names giống nhau hoặc gần giống
-        if (normalizedInput === normalizedConfig ||
-            normalizedInput.includes(normalizedConfig) ||
-            normalizedConfig.includes(normalizedInput)) {
-            // Nếu có provider, kiểm tra provider match
+        // ✅ CẢI THIỆN: Match chính xác hơn - chỉ exact match hoặc prefix match (không dùng includes để tránh match sai)
+        // Ví dụ: "gemini-2.5-flash" không nên match với "gemini-2.5-flash-lite"
+        if (normalizedInput === normalizedConfig) {
+            // Exact match - ưu tiên cao nhất
             if (!provider || config.provider === provider) {
                 validateFreeMode(config, isProductionFreeMode);
                 return config;
             }
+        } else if (normalizedInput.startsWith(normalizedConfig + '-') ||
+            normalizedConfig.startsWith(normalizedInput + '-')) {
+            // Prefix match nhưng phải có dấu '-' sau để tránh match sai
+            // Ví dụ: "gemini-2.5" sẽ match "gemini-2.5-flash" nhưng không match "gemini-2.5flash"
+            // Nhưng "gemini-2.5-flash" sẽ KHÔNG match "gemini-2.5-flash-lite" vì không có '-' giữa chúng trong comparison
+            // (Chỉ match khi một cái là prefix của cái kia với dấu '-' phân cách)
+            // Skip prefix match vì có thể gây nhầm lẫn
         }
     }
 

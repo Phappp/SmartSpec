@@ -542,7 +542,9 @@ export class DatabaseGeminiService {
     // ✅ MỚI: Token analysis trước khi gọi LLM (sử dụng model user đã chọn)
     const { getModelConfig, logTokenInfo } = await import("../../../shared/tokenManager");
     const modelName = await this.llmService.getRecommendedModel(undefined, userId);
-    const modelConfig = getModelConfig(modelName, undefined);
+    // ✅ CẢI THIỆN: getModelConfig đã tự động xử lý OpenRouter models và model có phí
+    // Set isProductionFreeMode = false để cho phép model có phí (user đã chọn)
+    const modelConfig = getModelConfig(modelName, undefined, false);
     logTokenInfo(prompt, modelConfig, '[Database Schema]');
 
     const generatedJsonString = await this.generateJsonContent(prompt, userId, projectId);

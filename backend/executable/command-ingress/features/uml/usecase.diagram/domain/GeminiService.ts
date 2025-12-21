@@ -189,13 +189,12 @@ export class UsecaseDiagramGeminiService {
         `📊 Generating use case diagram for ${requirements.length} use cases`
       );
 
-      // ✅ MỚI: Token analysis trước khi gọi LLM
+      // ✅ MỚI: Token analysis trước khi gọi LLM (sử dụng model user đã chọn)
       const { getModelConfig, estimateTokens, determineStrategy, logTokenInfo } = await import("../../../../shared/tokenManager");
-      const keys = await this.apiKeyService.getAllActiveKeys("gemini");
-      if (keys && keys.length > 0) {
-        const modelConfig = getModelConfig(keys[0].model_name || 'gemini-2.0-flash', 'gemini');
-        logTokenInfo(prompt, modelConfig, '[UML Usecase Diagram]');
-      }
+      const modelName = await this.llmService.getRecommendedModel(undefined, userId);
+      // ✅ CẢI THIỆN: Set isProductionFreeMode = false để cho phép model có phí (user đã chọn)
+      const modelConfig = getModelConfig(modelName, undefined, false);
+      logTokenInfo(prompt, modelConfig, '[UML Usecase Diagram]');
 
       // 1. Gọi Gemini và lấy chuỗi JSON (dùng TÊN string)
       const generatedJsonString = await this.generateJsonContent(prompt, userId, projectId);

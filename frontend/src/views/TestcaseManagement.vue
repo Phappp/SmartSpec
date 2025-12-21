@@ -1720,18 +1720,19 @@ export default {
       
       // Nếu testcase generation hoàn thành (completed hoặc DONE), refresh list
       if (event.type === 'TESTCASE_PROGRESS') {
-        // Kiểm tra nếu đã hoàn thành (stage = completed hoặc agentState = DONE hoặc progress = 100 và không processing)
+        // ✅ QUAN TRỌNG: Refresh data khi có shouldRefresh flag hoặc khi hoàn thành
+        const shouldRefresh = event.shouldRefresh === true;
         const isCompleted = event.stage === 'completed' || 
                            event.agentState === 'DONE' || 
                            (!event.isProcessing && event.progress >= 100) ||
                            (event.message && event.message.includes('Hoàn thành'))
         
-        if (isCompleted) {
-          console.log('✅ [TestcaseManagement] Testcase generation completed, refreshing list...')
+        if (shouldRefresh || isCompleted) {
+          console.log(`🔄 [TestcaseManagement] Refreshing testcase list... (shouldRefresh: ${shouldRefresh}, isCompleted: ${isCompleted})`)
           // Delay một chút để đảm bảo backend đã save xong
           setTimeout(() => {
             loadTestCases()
-          }, 1500)
+          }, shouldRefresh ? 500 : 1500) // Nếu có shouldRefresh flag, refresh nhanh hơn
         }
       } else if (event.type === 'ESTIMATE_RECEIVED') {
         // Khi nhận estimate, không cần refresh nhưng có thể log
