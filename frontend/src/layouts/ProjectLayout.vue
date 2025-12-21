@@ -1092,6 +1092,7 @@ export default {
             agentMessage: event.message || currentProcess?.agentMessage || 'Hoàn thành', // ✅ Giữ agentMessage
             estimateInfo: currentProcess?.estimateInfo || null,
             committedTestcases: event.committedTestcases || currentProcess?.committedTestcases || [], // ✅ Giữ committedTestcases
+            committedUsecases: event.committedUsecases || currentProcess?.committedUsecases || [], // ✅ Giữ committedUsecases
             batchProgress: currentProcess?.batchProgress || null,
             timestamp: currentProcess?.timestamp || Date.now(),
           }

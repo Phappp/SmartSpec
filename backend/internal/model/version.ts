@@ -27,10 +27,10 @@ const versionSchema = new Schema({
     version_temporary: { type: Boolean, default: true }, // là version tmp -> true
     inputs: [{ type: Schema.Types.ObjectId, ref: "inputs" }],
     progress: { type: Number, default: 0 },
-    stage: { type: String, enum: ["normalization", "input", "analyzing", "finalizing", "completed", "failed"], default: "input" },
+    stage: { type: String, enum: ["normalization", "input", "analyzing", "finalizing", "completed", "failed", "paused"], default: "input" },
     status: {
         type: String,
-        enum: ['processing', 'completed', 'failed', 'has_conflicts'],
+        enum: ['processing', 'completed', 'failed', 'has_conflicts', 'paused'],
         default: 'processing'
     },
     affects_requirement: { type: Boolean, default: false },
