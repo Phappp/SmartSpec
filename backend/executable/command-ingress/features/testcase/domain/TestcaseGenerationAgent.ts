@@ -468,8 +468,11 @@ export class TestcaseGenerationAgent {
         const progress = 20 + Math.floor((currentBatch.batchNumber / this.context.batchPlan.length) * 70);
 
         if (testcaseSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
-            // ✅ QUAN TRỌNG: Query lại từ DB để lấy số testcase đã lưu thực sự
+            // ✅ QUAN TRỌNG: Chỉ tính số testcases mới được thêm vào trong session này
             const actualSavedCount = await Testcase.countDocuments({ version_id: this.context.versionId });
+            const initialCount = this.context.initialTestcaseCount || 0;
+            const savedInSession = actualSavedCount - initialCount;
+
             testcaseSocketService.emitProgress(
                 this.context.projectId,
                 this.context.versionId,
@@ -481,12 +484,12 @@ export class TestcaseGenerationAgent {
                     currentBatch: currentBatch.batchNumber,
                     totalBatches: this.context.batchPlan.length,
                     testcasesInBatch: 0,
-                    savedCount: actualSavedCount, // ✅ Sửa: Dùng số đã lưu thực sự từ DB
+                    savedCount: savedInSession, // ✅ Chỉ tính testcases mới trong session này
                     totalCount: this.context.estimatedCount || 0
                 },
                 undefined, // errors
                 TestcaseAgentState.GENERATE_BATCH,
-                `Đang generate batch ${currentBatch.batchNumber}/${this.context.batchPlan.length} (${currentBatch.batchSize} testcases)... Đã lưu: ${actualSavedCount}/${this.context.estimatedCount || 0}`,
+                `Đang generate batch ${currentBatch.batchNumber}/${this.context.batchPlan.length} (${currentBatch.batchSize} testcases)... Đã lưu: ${savedInSession}/${this.context.estimatedCount || 0}`,
                 undefined, // shouldRefresh
                 this.context.committedTestcases // ✅ Emit committedTestcases với status "generating" đã được cập nhật
             );
@@ -499,7 +502,14 @@ export class TestcaseGenerationAgent {
                 .lean();
             const existingTitles = existingTestcases.map(tc => (tc.title as string)?.trim()).filter(Boolean);
 
-            // Generate batch với existing titles để tránh duplicate
+            // ✅ QUAN TRỌNG: Lấy danh sách committedTestcases cho batch này để đảm bảo order
+            const batchCommittedTestcases = this.context.committedTestcases?.slice(
+                currentBatch.offset,
+                currentBatch.offset + currentBatch.batchSize
+            ) || [];
+            const batchCommittedTitles = batchCommittedTestcases.map(tc => tc.title);
+
+            // Generate batch với existing titles và committed titles để đảm bảo order
             const batchTestcases = await this.gemini.generateTestCasesBatch(
                 this.context.requirements,
                 this.context.databaseSchema,
@@ -513,7 +523,8 @@ export class TestcaseGenerationAgent {
                 this.context.modelName,
                 this.context.userId,
                 this.context.projectId,
-                existingTitles // ✅ Pass existing titles để tránh duplicate
+                existingTitles, // ✅ Pass existing titles để tránh duplicate
+                batchCommittedTitles // ✅ Pass committed titles để đảm bảo order
             );
 
             if (batchTestcases.length === 0) {
@@ -580,7 +591,11 @@ export class TestcaseGenerationAgent {
                     // ✅ Emit event để frontend refresh data với committedTestcases
                     const { testcaseSocketService } = await import("./testcase.socket.service");
                     if (testcaseSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
+                        // ✅ QUAN TRỌNG: Chỉ tính số testcases mới được thêm vào trong session này
                         const actualSavedCount = await Testcase.countDocuments({ version_id: this.context.versionId });
+                        const initialCount = this.context.initialTestcaseCount || 0;
+                        const savedInSession = actualSavedCount - initialCount;
+
                         testcaseSocketService.emitProgress(
                             this.context.projectId,
                             this.context.versionId,
@@ -592,13 +607,13 @@ export class TestcaseGenerationAgent {
                                 currentBatch: currentBatch.batchNumber,
                                 totalBatches: this.context.batchPlan?.length || 1,
                                 testcasesInBatch: savedBatch.length,
-                                savedCount: actualSavedCount,
+                                savedCount: savedInSession, // ✅ Chỉ tính testcases mới trong session này
                                 totalCount: this.context.estimatedCount || 0
                             },
                             undefined,
                             TestcaseAgentState.GENERATE_BATCH,
-                            `✅ Đã lưu batch ${currentBatch.batchNumber}: ${savedBatch.length} testcases (tổng: ${actualSavedCount}/${this.context.estimatedCount || 0})`,
-                            true,
+                            `✅ Đã lưu batch ${currentBatch.batchNumber}: ${savedBatch.length} testcases (tổng: ${savedInSession}/${this.context.estimatedCount || 0})`,
+                            true, // ✅ shouldRefresh: true để frontend refresh data
                             this.context.committedTestcases // ✅ Emit committedTestcases với status đã cập nhật
                         );
                     }
@@ -863,8 +878,11 @@ export class TestcaseGenerationAgent {
         const { testcaseSocketService } = await import("./testcase.socket.service");
         if (testcaseSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
             const retryProgress = 93 + Math.floor(((currentRetryBatchIndex + 1) / retryPlan.length) * 5);
-            // ✅ QUAN TRỌNG: Query lại từ DB để lấy số testcase đã lưu thực sự
+            // ✅ QUAN TRỌNG: Chỉ tính số testcases mới được thêm vào trong session này
             const actualSavedCount = await Testcase.countDocuments({ version_id: this.context.versionId });
+            const initialCount = this.context.initialTestcaseCount || 0;
+            const savedInSession = actualSavedCount - initialCount;
+
             testcaseSocketService.emitProgress(
                 this.context.projectId,
                 this.context.versionId,
@@ -876,12 +894,12 @@ export class TestcaseGenerationAgent {
                     currentBatch: currentBatch.batchNumber,
                     totalBatches: retryPlan.length,
                     testcasesInBatch: 0,
-                    savedCount: actualSavedCount, // ✅ Sửa: Dùng số đã lưu thực sự từ DB
+                    savedCount: savedInSession, // ✅ Chỉ tính testcases mới trong session này
                     totalCount: this.context.estimatedCount || 0
                 },
                 undefined,
                 TestcaseAgentState.GENERATE_RETRY,
-                `🔄 Đang retry batch ${currentRetryBatchIndex + 1}/${retryPlan.length} (${currentBatch.batchSize} testcases)... Đã lưu: ${actualSavedCount}/${this.context.estimatedCount || 0}`
+                `🔄 Đang retry batch ${currentRetryBatchIndex + 1}/${retryPlan.length} (${currentBatch.batchSize} testcases)... Đã lưu: ${savedInSession}/${this.context.estimatedCount || 0}`
             );
         }
 
@@ -1249,25 +1267,24 @@ export class TestcaseGenerationAgent {
             return;
         }
 
-        // ✅ QUAN TRỌNG: Query số testcases đã lưu TRƯỚC KHI lưu batch mới
-        const currentCountBeforeSave = await Testcase.countDocuments({ version_id: this.context.versionId });
-
-        // ✅ Tính số testcases đã lưu trong session này (không tính testcases cũ)
-        const initialCount = this.context.initialTestcaseCount || 0;
-        const previouslySavedInSession = currentCountBeforeSave - initialCount;
-
+        // ✅ QUAN TRỌNG: Query số testcases đã lưu SAU KHI lưu batch mới để tính chính xác
+        // Lưu ý: performAtomicSave đã lưu testcases vào DB, nên cần query lại sau khi save
         const saveResult = await this.performAtomicSave(validTestcases);
 
         // Cập nhật savedTestcases
         this.context.savedTestcases = saveResult.savedTestcases || [];
 
-        // ✅ Tính tổng số đã lưu trong session này = số đã lưu trước đó trong session + số mới lưu
-        const totalSavedCount = previouslySavedInSession + saveResult.saved;
+        // ✅ QUAN TRỌNG: Query lại từ DB sau khi save để lấy số chính xác
+        const finalCountAfterSave = await Testcase.countDocuments({ version_id: this.context.versionId });
+        const initialCount = this.context.initialTestcaseCount || 0;
+
+        // ✅ Tính tổng số đã lưu trong session này = số testcases hiện tại trong DB - số testcases ban đầu
+        const totalSavedCount = finalCountAfterSave - initialCount;
 
         console.log(`✅ [ATOMIC_SAVE] Save complete:`, {
             totalExpected: saveResult.totalExpected,
             initialCount: initialCount,
-            previouslySavedInSession: previouslySavedInSession,
+            finalCountAfterSave: finalCountAfterSave,
             newlySaved: saveResult.saved,
             totalSavedInSession: totalSavedCount,
             repairedByLLM: saveResult.repairedByLLM,
@@ -1516,8 +1533,10 @@ export class TestcaseGenerationAgent {
             }
             this.context.savedTestcases.push(...result);
 
-            // ✅ Query lại từ DB để đảm bảo savedCount chính xác
+            // ✅ QUAN TRỌNG: Chỉ tính số testcases mới được thêm vào trong session này
             const actualSavedCount = await Testcase.countDocuments({ version_id: this.context.versionId });
+            const initialCount = this.context.initialTestcaseCount || 0;
+            const savedInSession = actualSavedCount - initialCount;
 
             // Broadcast progress với savedCount chính xác và flag refresh
             const { testcaseSocketService } = await import("./testcase.socket.service");
@@ -1534,13 +1553,13 @@ export class TestcaseGenerationAgent {
                         currentBatch: batchNumber,
                         totalBatches: this.context.batchPlan?.length || 1,
                         testcasesInBatch: result.length,
-                        savedCount: actualSavedCount,
+                        savedCount: savedInSession, // ✅ Chỉ tính testcases mới trong session này
                         totalCount: this.context.estimatedCount || 0
                     },
                     undefined,
                     TestcaseAgentState.GENERATE_BATCH,
-                    `Đã lưu batch ${batchNumber}: ${result.length} testcases (tổng: ${actualSavedCount}/${this.context.estimatedCount || 0})`,
-                    true, // ✅ Thêm flag shouldRefresh để frontend refresh data sau mỗi batch
+                    `Đã lưu batch ${batchNumber}: ${result.length} testcases (tổng: ${savedInSession}/${this.context.estimatedCount || 0})`,
+                    true, // ✅ shouldRefresh: true để frontend refresh data sau mỗi batch
                     this.context.committedTestcases // ✅ Emit committedTestcases với status đã cập nhật
                 );
             }
@@ -1606,7 +1625,7 @@ export class TestcaseGenerationAgent {
     private async verifyAndRetryBatch(batch: TestcaseBatchPlan): Promise<void> {
         console.log(`🔍 [VERIFY_BATCH] Verifying batch ${batch.batchNumber}...`);
 
-        const maxRetries = 3; // Tối đa 3 lần retry cho mỗi batch
+        const maxRetries = 1; // ✅ Tối đa 1 lần retry cho mỗi batch (theo yêu cầu)
         let retryCount = 0;
 
         while (retryCount < maxRetries) {

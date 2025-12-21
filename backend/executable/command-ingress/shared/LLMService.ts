@@ -62,6 +62,13 @@ export class LLMService {
             forceModel = false // ✅ MỚI: Mặc định không force
         } = options;
 
+        // ✅ CẢI THIỆN: Nếu model được chọn là có phí (không có :free), tự động tắt FREE mode
+        let effectiveFreeMode = isProductionFreeMode;
+        if (modelName && !modelName.includes(':free')) {
+            console.log(`💰 [callLLM] Paid model "${modelName}" detected, disabling FREE mode`);
+            effectiveFreeMode = false;
+        }
+
         // Xác định provider và model
         let targetProvider: Provider | undefined = provider;
         let targetModelName = modelName;
@@ -95,7 +102,7 @@ export class LLMService {
 
         // ✅ MỚI: Nếu forceModel = true và chưa set provider (không phải OpenRouter format), validate model trước
         if (forceModel && modelName && !targetProvider) {
-            const modelConfig = getModelConfig(modelName, provider, isProductionFreeMode);
+            const modelConfig = getModelConfig(modelName, provider, effectiveFreeMode);
             targetProvider = modelConfig.provider;
             targetModelName = modelConfig.modelName;
 
@@ -122,7 +129,7 @@ export class LLMService {
                 console.log(`✅ [callLLM] OpenRouter format detected, keeping original modelName: ${modelName}`);
             } else {
                 // Model native format → dùng getModelConfig
-                const modelConfig = getModelConfig(modelName, provider, isProductionFreeMode);
+                const modelConfig = getModelConfig(modelName, provider, effectiveFreeMode);
                 targetProvider = modelConfig.provider;
                 targetModelName = modelConfig.modelName;
             }

@@ -881,7 +881,8 @@ export class TestcaseGeminiService {
         modelName?: string,
         userId?: string,
         projectId?: string,
-        existingTitles?: string[] // ✅ Thêm parameter để tránh duplicate
+        existingTitles?: string[], // ✅ Thêm parameter để tránh duplicate
+        committedTitles?: string[] // ✅ Thêm parameter để đảm bảo order theo committedTestcases
     ): Promise<any[]> {
         try {
             console.log(`📦 [BATCH ${batchNumber}/${totalBatches}] Generating test cases ${offset + 1} to ${offset + batchSize} (estimated total: ${estimatedTotal || 'unknown'})...`);
@@ -903,6 +904,19 @@ ${existingTitles.map((title, idx) => `${idx + 1}. "${title}"`).join('\n')}
 **CRITICAL**: Generate NEW testcases that are DIFFERENT from the above list. Check the title carefully before generating.`
                 : '';
 
+            // ✅ QUAN TRỌNG: Thêm thông tin về committed testcases để đảm bảo generate đúng order
+            const committedTitlesSection = committedTitles && committedTitles.length > 0
+                ? `\n**COMMITTED TESTCASES FOR THIS BATCH (GENERATE IN THIS ORDER):**
+The following testcases should be generated in this batch, in the order listed:
+${committedTitles.map((title, idx) => `${idx + 1}. "${title}"`).join('\n')}
+
+**CRITICAL**: 
+- Generate testcases that MATCH or are SIMILAR to the titles above
+- Maintain the ORDER: first testcase should match "${committedTitles[0]}", second should match "${committedTitles[1] || 'N/A'}", etc.
+- If you cannot match exactly, generate testcases that cover the same test scenarios in the same order
+- The order of testcases in your response MUST match the order of committed testcases above`
+                : '';
+
             const batchPrompt = `${basePrompt}
 
 **BATCH INFORMATION:**
@@ -911,6 +925,7 @@ ${existingTitles.map((title, idx) => `${idx + 1}. "${title}"`).join('\n')}
 - Number of test cases to generate in this batch: ${batchSize}
 ${estimatedTotal ? `- **TOTAL ESTIMATED TEST CASES: ${estimatedTotal}** - DO NOT generate more than this!` : ''}
 ${existingTitlesSection}
+${committedTitlesSection}
 
 **REQUIREMENTS:**
 - Generate exactly ${batchSize} test cases (or fewer if content is exhausted)
@@ -918,7 +933,10 @@ ${estimatedTotal ? `- **IMPORTANT**: Total estimated test cases is ${estimatedTo
 - Start from test case number ${offset + 1}
 - DO NOT repeat test cases already generated in previous batches
 ${existingTitles && existingTitles.length > 0 ? '- **CRITICAL**: DO NOT generate testcases with titles that already exist (see EXISTING TESTCASES list above)' : ''}
+${committedTitles && committedTitles.length > 0 ? '- **CRITICAL**: Generate testcases that MATCH the committed testcases list above, in the SAME ORDER' : ''}
 - Each test case must have complete information
+- **ORDER IS IMPORTANT**: Generate test cases in the order they should appear (from ${offset + 1} to ${offset + batchSize})
+${committedTitles && committedTitles.length > 0 ? `- **ORDER MATCHING**: The first testcase in your response should match "${committedTitles[0]}", the second should match "${committedTitles[1] || 'N/A'}", etc.` : ''}
 
 **IMPORTANT:**
 - Return ONLY JSON object with "testcases" array, no markdown, no code fence
