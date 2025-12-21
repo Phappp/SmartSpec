@@ -748,8 +748,18 @@ export default {
       this.toast.info(`New usecase created by team: ${event.usecase.name}`)
 
       // Thêm usecase mới vào danh sách
-      if (!this.useCases.find((uc) => uc.id === event.usecase.id)) {
+      const usecaseId = String(event.usecase._id || event.usecase.id || '')
+      if (!this.useCases.find((uc) => {
+        const ucId = String(uc._id || uc.id || '')
+        return ucId === usecaseId
+      })) {
         this.useCases.push(event.usecase)
+        
+        // ✅ Thêm vào newUseCaseIds để highlight
+        if (usecaseId) {
+          this.newUseCaseIds.add(usecaseId)
+          console.log(`✨ Added new usecase to highlight: ${usecaseId}`)
+        }
 
         // Trigger UI update
         this.$forceUpdate()
@@ -877,33 +887,50 @@ export default {
         }
         
         // ✅ Detect usecases mới
-        const currentIds = new Set(newUseCases.map(uc => String(uc._id || uc.id)))
+        const currentIds = new Set(newUseCases.map(uc => String(uc._id || uc.id || '')))
         
         // Nếu previousUseCaseIds rỗng (lần đầu load), set nó = currentIds mà không highlight
         if (this.previousUseCaseIds.size === 0) {
-          this.previousUseCaseIds = new Set(currentIds)
+          // Lần đầu load: set previousUseCaseIds = currentIds (không highlight)
+          const validCurrentIds = Array.from(currentIds).filter(id => id && id !== '')
+          this.previousUseCaseIds = new Set(validCurrentIds)
           // Lưu vào localStorage
           localStorage.setItem(storageKey, JSON.stringify(Array.from(this.previousUseCaseIds)))
+          console.log(`📝 Initialized previousUseCaseIds with ${validCurrentIds.length} usecases (no highlight)`)
         } else {
           // Tìm usecases mới (có trong current nhưng không có trong previous)
           const newlyAddedIds = new Set()
           currentIds.forEach(id => {
-            if (!this.previousUseCaseIds.has(id)) {
+            // Bỏ qua ID rỗng
+            if (!id) return
+            // So sánh với cả dạng string và number trong previousUseCaseIds
+            let found = false
+            for (const prevId of this.previousUseCaseIds) {
+              if (String(prevId) === String(id)) {
+                found = true
+                break
+              }
+            }
+            if (!found) {
               newlyAddedIds.add(id)
             }
           })
           
           // Nếu có usecases mới, thêm vào newUseCaseIds để highlight
           if (newlyAddedIds.size > 0) {
-            newlyAddedIds.forEach(id => this.newUseCaseIds.add(id))
+            newlyAddedIds.forEach(id => {
+              if (id) {
+                this.newUseCaseIds.add(id)
+              }
+            })
             console.log(`✨ Detected ${newlyAddedIds.size} new usecase(s):`, Array.from(newlyAddedIds))
+            console.log(`📊 Total highlighted usecases: ${this.newUseCaseIds.size}`)
           }
+          
+          // ✅ QUAN TRỌNG: KHÔNG cập nhật previousUseCaseIds ngay sau khi detect
+          // Chỉ update khi user remove highlight (xử lý trong handleRemoveHighlight)
+          // Điều này đảm bảo usecases mới vẫn được highlight cho đến khi user hover để remove
         }
-        
-        // Cập nhật previousUseCaseIds với tất cả currentIds
-        this.previousUseCaseIds = new Set(currentIds)
-        // Lưu vào localStorage
-        localStorage.setItem(storageKey, JSON.stringify(Array.from(this.previousUseCaseIds)))
         
         this.useCases = newUseCases
         
@@ -2137,7 +2164,6 @@ export default {
       this.saveIncrementalState()
 
       // Hiển thị toast với estimate
-      this.toast.info(`Estimated ${event.estimate.estimated_count} use cases will be generated (${event.estimate.estimated_batches} batches)`)
     },
 
     handleIncrementalProgress(event) {
@@ -2193,15 +2219,17 @@ export default {
 
       // ✅ MỚI: Refresh usecases ngay khi nhận progress update (trong lúc processing)
       // Để user thấy usecases mới xuất hiện từng batch một
-      if (event.isProcessing) {
-        console.log('🔄 Processing in progress, fetching new usecases...')
+      // ✅ QUAN TRỌNG: Refresh data khi có shouldRefresh flag hoặc khi đang processing
+      const shouldRefresh = event.shouldRefresh === true;
+      if (event.isProcessing || shouldRefresh) {
+        console.log(`🔄 Processing in progress${shouldRefresh ? ' (shouldRefresh flag)' : ''}, fetching new usecases...`)
         // ✅ FIX: Giảm debounce từ 500ms xuống 200ms để fetch nhanh hơn
         if (this.incrementalFetchTimeout) {
           clearTimeout(this.incrementalFetchTimeout)
         }
         this.incrementalFetchTimeout = setTimeout(() => {
           this.fetchUseCasesIncremental(event.versionId)
-        }, 200) // Delay 200ms để batch các events lại (giảm từ 500ms)
+        }, shouldRefresh ? 100 : 200) // Nếu có shouldRefresh flag, refresh nhanh hơn
       }
 
       // Nếu hoàn thành, refresh toàn bộ data ngay lập tức

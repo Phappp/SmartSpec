@@ -1251,7 +1251,7 @@ export class TestcaseGenerationAgent {
                 // ✅ Check xem đã lưu vào DB chưa (check duplicate title)
                 const tcTitle = entry.data.title?.toLowerCase().trim();
                 if (!tcTitle || !existingTitles.has(tcTitle)) {
-                    validTestcases.push(entry.data);
+                validTestcases.push(entry.data);
                 } else {
                     console.log(`⏩ [ATOMIC_SAVE] Skipping testcase "${entry.data.title}" - already saved in incremental save`);
                 }

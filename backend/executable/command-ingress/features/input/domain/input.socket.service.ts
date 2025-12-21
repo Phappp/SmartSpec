@@ -127,7 +127,15 @@ export class InputSocketService {
         },
         errors?: string[], // ✅ Thêm errors parameter
         agentState?: string, // ✅ Agent state
-        message?: string // ✅ Human-readable message
+        message?: string, // ✅ Human-readable message
+        committedUsecases?: Array<{ // ✅ Danh sách usecases đã cam kết
+            index: number;
+            key: string;
+            name: string;
+            status: 'pending' | 'generating' | 'completed' | 'error';
+            error?: string;
+        }>,
+        shouldRefresh?: boolean // ✅ Flag để frontend biết cần refresh data
     ): void {
         const event: IncrementalProgressEvent = {
             type: 'INCREMENTAL_PROGRESS',
@@ -142,13 +150,16 @@ export class InputSocketService {
             errorMessage: errors && errors.length > 0 ? errors.join('; ') : undefined, // ✅ Thêm errorMessage cho compatibility
             agentState, // ✅ Agent state
             message, // ✅ Human-readable message
+            committedUsecases, // ✅ Danh sách usecases đã cam kết
+            shouldRefresh, // ✅ Flag để frontend biết cần refresh data
             timestamp: new Date()
         };
         this.broadcastToProject(projectId, event);
         const errorInfo = errors && errors.length > 0 ? ` (Errors: ${errors.length})` : '';
         const stateInfo = agentState ? ` [${agentState}]` : '';
         const messageInfo = message ? ` - ${message}` : '';
-        console.log(`📊 Broadcast incremental progress: ${progress}% - ${stage}${stateInfo}${messageInfo}${batchInfo ? ` (Batch ${batchInfo.currentBatch}/${batchInfo.totalBatches})` : ''}${errorInfo}`);
+        const refreshInfo = shouldRefresh ? ' [REFRESH]' : '';
+        console.log(`📊 Broadcast incremental progress: ${progress}% - ${stage}${stateInfo}${messageInfo}${batchInfo ? ` (Batch ${batchInfo.currentBatch}/${batchInfo.totalBatches})` : ''}${errorInfo}${refreshInfo}`);
     }
 
     emitEstimateReceived(
@@ -160,7 +171,14 @@ export class InputSocketService {
             summary: string;
             estimated_batches: number;
             reasoning?: string;
-        }
+        },
+        committedUsecases?: Array<{ // ✅ Thêm committedUsecases parameter
+            index: number;
+            key: string;
+            name: string;
+            status: 'pending' | 'generating' | 'completed' | 'error';
+            error?: string;
+        }>
     ): void {
         const event: EstimateReceivedEvent = {
             type: 'ESTIMATE_RECEIVED',
@@ -168,10 +186,11 @@ export class InputSocketService {
             versionId,
             userId,
             estimate,
+            committedUsecases, // ✅ Thêm committedUsecases vào event
             timestamp: new Date()
         };
         this.broadcastToProject(projectId, event);
-        console.log(`📊 Broadcast estimate received: ${estimate.estimated_count} use cases, ${estimate.estimated_batches} batches`);
+        console.log(`📊 Broadcast estimate received: ${estimate.estimated_count} use cases, ${estimate.estimated_batches} batches, ${committedUsecases?.length || 0} committed usecases`);
     }
 }
 
