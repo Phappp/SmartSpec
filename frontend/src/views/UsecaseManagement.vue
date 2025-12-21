@@ -2193,15 +2193,17 @@ export default {
 
       // ✅ MỚI: Refresh usecases ngay khi nhận progress update (trong lúc processing)
       // Để user thấy usecases mới xuất hiện từng batch một
-      if (event.isProcessing) {
-        console.log('🔄 Processing in progress, fetching new usecases...')
+      // ✅ QUAN TRỌNG: Refresh data khi có shouldRefresh flag hoặc khi đang processing
+      const shouldRefresh = event.shouldRefresh === true;
+      if (event.isProcessing || shouldRefresh) {
+        console.log(`🔄 Processing in progress${shouldRefresh ? ' (shouldRefresh flag)' : ''}, fetching new usecases...`)
         // ✅ FIX: Giảm debounce từ 500ms xuống 200ms để fetch nhanh hơn
         if (this.incrementalFetchTimeout) {
           clearTimeout(this.incrementalFetchTimeout)
         }
         this.incrementalFetchTimeout = setTimeout(() => {
           this.fetchUseCasesIncremental(event.versionId)
-        }, 200) // Delay 200ms để batch các events lại (giảm từ 500ms)
+        }, shouldRefresh ? 100 : 200) // Nếu có shouldRefresh flag, refresh nhanh hơn
       }
 
       // Nếu hoàn thành, refresh toàn bộ data ngay lập tức

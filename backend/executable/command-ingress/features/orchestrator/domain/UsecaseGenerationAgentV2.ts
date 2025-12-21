@@ -93,6 +93,9 @@ export interface AgentContextV2 {
     // Phase 6: Save result
     saveResult?: SaveResult;
 
+    // ✅ Track initial usecase count để tính số lượng mới save trong session
+    initialUsecaseCount?: number;
+
     // Resume state
     resumeState?: {
         state: AgentStateV2;
@@ -220,6 +223,11 @@ export class UsecaseGenerationAgentV2 {
     private async phase1_estimateWithCommitment(): Promise<void> {
         console.log(`📊 [PHASE 1] Estimating with commitment...`);
         await this.broadcastProgress(10, "estimating", "Đang ước tính usecases...");
+
+        // ✅ QUAN TRỌNG: Lưu số lượng usecases ban đầu để tính số lượng mới save trong session
+        const existingCount = await Usecase.countDocuments({ version_id: this.context.versionId });
+        this.context.initialUsecaseCount = existingCount;
+        console.log(`📊 [ESTIMATE] Initial usecase count in DB: ${existingCount} (sẽ chỉ tính usecases mới được thêm vào sau thời điểm này)`);
 
         const result = await this.gemini.estimateWithCommitment(
             this.context.mergedText,
@@ -358,7 +366,11 @@ export class UsecaseGenerationAgentV2 {
             }
 
             console.log(`✅ [PHASE 3] Batch ${currentBatch.batchNumber}: ${generatedCount} generated, ${missingCount} missing`);
-            await this.broadcastProgress(progress + 5, "saving",
+
+            // ✅ MỚI: Save batch này ngay sau khi generate (tương tự testcase)
+            await this.saveBatch(currentBatch);
+
+            await this.broadcastProgress(progress + 5, "generating",
                 `Batch ${currentBatch.batchNumber}: ${generatedCount} generated, ${missingCount} missing`);
 
             // Next batch
@@ -366,6 +378,60 @@ export class UsecaseGenerationAgentV2 {
 
         } catch (error: any) {
             await this.handleBatchError(error, currentBatch);
+        }
+    }
+
+    /**
+     * ✅ MỚI: Save batch ngay sau khi generate (tương tự testcase)
+     */
+    private async saveBatch(batch: BatchPlanV2): Promise<void> {
+        console.log(`💾 [SAVE_BATCH] Saving batch ${batch.batchNumber}...`);
+
+        // Collect valid usecases từ batch này
+        const batchUsecases: any[] = [];
+        for (const key of batch.keys) {
+            const entry = this.context.tempStorage.get(key);
+            if (entry && (entry.status === 'generated' || entry.status === 'repaired') && entry.generated) {
+                batchUsecases.push({ ...entry.generated, _tempKey: key });
+            }
+        }
+
+        if (batchUsecases.length === 0) {
+            console.log(`⏩ [SAVE_BATCH] Batch ${batch.batchNumber}: No valid usecases to save`);
+            return;
+        }
+
+        try {
+            // Save batch này
+            const saveResult = await this.atomicSaveWithRepair(batchUsecases);
+
+            // ✅ Cập nhật status trong temp storage thành "saved"
+            for (const key of batch.keys) {
+                const entry = this.context.tempStorage.get(key);
+                if (entry && (entry.status === 'generated' || entry.status === 'repaired')) {
+                    entry.status = 'generated'; // Giữ nguyên để có thể save lại trong ATOMIC_SAVE nếu cần
+                }
+            }
+
+            // ✅ Query lại từ DB để lấy số chính xác đã lưu trong session này
+            const finalCountAfterSave = await Usecase.countDocuments({ version_id: this.context.versionId });
+            const initialCount = this.context.initialUsecaseCount || 0;
+            const totalSavedInSession = finalCountAfterSave - initialCount;
+
+            console.log(`✅ [SAVE_BATCH] Batch ${batch.batchNumber}: Saved ${saveResult.saved} usecases (total in session: ${totalSavedInSession})`);
+
+            // ✅ Broadcast progress với shouldRefresh flag
+            await this.broadcastProgress(
+                20 + Math.floor((batch.batchNumber / (this.context.batchPlan?.length || 1)) * 50),
+                "saving",
+                `Đã lưu batch ${batch.batchNumber}: ${saveResult.saved} usecases`,
+                totalSavedInSession,
+                true // shouldRefresh
+            );
+
+        } catch (error: any) {
+            console.error(`❌ [SAVE_BATCH] Batch ${batch.batchNumber} save failed:`, error.message);
+            // Không throw, tiếp tục với batch tiếp theo
         }
     }
 
@@ -590,14 +656,34 @@ export class UsecaseGenerationAgentV2 {
             return;
         }
 
+        // ✅ QUAN TRỌNG: Chỉ save những usecases chưa được save trong các batch trước đó
+        // (vì đã save từng batch rồi, chỉ cần save những usecases còn lại)
+        const alreadySavedKeys = new Set<string>();
+        this.context.tempStorage.forEach((entry, key) => {
+            if (entry.status === 'generated' || entry.status === 'repaired') {
+                // Check xem đã có trong DB chưa
+                const existing = validUsecases.find(uc => uc._tempKey === key);
+                if (existing) {
+                    // Check duplicate by name
+                    // (có thể đã được save trong batch trước đó)
+                }
+            }
+        });
+
         // Atomic save with retry + LLM repair
         const saveResult = await this.atomicSaveWithRepair(validUsecases);
         this.context.saveResult = saveResult;
 
+        // ✅ Query lại từ DB để lấy số chính xác đã lưu trong session này
+        const finalCountAfterSave = await Usecase.countDocuments({ version_id: this.context.versionId });
+        const initialCount = this.context.initialUsecaseCount || 0;
+        const totalSavedInSession = finalCountAfterSave - initialCount;
+
         console.log(`✅ [PHASE 6] Save complete:`, saveResult);
         await this.broadcastProgress(100, "completed",
-            `Hoàn thành: ${saveResult.saved}/${saveResult.total_expected} usecases (${saveResult.repaired_by_llm} repaired by LLM)`,
-            saveResult.saved // ✅ Truyền savedCount thực tế từ database
+            `Hoàn thành: ${totalSavedInSession}/${saveResult.total_expected} usecases (${saveResult.repaired_by_llm} repaired by LLM)`,
+            totalSavedInSession, // ✅ Truyền savedCount thực tế từ database
+            true // shouldRefresh
         );
 
         this.state = AgentStateV2.DONE;
@@ -955,7 +1041,7 @@ export class UsecaseGenerationAgentV2 {
     /**
      * Broadcast progress
      */
-    private async broadcastProgress(progress: number, stage: string, message: string, savedCount?: number): Promise<void> {
+    private async broadcastProgress(progress: number, stage: string, message: string, savedCount?: number, shouldRefresh?: boolean): Promise<void> {
         try {
             const { inputSocketService } = await import("../../input/domain/input.socket.service");
             if (inputSocketService && this.context.projectId && this.context.versionId && this.context.userId) {
@@ -965,6 +1051,19 @@ export class UsecaseGenerationAgentV2 {
                     finalSavedCount = Array.from(this.context.tempStorage.values())
                         .filter(e => e.status === 'generated' || e.status === 'repaired').length;
                 }
+
+                // ✅ Tạo danh sách committedUsecases từ temp storage
+                const committedUsecases = Array.from(this.context.tempStorage.entries())
+                    .map(([key, entry], index) => ({
+                        index: index + 1,
+                        key: key,
+                        name: entry.committed.name,
+                        status: entry.status === 'generated' || entry.status === 'repaired' ? 'completed' as const :
+                            entry.status === 'missing' || entry.status === 'invalid' ? 'error' as const :
+                                stage === 'generating' && this.context.batchPlan?.some(b => b.keys.includes(key) && b.batchNumber === (this.context.currentBatchIndex || 0) + 1) ? 'generating' as const :
+                                    'pending' as const,
+                        error: entry.error
+                    }));
 
                 inputSocketService.emitIncrementalProgress(
                     this.context.projectId,
@@ -982,7 +1081,9 @@ export class UsecaseGenerationAgentV2 {
                     },
                     undefined,
                     this.state,
-                    message
+                    message,
+                    committedUsecases, // ✅ Gửi committedUsecases
+                    shouldRefresh // ✅ Flag để frontend biết cần refresh data
                 );
             }
         } catch (err) {

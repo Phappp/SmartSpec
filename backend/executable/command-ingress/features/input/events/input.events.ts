@@ -43,6 +43,14 @@ export interface IncrementalProgressEvent extends InputEventData {
     errorMessage?: string; // ✅ Thêm errorMessage cho compatibility
     agentState?: string; // ✅ Agent state: ESTIMATE_USECASE_COUNT, BATCH_PLANNING, GENERATE_BATCH, VERIFY_RESULTS, REPLAN_MISSING, GENERATE_RETRY
     message?: string; // ✅ Human-readable message từ agent
+    committedUsecases?: Array<{ // ✅ Danh sách usecases đã cam kết
+        index: number;
+        key: string;
+        name: string;
+        status: 'pending' | 'generating' | 'completed' | 'error';
+        error?: string;
+    }>;
+    shouldRefresh?: boolean; // ✅ Flag để frontend biết cần refresh data
 }
 
 export interface EstimateReceivedEvent extends InputEventData {
@@ -53,20 +61,27 @@ export interface EstimateReceivedEvent extends InputEventData {
         estimated_batches: number;
         reasoning?: string;
     };
+    committedUsecases?: Array<{ // ✅ Danh sách usecases đã cam kết
+        index: number;
+        key: string;
+        name: string;
+        status: 'pending' | 'generating' | 'completed' | 'error';
+        error?: string;
+    }>;
 }
 
 export interface InputsAddedSummaryEvent extends InputEventData {
-  type: 'INPUTS_ADDED_SUMMARY';
-  newInputsCount: number;
-  totalInputs: number;
-  unprocessedCount: number;
+    type: 'INPUTS_ADDED_SUMMARY';
+    newInputsCount: number;
+    totalInputs: number;
+    unprocessedCount: number;
 }
 
 export interface InputDeletedSummaryEvent extends InputEventData {
-  type: 'INPUT_DELETED_SUMMARY';
-  deletedInputId: string;
-  totalInputs: number;
-  unprocessedCount: number;
+    type: 'INPUT_DELETED_SUMMARY';
+    deletedInputId: string;
+    totalInputs: number;
+    unprocessedCount: number;
 }
 
 export type InputEvent =

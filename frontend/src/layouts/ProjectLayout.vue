@@ -14,8 +14,39 @@
       @show-sharing="handleShowSharing"
     />
 
+    <!-- Floating indicators for out-of-view loading items - mỗi process một indicator -->
+    <div
+      v-for="item in floatingIndicators"
+      :key="item.key"
+      class="floating-loading-indicator"
+      :class="{
+        'status-loading': item.process.status === 'processing' || (!item.process.status || item.process.status === 'processing'),
+        'status-success': item.process.status === 'success',
+        'status-failed': item.process.status === 'failed'
+      }"
+      :style="{ left: item.position + 'px' }"
+      @click="scrollToTop"
+    >
+      <div class="indicator-arrow"></div>
+      <div class="indicator-content">
+        <span class="material-symbols-outlined indicator-icon" :class="{
+          'success-icon': item.process.status === 'success',
+          'failed-icon': item.process.status === 'failed'
+        }">
+          <template v-if="item.process.status === 'success'">check_circle</template>
+          <template v-else-if="item.process.status === 'failed'">error</template>
+          <template v-else>{{ getProcessIcon(item.process.type) }}</template>
+        </span>
+        <span class="indicator-type">{{ getProcessName(item.process.type) }}</span>
+      </div>
+    </div>
+
     <!-- LLM Process Progress Indicator -->
-    <div v-if="groupedProcessesByUser.length > 0" class="llm-progress-section">
+    <div 
+      v-if="groupedProcessesByUser.length > 0" 
+      ref="progressSectionRef"
+      class="llm-progress-section"
+    >
       <div
         v-for="userGroup in groupedProcessesByUser"
         :key="userGroup.userId"
@@ -41,6 +72,7 @@
           <div
             v-for="process in userGroup.processes"
             :key="`${userGroup.userId}-${process.type}`"
+            :ref="(el) => setProgressItemRef(`${userGroup.userId}-${process.type}`, el)"
             class="llm-progress-item"
             :class="{
               'status-success': process.status === 'success',
@@ -189,6 +221,43 @@
                 </div>
               </div>
             </div>
+
+            <!-- ✅ MỚI: Hiển thị committed usecases list (chỉ cho usecase type) -->
+            <div v-if="process.type === 'usecase' && process.committedUsecases && process.committedUsecases.length > 0" class="committed-testcases-list">
+              <div class="committed-testcases-header" @click="toggleCommittedTestcases(`${process.userId}_${process.type}`)">
+                <span class="material-symbols-outlined" style="font-size: 16px; color: #64748b;">list</span>
+                <span class="committed-testcases-title">Danh sách usecases ({{ process.committedUsecases.length }})</span>
+                <span class="material-symbols-outlined toggle-icon" :class="{ 'expanded': showCommittedTestcases[`${process.userId}_${process.type}`] }">
+                  {{ showCommittedTestcases[`${process.userId}_${process.type}`] ? 'expand_less' : 'expand_more' }}
+                </span>
+              </div>
+              <div v-show="showCommittedTestcases[`${process.userId}_${process.type}`]" class="committed-testcases-items">
+                <div
+                  v-for="uc in getSortedCommittedUsecases(process.committedUsecases)"
+                  :key="uc.index"
+                  class="committed-testcase-item"
+                  :class="{
+                    'status-pending': uc.status === 'pending',
+                    'status-generating': uc.status === 'generating',
+                    'status-completed': uc.status === 'completed',
+                    'status-error': uc.status === 'error'
+                  }"
+                >
+                  <span class="testcase-status-icon">
+                    <span v-if="uc.status === 'completed'" class="material-symbols-outlined" style="font-size: 14px; color: #10b981;">check_circle</span>
+                    <span v-else-if="uc.status === 'error'" class="material-symbols-outlined" style="font-size: 14px; color: #ef4444;">error</span>
+                    <span v-else-if="uc.status === 'generating'" class="material-symbols-outlined spinning" style="font-size: 14px; color: #64748b;">sync</span>
+                    <span v-else class="material-symbols-outlined" style="font-size: 14px; color: #64748b;">radio_button_unchecked</span>
+                  </span>
+                  <span class="testcase-title" :class="{
+                    'text-completed': uc.status === 'completed',
+                    'text-error': uc.status === 'error',
+                    'text-generating': uc.status === 'generating',
+                    'text-pending': uc.status === 'pending'
+                  }">{{ uc.name }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -258,7 +327,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, watch, provide, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
@@ -295,6 +364,14 @@ export default {
     
     // ✅ Track show/hide state cho committed testcases của mỗi process
     const showCommittedTestcases = ref({}) // Format: { 'userId_processType': boolean }
+
+    // ✅ Track refs và visibility của progress items
+    const progressItemRefs = ref({}) // Format: { 'userId_type': HTMLElement }
+    const visibleProgressItems = ref(new Set()) // Set of 'userId_type' that are visible
+    const progressSectionRef = ref(null) // Ref cho progress section
+    const isProgressSectionVisible = ref(true) // Track xem progress section có trong viewport không
+    const scrollUpdateTrigger = ref(0) // Trigger để force update position khi scroll/resize
+    const itemPositions = ref({}) // Format: { 'userId_type': centerX } - Lưu position center X của mỗi item
 
     // Storage key for this project
     const getStorageKey = () => {
@@ -456,7 +533,112 @@ export default {
       const processKey = `${process.userId}_${process.type}`
       delete llmProcesses.value[processKey]
       delete showCommittedTestcases.value[processKey] // ✅ Xóa state show/hide khi remove process
+      delete progressItemRefs.value[processKey] // ✅ Xóa ref khi remove process
+      delete itemPositions.value[processKey] // ✅ Xóa position đã lưu
+      visibleProgressItems.value.delete(processKey) // ✅ Xóa visibility tracking
       saveProcessesToStorage()
+    }
+
+    // ✅ Set ref cho progress item
+    const setProgressItemRef = (key, el) => {
+      if (el) {
+        progressItemRefs.value[key] = el
+      } else {
+        delete progressItemRefs.value[key]
+      }
+    }
+
+    // ✅ Scroll lên trên cùng khi click vào floating indicator
+    const scrollToTop = () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+
+    // ✅ Setup IntersectionObserver để track visibility của progress items và progress section
+    let intersectionObserver = null
+    let sectionObserver = null
+    const setupVisibilityObserver = () => {
+      // Cleanup existing observers
+      if (intersectionObserver) {
+        intersectionObserver.disconnect()
+      }
+      if (sectionObserver) {
+        sectionObserver.disconnect()
+      }
+
+      // Observer cho progress section - để biết khi nào section không còn trong viewport
+      if (progressSectionRef.value) {
+        sectionObserver = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              isProgressSectionVisible.value = entry.isIntersecting
+            })
+          },
+          {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0, // Chỉ cần biết có intersect hay không
+          }
+        )
+        sectionObserver.observe(progressSectionRef.value)
+        // Set initial value ngay lập tức
+        const rect = progressSectionRef.value.getBoundingClientRect()
+        const isVisible = rect.top < window.innerHeight && rect.bottom > 0
+        isProgressSectionVisible.value = isVisible
+      } else {
+        // Nếu không có progress section, set visible = false
+        isProgressSectionVisible.value = false
+      }
+
+      // Observer cho từng progress item
+      intersectionObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const key = entry.target.dataset.progressKey
+            if (!key) return
+
+            if (entry.isIntersecting) {
+              visibleProgressItems.value.add(key)
+              // ✅ Khi item visible, lưu position center X để dùng khi bị khuất
+              try {
+                const rect = entry.target.getBoundingClientRect()
+                const centerX = rect.left + rect.width / 2
+                itemPositions.value[key] = centerX
+              } catch (e) {
+                // Ignore errors
+              }
+            } else {
+              visibleProgressItems.value.delete(key)
+              // ✅ Giữ lại position đã lưu khi item bị khuất
+              // Không xóa itemPositions để indicator vẫn biết vị trí
+            }
+          })
+        },
+        {
+          root: null, // viewport
+          rootMargin: '0px',
+          threshold: 0.1, // 10% visible
+        }
+      )
+
+      // Observe all progress item elements
+      Object.entries(progressItemRefs.value).forEach(([key, element]) => {
+        if (element && element.dataset) {
+          element.dataset.progressKey = key
+          intersectionObserver.observe(element)
+          
+          // ✅ Lưu position ban đầu khi setup observer
+          try {
+            const rect = element.getBoundingClientRect()
+            const centerX = rect.left + rect.width / 2
+            // Chỉ lưu nếu hợp lệ
+            if (!isNaN(centerX) && isFinite(centerX) && rect.width > 0) {
+              itemPositions.value[key] = centerX
+            }
+          } catch (e) {
+            // Ignore errors
+          }
+        }
+      })
     }
 
     // ✅ Toggle show/hide committed testcases
@@ -473,27 +655,146 @@ export default {
       if (!committedTestcases || !Array.isArray(committedTestcases)) {
         return []
       }
-      
+
       // Tách thành 2 nhóm: đang gen và các trạng thái khác
       const generating = committedTestcases.filter(tc => tc.status === 'generating')
       const others = committedTestcases.filter(tc => tc.status !== 'generating')
-      
+
       // Sắp xếp mỗi nhóm theo index để giữ thứ tự
       generating.sort((a, b) => a.index - b.index)
       others.sort((a, b) => a.index - b.index)
-      
+
+      // Trả về: đang gen trước, sau đó là các trạng thái khác
+      return [...generating, ...others]
+    }
+
+    // ✅ Sắp xếp committedUsecases: các usecase đang gen (generating) luôn ở đầu
+    const getSortedCommittedUsecases = (committedUsecases) => {
+      if (!committedUsecases || !Array.isArray(committedUsecases)) {
+        return []
+      }
+
+      // Tách thành 2 nhóm: đang gen và các trạng thái khác
+      const generating = committedUsecases.filter(uc => uc.status === 'generating')
+      const others = committedUsecases.filter(uc => uc.status !== 'generating')
+
+      // Sắp xếp mỗi nhóm theo index để giữ thứ tự
+      generating.sort((a, b) => a.index - b.index)
+      others.sort((a, b) => a.index - b.index)
+
       // Trả về: đang gen trước, sau đó là các trạng thái khác
       return [...generating, ...others]
     }
 
     // Group processes by userId
+    // ✅ Computed: Get loading items that are out of view
+    const outOfViewLoadingItems = computed(() => {
+      const loadingItems = []
+      Object.entries(llmProcesses.value).forEach(([key, process]) => {
+        // Only include items that are loading (not success/failed) and not visible
+        if (process && process.status !== 'success' && process.status !== 'failed' && !visibleProgressItems.value.has(key)) {
+          loadingItems.push({ key, process })
+        }
+      })
+      return loadingItems
+    })
+
+    // ✅ Force reactivity để cập nhật vị trí indicators khi scroll/resize
+    const handleScroll = () => {
+      // Trigger reactivity để computed tính lại positions
+      scrollUpdateTrigger.value++
+    }
+
+    // ✅ Computed: Lấy danh sách floating indicators - mỗi process out of view một indicator
+    // Sử dụng scrollUpdateTrigger để force update khi scroll/resize
+    const floatingIndicators = computed(() => {
+      // Trigger reactivity
+      scrollUpdateTrigger.value
+      
+      // Chỉ hiển thị khi progress section không còn visible (đã scroll xuống)
+      if (isProgressSectionVisible.value) {
+        return []
+      }
+      
+      // Lấy tất cả items out of view (loading, success, failed) và tính vị trí center X (trục Y của item)
+      const indicators = []
+      Object.entries(llmProcesses.value).forEach(([key, process]) => {
+        if (process && !visibleProgressItems.value.has(key)) {
+          const element = progressItemRefs.value[key]
+          
+          // ✅ Ưu tiên dùng position đã lưu
+          let centerX = itemPositions.value[key]
+          
+          // Nếu chưa có position đã lưu, tính từ element
+          if (centerX === undefined || centerX === null || isNaN(centerX)) {
+            if (element) {
+              try {
+                const rect = element.getBoundingClientRect()
+                // getBoundingClientRect() vẫn hoạt động ngay cả khi element bị khuất
+                centerX = rect.left + rect.width / 2
+                
+                // Lưu lại nếu hợp lệ, nếu không thì dùng center màn hình
+                if (isNaN(centerX) || !isFinite(centerX) || rect.width <= 0) {
+                  centerX = window.innerWidth / 2
+                } else {
+                  // Lưu position hợp lệ
+                  itemPositions.value[key] = centerX
+                }
+              } catch (e) {
+                centerX = window.innerWidth / 2
+              }
+            } else {
+              centerX = window.innerWidth / 2
+            }
+          }
+          
+          // Đảm bảo centerX hợp lệ
+          if (!centerX || isNaN(centerX) || !isFinite(centerX)) {
+            centerX = window.innerWidth / 2
+          }
+          
+          // Clamp về trong viewport (tránh indicator ở ngoài màn hình)
+          if (centerX < 50) centerX = 50
+          if (centerX > window.innerWidth - 50) centerX = window.innerWidth - 50
+          
+          indicators.push({ 
+            key, 
+            process, 
+            position: centerX
+          })
+        }
+      })
+      
+      // ✅ Sắp xếp indicators theo position để xử lý chồng lấn
+      indicators.sort((a, b) => a.position - b.position)
+      
+      // ✅ Tránh indicators chồng lên nhau - nếu quá gần nhau (< 150px) thì điều chỉnh
+      const MIN_SPACING = 150
+      for (let i = 1; i < indicators.length; i++) {
+        const prevPosition = indicators[i - 1].position
+        const currentPosition = indicators[i].position
+        
+        if (currentPosition - prevPosition < MIN_SPACING) {
+          // Điều chỉnh position của indicator hiện tại để cách indicator trước ít nhất MIN_SPACING
+          indicators[i].position = prevPosition + MIN_SPACING
+          
+          // Đảm bảo không ra ngoài viewport
+          if (indicators[i].position > window.innerWidth - 50) {
+            indicators[i].position = window.innerWidth - 50
+          }
+        }
+      }
+      
+      return indicators
+    })
+
     const groupedProcessesByUser = computed(() => {
       const groups = {}
-      
+
       // Group processes by userId - include all processes (processing, success, failed)
       Object.values(llmProcesses.value).forEach((process) => {
         if (!process) return
-        
+
         const userId = process.userId || 'unknown'
         if (!groups[userId]) {
           groups[userId] = {
@@ -686,7 +987,8 @@ export default {
           agentState: processType === 'testcase' ? 'ESTIMATE_TESTCASE_COUNT' : 'ESTIMATE_USECASE_COUNT', // ✅ Thêm agentState
           agentMessage: `Đã ước tính: ${event.estimate.estimated_count} ${processType === 'testcase' ? 'testcases' : 'usecases'}, ${event.estimate.estimated_batches} batches`, // ✅ Thêm agentMessage
           estimateInfo: event.estimate,
-          committedTestcases: event.committedTestcases || [], // ✅ Thêm committedTestcases
+          committedTestcases: event.committedTestcases || [], // ✅ Thêm committedTestcases (cho testcase)
+          committedUsecases: event.committedUsecases || [], // ✅ Thêm committedUsecases (cho usecase)
           batchProgress: {
             currentBatch: 0,
             totalBatches: event.estimate.estimated_batches,
@@ -838,6 +1140,18 @@ export default {
           mergedCommittedTestcases = Array.from(testcaseMap.values()).sort((a, b) => a.index - b.index)
         }
 
+        // ✅ Merge committedUsecases: cập nhật từng item thay vì replace toàn bộ
+        let mergedCommittedUsecases = currentProcess?.committedUsecases || []
+        if (event.committedUsecases && event.committedUsecases.length > 0) {
+          // Tạo map từ committedUsecases hiện tại
+          const usecaseMap = new Map(mergedCommittedUsecases.map(uc => [uc.index, uc]))
+          // Merge với committedUsecases từ event (ưu tiên event)
+          event.committedUsecases.forEach(eventUc => {
+            usecaseMap.set(eventUc.index, eventUc)
+          })
+          mergedCommittedUsecases = Array.from(usecaseMap.values()).sort((a, b) => a.index - b.index)
+        }
+
         // Update processing state
         llmProcesses.value[processKey] = {
           userId,
@@ -849,7 +1163,8 @@ export default {
           agentState: event.agentState || currentProcess?.agentState || null, // ✅ Thêm agentState
           agentMessage: event.message || currentProcess?.agentMessage || null, // ✅ Thêm agentMessage
           estimateInfo: currentProcess?.estimateInfo || null,
-          committedTestcases: mergedCommittedTestcases, // ✅ Sử dụng merged committedTestcases
+          committedTestcases: mergedCommittedTestcases, // ✅ Sử dụng merged committedTestcases (cho testcase)
+          committedUsecases: mergedCommittedUsecases, // ✅ Sử dụng merged committedUsecases (cho usecase)
           batchProgress: {
             currentBatch: event.batchInfo?.currentBatch || currentProcess?.batchProgress?.currentBatch || 0,
             totalBatches: event.batchInfo?.totalBatches || currentProcess?.batchProgress?.totalBatches || currentProcess?.estimateInfo?.estimated_batches || 0,
@@ -1053,6 +1368,18 @@ export default {
       }
     )
 
+    // ✅ Watch progressItemRefs để setup observer khi refs thay đổi
+    watch(
+      () => progressItemRefs.value,
+      () => {
+        // Delay để đảm bảo DOM đã render
+        nextTick(() => {
+          setupVisibilityObserver()
+        })
+      },
+      { deep: true }
+    )
+
     // Lifecycle
     onMounted(() => {
       fetchProjectData()
@@ -1063,6 +1390,15 @@ export default {
       
       // Initialize LLM progress listeners
       initLLMProgressListeners()
+
+      // Setup visibility observer
+      nextTick(() => {
+        setupVisibilityObserver()
+      })
+
+      // Setup scroll/resize listeners để cập nhật vị trí indicators
+      window.addEventListener('scroll', handleScroll, { passive: true })
+      window.addEventListener('resize', handleScroll, { passive: true })
     })
 
     onUnmounted(() => {
@@ -1072,6 +1408,20 @@ export default {
       
       // Cleanup LLM progress listeners
       cleanupLLMProgressListeners()
+      
+      // Cleanup intersection observers
+      if (intersectionObserver) {
+        intersectionObserver.disconnect()
+        intersectionObserver = null
+      }
+      if (sectionObserver) {
+        sectionObserver.disconnect()
+        sectionObserver = null
+      }
+      
+      // Cleanup scroll/resize listeners
+      window.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('resize', handleScroll)
     })
 
     return {
@@ -1107,7 +1457,12 @@ export default {
       getAgentStateIconClass,
       toggleCommittedTestcases, // ✅ Export toggle function
       showCommittedTestcases, // ✅ Export state
-      getSortedCommittedTestcases, // ✅ Export sort function
+      getSortedCommittedTestcases, // ✅ Export sort function (cho testcase)
+      getSortedCommittedUsecases, // ✅ Export sort function (cho usecase)
+      setProgressItemRef, // ✅ Export ref setter
+      progressSectionRef, // ✅ Export progress section ref
+      floatingIndicators, // ✅ Export computed
+      scrollToTop, // ✅ Export scroll function
     }
   },
 }
@@ -1117,6 +1472,126 @@ export default {
 .project-layout {
   min-height: 100vh;
   background: #f5f7fa;
+  position: relative;
+}
+
+/* Floating Loading Indicator - Tooltip style với mũi tên ở trên */
+.floating-loading-indicator {
+  position: fixed;
+  top: 8px;
+  z-index: 1000;
+  cursor: pointer;
+  transition: left 0.1s ease-out;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: slideDown 0.3s ease-out;
+  transform: translateX(-50%); /* Center theo position */
+}
+
+/* Nhấp nháy chậm cho indicator đang loading */
+.floating-loading-indicator.status-loading .indicator-content {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Mũi tên chỉ lên trên */
+.indicator-arrow {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid #1a365d;
+  margin-bottom: -1px;
+  transition: border-bottom-color 0.2s ease;
+}
+
+.floating-loading-indicator.status-success .indicator-arrow {
+  border-bottom-color: #10b981;
+}
+
+.floating-loading-indicator.status-failed .indicator-arrow {
+  border-bottom-color: #ef4444;
+}
+
+/* Content container */
+.indicator-content {
+  background: #1a365d;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: box-shadow 0.2s ease;
+  white-space: nowrap;
+}
+
+.floating-loading-indicator.status-success .indicator-content {
+  background: #10b981;
+}
+
+.floating-loading-indicator.status-failed .indicator-content {
+  background: #ef4444;
+}
+
+.floating-loading-indicator:hover .indicator-content {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.floating-loading-indicator:hover {
+  transform: translateX(-50%) translateY(-2px);
+}
+
+/* Icon */
+.indicator-icon {
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.indicator-icon.success-icon {
+  color: white;
+}
+
+.indicator-icon.failed-icon {
+  color: white;
+}
+
+/* Type text */
+.indicator-type {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* LLM Process Progress Section */
