@@ -10,9 +10,9 @@
       <div class="modal-body">
         <div class="user-form">
           <div class="form-section">
-            <h4>Thông tin cơ bản</h4>
+            <h4>Thông tin</h4>
             <div class="form-grid">
-              <div class="form-group">
+              <!-- <div class="form-group">
                 <label>Họ tên *</label>
                 <input type="text" v-model="formData.name" class="form-input" />
                 <span class="error-message" v-if="errors.name">{{ errors.name }}</span>
@@ -27,7 +27,7 @@
               <div class="form-group">
                 <label>Số điện thoại</label>
                 <input type="tel" v-model="formData.phone" class="form-input" />
-              </div>
+              </div> -->
 
               <div class="form-group">
                 <label>Vai trò *</label>
@@ -40,7 +40,7 @@
                 }}</span>
               </div>
 
-              <div class="form-group">
+               <div class="form-group">
                 <label>Trạng thái *</label>
                 <select v-model="formData.status" class="form-input">
                   <option value="ACTIVE">Đang hoạt động</option>
@@ -48,7 +48,7 @@
                 </select>
               </div>
 
-              <div class="form-group">
+              <!--<div class="form-group">
                 <label>Giới tính</label>
                 <select v-model="formData.gender" class="form-input">
                   <option value="">Chọn giới tính</option>
@@ -99,11 +99,11 @@
                 <span class="setting-description"
                   >Người dùng phải đổi mật khẩu khi đăng nhập lần tiếp theo</span
                 >
-              </div>
+              </div> -->
             </div>
           </div>
 
-          <div class="form-section">
+          <!-- <div class="form-section">
             <h4>Thống kê hoạt động</h4>
             <div class="stats-grid">
               <div class="stat-item">
@@ -123,7 +123,7 @@
                 <span class="stat-value">{{ formatDate(user.updated_at) }}</span>
               </div>
             </div>
-          </div>
+          </div> -->
         </div>
       </div>
       <div class="modal-footer">

@@ -653,8 +653,8 @@
               <span class="card-badge">{{ stats.activeApiKeys }}</span>
             </div>
             <div class="card-content">
-              <div class="quick-stats">
-                <div class="quick-stat">
+              <div class="quick-stats" style="min-height:150px">
+                <!-- <div class="quick-stat">
                   <span class="stat-label">Gemini</span>
                   <span class="stat-value">{{ apiStats.gemini }}</span>
                 </div>
@@ -665,7 +665,7 @@
                 <div class="quick-stat">
                   <span class="stat-label">Claude</span>
                   <span class="stat-value">{{ apiStats.claude }}</span>
-                </div>
+                </div> -->
               </div>
               <div class="action-buttons">
                 <button class="btn-action primary" @click="showApiKeyManagementModal = true">
@@ -723,7 +723,7 @@
           </div>
 
           <!-- System Management -->
-          <div class="management-card">
+          <!-- <div class="management-card">
             <div class="card-header">
               <h3><span class="material-symbols-outlined">settings</span> Quản lý hệ thống</h3>
               <span class="card-badge">{{ systemStats.totalConfigs }}</span>
@@ -754,7 +754,7 @@
                 </button>
               </div>
             </div>
-          </div>
+          </div> -->
         </div>
       </section>
 
@@ -952,7 +952,7 @@
           </div>
 
           <!-- System Status (right column, unchanged) -->
-          <div class="column-card">
+          <!-- <div class="column-card">
             <div class="card-header">
               <h3>
                 <span class="material-symbols-outlined">monitor_heart</span> Trạng thái hệ thống
@@ -999,7 +999,7 @@
                 <span class="metric-value">{{ systemMetrics.disk }}%</span>
               </div>
             </div>
-          </div>
+          </div> -->
         </div>
       </section>
     </main>
@@ -4184,7 +4184,6 @@ async function loadDashboardStatsFromAPI() {
 
 .column-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 24px;
 }
 
