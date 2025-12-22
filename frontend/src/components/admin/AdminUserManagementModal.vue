@@ -70,7 +70,7 @@
                 <th>Người dùng</th>
                 <th>Vai trò</th>
                 <th>Trạng thái</th>
-                <th>Dự án</th>
+                <!-- <th>Dự án</th> -->
                 <th>Thao tác</th>
               </tr>
             </thead>
@@ -113,12 +113,12 @@
                     {{ getStatusDisplay(user.status) }}
                   </span>
                 </td>
-                <td>
+                <!-- <td>
                   <div class="project-count">
                     <span class="count">{{ user.project_count || 0 }}</span>
                     <span class="label">dự án</span>
                   </div>
-                </td>
+                </td> -->
                 <td>
                   <div class="action-buttons">
                     <button class="btn-icon" @click="editUser(user)" title="Chỉnh sửa">

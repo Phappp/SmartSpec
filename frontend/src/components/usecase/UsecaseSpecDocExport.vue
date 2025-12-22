@@ -1127,20 +1127,6 @@ export default {
               }
             </div>
           </div>
-          <div class="detail-item">
-            <h4 class="keep-with-next">Related Use Cases</h4>
-            <div>
-              ${
-                uc.related_usecases && uc.related_usecases.length > 0
-                  ? uc.related_usecases
-                      .map(
-                        (relatedId) => `<span class="tag">UC-${this.escapeHtml(relatedId)}</span>`
-                      )
-                      .join('')
-                  : '<span class="tag">None</span>'
-              }
-            </div>
-          </div>
         </div>
         
         ${
