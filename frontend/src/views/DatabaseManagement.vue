@@ -748,7 +748,7 @@ export default {
               if (!col.nullable) columnDef += ' NOT NULL'
               if (col.unique && !col.is_primary_key) columnDef += ' UNIQUE'
 
-              if (col.is_primary_key && col.type.includes('INT')) {
+              if (col.is_primary_key && col.type.includes('INT')&&!col.is_foreign_key) {
                 columnDef += ' AUTO_INCREMENT'
               }
 
@@ -807,7 +807,7 @@ export default {
               if (!col.nullable) columnDef += ' NOT NULL'
               if (col.unique && !col.is_primary_key) columnDef += ' UNIQUE'
 
-              if (col.is_primary_key && col.type.includes('INT')) {
+              if (col.is_primary_key && col.type.includes('INT')&&!col.is_foreign_key) {
                 columnDef += ' IDENTITY(1,1)'
               }
 
@@ -1027,7 +1027,7 @@ export default {
           TEXT: 'TEXT',
           DATETIME: 'DATETIME',
           TIMESTAMP: 'TIMESTAMP',
-          BOOLEAN: 'TINYINT(1)',
+          BOOLEAN: 'BIT',
           DECIMAL: 'DECIMAL',
         },
         sqlserver: {
