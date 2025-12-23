@@ -2,12 +2,15 @@ import nodemailer, { Transporter } from "nodemailer";
 import "dotenv/config";
 
 const transporter: Transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST, // Replace with your SMTP server
-  port: 587, // Typically 587 or 465 for secure SMTP
-  secure: false, // true for 465, false for other ports
+  host: process.env.EMAIL_HOST,
+  port: 587,
+  secure: false, // đúng cho 587
   auth: {
-    user: process.env.EMAIL_USER, // Your email username
-    pass: process.env.EMAIL_PASS, // Your email password
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false,
   },
 });
 
@@ -25,7 +28,7 @@ const mailService = {
     emailTo,
     emailSubject,
     emailText,
-  }: EmailOptions): Promise<boolean|null> {
+  }: EmailOptions): Promise<boolean | null> {
     const mailOptions = {
       from: emailFrom,
       to: emailTo,
@@ -36,7 +39,7 @@ const mailService = {
     await transporter.sendMail(mailOptions);
     return true;
   },
-  
+
 };
 
 export default mailService;

@@ -20,19 +20,25 @@
       :key="item.key"
       class="floating-loading-indicator"
       :class="{
-        'status-loading': item.process.status === 'processing' || (!item.process.status || item.process.status === 'processing'),
+        'status-loading':
+          item.process.status === 'processing' ||
+          !item.process.status ||
+          item.process.status === 'processing',
         'status-success': item.process.status === 'success',
-        'status-failed': item.process.status === 'failed'
+        'status-failed': item.process.status === 'failed',
       }"
       :style="{ left: item.position + 'px' }"
       @click="scrollToTop"
     >
       <div class="indicator-arrow"></div>
       <div class="indicator-content">
-        <span class="material-symbols-outlined indicator-icon" :class="{
-          'success-icon': item.process.status === 'success',
-          'failed-icon': item.process.status === 'failed'
-        }">
+        <span
+          class="material-symbols-outlined indicator-icon"
+          :class="{
+            'success-icon': item.process.status === 'success',
+            'failed-icon': item.process.status === 'failed',
+          }"
+        >
           <template v-if="item.process.status === 'success'">check_circle</template>
           <template v-else-if="item.process.status === 'failed'">error</template>
           <template v-else>{{ getProcessIcon(item.process.type) }}</template>
@@ -42,8 +48,8 @@
     </div>
 
     <!-- LLM Process Progress Indicator -->
-    <div 
-      v-if="groupedProcessesByUser.length > 0" 
+    <div
+      v-if="groupedProcessesByUser.length > 0"
       ref="progressSectionRef"
       class="llm-progress-section"
     >
@@ -81,33 +87,49 @@
           >
             <div class="progress-header">
               <div class="progress-title">
-                <span class="material-symbols-outlined process-icon">{{ getProcessIcon(process.type) }}</span>
+                <span class="material-symbols-outlined process-icon">{{
+                  getProcessIcon(process.type)
+                }}</span>
                 <span class="process-name">{{ getProcessName(process.type) }}</span>
               </div>
               <div class="progress-header-right">
                 <!-- Hiển thị số lượng usecase/testcase đã gen / ước tính ở góc trên bên phải -->
-                <div v-if="(process.type === 'usecase' || process.type === 'testcase') && (process.batchProgress?.savedCount > 0 || process.batchProgress?.totalCount > 0 || process.estimateInfo?.estimated_count > 0)" class="usecase-count-display-header">
-                  <span class="usecase-count-number">{{ process.batchProgress?.savedCount || 0 }}</span>
+                <div
+                  v-if="
+                    (process.type === 'usecase' || process.type === 'testcase') &&
+                    (process.batchProgress?.savedCount > 0 ||
+                      process.batchProgress?.totalCount > 0 ||
+                      process.estimateInfo?.estimated_count > 0)
+                  "
+                  class="usecase-count-display-header"
+                >
+                  <span class="usecase-count-number">{{
+                    process.batchProgress?.savedCount || 0
+                  }}</span>
                   <span class="usecase-count-separator">/</span>
-                  <span class="usecase-count-total">{{ process.batchProgress?.totalCount || process.estimateInfo?.estimated_count || 0 }}</span>
+                  <span class="usecase-count-total">{{
+                    process.batchProgress?.totalCount || process.estimateInfo?.estimated_count || 0
+                  }}</span>
                 </div>
-              <!-- Close button for success/failed states -->
-              <button
-                v-if="process.status === 'success' || process.status === 'failed'"
-                class="close-process-btn"
-                @click="removeProcess(process)"
-                title="Close"
-              >
-                <span class="material-symbols-outlined">close</span>
-              </button>
+                <!-- Close button for success/failed states -->
+                <button
+                  v-if="process.status === 'success' || process.status === 'failed'"
+                  class="close-process-btn"
+                  @click="removeProcess(process)"
+                  title="Close"
+                >
+                  <span class="material-symbols-outlined">close</span>
+                </button>
               </div>
             </div>
-            
+
             <!-- Success State -->
             <div v-if="process.status === 'success'" class="progress-stages">
               <div class="progress-stage success-stage">
                 <div class="stage-content">
-                  <span class="material-symbols-outlined stage-icon success-icon">check_circle</span>
+                  <span class="material-symbols-outlined stage-icon success-icon"
+                    >check_circle</span
+                  >
                   <span class="stage-text">Completed successfully!</span>
                 </div>
               </div>
@@ -128,10 +150,18 @@
               <!-- Agent State và Message (ưu tiên hiển thị) -->
               <div v-if="process.agentState || process.agentMessage" class="progress-stage">
                 <div class="stage-content">
-                  <span class="material-symbols-outlined stage-icon" :class="getAgentStateIconClass(process.agentState)">{{ getAgentStateIcon(process.agentState) }}</span>
+                  <span
+                    class="material-symbols-outlined stage-icon"
+                    :class="getAgentStateIconClass(process.agentState)"
+                    >{{ getAgentStateIcon(process.agentState) }}</span
+                  >
                   <div class="stage-text-container">
-                    <span class="stage-text stage-title">{{ getAgentStateTitle(process.agentState) }}</span>
-                    <span v-if="process.agentMessage" class="stage-text stage-message">{{ process.agentMessage }}</span>
+                    <span class="stage-text stage-title">{{
+                      getAgentStateTitle(process.agentState)
+                    }}</span>
+                    <span v-if="process.agentMessage" class="stage-text stage-message">{{
+                      process.agentMessage
+                    }}</span>
                   </div>
                 </div>
               </div>
@@ -143,13 +173,24 @@
                   <span class="stage-text">Estimating...</span>
                 </div>
               </div>
-              
+
               <!-- Estimate Received - Only show for usecase and testcase -->
-              <div v-else-if="(process.type === 'usecase' || process.type === 'testcase') && process.estimateInfo?.estimated_count > 0 && (!process.batchProgress || process.batchProgress.currentBatch === 0)" class="progress-stage">
+              <div
+                v-else-if="
+                  (process.type === 'usecase' || process.type === 'testcase') &&
+                  process.estimateInfo?.estimated_count > 0 &&
+                  (!process.batchProgress || process.batchProgress.currentBatch === 0)
+                "
+                class="progress-stage"
+              >
                 <div class="stage-content">
-                  <span class="material-symbols-outlined stage-icon success pulse">check_circle</span>
+                  <span class="material-symbols-outlined stage-icon success pulse"
+                    >check_circle</span
+                  >
                   <div class="stage-text-container">
-                    <span class="stage-text stage-title">Estimated {{ process.estimateInfo.estimated_count }} items</span>
+                    <span class="stage-text stage-title"
+                      >Estimated {{ process.estimateInfo.estimated_count }} items</span
+                    >
                   </div>
                 </div>
               </div>
@@ -160,14 +201,23 @@
                   <span class="material-symbols-outlined stage-icon pulsing">auto_awesome</span>
                   <div class="stage-text-container">
                     <span class="stage-text stage-title">
-                    Generating Batch {{ process.batchProgress.currentBatch }}/{{ process.batchProgress.totalBatches }}
-                  </span>
+                      Generating Batch {{ process.batchProgress.currentBatch }}/{{
+                        process.batchProgress.totalBatches
+                      }}
+                    </span>
                   </div>
                 </div>
               </div>
 
               <!-- Saving Phase -->
-              <div v-else-if="process.batchProgress?.savedCount > 0 && process.batchProgress.savedCount < (process.batchProgress.totalCount || process.estimateInfo?.estimated_count || 0)" class="progress-stage">
+              <div
+                v-else-if="
+                  process.batchProgress?.savedCount > 0 &&
+                  process.batchProgress.savedCount <
+                    (process.batchProgress.totalCount || process.estimateInfo?.estimated_count || 0)
+                "
+                class="progress-stage"
+              >
                 <div class="stage-content">
                   <span class="material-symbols-outlined stage-icon spinning">save</span>
                   <div class="stage-text-container">
@@ -186,15 +236,39 @@
             </div>
 
             <!-- ✅ MỚI: Hiển thị committed testcases list (chỉ cho testcase type) -->
-            <div v-if="process.type === 'testcase' && process.committedTestcases && process.committedTestcases.length > 0" class="committed-testcases-list">
-              <div class="committed-testcases-header" @click="toggleCommittedTestcases(`${process.userId}_${process.type}`)">
-                <span class="material-symbols-outlined" style="font-size: 16px; color: #64748b;">list</span>
-                <span class="committed-testcases-title">Danh sách testcases ({{ process.committedTestcases.length }})</span>
-                <span class="material-symbols-outlined toggle-icon" :class="{ 'expanded': showCommittedTestcases[`${process.userId}_${process.type}`] }">
-                  {{ showCommittedTestcases[`${process.userId}_${process.type}`] ? 'expand_less' : 'expand_more' }}
+            <div
+              v-if="
+                process.type === 'testcase' &&
+                process.committedTestcases &&
+                process.committedTestcases.length > 0
+              "
+              class="committed-testcases-list"
+            >
+              <div
+                class="committed-testcases-header"
+                @click="toggleCommittedTestcases(`${process.userId}_${process.type}`)"
+              >
+                <span class="material-symbols-outlined" style="font-size: 16px; color: #64748b"
+                  >list</span
+                >
+                <span class="committed-testcases-title"
+                  >Danh sách testcases ({{ process.committedTestcases.length }})</span
+                >
+                <span
+                  class="material-symbols-outlined toggle-icon"
+                  :class="{ expanded: showCommittedTestcases[`${process.userId}_${process.type}`] }"
+                >
+                  {{
+                    showCommittedTestcases[`${process.userId}_${process.type}`]
+                      ? 'expand_less'
+                      : 'expand_more'
+                  }}
                 </span>
               </div>
-              <div v-show="showCommittedTestcases[`${process.userId}_${process.type}`]" class="committed-testcases-items">
+              <div
+                v-show="showCommittedTestcases[`${process.userId}_${process.type}`]"
+                class="committed-testcases-items"
+              >
                 <div
                   v-for="tc in getSortedCommittedTestcases(process.committedTestcases)"
                   :key="tc.index"
@@ -203,35 +277,83 @@
                     'status-pending': tc.status === 'pending',
                     'status-generating': tc.status === 'generating',
                     'status-completed': tc.status === 'completed',
-                    'status-error': tc.status === 'error'
+                    'status-error': tc.status === 'error',
                   }"
                 >
                   <span class="testcase-status-icon">
-                    <span v-if="tc.status === 'completed'" class="material-symbols-outlined" style="font-size: 14px; color: #10b981;">check_circle</span>
-                    <span v-else-if="tc.status === 'error'" class="material-symbols-outlined" style="font-size: 14px; color: #ef4444;">error</span>
-                    <span v-else-if="tc.status === 'generating'" class="material-symbols-outlined spinning" style="font-size: 14px; color: #64748b;">sync</span>
-                    <span v-else class="material-symbols-outlined" style="font-size: 14px; color: #64748b;">radio_button_unchecked</span>
+                    <span
+                      v-if="tc.status === 'completed'"
+                      class="material-symbols-outlined"
+                      style="font-size: 14px; color: #10b981"
+                      >check_circle</span
+                    >
+                    <span
+                      v-else-if="tc.status === 'error'"
+                      class="material-symbols-outlined"
+                      style="font-size: 14px; color: #ef4444"
+                      >error</span
+                    >
+                    <span
+                      v-else-if="tc.status === 'generating'"
+                      class="material-symbols-outlined spinning"
+                      style="font-size: 14px; color: #64748b"
+                      >sync</span
+                    >
+                    <span
+                      v-else
+                      class="material-symbols-outlined"
+                      style="font-size: 14px; color: #64748b"
+                      >radio_button_unchecked</span
+                    >
                   </span>
-                  <span class="testcase-title" :class="{
-                    'text-completed': tc.status === 'completed',
-                    'text-error': tc.status === 'error',
-                    'text-generating': tc.status === 'generating',
-                    'text-pending': tc.status === 'pending'
-                  }">{{ tc.title }}</span>
+                  <span
+                    class="testcase-title"
+                    :class="{
+                      'text-completed': tc.status === 'completed',
+                      'text-error': tc.status === 'error',
+                      'text-generating': tc.status === 'generating',
+                      'text-pending': tc.status === 'pending',
+                    }"
+                    >{{ tc.title }}</span
+                  >
                 </div>
               </div>
             </div>
 
             <!-- ✅ MỚI: Hiển thị committed usecases list (chỉ cho usecase type) -->
-            <div v-if="process.type === 'usecase' && process.committedUsecases && process.committedUsecases.length > 0" class="committed-testcases-list">
-              <div class="committed-testcases-header" @click="toggleCommittedTestcases(`${process.userId}_${process.type}`)">
-                <span class="material-symbols-outlined" style="font-size: 16px; color: #64748b;">list</span>
-                <span class="committed-testcases-title">Danh sách usecases ({{ process.committedUsecases.length }})</span>
-                <span class="material-symbols-outlined toggle-icon" :class="{ 'expanded': showCommittedTestcases[`${process.userId}_${process.type}`] }">
-                  {{ showCommittedTestcases[`${process.userId}_${process.type}`] ? 'expand_less' : 'expand_more' }}
+            <div
+              v-if="
+                process.type === 'usecase' &&
+                process.committedUsecases &&
+                process.committedUsecases.length > 0
+              "
+              class="committed-testcases-list"
+            >
+              <div
+                class="committed-testcases-header"
+                @click="toggleCommittedTestcases(`${process.userId}_${process.type}`)"
+              >
+                <span class="material-symbols-outlined" style="font-size: 16px; color: #64748b"
+                  >list</span
+                >
+                <span class="committed-testcases-title"
+                  >Danh sách usecases ({{ process.committedUsecases.length }})</span
+                >
+                <span
+                  class="material-symbols-outlined toggle-icon"
+                  :class="{ expanded: showCommittedTestcases[`${process.userId}_${process.type}`] }"
+                >
+                  {{
+                    showCommittedTestcases[`${process.userId}_${process.type}`]
+                      ? 'expand_less'
+                      : 'expand_more'
+                  }}
                 </span>
               </div>
-              <div v-show="showCommittedTestcases[`${process.userId}_${process.type}`]" class="committed-testcases-items">
+              <div
+                v-show="showCommittedTestcases[`${process.userId}_${process.type}`]"
+                class="committed-testcases-items"
+              >
                 <div
                   v-for="uc in getSortedCommittedUsecases(process.committedUsecases)"
                   :key="uc.index"
@@ -240,21 +362,45 @@
                     'status-pending': uc.status === 'pending',
                     'status-generating': uc.status === 'generating',
                     'status-completed': uc.status === 'completed',
-                    'status-error': uc.status === 'error'
+                    'status-error': uc.status === 'error',
                   }"
                 >
                   <span class="testcase-status-icon">
-                    <span v-if="uc.status === 'completed'" class="material-symbols-outlined" style="font-size: 14px; color: #10b981;">check_circle</span>
-                    <span v-else-if="uc.status === 'error'" class="material-symbols-outlined" style="font-size: 14px; color: #ef4444;">error</span>
-                    <span v-else-if="uc.status === 'generating'" class="material-symbols-outlined spinning" style="font-size: 14px; color: #64748b;">sync</span>
-                    <span v-else class="material-symbols-outlined" style="font-size: 14px; color: #64748b;">radio_button_unchecked</span>
+                    <span
+                      v-if="uc.status === 'completed'"
+                      class="material-symbols-outlined"
+                      style="font-size: 14px; color: #10b981"
+                      >check_circle</span
+                    >
+                    <span
+                      v-else-if="uc.status === 'error'"
+                      class="material-symbols-outlined"
+                      style="font-size: 14px; color: #ef4444"
+                      >error</span
+                    >
+                    <span
+                      v-else-if="uc.status === 'generating'"
+                      class="material-symbols-outlined spinning"
+                      style="font-size: 14px; color: #64748b"
+                      >sync</span
+                    >
+                    <span
+                      v-else
+                      class="material-symbols-outlined"
+                      style="font-size: 14px; color: #64748b"
+                      >radio_button_unchecked</span
+                    >
                   </span>
-                  <span class="testcase-title" :class="{
-                    'text-completed': uc.status === 'completed',
-                    'text-error': uc.status === 'error',
-                    'text-generating': uc.status === 'generating',
-                    'text-pending': uc.status === 'pending'
-                  }">{{ uc.name }}</span>
+                  <span
+                    class="testcase-title"
+                    :class="{
+                      'text-completed': uc.status === 'completed',
+                      'text-error': uc.status === 'error',
+                      'text-generating': uc.status === 'generating',
+                      'text-pending': uc.status === 'pending',
+                    }"
+                    >{{ uc.name }}</span
+                  >
                 </div>
               </div>
             </div>
@@ -265,41 +411,41 @@
 
     <!-- Navigation Tabs -->
     <div class="navigation-tabs">
-      <button 
-        class="tab-button" 
+      <button
+        class="tab-button"
         :class="{ active: isActiveTab('usecase') }"
         @click="navigateToTab('usecase')"
       >
         <span class="material-symbols-outlined">list_alt</span>
         Use Cases
       </button>
-      
-      <button 
-        class="tab-button" 
+
+      <button
+        class="tab-button"
         :class="{ active: isActiveTab('testcases') }"
         @click="navigateToTab('testcases')"
       >
         <span class="material-symbols-outlined">play_arrow</span>
         Test Cases
       </button>
-      <button 
-        class="tab-button" 
+      <button
+        class="tab-button"
         :class="{ active: isActiveTab('database') }"
         @click="navigateToTab('database')"
       >
         <span class="material-symbols-outlined">storage</span>
         Database
       </button>
-      <button 
-        class="tab-button" 
+      <button
+        class="tab-button"
         :class="{ active: isActiveTab('uml') }"
         @click="navigateToTab('uml')"
       >
         <span class="material-symbols-outlined">account_tree</span>
         UML
       </button>
-      <button 
-        class="tab-button" 
+      <button
+        class="tab-button"
         :class="{ active: isActiveTab('output') }"
         @click="navigateToTab('output')"
       >
@@ -310,10 +456,16 @@
 
     <!-- Router View với keep-alive để giữ state -->
     <div class="router-view-container">
-      <keep-alive :include="['UsecaseManagement', 'OutputManagement', 'TestcaseManagement', 'DatabaseManagement', 'UmlManagement']">
-        <router-view 
-          :key="`${projectId}-${selectedVersionId}`"
-        />
+      <keep-alive
+        :include="[
+          'UsecaseManagement',
+          'OutputManagement',
+          'TestcaseManagement',
+          'DatabaseManagement',
+          'UmlManagement',
+        ]"
+      >
+        <router-view :key="`${projectId}-${selectedVersionId}`" />
       </keep-alive>
     </div>
 
@@ -327,7 +479,16 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, watch, provide, nextTick } from 'vue'
+import {
+  ref,
+  computed,
+  onMounted,
+  onUnmounted,
+  onBeforeUnmount,
+  watch,
+  provide,
+  nextTick,
+} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'vue-toastification'
 import ProjectHeader from '@/components/ProjectHeader.vue'
@@ -361,7 +522,7 @@ export default {
 
     // LLM Process tracking - Store by userId and processType
     const llmProcesses = ref({}) // Format: { 'userId_processType': { userId, type, ...process } }
-    
+
     // ✅ Track show/hide state cho committed testcases của mỗi process
     const showCommittedTestcases = ref({}) // Format: { 'userId_processType': boolean }
 
@@ -382,11 +543,11 @@ export default {
     const saveProcessesToStorage = () => {
       try {
         if (!projectId.value) return
-        
+
         const processesToSave = {}
         const now = Date.now()
         const MAX_AGE = 2 * 60 * 60 * 1000 // 2 hours
-        
+
         // Only save active processes and check age
         Object.entries(llmProcesses.value).forEach(([key, process]) => {
           if (process && process.isProcessing) {
@@ -400,9 +561,13 @@ export default {
             }
           }
         })
-        
+
         localStorage.setItem(getStorageKey(), JSON.stringify(processesToSave))
-        console.log('💾 Saved LLM processes to storage:', Object.keys(processesToSave).length, 'processes')
+        console.log(
+          '💾 Saved LLM processes to storage:',
+          Object.keys(processesToSave).length,
+          'processes'
+        )
       } catch (error) {
         console.error('❌ Error saving processes to storage:', error)
       }
@@ -412,14 +577,14 @@ export default {
     const restoreProcessesFromStorage = () => {
       try {
         if (!projectId.value) return
-        
+
         const saved = localStorage.getItem(getStorageKey())
         if (!saved) return
-        
+
         const savedProcesses = JSON.parse(saved)
         const now = Date.now()
         const MAX_AGE = 2 * 60 * 60 * 1000 // 2 hours
-        
+
         // Restore only valid processes (processing, success, or failed)
         Object.entries(savedProcesses).forEach(([key, process]) => {
           if (process) {
@@ -432,15 +597,19 @@ export default {
                 timestamp: process.savedAt || now,
                 status: process.status || (process.isProcessing ? 'processing' : 'success'),
               }
-              
+
               // ✅ Không tự động xóa success states - giữ lại để user đóng thủ công
               llmProcesses.value[key] = restoredProcess
             }
           }
         })
-        
+
         if (Object.keys(llmProcesses.value).length > 0) {
-          console.log('🔄 Restored LLM processes from storage:', Object.keys(llmProcesses.value).length, 'processes')
+          console.log(
+            '🔄 Restored LLM processes from storage:',
+            Object.keys(llmProcesses.value).length,
+            'processes'
+          )
         }
       } catch (error) {
         console.error('❌ Error restoring processes from storage:', error)
@@ -460,7 +629,6 @@ export default {
       }
     }
 
-
     // Fetch project data
     const fetchProjectData = async () => {
       if (!projectId.value) return
@@ -473,7 +641,8 @@ export default {
 
         // Set selected version
         if (!selectedVersionId.value && project.value.current_version) {
-          selectedVersionId.value = project.value.current_version._id || project.value.current_version
+          selectedVersionId.value =
+            project.value.current_version._id || project.value.current_version
         }
 
         // Initialize socket for active users
@@ -625,7 +794,7 @@ export default {
         if (element && element.dataset) {
           element.dataset.progressKey = key
           intersectionObserver.observe(element)
-          
+
           // ✅ Lưu position ban đầu khi setup observer
           try {
             const rect = element.getBoundingClientRect()
@@ -657,8 +826,8 @@ export default {
       }
 
       // Tách thành 2 nhóm: đang gen và các trạng thái khác
-      const generating = committedTestcases.filter(tc => tc.status === 'generating')
-      const others = committedTestcases.filter(tc => tc.status !== 'generating')
+      const generating = committedTestcases.filter((tc) => tc.status === 'generating')
+      const others = committedTestcases.filter((tc) => tc.status !== 'generating')
 
       // Sắp xếp mỗi nhóm theo index để giữ thứ tự
       generating.sort((a, b) => a.index - b.index)
@@ -675,8 +844,8 @@ export default {
       }
 
       // Tách thành 2 nhóm: đang gen và các trạng thái khác
-      const generating = committedUsecases.filter(uc => uc.status === 'generating')
-      const others = committedUsecases.filter(uc => uc.status !== 'generating')
+      const generating = committedUsecases.filter((uc) => uc.status === 'generating')
+      const others = committedUsecases.filter((uc) => uc.status !== 'generating')
 
       // Sắp xếp mỗi nhóm theo index để giữ thứ tự
       generating.sort((a, b) => a.index - b.index)
@@ -692,7 +861,12 @@ export default {
       const loadingItems = []
       Object.entries(llmProcesses.value).forEach(([key, process]) => {
         // Only include items that are loading (not success/failed) and not visible
-        if (process && process.status !== 'success' && process.status !== 'failed' && !visibleProgressItems.value.has(key)) {
+        if (
+          process &&
+          process.status !== 'success' &&
+          process.status !== 'failed' &&
+          !visibleProgressItems.value.has(key)
+        ) {
           loadingItems.push({ key, process })
         }
       })
@@ -710,21 +884,21 @@ export default {
     const floatingIndicators = computed(() => {
       // Trigger reactivity
       scrollUpdateTrigger.value
-      
+
       // Chỉ hiển thị khi progress section không còn visible (đã scroll xuống)
       if (isProgressSectionVisible.value) {
         return []
       }
-      
+
       // Lấy tất cả items out of view (loading, success, failed) và tính vị trí center X (trục Y của item)
       const indicators = []
       Object.entries(llmProcesses.value).forEach(([key, process]) => {
         if (process && !visibleProgressItems.value.has(key)) {
           const element = progressItemRefs.value[key]
-          
+
           // ✅ Ưu tiên dùng position đã lưu
           let centerX = itemPositions.value[key]
-          
+
           // Nếu chưa có position đã lưu, tính từ element
           if (centerX === undefined || centerX === null || isNaN(centerX)) {
             if (element) {
@@ -732,7 +906,7 @@ export default {
                 const rect = element.getBoundingClientRect()
                 // getBoundingClientRect() vẫn hoạt động ngay cả khi element bị khuất
                 centerX = rect.left + rect.width / 2
-                
+
                 // Lưu lại nếu hợp lệ, nếu không thì dùng center màn hình
                 if (isNaN(centerX) || !isFinite(centerX) || rect.width <= 0) {
                   centerX = window.innerWidth / 2
@@ -747,44 +921,44 @@ export default {
               centerX = window.innerWidth / 2
             }
           }
-          
+
           // Đảm bảo centerX hợp lệ
           if (!centerX || isNaN(centerX) || !isFinite(centerX)) {
             centerX = window.innerWidth / 2
           }
-          
+
           // Clamp về trong viewport (tránh indicator ở ngoài màn hình)
           if (centerX < 50) centerX = 50
           if (centerX > window.innerWidth - 50) centerX = window.innerWidth - 50
-          
-          indicators.push({ 
-            key, 
-            process, 
-            position: centerX
+
+          indicators.push({
+            key,
+            process,
+            position: centerX,
           })
         }
       })
-      
+
       // ✅ Sắp xếp indicators theo position để xử lý chồng lấn
       indicators.sort((a, b) => a.position - b.position)
-      
+
       // ✅ Tránh indicators chồng lên nhau - nếu quá gần nhau (< 150px) thì điều chỉnh
       const MIN_SPACING = 150
       for (let i = 1; i < indicators.length; i++) {
         const prevPosition = indicators[i - 1].position
         const currentPosition = indicators[i].position
-        
+
         if (currentPosition - prevPosition < MIN_SPACING) {
           // Điều chỉnh position của indicator hiện tại để cách indicator trước ít nhất MIN_SPACING
           indicators[i].position = prevPosition + MIN_SPACING
-          
+
           // Đảm bảo không ra ngoài viewport
           if (indicators[i].position > window.innerWidth - 50) {
             indicators[i].position = window.innerWidth - 50
           }
         }
       }
-      
+
       return indicators
     })
 
@@ -805,7 +979,7 @@ export default {
         }
         groups[userId].processes.push(process)
       })
-      
+
       // Get user info from activeUsers
       Object.keys(groups).forEach((userId) => {
         const user = activeUsers.value.find((u) => u.userId === userId)
@@ -824,7 +998,7 @@ export default {
           }
         }
       })
-      
+
       // Convert to array and sort by userId (current user first)
       const currentUserId = localStorage.getItem('userId')
       return Object.values(groups).sort((a, b) => {
@@ -859,19 +1033,19 @@ export default {
     const getAgentStateTitle = (state) => {
       const titles = {
         // V1 States
-        'ESTIMATE_USECASE_COUNT': 'Đang ước tính usecases',
-        'ESTIMATE_TESTCASE_COUNT': 'Đang ước tính testcases',
-        'BATCH_PLANNING': 'Đang lập kế hoạch batches',
-        'GENERATE_BATCH': 'Đang generate',
-        'VERIFY_RESULTS': 'Đang kiểm tra kết quả',
-        'REPLAN_MISSING': 'Đang lập kế hoạch retry',
-        'GENERATE_RETRY': 'Đang retry',
-        'DONE': 'Hoàn thành',
+        ESTIMATE_USECASE_COUNT: 'Đang ước tính usecases',
+        ESTIMATE_TESTCASE_COUNT: 'Đang ước tính testcases',
+        BATCH_PLANNING: 'Đang lập kế hoạch batches',
+        GENERATE_BATCH: 'Đang generate',
+        VERIFY_RESULTS: 'Đang kiểm tra kết quả',
+        REPLAN_MISSING: 'Đang lập kế hoạch retry',
+        GENERATE_RETRY: 'Đang retry',
+        DONE: 'Hoàn thành',
         // V2 States (Testcase Generation - Orchestrator Style)
-        'ESTIMATE_WITH_COMMITMENT': 'Đang ước tính',
-        'RETRY_MISSING': 'Đang retry usecases thiếu',
-        'FINAL_VALIDATION': 'Đang validate toàn bộ testcases',
-        'ATOMIC_SAVE': 'Đang lưu tất cả testcases vào database'
+        ESTIMATE_WITH_COMMITMENT: 'Đang ước tính',
+        RETRY_MISSING: 'Đang retry usecases thiếu',
+        FINAL_VALIDATION: 'Đang validate toàn bộ testcases',
+        ATOMIC_SAVE: 'Đang lưu tất cả testcases vào database',
       }
       return titles[state] || 'Đang xử lý...'
     }
@@ -880,19 +1054,19 @@ export default {
     const getAgentStateIcon = (state) => {
       const icons = {
         // V1 States
-        'ESTIMATE_USECASE_COUNT': 'calculate',
-        'ESTIMATE_TESTCASE_COUNT': 'calculate',
-        'BATCH_PLANNING': 'list_alt',
-        'GENERATE_BATCH': 'auto_awesome',
-        'VERIFY_RESULTS': 'verified',
-        'REPLAN_MISSING': 'refresh',
-        'GENERATE_RETRY': 'sync',
-        'DONE': 'check_circle',
+        ESTIMATE_USECASE_COUNT: 'calculate',
+        ESTIMATE_TESTCASE_COUNT: 'calculate',
+        BATCH_PLANNING: 'list_alt',
+        GENERATE_BATCH: 'auto_awesome',
+        VERIFY_RESULTS: 'verified',
+        REPLAN_MISSING: 'refresh',
+        GENERATE_RETRY: 'sync',
+        DONE: 'check_circle',
         // V2 States
-        'ESTIMATE_WITH_COMMITMENT': 'fact_check',
-        'RETRY_MISSING': 'replay',
-        'FINAL_VALIDATION': 'verified_user',
-        'ATOMIC_SAVE': 'save'
+        ESTIMATE_WITH_COMMITMENT: 'fact_check',
+        RETRY_MISSING: 'replay',
+        FINAL_VALIDATION: 'verified_user',
+        ATOMIC_SAVE: 'save',
       }
       return icons[state] || 'sync'
     }
@@ -900,7 +1074,8 @@ export default {
     // ✅ Helper: Get agent state icon class (V1 + V2)
     const getAgentStateIconClass = (state) => {
       if (state === 'DONE') return 'success'
-      if (state === 'GENERATE_RETRY' || state === 'REPLAN_MISSING' || state === 'RETRY_MISSING') return 'pulsing'
+      if (state === 'GENERATE_RETRY' || state === 'REPLAN_MISSING' || state === 'RETRY_MISSING')
+        return 'pulsing'
       if (state === 'GENERATE_BATCH') return 'pulsing'
       if (state === 'VERIFY_RESULTS' || state === 'FINAL_VALIDATION') return 'spinning'
       if (state === 'ATOMIC_SAVE') return 'spinning' // Spinning icon for atomic save
@@ -949,7 +1124,7 @@ export default {
         error: event.error,
         hasErrors: event.errors && event.errors.length > 0,
       })
-      
+
       // Determine process type from event
       let processType = null
       if (event.type === 'INCREMENTAL_PROGRESS' || event.type === 'ESTIMATE_RECEIVED') {
@@ -962,19 +1137,19 @@ export default {
       } else if (event.type === 'UML_PROGRESS') {
         processType = 'uml'
       }
-      
+
       if (!processType) return
-      
+
       // Only handle if same version
       const currentVersionId = selectedVersionId.value
       if (event.versionId && event.versionId !== currentVersionId) {
         return
       }
-      
+
       // Get userId from event
       const userId = event.userId || localStorage.getItem('userId') || 'unknown'
       const processKey = `${userId}_${processType}`
-      
+
       // Update process state
       if (event.type === 'ESTIMATE_RECEIVED') {
         llmProcesses.value[processKey] = {
@@ -984,8 +1159,11 @@ export default {
           status: 'processing',
           progress: 10,
           stage: 'estimate_received',
-          agentState: processType === 'testcase' ? 'ESTIMATE_TESTCASE_COUNT' : 'ESTIMATE_USECASE_COUNT', // ✅ Thêm agentState
-          agentMessage: `Đã ước tính: ${event.estimate.estimated_count} ${processType === 'testcase' ? 'testcases' : 'usecases'}, ${event.estimate.estimated_batches} batches`, // ✅ Thêm agentMessage
+          agentState:
+            processType === 'testcase' ? 'ESTIMATE_TESTCASE_COUNT' : 'ESTIMATE_USECASE_COUNT', // ✅ Thêm agentState
+          agentMessage: `Đã ước tính: ${event.estimate.estimated_count} ${
+            processType === 'testcase' ? 'testcases' : 'usecases'
+          }, ${event.estimate.estimated_batches} batches`, // ✅ Thêm agentMessage
           estimateInfo: event.estimate,
           committedTestcases: event.committedTestcases || [], // ✅ Thêm committedTestcases (cho testcase)
           committedUsecases: event.committedUsecases || [], // ✅ Thêm committedUsecases (cho usecase)
@@ -1003,32 +1181,33 @@ export default {
         const progress = event.progress || 0
         const stage = event.stage || 'processing'
         const existingProcess = llmProcesses.value[processKey]
-        
+
         // ✅ QUAN TRỌNG: Nếu process cũ đã hoàn thành (success) và event mới là process mới đang xử lý
         // thì cần reset lại hoàn toàn để tránh hiển thị trạng thái "Hoàn thành" khi đang gen mới
-        const isNewProcessStarting = existingProcess?.status === 'success' && 
-                                     (event.isProcessing === true || 
-                                      (stage !== 'completed' && stage !== 'failed' && stage !== 'error'))
-        
+        const isNewProcessStarting =
+          existingProcess?.status === 'success' &&
+          (event.isProcessing === true ||
+            (stage !== 'completed' && stage !== 'failed' && stage !== 'error'))
+
         if (isNewProcessStarting) {
           console.log(`🔄 [${processType}] Resetting completed process for new generation`, {
             oldStatus: existingProcess?.status,
             newStage: stage,
-            isProcessing: event.isProcessing
+            isProcessing: event.isProcessing,
           })
           // Reset process về trạng thái ban đầu - xóa hoàn toàn process cũ
           delete llmProcesses.value[processKey]
           saveProcessesToStorage()
         }
-        
+
         // Lấy lại existingProcess sau khi có thể đã reset
         const currentProcess = llmProcesses.value[processKey]
-        
+
         // ✅ QUAN TRỌNG: Kiểm tra failed TRƯỚC khi kiểm tra success
         // Backend có thể gửi stage: "completed" nhưng vẫn có errors (partial success)
         const hasErrors = Array.isArray(event.errors) && event.errors.length > 0
         const hasErrorMessage = event.error || event.errorMessage || event.message
-        
+
         // Debug log cho testcase
         if (processType === 'testcase') {
           console.log('🔍 Testcase event check:', {
@@ -1042,17 +1221,24 @@ export default {
             hasErrorMessage,
           })
         }
-        
+
         // ✅ Kiểm tra failed: stage === 'failed' HOẶC có errors
-        if (stage === 'failed' || stage === 'error' || event.error || event.status === 'failed' || event.status === 'error' || hasErrors) {
+        if (
+          stage === 'failed' ||
+          stage === 'error' ||
+          event.error ||
+          event.status === 'failed' ||
+          event.status === 'error' ||
+          hasErrors
+        ) {
           // Format error message thân thiện với người dùng
-          const rawErrorMsg = hasErrors 
-            ? event.errors.join('; ') 
-            : (event.error || event.errorMessage || event.message || 'Generation failed')
-          
+          const rawErrorMsg = hasErrors
+            ? event.errors.join('; ')
+            : event.error || event.errorMessage || event.message || 'Generation failed'
+
           // Format error message để thân thiện hơn
           const friendlyErrorMsg = translateErrorMessage(rawErrorMsg)
-          
+
           llmProcesses.value[processKey] = {
             userId,
             type: processType,
@@ -1071,15 +1257,21 @@ export default {
           console.log('❌ Process failed:', processKey, friendlyErrorMsg)
           return
         }
-        
+
         // Check if process completed successfully (chỉ khi không phải failed và không có errors)
         // ✅ QUAN TRỌNG: Kiểm tra hasErrors và hasErrorMessage TRƯỚC khi set success
         // ✅ Cũng kiểm tra agentState === 'DONE' hoặc stage === 'completed'
         // ✅ Ưu tiên kiểm tra stage === 'completed' trước (backend đang emit đúng)
-        const isCompleted = (stage === 'completed' && !hasErrors && !hasErrorMessage) ||
-                           (!event.isProcessing && progress >= 100 && stage !== 'failed' && stage !== 'error' && !hasErrors && !hasErrorMessage) ||
-                           (event.agentState === 'DONE')
-        
+        const isCompleted =
+          (stage === 'completed' && !hasErrors && !hasErrorMessage) ||
+          (!event.isProcessing &&
+            progress >= 100 &&
+            stage !== 'failed' &&
+            stage !== 'error' &&
+            !hasErrors &&
+            !hasErrorMessage) ||
+          event.agentState === 'DONE'
+
         if (isCompleted) {
           llmProcesses.value[processKey] = {
             userId,
@@ -1091,13 +1283,14 @@ export default {
             agentState: 'DONE', // ✅ Set agentState khi hoàn thành
             agentMessage: event.message || currentProcess?.agentMessage || 'Hoàn thành', // ✅ Giữ agentMessage
             estimateInfo: currentProcess?.estimateInfo || null,
-            committedTestcases: event.committedTestcases || currentProcess?.committedTestcases || [], // ✅ Giữ committedTestcases
+            committedTestcases:
+              event.committedTestcases || currentProcess?.committedTestcases || [], // ✅ Giữ committedTestcases
             committedUsecases: event.committedUsecases || currentProcess?.committedUsecases || [], // ✅ Giữ committedUsecases
             batchProgress: currentProcess?.batchProgress || null,
             timestamp: currentProcess?.timestamp || Date.now(),
           }
           saveProcessesToStorage()
-          
+
           // ✅ Emit event khi database generation hoàn thành để tự động refresh data
           if (processType === 'database') {
             eventBus.emit('database-generation-completed', {
@@ -1107,20 +1300,20 @@ export default {
             })
             console.log('📢 Emitted database-generation-completed event')
           }
-          
+
           // ✅ Không tự động xóa - chỉ xóa khi user đóng thủ công
           return
         }
-        
+
         // ✅ Cập nhật savedCount: ưu tiên từ batchInfo.savedCount (từ backend)
         // Nếu không có, tính từ usecasesInBatch + previous savedCount
         let savedCount = event.batchInfo?.savedCount
-        
+
         if (savedCount === undefined || savedCount === null) {
           // Fallback: tính từ previous + usecasesInBatch
           const previousSavedCount = currentProcess?.batchProgress?.savedCount || 0
           const currentBatchUsecases = event.batchInfo?.usecasesInBatch || 0
-          
+
           // Nếu có usecasesInBatch > 0, có thể là batch mới đã save
           if (currentBatchUsecases > 0) {
             savedCount = previousSavedCount + currentBatchUsecases
@@ -1128,29 +1321,33 @@ export default {
             savedCount = previousSavedCount
           }
         }
-        
+
         // ✅ Merge committedTestcases: cập nhật từng item thay vì replace toàn bộ
         let mergedCommittedTestcases = currentProcess?.committedTestcases || []
         if (event.committedTestcases && event.committedTestcases.length > 0) {
           // Tạo map từ committedTestcases hiện tại
-          const testcaseMap = new Map(mergedCommittedTestcases.map(tc => [tc.index, tc]))
+          const testcaseMap = new Map(mergedCommittedTestcases.map((tc) => [tc.index, tc]))
           // Merge với committedTestcases từ event (ưu tiên event)
-          event.committedTestcases.forEach(eventTc => {
+          event.committedTestcases.forEach((eventTc) => {
             testcaseMap.set(eventTc.index, eventTc)
           })
-          mergedCommittedTestcases = Array.from(testcaseMap.values()).sort((a, b) => a.index - b.index)
+          mergedCommittedTestcases = Array.from(testcaseMap.values()).sort(
+            (a, b) => a.index - b.index
+          )
         }
 
         // ✅ Merge committedUsecases: cập nhật từng item thay vì replace toàn bộ
         let mergedCommittedUsecases = currentProcess?.committedUsecases || []
         if (event.committedUsecases && event.committedUsecases.length > 0) {
           // Tạo map từ committedUsecases hiện tại
-          const usecaseMap = new Map(mergedCommittedUsecases.map(uc => [uc.index, uc]))
+          const usecaseMap = new Map(mergedCommittedUsecases.map((uc) => [uc.index, uc]))
           // Merge với committedUsecases từ event (ưu tiên event)
-          event.committedUsecases.forEach(eventUc => {
+          event.committedUsecases.forEach((eventUc) => {
             usecaseMap.set(eventUc.index, eventUc)
           })
-          mergedCommittedUsecases = Array.from(usecaseMap.values()).sort((a, b) => a.index - b.index)
+          mergedCommittedUsecases = Array.from(usecaseMap.values()).sort(
+            (a, b) => a.index - b.index
+          )
         }
 
         // Update processing state
@@ -1167,17 +1364,26 @@ export default {
           committedTestcases: mergedCommittedTestcases, // ✅ Sử dụng merged committedTestcases (cho testcase)
           committedUsecases: mergedCommittedUsecases, // ✅ Sử dụng merged committedUsecases (cho usecase)
           batchProgress: {
-            currentBatch: event.batchInfo?.currentBatch || currentProcess?.batchProgress?.currentBatch || 0,
-            totalBatches: event.batchInfo?.totalBatches || currentProcess?.batchProgress?.totalBatches || currentProcess?.estimateInfo?.estimated_batches || 0,
+            currentBatch:
+              event.batchInfo?.currentBatch || currentProcess?.batchProgress?.currentBatch || 0,
+            totalBatches:
+              event.batchInfo?.totalBatches ||
+              currentProcess?.batchProgress?.totalBatches ||
+              currentProcess?.estimateInfo?.estimated_batches ||
+              0,
             savedCount: savedCount, // ✅ Sử dụng savedCount đã tính
-            totalCount: event.batchInfo?.totalCount || currentProcess?.batchProgress?.totalCount || currentProcess?.estimateInfo?.estimated_count || 0,
+            totalCount:
+              event.batchInfo?.totalCount ||
+              currentProcess?.batchProgress?.totalCount ||
+              currentProcess?.estimateInfo?.estimated_count ||
+              0,
             // ✅ Thêm testcasesInBatch cho testcase type
             testcasesInBatch: event.batchInfo?.testcasesInBatch || 0,
             usecasesInBatch: event.batchInfo?.usecasesInBatch || 0,
           },
           timestamp: currentProcess?.timestamp || Date.now(),
         }
-        
+
         // Save to storage
         saveProcessesToStorage()
       }
@@ -1189,14 +1395,14 @@ export default {
         console.warn('⚠️ Socket not available for LLM progress tracking')
         return
       }
-      
+
       // Listen to input events (usecase generation)
       socket.on('input_event', (event) => {
         if (event.type === 'INCREMENTAL_PROGRESS' || event.type === 'ESTIMATE_RECEIVED') {
           handleLLMProgressEvent(event)
         }
       })
-      
+
       // Listen to other process events (database, testcase, uml)
       socket.on('testcase_event', (event) => {
         // ✅ Đảm bảo giữ nguyên tất cả fields từ event, đặc biệt là errors
@@ -1209,7 +1415,7 @@ export default {
           error: event.error,
         })
       })
-      
+
       socket.on('uml_event', (event) => {
         // ✅ Đảm bảo giữ nguyên tất cả fields từ event, đặc biệt là errors
         console.log('📥 [UML Event] Received:', {
@@ -1228,7 +1434,7 @@ export default {
           error: event.error,
         })
       })
-      
+
       socket.on('database_event', (event) => {
         // ✅ Đảm bảo giữ nguyên tất cả fields từ event, đặc biệt là errors
         console.log('📥 [Database Event] Received:', {
@@ -1261,7 +1467,7 @@ export default {
     // Cleanup socket listeners
     const cleanupLLMProgressListeners = () => {
       if (!socket) return
-      
+
       socket.off('input_event')
       socket.off('database_event')
       socket.off('testcase_event')
@@ -1324,12 +1530,16 @@ export default {
     }
 
     // Watch route changes
-    watch(() => route.params.id, (newId, oldId) => {
-      if (newId !== oldId) {
-        fetchProjectData()
-        fetchVersions()
-      }
-    }, { immediate: true })
+    watch(
+      () => route.params.id,
+      (newId, oldId) => {
+        if (newId !== oldId) {
+          fetchProjectData()
+          fetchVersions()
+        }
+      },
+      { immediate: true }
+    )
 
     // Provide data cho child components (phải gọi trước return)
     provide('projectLayout', {
@@ -1385,10 +1595,10 @@ export default {
     onMounted(() => {
       fetchProjectData()
       fetchVersions()
-      
+
       // Restore processes from storage
       restoreProcessesFromStorage()
-      
+
       // Initialize LLM progress listeners
       initLLMProgressListeners()
 
@@ -1406,10 +1616,10 @@ export default {
       if (project.value?._id) {
         cleanupSocketConnection()
       }
-      
+
       // Cleanup LLM progress listeners
       cleanupLLMProgressListeners()
-      
+
       // Cleanup intersection observers
       if (intersectionObserver) {
         intersectionObserver.disconnect()
@@ -1419,7 +1629,7 @@ export default {
         sectionObserver.disconnect()
         sectionObserver = null
       }
-      
+
       // Cleanup scroll/resize listeners
       window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('resize', handleScroll)
@@ -1578,7 +1788,8 @@ export default {
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -1678,12 +1889,7 @@ export default {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(26, 54, 93, 0.1),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgba(26, 54, 93, 0.1), transparent);
   animation: shimmerSweep 2.5s infinite;
   pointer-events: none;
   z-index: 1;
@@ -1807,7 +2013,8 @@ export default {
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
@@ -1818,7 +2025,8 @@ export default {
 }
 
 @keyframes pulseBlink {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -1962,7 +2170,6 @@ export default {
   font-size: 18px;
 }
 
-
 .progress-bar {
   width: 100%;
   height: 8px;
@@ -1991,12 +2198,7 @@ export default {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.4),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
   animation: shimmer 2s infinite;
 }
 
